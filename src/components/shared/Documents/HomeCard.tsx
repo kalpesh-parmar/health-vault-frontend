@@ -94,12 +94,12 @@ const getDefaultIcon = (title: string) => {
   return "folder-outline";
 };
 
-const HomeCard: React.FC<HomeCardProps> = ({
+const HomeCard = ({
   title,
   subtitle,
   onPress,
   accentColor = "#2563eb",
-}) => {
+}: HomeCardProps) => {
   const icon = getDefaultIcon(title);
 
   return (

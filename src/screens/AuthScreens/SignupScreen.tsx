@@ -10,7 +10,7 @@ import { useNavigation } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
-import { registerUser } from "../services/authService";
+import { registerUser } from "../../services/authService";
 import { useRef } from "react";
 
 const SignupScreen = () => {

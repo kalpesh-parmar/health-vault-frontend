@@ -138,6 +138,18 @@ const ImagePreview = ({
                 />
                 {error && <PrimaryText>Filename is required.</PrimaryText>}
 
+                <FileInput
+                  placeholder="E.G :- my_scan"
+                  placeholderTextColor="#000000"
+                  cursorColor="black"
+                  onChangeText={(text: string) => {
+                    setFileName(text);
+                    setError("");
+                    if (!text) setError("Filename is required.");
+                  }}
+                  autoFocus
+                />
+
                 <DualButtons
                   secondaryBtnText="Cancel"
                   secondaryBtnColor="black"

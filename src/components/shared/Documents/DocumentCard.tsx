@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { RootStackParamList } from "../../navigation/types";
+import { RootStackParamList } from "../../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 export interface MedicalDocument {
@@ -12,18 +12,23 @@ export interface MedicalDocument {
   imageUri?: string;
   documentId?: string;
   AISummary?: string;
-};
+}
 
 interface Props {
   item: MedicalDocument;
 }
 
 const DocumentCard = ({ item }: Props) => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   return (
-    <Card onPress={() => navigation.navigate("SummaryScreen", {
-      document: item,
-    })}>
+    <Card
+      onPress={() =>
+        navigation.navigate("SummaryScreen", {
+          document: item,
+        })
+      }
+    >
       <IconContainer>
         <MaterialCommunityIcons
           name="file-document-outline"

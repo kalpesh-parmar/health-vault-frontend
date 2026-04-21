@@ -4,7 +4,7 @@ import styled from "styled-components/native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation, DrawerActions } from "@react-navigation/native";
-import ScreenHeader from "../components/shared/Header";
+import ScreenHeader from "../../components/shared/Header";
 
 const AboutScreen = () => {
   const navigation = useNavigation();
@@ -17,30 +17,44 @@ const AboutScreen = () => {
       <StyledScrollView showsVerticalScrollIndicator={false}>
         <BrandSection>
           <LogoContainer>
-            <MaterialCommunityIcons name="shield-check" size={50} color="white" />
+            <MaterialCommunityIcons
+              name="shield-check"
+              size={50}
+              color="white"
+            />
           </LogoContainer>
           <VersionBadge>Version 2.0.4</VersionBadge>
           <MissionText>
-            Securing your medical legacy through decentralized accessibility and modern design.
+            Securing your medical legacy through decentralized accessibility and
+            modern design.
           </MissionText>
         </BrandSection>
 
         <SectionTitle>Our Mission</SectionTitle>
         <Card>
-          <IconCircle style={{ backgroundColor: '#eff6ff' }}>
-            <MaterialCommunityIcons name="eye-outline" size={24} color="#2563eb" />
+          <IconCircle style={{ backgroundColor: "#eff6ff" }}>
+            <MaterialCommunityIcons
+              name="eye-outline"
+              size={24}
+              color="#2563eb"
+            />
           </IconCircle>
           <CardContent>
             <CardTitle>Vision</CardTitle>
             <CardDescription>
-              To be the world's most trusted digital vault for personal health information.
+              To be the world's most trusted digital vault for personal health
+              information.
             </CardDescription>
           </CardContent>
         </Card>
 
         <Card>
-          <IconCircle style={{ backgroundColor: '#f0fdf4' }}>
-            <MaterialCommunityIcons name="lock-check-outline" size={24} color="#22c55e" />
+          <IconCircle style={{ backgroundColor: "#f0fdf4" }}>
+            <MaterialCommunityIcons
+              name="lock-check-outline"
+              size={24}
+              color="#22c55e"
+            />
           </IconCircle>
           <CardContent>
             <CardTitle>Privacy First</CardTitle>
@@ -62,7 +76,11 @@ const AboutScreen = () => {
 
           <ProjectCard>
             <ProjectIcon bg="#ede9fe">
-              <MaterialCommunityIcons name="family-tree" size={24} color="#7c3aed" />
+              <MaterialCommunityIcons
+                name="family-tree"
+                size={24}
+                color="#7c3aed"
+              />
             </ProjectIcon>
             <ProjectName>Family Vault</ProjectName>
             <ProjectStatus>Beta</ProjectStatus>
@@ -71,18 +89,28 @@ const AboutScreen = () => {
 
         <SectionTitle>Get in Touch</SectionTitle>
         <ContactGrid>
-          <ContactButton onPress={() => Linking.openURL('mailto:support@healthvault.com')}>
-            <MaterialCommunityIcons name="email-outline" size={24} color="black" />
+          <ContactButton
+            onPress={() => Linking.openURL("mailto:support@healthvault.com")}
+          >
+            <MaterialCommunityIcons
+              name="email-outline"
+              size={24}
+              color="black"
+            />
             <ContactText>Email Us</ContactText>
           </ContactButton>
-          
-          <ContactButton onPress={() => Linking.openURL('https://techrover.us')}>
+
+          <ContactButton
+            onPress={() => Linking.openURL("https://techrover.us")}
+          >
             <MaterialCommunityIcons name="web" size={24} color="black" />
             <ContactText>Website</ContactText>
           </ContactButton>
         </ContactGrid>
 
-        <FooterText>© 2026 HealthVault Inc.{"\n"}TechRover Solutions PVT. LTD.</FooterText>
+        <FooterText>
+          © 2026 HealthVault Inc.{"\n"}TechRover Solutions PVT. LTD.
+        </FooterText>
       </StyledScrollView>
     </Container>
   );

@@ -3,7 +3,7 @@ import { Switch } from "react-native";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import ScreenHeader from "../components/shared/Header";
+import ScreenHeader from "../../components/shared/Header";
 
 const SettingsScreen = () => {
   const [isBiometricEnabled, setBiometricEnabled] = useState(true);

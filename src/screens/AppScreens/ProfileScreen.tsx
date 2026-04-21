@@ -2,18 +2,18 @@ import React, { useEffect, useState } from "react";
 import { ScrollView, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import styled from "styled-components/native";
-import ScreenHeader from "../components/shared/Header";
+import ScreenHeader from "../../components/shared/Header";
 import {
   Ionicons,
   MaterialCommunityIcons,
   MaterialIcons,
 } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/core";
-import DualButtons from "../components/shared/Buttons/DualButtons";
-import LogoutModal from "../components/Auth/LogoutModal";
-import { getUserById, updateUser } from "../services/authService"; 
-import * as SecureStore from 'expo-secure-store';
-import Toast from "react-native-toast-message"; 
+import DualButtons from "../../components/shared/Buttons/DualButtons";
+import LogoutModal from "../../components/Auth/LogoutModal";
+import { getUserById, updateUser } from "../../services/authService";
+import * as SecureStore from "expo-secure-store";
+import Toast from "react-native-toast-message";
 
 const ProfileScreen = () => {
   const [username, setUsername] = useState<string | null>(null);
@@ -35,7 +35,7 @@ const ProfileScreen = () => {
     },
     onSuccess: () => {
       console.log("Profile Updated Successfully.");
-      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
       Toast.show({
         type: "success",
         text1: "Profile Updated",
@@ -48,17 +48,17 @@ const ProfileScreen = () => {
         text1: "Error",
         text2: error.message || "Could not update username.",
       });
-    }
+    },
   });
 
   const { data: userData, isLoading } = useQuery({
-    queryKey: ['userProfile'],
+    queryKey: ["userProfile"],
     queryFn: async () => {
       const userId = await SecureStore.getItemAsync("userId");
       if (!userId) throw new Error("No user ID found in SecureStore.");
       const response = await getUserById(userId);
       return response?.data || response;
-    }
+    },
   });
 
   useEffect(() => {
@@ -85,7 +85,7 @@ const ProfileScreen = () => {
   const handleSaveUsername = () => {
     if (editedUsername && editedUsername !== username) {
       updateProfileMutation.mutate(editedUsername);
-      setUsername(editedUsername); 
+      setUsername(editedUsername);
     }
     setEditedUsername("");
     setShowInput(false);
@@ -124,14 +124,16 @@ const ProfileScreen = () => {
                     <UsernameInput
                       placeholder="New username"
                       onChangeText={setEditedUsername}
-                      onBlur={handleSaveUsername} 
+                      onBlur={handleSaveUsername}
                       placeholderTextColor="grey"
                       autoFocus
                     />
                   ) : (
                     <UserName>{username || "Guest User"}</UserName>
                   )}
-                  <EditIconWrapper onPress={showInput ? handleSaveUsername : handleEditProfile}>
+                  <EditIconWrapper
+                    onPress={showInput ? handleSaveUsername : handleEditProfile}
+                  >
                     {showInput ? (
                       <MaterialCommunityIcons
                         name="check"

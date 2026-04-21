@@ -2,8 +2,8 @@ import React from "react";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import TabNavigator from "../navigation/TabNavigator";
-import AboutScreen from "../screens/AboutScreen";
-import ProfileScreen from "../screens/ProfileScreen";
+import AboutScreen from "../screens/AppScreens/AboutScreen";
+import ProfileScreen from "../screens/AppScreens/ProfileScreen";
 import CustomDrawerContent from "./CustomDrawerContent";
 
 const Drawer = createDrawerNavigator();

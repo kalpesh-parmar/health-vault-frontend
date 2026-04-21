@@ -1,4 +1,4 @@
-import { MedicalDocument } from "../components/Documents/DocumentCard";
+import { MedicalDocument } from "../components/shared/Documents/DocumentCard";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -9,4 +9,5 @@ export type RootStackParamList = {
   "About Us": undefined;
   DocumentList: undefined;
   SummaryScreen: { document: MedicalDocument };
+  Medication: undefined;
 };

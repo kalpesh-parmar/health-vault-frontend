@@ -6,19 +6,15 @@ import { useCameraPermissions, CameraView } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import LogoutModal from "../components/Auth/LogoutModal";
-import BottomSheet from "../components/shared/BottomSheet";
-import {
-  DrawerActions,
-  useNavigation,
-} from "@react-navigation/native";
+import LogoutModal from "../../components/Auth/LogoutModal";
+import BottomSheet from "../../components/shared/BottomSheet";
+import { DrawerActions, useNavigation } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { MedicalDocument } from "../components/Documents/DocumentCard";
-import ImagePreview from "../components/shared/ImagePreview";
-import Loader from "../components/shared/Loader";
-import { RootStackParamList } from "../navigation/types";
-import HomeCard from "../components/Documents/HomeCard";
+import ImagePreview from "../../components/shared/ImagePreview";
+import Loader from "../../components/shared/Loader";
+import { RootStackParamList } from "../../navigation/types";
+import HomeCard from "../../components/shared/Documents/HomeCard";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 const HomeScreen = () => {
@@ -33,7 +29,8 @@ const HomeScreen = () => {
     "camera",
   );
   const cameraRef = useRef<any>(null);
-const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleCapture = async () => {
     if (permission?.granted) {
@@ -261,7 +258,7 @@ const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>(
           <HomeCard
             title="Medication"
             subtitle="Track medicines"
-            // onPress={() => navigation.navigate("Medication")}
+            onPress={() => navigation.navigate("Medication")}
             accentColor="#10B981"
           />
 
