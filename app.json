@@ -1,30 +1,48 @@
 {
   "expo": {
-    "name": "DocumentsVaultApp",
-    "slug": "DocumentsVaultApp",
+    "name": "Health Vault",
+    "slug": "health-vault",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/health_vault_logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "image": "./assets/Splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#0A3A4A"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/health_vault_logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.DocumentsVaultApp",
+      "usesCleartextTraffic": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": ""
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow HealthVault to access your camera to scan medical documents."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow HealthVault to access your photos so you can upload medical records from your gallery."
+        }
+      ],
+      "expo-secure-store"
+    ]
   }
 }
