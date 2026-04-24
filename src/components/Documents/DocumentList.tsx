@@ -1,42 +1,50 @@
 import React, { useState } from "react";
 import { FlatList } from "react-native";
 import styled from "styled-components/native";
-import EmptyContent from "../EmptyContent";
-import ScreenHeader from "../Header";
-import { Ionicons } from "@expo/vector-icons";
-import { MedicalDocument } from "./DocumentCard";
+import EmptyContent from "../shared/EmptyContent";
+import ScreenHeader from "../shared/Header";
+import DocumentCard, { MedicalDocument } from "./DocumentCard";
 
 const DUMMY_DOCS: MedicalDocument[] = [
-  { id: "1", title: "Blood Test Results", createdAt: "12 Oct 2025" },
-  { id: "2", title: "Dental X-Ray", createdAt: "05 Nov 2025" },
-  { id: "3", title: "Vaccination Record", createdAt: "20 Nov 2025" },
-  { id: "4", title: "MRI Scan - Knee", createdAt: "01 Dec 2025" },
-  { id: "5", title: "Prescription - Vitamins", createdAt: "15 Dec 2025" },
+  {
+    id: "1",
+    title: "Blood Test Results",
+    category: "Medical",
+    createdAt: "12 Oct 2025",
+    notes: "This is a blood test result.",
+    AISummary: "This is an AI summary of the blood test result.",
+  },
+  {
+    id: "2",
+    title: "Dental X-Ray",
+    category: "Medical",
+    createdAt: "05 Nov 2025",
+  },
+  {
+    id: "3",
+    title: "Vaccination Record",
+    category: "Medical",
+    createdAt: "20 Nov 2025",
+  },
+  {
+    id: "4",
+    title: "MRI Scan - Knee",
+    category: "Medical",
+    createdAt: "01 Dec 2025",
+  },
+  {
+    id: "5",
+    title: "Prescription - Vitamins",
+    category: "Medical",
+    createdAt: "15 Dec 2025",
+  },
 ];
 
-const DocumentList = ({ navigation }: any) => {
+const DocumentList = () => {
   const [documents, setDocuments] = useState<MedicalDocument[]>(DUMMY_DOCS);
 
   const renderItem = ({ item }: { item: MedicalDocument }) => {
-    return (
-      <DocCard
-        activeOpacity={0.75}
-        onPress={() => {
-          navigation.navigate("SummaryScreen", { document: item });
-        }}
-      >
-        <DocIconBox style={{ backgroundColor: "#EEF3FD" }}>
-          <Ionicons name={"document-text"} size={20} color={"#1246A8"} />
-        </DocIconBox>
-        <DocInfo>
-          <DocTitle numberOfLines={1}>{item.title}</DocTitle>
-          <DocDate>{item.createdAt}</DocDate>
-        </DocInfo>
-        <DocRight>
-          <Ionicons name="chevron-forward" size={16} color="#7a7f86ff" />
-        </DocRight>
-      </DocCard>
-    );
+    return <DocumentCard document={item} />;
   };
 
   return (
@@ -121,54 +129,6 @@ const SectionLabelText = styled.Text`
   font-weight: 700;
   color: #0f172a;
   padding-left: 13px;
-`;
-
-const DocCard = styled.TouchableOpacity`
-  background-color: #ffffff;
-  border-radius: 20px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  border-width: 0.5px;
-  border-color: #e2e8f0;
-  elevation: 2;
-  shadow-color: #000;
-  shadow-opacity: 0.04;
-  shadow-radius: 6px;
-  shadow-offset: 0px 2px;
-`;
-
-const DocIconBox = styled.View`
-  width: 44px;
-  height: 44px;
-  background-color: #eef3fd;
-  border-radius: 13px;
-  align-items: center;
-  justify-content: center;
-`;
-
-const DocInfo = styled.View`
-  flex: 1;
-`;
-
-const DocTitle = styled.Text`
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
-  margin-bottom: 3px;
-`;
-
-const DocDate = styled.Text`
-  font-size: 12px;
-  color: #94a3b8;
-`;
-
-const DocRight = styled.View`
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
 `;
 
 const EmptyStateWrapper = styled.View`

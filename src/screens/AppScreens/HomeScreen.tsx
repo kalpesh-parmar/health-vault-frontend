@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { TouchableOpacity, Linking } from "react-native";
+import { Linking } from "react-native";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCameraPermissions, CameraView } from "expo-camera";
@@ -14,8 +14,10 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import ImagePreview from "../../components/shared/ImagePreview";
 import Loader from "../../components/shared/Loader";
 import { RootStackParamList } from "../../navigation/types";
-import HomeCard from "../../components/shared/Documents/HomeCard";
+import HomeCard from "../../components/Documents/HomeCard";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { documentUpload } from "../../services/authService";
+import { useMutation } from "@tanstack/react-query";
 
 const HomeScreen = () => {
   const refRBSheet = useRef<BottomSheetModal>(null);
@@ -29,6 +31,9 @@ const HomeScreen = () => {
     "camera",
   );
   const cameraRef = useRef<any>(null);
+  const [filename, setFilename] = useState<string>("");
+  const [category, setCategory] = useState<string>("");
+
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -61,6 +66,7 @@ const HomeScreen = () => {
       try {
         setIsCapturing(true);
         const photo = await cameraRef.current.takePictureAsync();
+        console.log("Photo URI :- ", photo.uri);
         setPreviewSource("camera");
         setSelectedImages([photo.uri]);
         setIsCapturing(false);
@@ -85,34 +91,61 @@ const HomeScreen = () => {
     void handleGalleryPick();
   };
 
-  const handleSave = (fileName: string, images: string[]) => {
-    if (!images || images.length === 0) return;
-
-    if (!fileName) {
+  const { mutateAsync: saveDocumentMutation, isPending } = useMutation({
+    mutationFn: documentUpload,
+    onSuccess: () => {
+      Toast.show({
+        type: "success",
+        text1: "Document Added",
+        text2: "Your selected images are ready in the local list.",
+      });
+    },
+    onError: (error) => {
       Toast.show({
         type: "error",
-        text1: "Invalid filename.",
-        text2: "Please enter a valid filename.",
+        text1: "Error",
+        text2: error?.message,
+      });
+    },
+  });
+
+  const handleSave = async (fileName: string, category: string, images: string[]) => {
+    if (!images || images.length === 0) return;
+
+    if (!fileName || !category) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Please fill both filename and category.",
       });
       return;
     }
 
-    const formattedDate = new Date().toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    setFilename(fileName);
+    setCategory(category);
 
-    // setDocuments((docs) => [
-    //   {
-    //     id: Date.now().toString(),
-    //     title: fileName,
-    //     createdAt: formattedDate,
-    //     imageUri: images[0],
-    //     // documentId: response.documentId, // 🔥 critical
-    //   },
-    //   ...docs,
-    // ]);
+    try {
+      const formData = new FormData();
+
+      const uri = images[0];
+      const filename = uri.split("/").pop();
+      const type = filename?.split(".").pop();
+
+      formData.append("file", {
+        uri: uri,
+        name: `${fileName}.${type}`,
+        type: `image/${type}`,
+      } as any);
+
+      formData.append("fileName", `${fileName}.${type}`);
+      console.log("Filename :-", `${fileName}.${type}`);
+      formData.append("category", category);
+
+      await saveDocumentMutation(formData);
+    } catch (error) {
+      console.log("Error :- ", error);
+    }
+
     setIsPreviewVisible(false);
     setSelectedImages([]);
 
@@ -147,8 +180,8 @@ const HomeScreen = () => {
       mediaTypes: ["images"],
       quality: 1,
       allowsEditing: false,
-      allowsMultipleSelection: true,
-      selectionLimit: 5,
+      allowsMultipleSelection: false,
+      selectionLimit: 1,
     });
 
     if (result.canceled || !result.assets?.length) {
@@ -194,6 +227,7 @@ const HomeScreen = () => {
         onRetake={() => handleRetake()}
         onSave={handleSave}
         retakeLabel={previewSource === "camera" ? "Retake" : "Choose Another"}
+        isPending={isPending}
       />
 
       <Container>
@@ -208,16 +242,6 @@ const HomeScreen = () => {
           />
 
           <AppNameHeader>HealthVault</AppNameHeader>
-
-          <TouchableOpacity onPress={() => setShowLogoutModal(true)}>
-            <LogoutIconWrapper>
-              <MaterialCommunityIcons
-                name="logout-variant"
-                size={22}
-                color="#ef4444"
-              />
-            </LogoutIconWrapper>
-          </TouchableOpacity>
         </Header>
 
         <WelcomeSection>
@@ -226,12 +250,6 @@ const HomeScreen = () => {
             Access, manage & secure all your medical records in one place
           </SubWelcomeText>
         </WelcomeSection>
-
-        {/* <DocumentList
-          documents={documents}
-          handleDelete={handleDelete}
-          handleSummary={handleSummary}
-        /> */}
 
         <CardsWrapper>
           <HomeCard
@@ -334,21 +352,12 @@ const Header = styled.View`
 `;
 
 const AppNameHeader = styled.Text`
+  flex: 1;
+  text-align: center;
   font-size: 24px;
   font-weight: 900;
   color: #2563eb;
 `;
-
-const LogoutIconWrapper = styled.View`
-  background-color: #fff1f2;
-  padding: 10px;
-  border-radius: 14px;
-  shadow-color: #ef4444;
-  shadow-opacity: 0.15;
-  shadow-radius: 10px;
-  elevation: 3;
-`;
-
 const WelcomeSection = styled.View`
   padding: 20px 20px 10px;
 `;
@@ -369,10 +378,11 @@ const SubWelcomeText = styled.Text`
 const CardsWrapper = styled.View`
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
+  justify-content: flex-start;
   align-items: center;
-  padding: 10px 20px 0px;
+  gap: 12px;
+  padding: 10px 20px;
+  overflow: hidden;
 `;
 
 const FABWrapper = styled.View`

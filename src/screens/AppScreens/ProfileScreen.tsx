@@ -14,47 +14,53 @@ import LogoutModal from "../../components/Auth/LogoutModal";
 import { getUserById, updateUser } from "../../services/authService";
 import * as SecureStore from "expo-secure-store";
 import Toast from "react-native-toast-message";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { ProfileStackParamList } from "../../navigation/types";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
+
+type Gender = "Male" | "Female" | "Other";
 
 const ProfileScreen = () => {
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [password, setPassword] = useState<string | null>(null);
+  const [fullname, setFullname] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [dateOfBirth, setDateOfBirth] = useState<Date | null>(new Date());
+  const [gender, setGender] = useState<Gender | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<"Log Out" | "Delete Account">(
     "Log Out",
   );
-  const [editedUsername, setEditedUsername] = useState<string>("");
-  const [showInput, setShowInput] = useState<boolean>(false);
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
   const queryClient = useQueryClient();
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async (newUsername: string) => {
-      const userId = await SecureStore.getItemAsync("userId");
-      if (!userId) throw new Error("No user ID found in SecureStore.");
-      return await updateUser(userId, { userName: newUsername });
-    },
-    onSuccess: () => {
-      console.log("Profile Updated Successfully.");
+  useFocusEffect(
+    useCallback(() => {
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-      Toast.show({
-        type: "success",
-        text1: "Profile Updated",
-        text2: "Username changed successfully.",
-      });
-    },
-    onError: (error: any) => {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: error.message || "Could not update username.",
-      });
-    },
-  });
+    }, []),
+  );
+
+  const formData = {
+    username: username ?? "",
+    fullname: fullname ?? "",
+    email: email ?? "",
+    password: password ?? "",
+    dob: dateOfBirth ?? new Date(),
+    phone: phone ?? "",
+    gender:
+      gender === "Male" || gender === "Female" || gender === "Other"
+        ? gender
+        : "Male",
+  };
 
   const { data: userData, isLoading } = useQuery({
     queryKey: ["userProfile"],
     queryFn: async () => {
       const userId = await SecureStore.getItemAsync("userId");
+      console.log("userId :- ", userId);
       if (!userId) throw new Error("No user ID found in SecureStore.");
       const response = await getUserById(userId);
       return response?.data || response;
@@ -62,9 +68,14 @@ const ProfileScreen = () => {
   });
 
   useEffect(() => {
+    console.log("userData :- ", userData);
     if (userData) {
       setUsername(userData?.userName || "Guest");
       setEmail(userData?.email || "No Email");
+      setFullname(userData?.fullName || "No Name");
+      setDateOfBirth(userData?.dateOfBirth || "No DOB");
+      setPhone(userData?.phone || "No Mobile");
+      setGender(userData?.gender || "No Gender");
     }
   }, [userData]);
 
@@ -76,19 +87,6 @@ const ProfileScreen = () => {
   const triggerLogOut = () => {
     setModalMode("Log Out");
     setShowModal(true);
-  };
-
-  const handleEditProfile = () => {
-    setShowInput(true);
-  };
-
-  const handleSaveUsername = () => {
-    if (editedUsername && editedUsername !== username) {
-      updateProfileMutation.mutate(editedUsername);
-      setUsername(editedUsername);
-    }
-    setEditedUsername("");
-    setShowInput(false);
   };
 
   return (
@@ -120,29 +118,14 @@ const ProfileScreen = () => {
             ) : (
               <IdentityWrapper>
                 <EditNameWrapper>
-                  {showInput ? (
-                    <UsernameInput
-                      placeholder="New username"
-                      onChangeText={setEditedUsername}
-                      onBlur={handleSaveUsername}
-                      placeholderTextColor="grey"
-                      autoFocus
-                    />
-                  ) : (
-                    <UserName>{username || "Guest User"}</UserName>
-                  )}
+                  <UserName>{username || "Guest User"}</UserName>
                   <EditIconWrapper
-                    onPress={showInput ? handleSaveUsername : handleEditProfile}
+                    onPress={() => {
+                      if (!userData) return;
+                      navigation.navigate("EditProfile", { formData });
+                    }}
                   >
-                    {showInput ? (
-                      <MaterialCommunityIcons
-                        name="check"
-                        size={16}
-                        color="lightseagreen"
-                      />
-                    ) : (
-                      <MaterialIcons name="edit" size={16} color="#2563eb" />
-                    )}
+                    <MaterialIcons name="edit" size={16} color="#2563eb" />
                   </EditIconWrapper>
                 </EditNameWrapper>
 

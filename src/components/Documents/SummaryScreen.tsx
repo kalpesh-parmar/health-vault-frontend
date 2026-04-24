@@ -1,24 +1,23 @@
 import React from "react";
 import styled from "styled-components/native";
-import ScreenHeader from "../Header";
+import ScreenHeader from "../shared/Header";
 import { MedicalDocument } from "./DocumentCard";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
-interface DocumentsProps {
-  document: MedicalDocument;
-}
+const SummaryScreen = ({ route, navigation }: any) => {
+  const { document } = route.params;
+  console.log("Document :-", document);
 
-const SummaryScreen = ({ document }: DocumentsProps) => {
   const handleDelete = (id: string) => {};
-  const handleEdit = (id: string, updatedData?: Partial<MedicalDocument>) => {};
+  const handleEdit = (id: string, updatedData?: Partial<MedicalDocument>) => {
+    navigation.navigate("EditDocument", { document });
+  };
 
   return (
     <Container>
       <HeaderBand>
         <ScreenHeader title="Summary" showBack={true} />
-        <HeaderCircle1 />
-        <HeaderCircle2 />
       </HeaderBand>
 
       <ScrollContent>
@@ -26,15 +25,15 @@ const SummaryScreen = ({ document }: DocumentsProps) => {
           <MetaLeft>
             <CategoryRow>
               <CategoryDot />
-              <CategoryLabel>Medical</CategoryLabel>
+              <CategoryLabel>{document.category}</CategoryLabel>
             </CategoryRow>
-            <DocumentTitle>{document.title}</DocumentTitle>
+            <DocumentTitle>{document?.title}</DocumentTitle>
             <DateRow>
               <Ionicons name="calendar-outline" size={12} color="#94A3B8" />
-              <DocumentDate>Created {document.createdAt}</DocumentDate>
+              <DocumentDate>Created {document?.createdAt}</DocumentDate>
             </DateRow>
           </MetaLeft>
-          <EditButton onPress={() => handleEdit(document.id)}>
+          <EditButton onPress={() => handleEdit(document?.id || "")}>
             <Ionicons name="pencil-sharp" size={16} color="#1246A8" />
           </EditButton>
         </MetaCard>
@@ -55,19 +54,37 @@ const SummaryScreen = ({ document }: DocumentsProps) => {
               </GeneratedBadge>
             </SummaryHeader>
             <SummaryText>
-              {document.AISummary ||
+              {document?.AISummary ||
                 "AI summary will be generated on OCR API call."}
             </SummaryText>
           </SummaryGradient>
         </SummaryCard>
+
+        {document?.notes && (
+          <SummaryCard>
+            <SummaryGradient
+              colors={["#EEF3FD", "#FFFCF3"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <SummaryHeader>
+                <SummaryIconBadge>
+                  <Ionicons name="book-outline" size={14} color="#ffffff" />
+                </SummaryIconBadge>
+                <SummaryTitle>Notes</SummaryTitle>
+              </SummaryHeader>
+              <SummaryText>{document?.notes}</SummaryText>
+            </SummaryGradient>
+          </SummaryCard>
+        )}
 
         <PreviewCard>
           <PreviewHeader>
             <Ionicons name="document-outline" size={13} color="#94A3B8" />
             <PreviewLabel>Document Preview</PreviewLabel>
           </PreviewHeader>
-          {document.imageUri ? (
-            <PreviewImage source={{ uri: document.imageUri }} />
+          {document?.imageUri ? (
+            <PreviewImage source={{ uri: document?.imageUri }} />
           ) : (
             <EmptyPreview>
               <Ionicons name="image-outline" size={36} color="#CBD5E1" />
@@ -77,14 +94,17 @@ const SummaryScreen = ({ document }: DocumentsProps) => {
         </PreviewCard>
 
         <ActionRow>
-          <ActionButton variant="edit" onPress={() => handleEdit(document.id)}>
+          <ActionButton
+            variant="edit"
+            onPress={() => handleEdit(document?.id || "")}
+          >
             <Ionicons name="pencil-sharp" size={18} color="#1246A8" />
             <ActionButtonText variant="edit">Edit Document</ActionButtonText>
           </ActionButton>
 
           <ActionButton
             variant="delete"
-            onPress={() => handleDelete(document.id)}
+            onPress={() => handleDelete(document?.id || "")}
           >
             <Ionicons name="trash-outline" size={18} color="#E53535" />
             <ActionButtonText variant="delete">Delete</ActionButtonText>
@@ -113,26 +133,6 @@ const HeaderBand = styled.View`
   background-color: #ffffff;
   padding-bottom: 24px;
   overflow: hidden;
-`;
-
-const HeaderCircle1 = styled.View`
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  border-radius: 60px;
-  background-color: rgba(255, 255, 255, 0.06);
-  top: -30px;
-  right: -20px;
-`;
-
-const HeaderCircle2 = styled.View`
-  position: absolute;
-  width: 70px;
-  height: 70px;
-  border-radius: 35px;
-  background-color: rgba(255, 255, 255, 0.08);
-  top: 24px;
-  right: 50px;
 `;
 
 const ScrollContent = styled.ScrollView.attrs({

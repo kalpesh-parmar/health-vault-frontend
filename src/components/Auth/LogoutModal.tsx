@@ -5,13 +5,14 @@ import DualButtons from "../shared/Buttons/DualButtons";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import { useAuth } from "../../context/AuthContext";
-import { deleteUserAccount, logoutSession } from "../../services/authService";
+import { deleteUserAccount, logoutUser } from "../../services/authService";
 import { useMutation } from "@tanstack/react-query";
+import * as SecureStore from "expo-secure-store";
 
 interface LogoutModalProps {
   showModal: boolean;
   onClose: () => void;
-  mode?: "Log Out" | "Delete Account";
+  mode?: "Log Out" | "Delete Account" | "Delete Document";
 }
 
 const LogoutModal = ({
@@ -22,7 +23,7 @@ const LogoutModal = ({
   const { logout } = useAuth();
 
   const logoutMutation = useMutation({
-    mutationFn: logoutSession,
+    mutationFn: logoutUser,
     onSuccess: async () => {
       console.log("Logged out successfully.");
       await logout();
@@ -39,12 +40,13 @@ const LogoutModal = ({
         text1: "OOPS!!! 😣",
         text2: error.message || "Error Logging out.",
       });
-    }
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteUserAccount,
     onSuccess: async () => {
+      await SecureStore.deleteItemAsync("userId");
       console.log("Account Deleted Successfully.");
       await logout();
       onClose();
@@ -62,15 +64,17 @@ const LogoutModal = ({
       });
     },
   });
-  
+
   const handleAuthAction = async () => {
     try {
       if (mode === "Log Out") {
         logoutMutation.mutate();
-      } else {
+      } else if(mode === "Delete Account"){
         deleteMutation.mutate();
+      } else {
+        // Document Deletion API call will be made here.
       }
-    } catch (error:any) {
+    } catch (error: any) {
       console.error(`Error during ${mode}:`, error);
       Toast.show({
         type: "error",
@@ -99,20 +103,39 @@ const LogoutModal = ({
           </IconWrapper>
 
           <ContentContainer>
-            <Title>{isLogout ? "Log Out" : "Delete Account"}</Title>
+            <Title>
+              {mode === "Delete Document"
+                ? "Delete Document"
+                : isLogout
+                  ? "Log Out"
+                  : "Delete Account"}
+            </Title>
             <Description>
               Are you sure you want to{" "}
-              {isLogout ? "leave" : "delete your account from"} Health Vault?{" "}
-              {isLogout
-                ? "You will need to enter your credentials to return."
-                : "Your account will be deleted permanently."}
+              {mode === "Delete Document"
+                ? "delete"
+                : isLogout
+                  ? "leave"
+                  : "delete your account from"}{" "}
+              this Document ?{" "}
+              {mode === "Delete Document"
+                ? "This action will permanently delete this document and it cannot be undone."
+                : isLogout
+                  ? "You will need to enter your credentials to return."
+                  : "Your account will be deleted permanently."}
             </Description>
           </ContentContainer>
 
           <DualButtons
             secondaryBtnText="Cancel"
             secondaryBtnColor="grey"
-            mainBtnText={isLogout ? "Log Out" : "Delete Account"}
+            mainBtnText={
+              mode === "Delete Document"
+                ? "Delete"
+                : isLogout
+                  ? "Log Out"
+                  : "Delete Account"
+            }
             mainBtnColor="red"
             onSecondaryPress={onClose}
             onMainPress={handleAuthAction}

@@ -10,14 +10,16 @@ import styled from "styled-components/native";
 import React, { useState } from "react";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import DualButtons from "./Buttons/DualButtons";
+import Loader from "./Loader";
 
 interface ImagePreviewProps {
   images: string[];
   isVisible: boolean;
   setIsVisible: (modal: boolean) => void;
   onRetake: () => void;
-  onSave: (fileName: string, images: string[]) => void;
+  onSave: (fileName: string, category: string, images: string[]) => void;
   retakeLabel?: string;
+  isPending: boolean;
 }
 
 const ImagePreview = ({
@@ -27,11 +29,13 @@ const ImagePreview = ({
   onRetake,
   onSave,
   retakeLabel = "Retake",
+  isPending
 }: ImagePreviewProps) => {
   if (!images || images.length === 0) return null;
 
   const [showInput, setShowInput] = useState<boolean>(false);
   const [fileName, setFileName] = useState("");
+  const [category, setCategory] = useState("");
   const [error, setError] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [width, setWidth] = useState(0);
@@ -59,11 +63,14 @@ const ImagePreview = ({
   const resetPreviewState = () => {
     setShowInput(false);
     setFileName("");
+    setCategory("");
     setError("");
   };
 
   return (
     <>
+
+    {isPending && <Loader visible={isVisible} />}
       <Modal visible={isVisible} animationType="fade" transparent={false}>
         <Container>
           <CloseBtn
@@ -88,7 +95,9 @@ const ImagePreview = ({
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                keyExtractor={(_item: string, index: number) => index.toString()}
+                keyExtractor={(_item: string, index: number) =>
+                  index.toString()
+                }
                 onMomentumScrollEnd={handleMomentumScrollEnd}
                 renderItem={renderImage}
               />
@@ -116,7 +125,7 @@ const ImagePreview = ({
               }}
             >
               <MaterialCommunityIcons name="check" size={20} color="#fff" />
-              <PrimaryText style={{color: "white"}}>Save</PrimaryText>
+              <PrimaryText style={{ color: "white" }}>Save</PrimaryText>
             </PrimaryButton>
           </ActionBar>
 
@@ -126,6 +135,7 @@ const ImagePreview = ({
                 <InputLabel>Enter File Name</InputLabel>
 
                 <FileInput
+                  value={fileName}
                   placeholder="E.G :- my_scan"
                   placeholderTextColor="#000000"
                   cursorColor="black"
@@ -138,17 +148,19 @@ const ImagePreview = ({
                 />
                 {error && <PrimaryText>Filename is required.</PrimaryText>}
 
+                <InputLabel>Enter Category</InputLabel>
                 <FileInput
-                  placeholder="E.G :- my_scan"
+                  value={category}
+                  placeholder="Family, Insurance, Medication, Medical Documents, Others"
                   placeholderTextColor="#000000"
                   cursorColor="black"
                   onChangeText={(text: string) => {
-                    setFileName(text);
+                    setCategory(text);
                     setError("");
-                    if (!text) setError("Filename is required.");
+                    if (!text) setError("Category is required.");
                   }}
-                  autoFocus
                 />
+                {error && <PrimaryText>Category is required.</PrimaryText>}
 
                 <DualButtons
                   secondaryBtnText="Cancel"
@@ -163,8 +175,10 @@ const ImagePreview = ({
                   onMainPress={() => {
                     if (!fileName?.trim()) {
                       setError("Filename is required.");
+                    } else if (!category?.trim()) {
+                      setError("Category is required.");
                     } else {
-                      onSave(fileName.trim(), images);
+                      onSave(fileName.trim(), category.trim(), images);
                       resetPreviewState();
                     }
                   }}

@@ -5,7 +5,7 @@ import { useNavigation } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
-import { login, createSession } from "../../services/authService";
+import { login } from "../../services/authService";
 import * as SecureStore from "expo-secure-store";
 import { useAuth } from "../../context/AuthContext";
 
@@ -33,38 +33,20 @@ const LoginScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const sessionMutation = useMutation({
-    mutationFn: createSession,
-    onSuccess: async (result) => {
-      console.log(result);
-      const sessionData = result?.data || result;
-      console.log("Session Id :- ", sessionData.id);
-      const userId = sessionData.userId;
-      await authLogin(String(sessionData.id), String(userId));
-    },
-    onError: (error: any) => {
-      console.log(error.message);
-      Toast.show({
-        type: "error",
-        text1: "Session Error",
-        text2: error.message || "Failed to create session",
-      });
-    },
-  });
-
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: async (result) => {
       console.log(result);
-      const token = result?.data?.token;
+      const token = result?.data;
       console.log("Token :- ", token);
       await SecureStore.setItemAsync("authToken", String(token));
+      const userId = await SecureStore.getItemAsync("userId");
+      await authLogin(String(userId));
       Toast.show({
         type: "success",
         text1: "Hurrahhh!!! 🥳",
         text2: `LoggedIn Successfully.`,
       });
-      sessionMutation.mutate(String(token));
     },
     onError: (error: any) => {
       console.log("Login Screen Displayed :-", error);
@@ -128,7 +110,10 @@ const LoginScreen = () => {
                     placeholder="name@example.com"
                     placeholderTextColor="#94a3b8"
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(text: string) => {
+                      setEmail(text);
+                      setEmailError("");
+                    }}
                     autoCapitalize="none"
                   />
                 </InputWrapper>
@@ -148,7 +133,10 @@ const LoginScreen = () => {
                     placeholderTextColor="#94a3b8"
                     secureTextEntry
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(text: string) => {
+                      setPassword(text);
+                      setPasswordError("");
+                    }}
                     autoCapitalize
                   />
                 </InputWrapper>
