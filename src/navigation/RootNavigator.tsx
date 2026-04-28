@@ -2,29 +2,26 @@ import React from "react";
 import AuthStack from "./stacks/AuthStack";
 import AppStack from "./stacks/AppStack";
 import { useAuth } from "../context/AuthContext";
-import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
+import Loader from "../components/shared/Loader";
+import DocumentList from "../components/Documents/DocumentList";
+import SummaryScreen from "../components/Documents/SummaryScreen";
+import ProfileScreen from "../screens/AppScreens/ProfileScreen";
+import HomeScreen from "../screens/AppScreens/HomeScreen";
+import AddMedication from "../screens/AppScreens/DocsCategoryScreens/Medication/AddMedication";
 
 const RootNavigator = () => {
   const { isLoggedIn, isLoading } = useAuth();
   return (
     <NavigationContainer>
-      {isLoading ? (
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "#000",
-          }}
-        >
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
+      {/* {isLoading ? (
+        <Loader visible={true} />
       ) : isLoggedIn ? (
         <AppStack />
       ) : (
         <AuthStack />
-      )}
+      )} */}
+      <AddMedication />
     </NavigationContainer>
   );
 };

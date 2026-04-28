@@ -18,12 +18,25 @@ import HomeCard from "../../components/Documents/HomeCard";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { documentUpload } from "../../services/authService";
 import { useMutation } from "@tanstack/react-query";
+import { useFonts } from "expo-font";
+import { Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
+import {
+  Montserrat_600SemiBold,
+  Montserrat_700Bold,
+} from "@expo-google-fonts/montserrat";
+import { BlurView } from "expo-blur";
+import {
+  handleCapture,
+  handleGalleryPick,
+  handleRetake,
+  takePicture,
+} from "../../utils/ImageUpload";
 
 const HomeScreen = () => {
   const refRBSheet = useRef<BottomSheetModal>(null);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [isCameraVisible, setIsCameraVisible] = useState(false);
+  const [isCameraVisible, setIsCameraVisible] = useState<boolean>(false);
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [isPreviewVisible, setIsPreviewVisible] = useState<boolean>(false);
@@ -37,59 +50,16 @@ const HomeScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const handleCapture = async () => {
-    if (permission?.granted) {
-      refRBSheet?.current?.dismiss();
-      setIsCameraVisible(true);
-      return;
-    }
+  const fontsLoaded = useFonts({
+    Inter_400Regular,
+    Inter_600SemiBold,
+    Montserrat_600SemiBold,
+    Montserrat_700Bold,
+  });
 
-    const response = await requestPermission();
-    if (response.granted) {
-      setIsCameraVisible(true);
-    } else if (!permission?.canAskAgain) {
-      refRBSheet?.current?.dismiss();
-      Toast.show({
-        type: "error",
-        text1: "Enable Camera Permission",
-        text2: "Please enable camera access from device settings.",
-        props: {
-          buttonText: "Go To Settings",
-          onPressButton: () => Linking.openSettings(),
-        },
-      });
-    }
-  };
-
-  const takePicture = async () => {
-    if (cameraRef?.current && !isCapturing) {
-      try {
-        setIsCapturing(true);
-        const photo = await cameraRef.current.takePictureAsync();
-        console.log("Photo URI :- ", photo.uri);
-        setPreviewSource("camera");
-        setSelectedImages([photo.uri]);
-        setIsCapturing(false);
-        setIsPreviewVisible(true);
-        setIsCameraVisible(false);
-      } catch (error) {
-        console.log("capturing Error:-", error);
-      } finally {
-        setIsCapturing(false);
-      }
-    }
-  };
-
-  const handleRetake = () => {
-    setIsPreviewVisible(false);
-    setSelectedImages([]);
-    if (previewSource === "camera") {
-      setIsCameraVisible(true);
-      return;
-    }
-
-    void handleGalleryPick();
-  };
+  if (!fontsLoaded) {
+    return <Loader visible={true} />;
+  }
 
   const { mutateAsync: saveDocumentMutation, isPending } = useMutation({
     mutationFn: documentUpload,
@@ -109,7 +79,11 @@ const HomeScreen = () => {
     },
   });
 
-  const handleSave = async (fileName: string, category: string, images: string[]) => {
+  const handleSave = async (
+    fileName: string,
+    category: string,
+    images: string[],
+  ) => {
     if (!images || images.length === 0) return;
 
     if (!fileName || !category) {
@@ -134,7 +108,7 @@ const HomeScreen = () => {
       formData.append("file", {
         uri: uri,
         name: `${fileName}.${type}`,
-        type: `image/${type}`,
+        type: `image/jpeg`,
       } as any);
 
       formData.append("fileName", `${fileName}.${type}`);
@@ -154,45 +128,6 @@ const HomeScreen = () => {
       text1: "Document Added",
       text2: "Your selected images are ready in the local list.",
     });
-  };
-
-  const handleGalleryPick = async () => {
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    console.log(permissionResult);
-
-    if (!permissionResult.granted) {
-      if (!permissionResult.canAskAgain) {
-        Toast.show({
-          type: "error",
-          text1: "Enable Gallery Permission",
-          text2: "Please enable photo library access from device settings.",
-          props: {
-            buttonText: "Go To Settings",
-            onPressButton: () => Linking.openSettings(),
-          },
-        });
-      }
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 1,
-      allowsEditing: false,
-      allowsMultipleSelection: false,
-      selectionLimit: 1,
-    });
-
-    if (result.canceled || !result.assets?.length) {
-      return;
-    }
-
-    refRBSheet.current?.dismiss();
-    setPreviewSource("gallery");
-    const imageUris = result.assets.map((asset) => asset.uri);
-    setSelectedImages(imageUris);
-    setIsPreviewVisible(true);
   };
 
   return (
@@ -289,7 +224,11 @@ const HomeScreen = () => {
         </CardsWrapper>
 
         <FABWrapper>
-          <FABButton onPress={() => refRBSheet.current?.present()}>
+          <FABButton
+            onPress={() => {
+              refRBSheet.current?.present();
+            }}
+          >
             <MaterialCommunityIcons name="plus" size={30} color="white" />
           </FABButton>
         </FABWrapper>
@@ -355,8 +294,8 @@ const AppNameHeader = styled.Text`
   flex: 1;
   text-align: center;
   font-size: 24px;
-  font-weight: 900;
   color: #2563eb;
+  font-family: "Montserrat_700Bold";
 `;
 const WelcomeSection = styled.View`
   padding: 20px 20px 10px;
@@ -417,7 +356,7 @@ const SheetTitle = styled.Text`
 
 const SheetSubtitle = styled.Text`
   font-size: 14px;
-  color: #64748b;
+  color: #303843ff;
   margin-top: 6px;
   margin-bottom: 30px;
   text-align: center;

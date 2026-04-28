@@ -16,7 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "googleServicesFile": "./android/app/google-services.json",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/Splash.png",
         "backgroundColor": "#000000"
@@ -43,7 +43,10 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "expo-font",
+      "@react-native-community/datetimepicker",
+      "expo-mail-composer",
+      "expo-notifications"
     ]
   }
 }

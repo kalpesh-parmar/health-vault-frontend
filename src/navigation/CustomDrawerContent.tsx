@@ -7,16 +7,30 @@ import {
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import LogoutModal from "../components/Auth/LogoutModal";
+import { LinearGradient } from "expo-linear-gradient";
+import { TouchableOpacity } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "./types";
 
 const CustomDrawerContent = (props: any) => {
   const [showModal, setShowModal] = useState<boolean>(false);
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <Container>
       <DrawerContentScrollView contentContainerStyle={{ paddingTop: 0 }}>
-        <Header>
-          <Title>Health Vault</Title>
-        </Header>
+        <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
+          <Header>
+            <ProfileImage source={{ uri: "https://i.pravatar.cc/150" }} />
+
+            <UserInfo>
+              <Username>Dharmik</Username>
+              <Subtitle>Welcome back 👋</Subtitle>
+            </UserInfo>
+          </Header>
+        </TouchableOpacity>
 
         <DrawerSection>
           <DrawerItemList {...props} />
@@ -29,15 +43,21 @@ const CustomDrawerContent = (props: any) => {
           onPress={() => {
             setShowModal(true);
           }}
-          icon={() => (
-            <Ionicons name="log-out-outline" size={30} color="red" />
-          )}
-          labelStyle={{ color: "red", fontWeight: "600", fontSize: 16, letterSpacing: 1 }}
+          icon={() => <Ionicons name="log-out-outline" size={30} color="red" />}
+          labelStyle={{
+            color: "red",
+            fontWeight: "600",
+            fontSize: 16,
+            letterSpacing: 1,
+          }}
         />
       </BottomSection>
 
       {showModal && (
-        <LogoutModal showModal={showModal} onClose={() => setShowModal(false)} />
+        <LogoutModal
+          showModal={showModal}
+          onClose={() => setShowModal(false)}
+        />
       )}
     </Container>
   );
@@ -50,25 +70,48 @@ const Container = styled.View`
   background-color: #f8fafc;
 `;
 
-const Header = styled.View`
-  padding: 24px 20px;
-  border-radius: 25px 0 25px 0;
-  background-color: #607c98ff;
-  margin: 50px 20px 0;
+const Header = styled(LinearGradient).attrs({
+  colors: ["#4f46e5", "#7c3aed"],
+  start: { x: 0, y: 1 },
+  end: { x: 1, y: 0 },
+})`
+  padding: 10px;
+  height: 70px;
+  margin-top: 50px;
+  border-radius: 26px;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  elevation: 10;
 `;
 
-const Title = styled.Text`
-  color: #000000;
-  font-size: 20px;
-  font-weight: 600;
+const ProfileImage = styled.Image`
+  width: 52px;
+  height: 52px;
+  border-radius: 26px;
+  border: 2px solid #6366f1;
+`;
+
+const UserInfo = styled.View`
+  margin-left: 14px;
+`;
+
+const Username = styled.Text`
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+`;
+
+const Subtitle = styled.Text`
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 2px;
 `;
 
 const DrawerSection = styled.View`
   flex: 1;
   justify-content: space-between;
-  padding-top: 40px;
+  padding-top: 20px;
 `;
 
 const BottomSection = styled.View`

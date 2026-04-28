@@ -4,6 +4,9 @@ import ScreenHeader from "../shared/Header";
 import { MedicalDocument } from "./DocumentCard";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as MailComposer from 'expo-mail-composer'; 
+import Toast from "react-native-toast-message";
+import { generateProfessionalEmail } from "../../utils/ShareTemplate";
 
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
@@ -12,6 +15,44 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const handleDelete = (id: string) => {};
   const handleEdit = (id: string, updatedData?: Partial<MedicalDocument>) => {
     navigation.navigate("EditDocument", { document });
+  };
+
+  const handleShare = async () => {
+    const result = await MailComposer.isAvailableAsync();
+    if(!result) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Mail is not available'
+      });
+      return;
+    }
+
+    const subject = `Document Shared - ${document?.title}`;
+    const body = generateProfessionalEmail(document);
+    const attachment = document?.imageUri;
+
+    const mail = {
+      subject: subject,
+      body: body,
+      attachments: attachment ? [attachment] : [],
+    }
+
+    const share = await MailComposer.composeAsync(mail);
+
+    if(share.status === "cancelled") {
+      Toast.show({
+        type: 'info',
+        text1: 'Cancelled',
+        text2: 'Mail not sent'
+      })
+    } else {
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'Mail sent successfully'
+      })
+    }
   };
 
   return (
@@ -36,46 +77,48 @@ const SummaryScreen = ({ route, navigation }: any) => {
           <EditButton onPress={() => handleEdit(document?.id || "")}>
             <Ionicons name="pencil-sharp" size={16} color="#1246A8" />
           </EditButton>
-        </MetaCard>
 
-        <SummaryCard>
-          <SummaryGradient
-            colors={["#EEF3FD", "#F5F0FF"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <SummaryHeader>
-              <SummaryIconBadge>
-                <Ionicons name="sparkles" size={14} color="#ffffff" />
-              </SummaryIconBadge>
-              <SummaryTitle>AI Summary</SummaryTitle>
-              <GeneratedBadge>
-                <GeneratedBadgeText>GENERATED</GeneratedBadgeText>
-              </GeneratedBadge>
-            </SummaryHeader>
-            <SummaryText>
-              {document?.AISummary ||
-                "AI summary will be generated on OCR API call."}
-            </SummaryText>
-          </SummaryGradient>
-        </SummaryCard>
-
-        {document?.notes && (
           <SummaryCard>
             <SummaryGradient
-              colors={["#EEF3FD", "#FFFCF3"]}
+              colors={["#E8EFFD", "#EDE6FF", "#F5F0FF"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               <SummaryHeader>
                 <SummaryIconBadge>
-                  <Ionicons name="book-outline" size={14} color="#ffffff" />
+                  <Ionicons name="sparkles" size={14} color="#ffffff" />
                 </SummaryIconBadge>
-                <SummaryTitle>Notes</SummaryTitle>
+                <SummaryTitle>AI Summary</SummaryTitle>
               </SummaryHeader>
-              <SummaryText>{document?.notes}</SummaryText>
+              <SummaryText>
+                {document?.AISummary ||
+                  "AI summary will be generated on OCR API call."}
+              </SummaryText>
             </SummaryGradient>
           </SummaryCard>
+        </MetaCard>
+
+        {document?.notes && (
+          <NotesCard>
+            <NotesGradient
+              colors={["#FFFDF0", "#FFF8D6", "#FFF4C2"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <NotesMarginLine />
+              <NotesContent>
+                <NotesHeader>
+                  <NotesIconBadge>
+                    <Ionicons name="book-outline" size={14} color="#ffffff" />
+                  </NotesIconBadge>
+                  <NotesTitle>Notes</NotesTitle>
+                </NotesHeader>
+                <NotesRuledContainer>
+                  <NotesText>{document?.notes}</NotesText>
+                </NotesRuledContainer>
+              </NotesContent>
+            </NotesGradient>
+          </NotesCard>
         )}
 
         <PreviewCard>
@@ -93,23 +136,10 @@ const SummaryScreen = ({ route, navigation }: any) => {
           )}
         </PreviewCard>
 
-        <ActionRow>
-          <ActionButton
-            variant="edit"
-            onPress={() => handleEdit(document?.id || "")}
-          >
-            <Ionicons name="pencil-sharp" size={18} color="#1246A8" />
-            <ActionButtonText variant="edit">Edit Document</ActionButtonText>
-          </ActionButton>
-
-          <ActionButton
-            variant="delete"
-            onPress={() => handleDelete(document?.id || "")}
-          >
-            <Ionicons name="trash-outline" size={18} color="#E53535" />
-            <ActionButtonText variant="delete">Delete</ActionButtonText>
-          </ActionButton>
-        </ActionRow>
+        <ActionButton onPress={() => handleShare}>
+          <ActionButtonText>Share Document</ActionButtonText>
+          <Ionicons name="share" size={24} color="#ffffff" />
+        </ActionButton>
       </ScrollContent>
     </Container>
   );
@@ -120,9 +150,6 @@ export default SummaryScreen;
 const BLUE = "#1246A8";
 const BLUE_LIGHT = "#EEF3FD";
 const BLUE_BORDER = "#C5D5F7";
-const RED = "#E53535";
-const RED_LIGHT = "#FEF2F2";
-const RED_BORDER = "#FECACA";
 
 const Container = styled.SafeAreaView`
   flex: 1;
@@ -147,7 +174,7 @@ const MetaCard = styled.View`
   background-color: #ffffff;
   border-radius: 20px;
   padding: 18px;
-  flex-direction: row;
+  flex: 1;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 14px;
@@ -206,6 +233,9 @@ const DocumentDate = styled.Text`
 `;
 
 const EditButton = styled.TouchableOpacity`
+  position: absolute;
+  top: 40px;
+  right: 20px;
   width: 38px;
   height: 38px;
   border-radius: 12px;
@@ -214,15 +244,20 @@ const EditButton = styled.TouchableOpacity`
   border-color: ${BLUE_BORDER};
   align-items: center;
   justify-content: center;
-  margin-left: 12px;
 `;
 
 const SummaryCard = styled.View`
+  width: 100%;
+  margin-top: 20px;
   border-radius: 20px;
   overflow: hidden;
-  margin-bottom: 14px;
   border-width: 0.5px;
   border-color: ${BLUE_BORDER};
+  shadow-color: #6b8cda;
+  shadow-offset: 0px 8px;
+  shadow-opacity: 0.18;
+  shadow-radius: 20px;
+  elevation: 6;
 `;
 
 const SummaryGradient = styled(LinearGradient)`
@@ -237,32 +272,25 @@ const SummaryHeader = styled.View`
 `;
 
 const SummaryIconBadge = styled.View`
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background-color: ${BLUE};
   align-items: center;
   justify-content: center;
+  shadow-color: ${BLUE};
+  shadow-offset: 0px 3px;
+  shadow-opacity: 0.45;
+  shadow-radius: 6px;
+  elevation: 4;
 `;
 
 const SummaryTitle = styled.Text`
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   color: ${BLUE};
   flex: 1;
-`;
-
-const GeneratedBadge = styled.View`
-  background-color: ${BLUE};
-  border-radius: 20px;
-  padding: 3px 10px;
-`;
-
-const GeneratedBadgeText = styled.Text`
-  font-size: 9px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.2px;
 `;
 
 const SummaryText = styled.Text`
@@ -271,13 +299,84 @@ const SummaryText = styled.Text`
   line-height: 22px;
 `;
 
+const NotesCard = styled.View`
+  border-radius: 20px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  border-width: 0.5px;
+  border-color: #e8d9a0;
+  shadow-color: #c4a84f;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.12;
+  shadow-radius: 14px;
+  elevation: 3;
+`;
+
+const NotesGradient = styled(LinearGradient)`
+  padding: 18px 18px 18px 0px;
+  flex-direction: row;
+`;
+
+const NotesMarginLine = styled.View`
+  width: 3px;
+  border-radius: 3px;
+  background-color: #f0c040;
+  margin-left: 16px;
+  margin-right: 14px;
+  opacity: 0.75;
+`;
+
+const NotesContent = styled.View`
+  flex: 1;
+`;
+
+const NotesHeader = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+`;
+
+const NotesIconBadge = styled.View`
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background-color: #c68a00;
+  align-items: center;
+  justify-content: center;
+  shadow-color: #c68a00;
+  shadow-offset: 0px 3px;
+  shadow-opacity: 0.35;
+  shadow-radius: 5px;
+  elevation: 3;
+`;
+
+const NotesTitle = styled.Text`
+  font-size: 15px;
+  font-weight: 800;
+  color: #8a6200;
+  flex: 1;
+  letter-spacing: 0.2px;
+`;
+
+const NotesRuledContainer = styled.View`
+  position: relative;
+`;
+
+const NotesText = styled.Text`
+  font-size: 13px;
+  color: #4a3800;
+  line-height: 22px;
+  opacity: 0.9;
+`;
+
 const PreviewCard = styled.View`
   background-color: #ffffff;
   border-radius: 20px;
   overflow: hidden;
   margin-bottom: 14px;
   border-width: 0.5px;
-  border-color: #e2e8f0;
+  border-color: #797c7fff;
 `;
 
 const PreviewHeader = styled.View`
@@ -286,7 +385,7 @@ const PreviewHeader = styled.View`
   gap: 7px;
   padding: 10px 16px;
   border-bottom-width: 0.5px;
-  border-bottom-color: #e2e8f0;
+  border-bottom-color: #797c7fff;
   background-color: #f8fafc;
 `;
 
@@ -298,7 +397,7 @@ const PreviewLabel = styled.Text`
 
 const PreviewImage = styled.Image`
   width: 100%;
-  height: 200px;
+  height: fit-content;
 `;
 
 const EmptyPreview = styled.View`
@@ -314,28 +413,24 @@ const EmptyText = styled.Text`
   color: #94a3b8;
 `;
 
-const ActionRow = styled.View`
-  flex-direction: row;
-  gap: 10px;
-`;
-
-const ActionButton = styled.TouchableOpacity<{ variant: "edit" | "delete" }>`
+const ActionButton = styled.TouchableOpacity`
+  background-color: #000000;
   flex: 1;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 16px 10px;
-  border-radius: 18px;
-  background-color: ${({ variant }: any) =>
-    variant === "edit" ? BLUE_LIGHT : RED_LIGHT};
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 10px;
+  flex-direction: row;
+  align-items: center;
   border-width: 0.5px;
-  border-color: ${({ variant }: any) =>
-    variant === "edit" ? BLUE_BORDER : RED_BORDER};
+  border-color: ${BLUE_BORDER};
 `;
 
-const ActionButtonText = styled.Text<{ variant: "edit" | "delete" }>`
-  font-size: 13px;
+const ActionButtonText = styled.Text`
+  font-size: 16px;
   font-weight: 700;
-  color: ${({ variant }: any) => (variant === "edit" ? BLUE : RED)};
+  color: #ffffffff;
+  letter-spacing: 0.5px;
+  padding-right: 10px;
 `;

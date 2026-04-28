@@ -96,18 +96,19 @@ export const deleteUserAccount = async () => {
   return result;
 };
 
-export const getUserById = async (userId: string) => {
-  const endpoint = AUTH_ENDPOINTS.GET_USER_BY_ID.replace("{id}", userId);
+export const getUser = async () => {
+  const endpoint = AUTH_ENDPOINTS.GET_USER;
 
   const response = await fetch(endpoint, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${await SecureStore.getItemAsync("authToken")}`
     },
   });
 
   const result = await response.json();
-  console.log("User Data :- ",result);
+  console.log("User Data :- ", result);
 
   if (!response.ok) {
     throw new Error(result?.status?.description?.message);

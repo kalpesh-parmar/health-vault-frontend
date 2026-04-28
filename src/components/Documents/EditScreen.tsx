@@ -6,6 +6,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Alert } from "react-native";
 import Toast from "react-native-toast-message";
 import LogoutModal from "../Auth/LogoutModal";
+import DualButtons from "../shared/Buttons/DualButtons";
+import { useNavigation } from "@react-navigation/native";
+import { ProfileStackParamList, RootStackParamList } from "../../navigation/types";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 const EditScreen = ({ route }: any) => {
   const { document } = route.params;
@@ -14,6 +18,7 @@ const EditScreen = ({ route }: any) => {
   const [notes, setNotes] = useState(document?.notes ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [showModal, setShowModal] = useState<boolean>(false);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -27,15 +32,22 @@ const EditScreen = ({ route }: any) => {
       text1: "Hurrahhh!!! 🥳",
       text2: `Document Updated Successfully.`,
     });
+    navigation.navigate("DocumentSummary", {document: {id: document.id, title: filename, category, notes, createdAt: document.createdAt}});
   };
 
   const handleDelete = () => {
     setShowModal(true);
   };
 
-  return ( 
+  return (
     <Container>
-      <LogoutModal showModal={showModal} onClose={() => {setShowModal(false)}} mode="Delete Document" />
+      <LogoutModal
+        showModal={showModal}
+        onClose={() => {
+          setShowModal(false);
+        }}
+        mode="Delete Document"
+      />
       <ScreenHeader title="Edit Document" showBack={true} />
 
       <ScrollContent>
@@ -110,69 +122,20 @@ const EditScreen = ({ route }: any) => {
                 <Ionicons name="calendar-outline" size={14} color={BLUE} />
               </FieldIconBadge>
               <FieldMeta>
-                <FieldLabel>Created On</FieldLabel>
-                <ReadOnlyPill>
-                  <Ionicons name="lock-closed" size={9} color={SLATE} />
-                  <ReadOnlyText>Read only</ReadOnlyText>
-                </ReadOnlyPill>
+                <FieldLabel>Created On {document?.createdAt ?? "—"}</FieldLabel>
               </FieldMeta>
             </FieldRow>
-            <ReadOnlyValue editable={false}>
-              {document?.createdAt ?? "—"}
-            </ReadOnlyValue>
           </FieldBlock>
         </FormCard>
 
-        <SaveButton
-          onPress={handleSave}
-          disabled={isSaving}
-          activeOpacity={0.85}
-        >
-          <SaveGradient
-            colors={["#1A56CC", "#1246A8"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            {isSaving ? (
-              <SaveButtonText>Saving...</SaveButtonText>
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                <SaveButtonText>Save Changes</SaveButtonText>
-              </>
-            )}
-          </SaveGradient>
-        </SaveButton>
-
-        <DangerCard>
-          <DangerGradient
-            colors={["#FFF5F5", "#FEF2F2"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <DangerHeader>
-              <DangerIconBadge>
-                <Ionicons name="warning" size={14} color="#fff" />
-              </DangerIconBadge>
-              <DangerTitle>Delete Document</DangerTitle>
-            </DangerHeader>
-
-            <DangerBody>
-              <DangerBullet>
-                <Ionicons name="close-circle" size={14} color={RED} />
-                <DangerBulletText>
-                  This document will be permanently removed from your records.
-                </DangerBulletText>
-              </DangerBullet>
-            </DangerBody>
-
-            <DeleteButton onPress={handleDelete} activeOpacity={0.85}>
-              <Ionicons name="trash" size={16} color="#fff" />
-              <DeleteButtonText>Delete This Document</DeleteButtonText>
-            </DeleteButton>
-          </DangerGradient>
-        </DangerCard>
-
+        <DualButtons 
+          mainBtnText="Save Changes"
+          mainBtnColor="blue"
+          secondaryBtnText="Delete Document"
+          secondaryBtnColor="red"
+          onMainPress={handleSave}
+          onSecondaryPress={handleDelete}
+        />
         <BottomSpacer />
       </ScrollContent>
     </Container>
@@ -343,7 +306,7 @@ const SaveButtonText = styled.Text`
 `;
 
 const DangerCard = styled.View`
-  margin-top: 24px;
+margin-top: 14px;
   border-radius: 20px;
   overflow: hidden;
   border-width: 0.5px;

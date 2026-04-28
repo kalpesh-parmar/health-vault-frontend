@@ -233,6 +233,8 @@ export default function EditProfile({
                 <FieldInput
                   value={form.email}
                   onChangeText={(text: string) => updateField("email", text)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
                 />
               </FieldContent>
             </FieldRow>
@@ -245,6 +247,8 @@ export default function EditProfile({
                 <FieldInput
                   value={form.phone}
                   onChangeText={(text: string) => updateField("phone", text)}
+                  keyboardType="phone-pad"
+                  maxLength={10}
                 />
               </FieldContent>
             </FieldRow>

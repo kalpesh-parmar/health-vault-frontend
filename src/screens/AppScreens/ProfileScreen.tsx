@@ -11,9 +11,8 @@ import {
 import { useNavigation } from "@react-navigation/core";
 import DualButtons from "../../components/shared/Buttons/DualButtons";
 import LogoutModal from "../../components/Auth/LogoutModal";
-import { getUserById, updateUser } from "../../services/authService";
+import { getUser } from "../../services/authService";
 import * as SecureStore from "expo-secure-store";
-import Toast from "react-native-toast-message";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ProfileStackParamList } from "../../navigation/types";
 import { useFocusEffect } from "@react-navigation/native";
@@ -62,7 +61,7 @@ const ProfileScreen = () => {
       const userId = await SecureStore.getItemAsync("userId");
       console.log("userId :- ", userId);
       if (!userId) throw new Error("No user ID found in SecureStore.");
-      const response = await getUserById(userId);
+      const response = await getUser();
       return response?.data || response;
     },
   });
@@ -137,18 +136,14 @@ const ProfileScreen = () => {
           <StatsRow>
             <StatBox>
               <StatValue>5</StatValue>
-              <StatLabel>Uploads</StatLabel>
+              <StatLabel>Document Uploads</StatLabel>
             </StatBox>
             <StatDivider />
-            <StatBox>
-              <StatValue>Pro</StatValue>
-              <StatLabel>Plan</StatLabel>
-            </StatBox>
           </StatsRow>
 
           <SectionLabel>General</SectionLabel>
           <MenuCard>
-            <MenuItem onPress={() => navigation.navigate("Home" as never)}>
+            <MenuItem onPress={() => navigation.navigate("DocumentList" as never)}>
               <IconWrapper style={{ backgroundColor: "#eff6ff" }}>
                 <Ionicons name="document-text" size={20} color="#2563eb" />
               </IconWrapper>
@@ -167,8 +162,8 @@ const ProfileScreen = () => {
             </MenuItem>
           </MenuCard>
 
-          <SectionLabel>Account Actions</SectionLabel>
           <ActionsWrapper>
+            <SectionLabel>Account Actions</SectionLabel>
             <DualButtons
               secondaryBtnText="Delete Account"
               secondaryBtnColor="grey"
@@ -368,14 +363,6 @@ const MenuDivider = styled.View`
 `;
 
 const ActionsWrapper = styled.View`
-  margin-top: 5px;
-`;
-
-const FooterText = styled.Text`
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #94a3b8;
-  margin-top: 30px;
-  margin-bottom: 20px;
+  margin-top: 80px;
+  margin-bottom: 10px;
 `;

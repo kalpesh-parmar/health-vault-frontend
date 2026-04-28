@@ -16,6 +16,8 @@ import { useMutation } from "@tanstack/react-query";
 import { registerUser } from "../../services/authService";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as SecureStore from "expo-secure-store";
+import PasswordInfoModal from "../../components/PasswordInfo";
+import PhoneInput from "react-native-phone-number-input";
 
 const SignupScreen = () => {
   const navigation = useNavigation();
@@ -23,23 +25,45 @@ const SignupScreen = () => {
 
   // ✅ STATES
   const [username, setUsername] = useState("");
-  const [fullname, setFullname] = useState("");
+  const [firstname, setFirstname] = useState("");
+  const [lastname, setLastname] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [gender, setGender] = useState<string | null>(null);
-  const [date, setDate] = useState<Date>(new Date());
+  const [age, setAge] = useState<Date>(new Date());
   const [showDate, setShowDate] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const genderOptions = ["male", "female", "other"];
+  const [showPasswordInfo, setShowPasswordInfo] = useState<boolean>(false);
+  const [formattedValue, setFormattedValue] = useState("");
+
+  type IconName = keyof typeof Ionicons.glyphMap;
+
+  const genderConfig: Record<
+    "male" | "female" | "other",
+    { icon: IconName; label: string }
+  > = {
+    male: {
+      icon: "man",
+      label: "Male",
+    },
+    female: {
+      icon: "woman",
+      label: "Female",
+    },
+    other: {
+      icon: "person",
+      label: "Other",
+    },
+  };
 
   // ✅ VALIDATION
   const validate = () => {
     let newErrors: { [key: string]: string } = {};
 
-    if (!username) newErrors.username = "Username is required";
-    if (!fullname) newErrors.fullname = "Full name is required";
+    if (!firstname) newErrors.firstname = "First name is required";
+    if (!lastname) newErrors.lastname = "Last name is required";
 
     const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w\w+)+$/;
     if (!email) newErrors.email = "Email is required";
@@ -58,17 +82,16 @@ const SignupScreen = () => {
 
     if (!gender) newErrors.gender = "Select gender";
 
-    if (!date) newErrors.dob = "Select date of birth";
+    if (!age) newErrors.age = "Select age";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  
   const registerMutation = useMutation({
     mutationFn: registerUser,
     onSuccess: async (result) => {
-      const userId = result?.data?.[0]?.id;
+      const userId = result?.data?.id;
       await SecureStore.setItemAsync("userId", String(userId));
       Toast.show({
         type: "success",
@@ -99,29 +122,20 @@ const SignupScreen = () => {
     isSubmitting.current = true;
 
     const formData = {
-      username,
-      fullname,
+      firstname,
+      lastname,
       email,
       mobile,
       password,
       gender,
-      date,
+      age: age,
     };
 
     try {
-      await registerMutation.mutateAsync(formData);
+      await registerMutation.mutateAsync(formData as any);
     } finally {
       isSubmitting.current = false;
     }
-  };
-
-  const formatDate = (date: Date) => {
-    return date ? date.toISOString().split("T")[0] : "";
-  };
-
-  const onChangeDate = (_: any, selectedDate?: Date) => {
-    setShowDate(false);
-    if (selectedDate) setDate(selectedDate);
   };
 
   return (
@@ -141,43 +155,40 @@ const SignupScreen = () => {
             </Header>
 
             <FormCard>
-              {/* Username */}
               <InputGroup>
-                <Label>Username</Label>
-                <InputWrapper>
-                  <Ionicons name="at-outline" size={20} color="#64748b" />
-                  <StyledInput
-                    value={username}
-                    onChangeText={(text: string) => {
-                      setUsername(text);
-                      setErrors((prev) => ({ ...prev, username: "" }));
-                    }}
-                    placeholder="Enter Username"
-                    placeholderTextColor="#acababff"
-                  />
-                </InputWrapper>
-                {errors.username && <ErrorText>{errors.username}</ErrorText>}
-              </InputGroup>
-
-              {/* Fullname */}
-              <InputGroup>
-                <Label>Full Name</Label>
+                <Label>First Name</Label>
                 <InputWrapper>
                   <Ionicons name="person-outline" size={20} color="#64748b" />
                   <StyledInput
-                    value={fullname}
+                    value={firstname}
                     onChangeText={(text: string) => {
-                      setFullname(text);
-                      setErrors((prev) => ({ ...prev, fullname: "" }));
+                      setFirstname(text);
+                      setErrors((prev) => ({ ...prev, firstname: "" }));
                     }}
-                    placeholder="Name Middlename Surname"
+                    placeholder="Enter First Name"
                     placeholderTextColor="#acababff"
                   />
                 </InputWrapper>
-                {errors.fullname && <ErrorText>{errors.fullname}</ErrorText>}
+                {errors.firstname && <ErrorText>{errors.firstname}</ErrorText>}
               </InputGroup>
 
-              {/* Email */}
+              <InputGroup>
+                <Label>Last Name</Label>
+                <InputWrapper>
+                  <Ionicons name="person-outline" size={20} color="#64748b" />
+                  <StyledInput
+                    value={lastname}
+                    onChangeText={(text: string) => {
+                      setLastname(text);
+                      setErrors((prev) => ({ ...prev, lastname: "" }));
+                    }}
+                    placeholder="Enter Last Name"
+                    placeholderTextColor="#acababff"
+                  />
+                </InputWrapper>
+                {errors.lastname && <ErrorText>{errors.lastname}</ErrorText>}
+              </InputGroup>
+
               <InputGroup>
                 <Label>Email</Label>
                 <InputWrapper>
@@ -196,27 +207,62 @@ const SignupScreen = () => {
                 {errors.email && <ErrorText>{errors.email}</ErrorText>}
               </InputGroup>
 
-              {/* Mobile */}
               <InputGroup>
                 <Label>Mobile</Label>
-                <InputWrapper>
-                  <Ionicons name="call-outline" size={20} color="#64748b" />
-                  <StyledInput
-                    value={mobile}
-                    onChangeText={(text: string) => {
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#e2e8f0",
+                    borderRadius: 10,
+                  }}
+                >
+                  <PhoneInput
+                    defaultValue={mobile}
+                    defaultCode="IN"
+                    layout="second"
+                    onChangeText={(text) => {
                       setMobile(text);
                       setErrors((prev) => ({ ...prev, mobile: "" }));
                     }}
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    placeholder="1234567890"
-                    placeholderTextColor="#acababff"
+                    onChangeFormattedText={(text) => {
+                      setFormattedValue(text);
+                    }}
+                    textInputProps={{
+                      maxLength: 10,
+                    }}
+                    withShadow={false}
+                    autoFocus={false}
+                    containerStyle={{
+                      width: "100%",
+                      backgroundColor: "#fff",
+                      borderRadius: 10,
+                      height: 50,
+                    }}
+                    textContainerStyle={{
+                      backgroundColor: "transparent",
+                      borderTopRightRadius: 10,
+                      borderBottomRightRadius: 10,
+                      paddingVertical: 0,
+                    }}
+                    textInputStyle={{
+                      fontSize: 14,
+                      color: "#0f172a",
+                      padding: 0,
+                      margin: 0,
+                    }}
+                    codeTextStyle={{
+                      fontSize: 14,
+                      color: "#0f172a",
+                    }}
+                    flagButtonStyle={{
+                      borderRightWidth: 1,
+                      borderRightColor: "#e2e8f0",
+                    }}
                   />
-                </InputWrapper>
+                </View>
                 {errors.mobile && <ErrorText>{errors.mobile}</ErrorText>}
               </InputGroup>
 
-              {/* Gender */}
               <InputGroup>
                 <Label>Gender</Label>
                 <InputWrapper
@@ -228,31 +274,53 @@ const SignupScreen = () => {
                     backgroundColor: "transparent",
                   }}
                 >
-                  {genderOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                      }}
-                      onPress={() => {
-                        setGender(option);
-                        setErrors((prev) => ({ ...prev, gender: "" }));
-                      }}
-                    >
-                      <RadioOuter>
-                        {gender === option && <RadioInner />}
-                      </RadioOuter>
+                  {Object.keys(genderConfig).map((key: string) => {
+                    const item = genderConfig[key as keyof typeof genderConfig];
+                    const isSelected = gender === key;
 
-                      <Text style={{ marginLeft: 8 }}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={{
+                          alignItems: "center",
+                          marginRight: 20,
+                        }}
+                        onPress={() => {
+                          setGender(key);
+                          setErrors((prev) => ({ ...prev, gender: "" }));
+                        }}
+                      >
+                        {/* Icon */}
+                        <Ionicons
+                          name={item.icon}
+                          size={28}
+                          color={isSelected ? "#2563eb" : "#64748b"}
+                        />
+
+                        {/* Label */}
+                        <Text
+                          style={{
+                            marginTop: 4,
+                            fontSize: 13,
+                            color: isSelected ? "#2563eb" : "#334155",
+                          }}
+                        >
+                          {item.label}
+                        </Text>
+
+                        {/* Radio */}
+                        <RadioOuter style={{ marginTop: 6 }}>
+                          {isSelected && <RadioInner />}
+                        </RadioOuter>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </InputWrapper>
                 {errors.gender && <ErrorText>{errors.gender}</ErrorText>}
               </InputGroup>
 
               <InputGroup>
-                <Label>Date of Birth</Label>
+                <Label>Age</Label>
                 <TouchableOpacity onPress={() => setShowDate(true)}>
                   <InputWrapper>
                     <Ionicons
@@ -260,25 +328,48 @@ const SignupScreen = () => {
                       size={20}
                       color="#64748b"
                     />
-                    <Text style={{ marginLeft: 10 }}>{formatDate(date)}</Text>
+                    <StyledInput
+                      value={String(age)}
+                      onChangeText={(text: any) => {
+                        setAge(text as any);
+                        setErrors((prev) => ({ ...prev, age: "" }));
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                      placeholder="Enter age"
+                      placeholderTextColor="#acababff"
+                    />
                   </InputWrapper>
                 </TouchableOpacity>
-
-                {showDate && (
-                  <DateTimePicker
-                    value={date}
-                    mode="date"
-                    onChange={onChangeDate}
-                    maximumDate={new Date()}
-                  />
-                )}
-
-                {errors.dob && <ErrorText>{errors.dob}</ErrorText>}
+                {errors.age && <ErrorText>{errors.age}</ErrorText>}
               </InputGroup>
 
               {/* Password */}
+              <PasswordInfoModal
+                visible={showPasswordInfo}
+                onClose={() => setShowPasswordInfo(false)}
+              />
               <InputGroup>
-                <Label>Password</Label>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  <Label>Password &nbsp;</Label>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowPasswordInfo(true);
+                    }}
+                  >
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color="#64748b"
+                    />
+                  </TouchableOpacity>
+                </View>
                 <InputWrapper>
                   <Ionicons
                     name="lock-closed-outline"
@@ -299,9 +390,27 @@ const SignupScreen = () => {
                 {errors.password && <ErrorText>{errors.password}</ErrorText>}
               </InputGroup>
 
-              {/* Confirm Password */}
               <InputGroup>
-                <Label>Confirm Password</Label>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  <Label>Confirm Password &nbsp;</Label>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowPasswordInfo(true);
+                    }}
+                  >
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color="#64748b"
+                    />
+                  </TouchableOpacity>
+                </View>
                 <InputWrapper>
                   <Ionicons
                     name="shield-checkmark-outline"
@@ -332,7 +441,7 @@ const SignupScreen = () => {
             <Footer>
               <FooterText>Already have an account?</FooterText>
               <LoginLink onPress={() => navigation.navigate("Login" as never)}>
-                <LinkText> Sign In</LinkText>
+                <LinkText> Log In</LinkText>
               </LoginLink>
             </Footer>
           </InnerContainer>
@@ -416,7 +525,8 @@ const ButtonText = styled.Text`
 
 const ErrorText = styled.Text`
   color: red;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 400;
 `;
 
 const RadioOuter = styled.View`

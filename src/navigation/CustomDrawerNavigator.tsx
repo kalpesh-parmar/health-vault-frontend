@@ -42,16 +42,6 @@ const CustomDrawerNavigator = () => {
       </Drawer.Screen>
 
       <Drawer.Screen
-        name="Profile"
-        component={ProfileStack}
-        options={{
-          drawerIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
-        }}
-      />
-
-      <Drawer.Screen
         name="About Us"
         component={AboutScreen}
         options={{

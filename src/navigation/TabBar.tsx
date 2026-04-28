@@ -13,7 +13,7 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
     getFocusedRouteNameFromRoute(currentRoute) ?? currentRoute.name;
 
   useEffect(() => {
-    const shouldHide = nestedRouteName === "EditProfile";
+    const shouldHide = nestedRouteName != "Home";
 
     Animated.timing(translateY, {
       toValue: shouldHide ? 120 : 0,

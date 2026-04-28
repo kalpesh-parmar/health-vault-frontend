@@ -1,9 +1,13 @@
 import React from "react";
 import styled from "styled-components/native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { RootStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { TouchableOpacity } from "react-native";
+import * as MailComposer from "expo-mail-composer";
+import Toast from "react-native-toast-message";
+import { generateProfessionalEmail } from "../../utils/ShareTemplate";
 
 export interface MedicalDocument {
   id: string;
@@ -22,9 +26,47 @@ interface Props {
 
 const DocumentCard = ({ document }: Props) => {
   console.log("Document Details :-", document);
-  
+
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const handleShare = async (item: any) => {
+    const result = await MailComposer.isAvailableAsync();
+    if(!result) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Mail is not available'
+      });
+      return;
+    }
+
+    const subject = `Document Shared - ${item?.title}`;
+    const body = generateProfessionalEmail(document);
+    const attachment = item?.imageUri;
+
+    const mail = {
+      subject: subject,
+      body: body,
+      attachments: attachment ? [attachment] : [],
+    }
+
+    const share = await MailComposer.composeAsync(mail);
+
+    if(share.status === "cancelled") {
+      Toast.show({
+        type: 'info',
+        text1: 'Cancelled',
+        text2: 'Mail not sent'
+      })
+    } else {
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'Mail sent successfully'
+      })
+    }
+  };
   return (
     <DocCard
       onPress={() =>
@@ -41,7 +83,9 @@ const DocumentCard = ({ document }: Props) => {
         <DocDate>{document.createdAt}</DocDate>
       </DocInfo>
       <DocRight>
-        <Ionicons name="chevron-forward" size={16} color="#7a7f86ff" />
+        <TouchableOpacity onPress={() => handleShare(document)}>
+          <MaterialIcons name="share" size={24} color="#1246A8" />
+        </TouchableOpacity>
       </DocRight>
     </DocCard>
   );

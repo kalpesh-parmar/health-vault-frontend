@@ -1,5 +1,4 @@
 import {
-  FlatList,
   LayoutChangeEvent,
   ListRenderItem,
   Modal,
@@ -29,7 +28,7 @@ const ImagePreview = ({
   onRetake,
   onSave,
   retakeLabel = "Retake",
-  isPending
+  isPending,
 }: ImagePreviewProps) => {
   if (!images || images.length === 0) return null;
 
@@ -69,8 +68,7 @@ const ImagePreview = ({
 
   return (
     <>
-
-    {isPending && <Loader visible={isVisible} />}
+      {isPending && <Loader visible={true} />}
       <Modal visible={isVisible} animationType="fade" transparent={false}>
         <Container>
           <CloseBtn
@@ -165,7 +163,7 @@ const ImagePreview = ({
                 <DualButtons
                   secondaryBtnText="Cancel"
                   secondaryBtnColor="black"
-                  mainBtnText="Save"
+                  mainBtnText="Proceed"
                   mainBtnColor="#2563eb"
                   onSecondaryPress={() => {
                     setShowInput(false);

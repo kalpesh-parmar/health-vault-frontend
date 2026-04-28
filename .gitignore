@@ -17,7 +17,10 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
-
+firebaseConfig.js
+google-services.json
+health-vault-50-firebase-adminsdk-fbsvc-34364f44de.json
+src/utils/
 # Metro
 .metro-health-check*
 

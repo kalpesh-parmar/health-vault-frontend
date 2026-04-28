@@ -1,9 +1,13 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { FlatList } from "react-native";
 import styled from "styled-components/native";
 import EmptyContent from "../shared/EmptyContent";
 import ScreenHeader from "../shared/Header";
 import DocumentCard, { MedicalDocument } from "./DocumentCard";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { handleCapture, handleGalleryPick } from "../../utils/ImageUpload";
+import BottomSheet from "../shared/BottomSheet";
 
 const DUMMY_DOCS: MedicalDocument[] = [
   {
@@ -42,6 +46,7 @@ const DUMMY_DOCS: MedicalDocument[] = [
 
 const DocumentList = () => {
   const [documents, setDocuments] = useState<MedicalDocument[]>(DUMMY_DOCS);
+  const refRBSheet = useRef<BottomSheetModal>(null);
 
   const renderItem = ({ item }: { item: MedicalDocument }) => {
     return <DocumentCard document={item} />;
@@ -86,6 +91,47 @@ const DocumentList = () => {
           </EmptyStateWrapper>
         }
       />
+
+      <FABWrapper>
+        <FABButton
+          onPress={() => {
+            refRBSheet.current?.present();
+          }}
+        >
+          <MaterialCommunityIcons name="plus" size={30} color="white" />
+        </FABButton>
+      </FABWrapper>
+
+      <BottomSheet ref={refRBSheet}>
+        <SheetContentWrapper>
+          <SheetTitle>Add Document</SheetTitle>
+          <SheetSubtitle>Securely upload or capture your record</SheetSubtitle>
+
+          <SheetButtonsContainer>
+            <SheetActionButton onPress={() => void handleGalleryPick()}>
+              <IconWrapper style={{ backgroundColor: "#eff6ff" }}>
+                <MaterialCommunityIcons
+                  name="image-plus"
+                  size={28}
+                  color="#2563eb"
+                />
+              </IconWrapper>
+              <SheetActionButtonText>Gallery</SheetActionButtonText>
+            </SheetActionButton>
+
+            <SheetActionButton onPress={handleCapture}>
+              <IconWrapper style={{ backgroundColor: "#f0fdf4" }}>
+                <MaterialCommunityIcons
+                  name="camera-plus"
+                  size={28}
+                  color="#22c55e"
+                />
+              </IconWrapper>
+              <SheetActionButtonText>Camera</SheetActionButtonText>
+            </SheetActionButton>
+          </SheetButtonsContainer>
+        </SheetContentWrapper>
+      </BottomSheet>
     </Container>
   );
 };
@@ -143,4 +189,75 @@ const EmptySubText = styled.Text`
   font-size: 13px;
   color: #94a3b8;
   text-align: center;
+`;
+
+const FABWrapper = styled.View`
+  position: absolute;
+  bottom: 50px;
+  right: 25px;
+`;
+
+const FABButton = styled.TouchableOpacity`
+  width: 65px;
+  height: 65px;
+  border-radius: 24px;
+  background-color: #2563eb;
+  justify-content: center;
+  align-items: center;
+  shadow-color: #2563eb;
+  shadow-opacity: 0.4;
+  shadow-radius: 20px;
+  elevation: 12;
+`;
+
+const SheetContentWrapper = styled.View`
+  padding: 25px 20px;
+  align-items: center;
+`;
+
+const SheetTitle = styled.Text`
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+`;
+
+const SheetSubtitle = styled.Text`
+  font-size: 14px;
+  color: #303843ff;
+  margin-top: 6px;
+  margin-bottom: 30px;
+  text-align: center;
+`;
+
+const SheetButtonsContainer = styled.View`
+  flex-direction: row;
+  justify-content: space-evenly;
+  width: 100%;
+`;
+
+const SheetActionButton = styled.TouchableOpacity`
+  align-items: center;
+  width: 100px;
+  background-color: white;
+  padding: 16px;
+  border-radius: 20px;
+  shadow-color: #000;
+  shadow-opacity: 0.05;
+  shadow-radius: 10px;
+  elevation: 3;
+`;
+
+const IconWrapper = styled.View`
+  width: 30px;
+  height: 30px;
+  border-radius: 20px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 12px;
+`;
+
+const SheetActionButtonText = styled.Text`
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
 `;

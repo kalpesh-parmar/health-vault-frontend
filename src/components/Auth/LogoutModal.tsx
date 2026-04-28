@@ -72,6 +72,12 @@ const LogoutModal = ({
       } else if(mode === "Delete Account"){
         deleteMutation.mutate();
       } else {
+        Toast.show({
+          type: "success",
+          text1: "Document Deletion. !!!",
+          text2: "Document Deleted Successfully.",
+        });
+        onClose();
         // Document Deletion API call will be made here.
       }
     } catch (error: any) {

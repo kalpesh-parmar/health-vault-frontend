@@ -56,7 +56,7 @@ const MedicationScreen = () => {
       <CardHeader>
         <TitleSection>
           <IconWrapper>
-            <Ionicons name="medical" size={20} color="#2563eb" />
+            <Ionicons name="medkit-outline" size={20} color="#2563eb" />
           </IconWrapper>
           <MedName>{item.name}</MedName>
         </TitleSection>
