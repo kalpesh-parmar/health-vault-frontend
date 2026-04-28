@@ -1,14 +1,21 @@
 import React from "react";
+import { ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
 
 type TextParam = {
   text: string;
+  onPress: () => void;
+  isLoading?: boolean;
 };
 
-const PrimaryButton = ({ text}: TextParam) => {
+const PrimaryButton = ({ text, onPress, isLoading }: TextParam) => {
   return (
-    <PrimaryBtn>
-      <PrimaryButtonText>{text}</PrimaryButtonText>
+    <PrimaryBtn onPress={onPress} disabled={isLoading}>
+      {isLoading ? (
+        <ActivityIndicator size="small" color="#fff" />
+      ) : (
+        <PrimaryButtonText>{text}</PrimaryButtonText>
+      )}
     </PrimaryBtn>
   );
 };

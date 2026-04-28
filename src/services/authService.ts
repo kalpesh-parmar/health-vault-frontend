@@ -8,8 +8,12 @@ type loginRequestBody = {
 
 type signupRequestBody = {
   username: string;
+  fullname: string;
   email: string;
+  mobile: string;
   password: string;
+  gender: string | null;
+  date: Date | null;
 };
 
 export const login = async ({ email, password }: loginRequestBody) => {
@@ -27,15 +31,19 @@ export const login = async ({ email, password }: loginRequestBody) => {
   const result = await response.json();
 
   if (!response.ok) {
-    throw new Error(result?.status?.description?.message);
+    throw new Error(result?.status?.description);
   }
   return result;
 };
 
 export const registerUser = async ({
   username,
+  fullname,
   email,
+  mobile,
   password,
+  gender,
+  date,
 }: signupRequestBody) => {
   const response = await fetch(AUTH_ENDPOINTS.SIGNUP, {
     method: "POST",
@@ -44,8 +52,12 @@ export const registerUser = async ({
     },
     body: JSON.stringify({
       userName: username,
+      fullName: fullname,
       email: email,
       password: password,
+      gender: gender,
+      dateOfBirth: date,
+      phone: mobile,
     }),
   });
 
@@ -55,24 +67,6 @@ export const registerUser = async ({
   if (!response.ok) {
     throw new Error(result?.status?.description?.message);
   }
-
-  return result;
-};
-
-export const createSession = async (token: string) => {
-  const response = await fetch(AUTH_ENDPOINTS.SESSION, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      token: token,
-    }),
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) throw new Error(result?.status?.description?.message);
 
   return result;
 };
@@ -102,17 +96,19 @@ export const deleteUserAccount = async () => {
   return result;
 };
 
-export const getUserById = async (userId: string) => {
-  const endpoint = AUTH_ENDPOINTS.GET_USER_BY_ID.replace("{id}", userId);
+export const getUser = async () => {
+  const endpoint = AUTH_ENDPOINTS.GET_USER;
 
   const response = await fetch(endpoint, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${await SecureStore.getItemAsync("authToken")}`
     },
   });
 
   const result = await response.json();
+  console.log("User Data :- ", result);
 
   if (!response.ok) {
     throw new Error(result?.status?.description?.message);
@@ -129,37 +125,57 @@ export const updateUser = async (userId: string, data: any) => {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      userName: data?.userName,
+      fullName: data?.fullName,
+      email: data?.email,
+      password: data?.password,
+      gender: data?.gender,
+      dateOfBirth: data?.dateOfBirth,
+      phone: data?.phone,
+    }),
   });
 
   const result = await response.json();
+  console.log("Updated Data :- ", result);
 
   if (!response.ok) {
-    throw new Error(result?.status?.description?.message);
+    throw new Error(result?.status?.description);
   }
 
   return result;
 };
 
-export const logoutSession = async () => {
-  const sessionId = await SecureStore.getItemAsync("sessionId");
-  const numSessionId = parseInt(sessionId || "0");
-  console.log("Session Id :- ", numSessionId);
-
-  if (!numSessionId) {
-    throw new Error("Session not found. Please login again.");
-  }
-
+export const logoutUser = async () => {
   const response = await fetch(AUTH_ENDPOINTS.LOGOUT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${await SecureStore.getItemAsync("authToken")}`,
     },
-    body: JSON.stringify({ sessionId: numSessionId }),
   });
 
   const result = await response.json();
   console.log("Result :- ", result);
+
+  if (!response.ok) {
+    throw new Error(result?.status?.description);
+  }
+
+  return result;
+};
+
+export const documentUpload = async (formData: FormData) => {
+  const response = await fetch(AUTH_ENDPOINTS.DOCUMENT_UPLOAD, {
+    method: "POST",
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+    body: formData,
+  });
+
+  const result = await response.json();
+  console.log("Document Upload Result :- ", result);
 
   if (!response.ok) {
     throw new Error(result?.status?.description);

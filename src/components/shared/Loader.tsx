@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, Easing, View, Dimensions, Platform } from "react-native";
+import {
+  Animated,
+  Easing,
+  View,
+  Dimensions,
+  Platform,
+  Modal,
+} from "react-native";
 import styled from "styled-components/native";
 import { BlurView } from "expo-blur";
 
@@ -49,22 +56,22 @@ const ModernLoader = ({ visible }: Props) => {
     outputRange: ["0deg", "360deg"],
   });
 
-  if (!visible) return null;
-
   return (
-    <Container style={{ opacity: fadeAnim }}>
-      <GlassBackground
-        intensity={Platform.OS === "ios" ? 30 : 100}
-        tint="dark"
-      />
+    <Modal transparent visible={visible}>
+      <Container style={{ opacity: fadeAnim }}>
+        <GlassBackground
+          intensity={Platform.OS === "ios" ? 30 : 100}
+          tint="dark"
+        />
 
-      <LoaderContent>
-        <SpinnerWrapper style={{ transform: [{ rotate: spin }] }}>
-          <RingLine />
-        </SpinnerWrapper>
-        <StatusText>PROCESSING</StatusText>
-      </LoaderContent>
-    </Container>
+        <LoaderContent>
+          <SpinnerWrapper style={{ transform: [{ rotate: spin }] }}>
+            <RingLine />
+          </SpinnerWrapper>
+          <StatusText>PROCESSING</StatusText>
+        </LoaderContent>
+      </Container>
+    </Modal>
   );
 };
 

@@ -16,26 +16,6 @@ const SettingsScreen = () => {
       <ScreenHeader title="Settings" showBack={true} />
 
       <StyledScrollView showsVerticalScrollIndicator={false}>
-        <ProfileCard>
-          <AvatarWrapper>
-            <MaterialCommunityIcons
-              name="account-circle"
-              size={60}
-              color="#cbd5e1"
-            />
-          </AvatarWrapper>
-          <ProfileInfo>
-            <ProfileName>Tech Rover</ProfileName>
-            <ProfileEmail>tech.r@healthvault.com</ProfileEmail>
-          </ProfileInfo>
-          <EditButton>
-            <MaterialCommunityIcons
-              name="pencil-outline"
-              size={20}
-              color="#2563eb"
-            />
-          </EditButton>
-        </ProfileCard>
 
         <SectionHeader>Account Settings</SectionHeader>
         <SettingsGroup>
@@ -165,48 +145,6 @@ const Container = styled.SafeAreaView`
 const StyledScrollView = styled.ScrollView`
   flex: 1;
   padding: 20px;
-`;
-
-const ProfileCard = styled.View`
-  flex-direction: row;
-  align-items: center;
-  background-color: #ffffff;
-  padding: 20px;
-  border-radius: 24px;
-  margin-bottom: 25px;
-  shadow-color: #000;
-  shadow-opacity: 0.04;
-  shadow-radius: 10px;
-  elevation: 2;
-`;
-
-const AvatarWrapper = styled.View`
-  background-color: #f1f5f9;
-  border-radius: 20px;
-  padding: 5px;
-`;
-
-const ProfileInfo = styled.View`
-  margin-left: 15px;
-  flex: 1;
-`;
-
-const ProfileName = styled.Text`
-  font-size: 18px;
-  font-weight: 800;
-  color: #1e293b;
-`;
-
-const ProfileEmail = styled.Text`
-  font-size: 13px;
-  color: #64748b;
-  margin-top: 2px;
-`;
-
-const EditButton = styled.TouchableOpacity`
-  background-color: #eff6ff;
-  padding: 8px;
-  border-radius: 12px;
 `;
 
 const SectionHeader = styled.Text`

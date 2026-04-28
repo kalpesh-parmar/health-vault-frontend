@@ -11,60 +11,70 @@ import {
 import { useNavigation } from "@react-navigation/core";
 import DualButtons from "../../components/shared/Buttons/DualButtons";
 import LogoutModal from "../../components/Auth/LogoutModal";
-import { getUserById, updateUser } from "../../services/authService";
+import { getUser } from "../../services/authService";
 import * as SecureStore from "expo-secure-store";
-import Toast from "react-native-toast-message";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { ProfileStackParamList } from "../../navigation/types";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
+
+type Gender = "Male" | "Female" | "Other";
 
 const ProfileScreen = () => {
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [password, setPassword] = useState<string | null>(null);
+  const [fullname, setFullname] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [dateOfBirth, setDateOfBirth] = useState<Date | null>(new Date());
+  const [gender, setGender] = useState<Gender | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<"Log Out" | "Delete Account">(
     "Log Out",
   );
-  const [editedUsername, setEditedUsername] = useState<string>("");
-  const [showInput, setShowInput] = useState<boolean>(false);
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
   const queryClient = useQueryClient();
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async (newUsername: string) => {
-      const userId = await SecureStore.getItemAsync("userId");
-      if (!userId) throw new Error("No user ID found in SecureStore.");
-      return await updateUser(userId, { userName: newUsername });
-    },
-    onSuccess: () => {
-      console.log("Profile Updated Successfully.");
+  useFocusEffect(
+    useCallback(() => {
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-      Toast.show({
-        type: "success",
-        text1: "Profile Updated",
-        text2: "Username changed successfully.",
-      });
-    },
-    onError: (error: any) => {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: error.message || "Could not update username.",
-      });
-    },
-  });
+    }, []),
+  );
+
+  const formData = {
+    username: username ?? "",
+    fullname: fullname ?? "",
+    email: email ?? "",
+    password: password ?? "",
+    dob: dateOfBirth ?? new Date(),
+    phone: phone ?? "",
+    gender:
+      gender === "Male" || gender === "Female" || gender === "Other"
+        ? gender
+        : "Male",
+  };
 
   const { data: userData, isLoading } = useQuery({
     queryKey: ["userProfile"],
     queryFn: async () => {
       const userId = await SecureStore.getItemAsync("userId");
+      console.log("userId :- ", userId);
       if (!userId) throw new Error("No user ID found in SecureStore.");
-      const response = await getUserById(userId);
+      const response = await getUser();
       return response?.data || response;
     },
   });
 
   useEffect(() => {
+    console.log("userData :- ", userData);
     if (userData) {
       setUsername(userData?.userName || "Guest");
       setEmail(userData?.email || "No Email");
+      setFullname(userData?.fullName || "No Name");
+      setDateOfBirth(userData?.dateOfBirth || "No DOB");
+      setPhone(userData?.phone || "No Mobile");
+      setGender(userData?.gender || "No Gender");
     }
   }, [userData]);
 
@@ -76,19 +86,6 @@ const ProfileScreen = () => {
   const triggerLogOut = () => {
     setModalMode("Log Out");
     setShowModal(true);
-  };
-
-  const handleEditProfile = () => {
-    setShowInput(true);
-  };
-
-  const handleSaveUsername = () => {
-    if (editedUsername && editedUsername !== username) {
-      updateProfileMutation.mutate(editedUsername);
-      setUsername(editedUsername);
-    }
-    setEditedUsername("");
-    setShowInput(false);
   };
 
   return (
@@ -120,29 +117,14 @@ const ProfileScreen = () => {
             ) : (
               <IdentityWrapper>
                 <EditNameWrapper>
-                  {showInput ? (
-                    <UsernameInput
-                      placeholder="New username"
-                      onChangeText={setEditedUsername}
-                      onBlur={handleSaveUsername}
-                      placeholderTextColor="grey"
-                      autoFocus
-                    />
-                  ) : (
-                    <UserName>{username || "Guest User"}</UserName>
-                  )}
+                  <UserName>{username || "Guest User"}</UserName>
                   <EditIconWrapper
-                    onPress={showInput ? handleSaveUsername : handleEditProfile}
+                    onPress={() => {
+                      if (!userData) return;
+                      navigation.navigate("EditProfile", { formData });
+                    }}
                   >
-                    {showInput ? (
-                      <MaterialCommunityIcons
-                        name="check"
-                        size={16}
-                        color="lightseagreen"
-                      />
-                    ) : (
-                      <MaterialIcons name="edit" size={16} color="#2563eb" />
-                    )}
+                    <MaterialIcons name="edit" size={16} color="#2563eb" />
                   </EditIconWrapper>
                 </EditNameWrapper>
 
@@ -154,18 +136,14 @@ const ProfileScreen = () => {
           <StatsRow>
             <StatBox>
               <StatValue>5</StatValue>
-              <StatLabel>Uploads</StatLabel>
+              <StatLabel>Document Uploads</StatLabel>
             </StatBox>
             <StatDivider />
-            <StatBox>
-              <StatValue>Pro</StatValue>
-              <StatLabel>Plan</StatLabel>
-            </StatBox>
           </StatsRow>
 
           <SectionLabel>General</SectionLabel>
           <MenuCard>
-            <MenuItem onPress={() => navigation.navigate("Home" as never)}>
+            <MenuItem onPress={() => navigation.navigate("DocumentList" as never)}>
               <IconWrapper style={{ backgroundColor: "#eff6ff" }}>
                 <Ionicons name="document-text" size={20} color="#2563eb" />
               </IconWrapper>
@@ -184,8 +162,8 @@ const ProfileScreen = () => {
             </MenuItem>
           </MenuCard>
 
-          <SectionLabel>Account Actions</SectionLabel>
           <ActionsWrapper>
+            <SectionLabel>Account Actions</SectionLabel>
             <DualButtons
               secondaryBtnText="Delete Account"
               secondaryBtnColor="grey"
@@ -385,14 +363,6 @@ const MenuDivider = styled.View`
 `;
 
 const ActionsWrapper = styled.View`
-  margin-top: 5px;
-`;
-
-const FooterText = styled.Text`
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #94a3b8;
-  margin-top: 30px;
-  margin-bottom: 20px;
+  margin-top: 80px;
+  margin-bottom: 10px;
 `;

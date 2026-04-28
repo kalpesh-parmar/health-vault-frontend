@@ -1,4 +1,4 @@
-import { MedicalDocument } from "../components/shared/Documents/DocumentCard";
+import { MedicalDocument } from "../components/Documents/DocumentCard";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -8,6 +8,22 @@ export type RootStackParamList = {
   Settings: undefined;
   "About Us": undefined;
   DocumentList: undefined;
-  SummaryScreen: { document: MedicalDocument };
+  DocumentSummary: { document: MedicalDocument };
   Medication: undefined;
+  EditDocument: { document: MedicalDocument };
+};
+
+export type ProfileStackParamList = {
+  Profile: undefined;
+  EditProfile: {
+    formData: {
+      username: string;
+      fullname: string;
+      email: string;
+      password: string;
+      dob: Date;
+      phone: string;
+      gender: "Male" | "Female" | "Other";
+    };
+  };
 };

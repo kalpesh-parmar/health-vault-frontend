@@ -70,11 +70,11 @@
 //   border-radius: 50px;
 // `;
 
-
 import React from "react";
 import styled from "styled-components/native";
 import { GestureResponderEvent } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { ScrollView } from "react-native-gesture-handler";
 
 interface HomeCardProps {
   title: string;
@@ -126,8 +126,9 @@ const HomeCard = ({
 export default HomeCard;
 
 const CardTouchable = styled.TouchableOpacity`
+  flex-grow: 1;
   width: 48%;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 `;
 
 const BorderRing = styled.View<{ accentColor: string }>`
@@ -137,6 +138,7 @@ const BorderRing = styled.View<{ accentColor: string }>`
 `;
 
 const CardContainer = styled.View`
+  width: 100%;
   height: 132px;
   border-radius: 22px;
   background-color: #ffffff;

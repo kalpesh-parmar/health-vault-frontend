@@ -5,6 +5,7 @@ import TabNavigator from "../navigation/TabNavigator";
 import AboutScreen from "../screens/AppScreens/AboutScreen";
 import ProfileScreen from "../screens/AppScreens/ProfileScreen";
 import CustomDrawerContent from "./CustomDrawerContent";
+import ProfileStack from "./stacks/ProfileStack";
 
 const Drawer = createDrawerNavigator();
 
@@ -39,16 +40,6 @@ const CustomDrawerNavigator = () => {
       >
         {() => <TabNavigator />}
       </Drawer.Screen>
-
-      <Drawer.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          drawerIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
-        }}
-      />
 
       <Drawer.Screen
         name="About Us"

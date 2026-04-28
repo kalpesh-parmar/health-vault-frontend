@@ -2,42 +2,26 @@ import React from "react";
 import AuthStack from "./stacks/AuthStack";
 import AppStack from "./stacks/AppStack";
 import { useAuth } from "../context/AuthContext";
-import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
-import MedicationScreen from "../screens/AppScreens/DocsCategoryScreens/Medication/MedicationScreen";
-import EmptyContent from "../components/shared/EmptyContent";
-import DocumentList from "../components/shared/Documents/DocumentList";
-import SummaryScreen from "../components/shared/Documents/SummaryScreen";
+import Loader from "../components/shared/Loader";
+import DocumentList from "../components/Documents/DocumentList";
+import SummaryScreen from "../components/Documents/SummaryScreen";
+import ProfileScreen from "../screens/AppScreens/ProfileScreen";
+import HomeScreen from "../screens/AppScreens/HomeScreen";
+import AddMedication from "../screens/AppScreens/DocsCategoryScreens/Medication/AddMedication";
 
 const RootNavigator = () => {
   const { isLoggedIn, isLoading } = useAuth();
   return (
     <NavigationContainer>
       {/* {isLoading ? (
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "#000",
-          }}
-        >
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
+        <Loader visible={true} />
       ) : isLoggedIn ? (
         <AppStack />
       ) : (
         <AuthStack />
       )} */}
-      <SummaryScreen
-        document={{
-          id: "1",
-          title: "First Report",
-          category: "Medical",
-          type: "PDF",
-          createdAt: "2023-10-12",
-        }}
-      />
+      <AddMedication />
     </NavigationContainer>
   );
 };
