@@ -4,15 +4,16 @@ import styled from "styled-components/native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import ScreenHeader from "../../components/shared/Header";
+import { useAppTheme } from "../../context/ThemeContext";
 
 const SettingsScreen = () => {
   const [isBiometricEnabled, setBiometricEnabled] = useState(true);
-  const [isDarkMode, setDarkMode] = useState(false);
   const [isNotificationsEnabled, setNotificationsEnabled] = useState(true);
+  const { isDark, setThemeMode } = useAppTheme();
 
   return (
     <Container>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <ScreenHeader title="Settings" showBack={true} />
 
       <StyledScrollView showsVerticalScrollIndicator={false}>
@@ -20,21 +21,21 @@ const SettingsScreen = () => {
         <SectionHeader>Account Settings</SectionHeader>
         <SettingsGroup>
           <SettingItem>
-            <IconBox bg="#eff6ff">
+            <IconBox bg={isDark ? "#1e3a8a" : "#eff6ff"}>
               <MaterialCommunityIcons
                 name="shield-lock-outline"
                 size={22}
-                color="#2563eb"
+                color="#3b82f6"
               />
             </IconBox>
             <SettingLabel>Security & Password</SettingLabel>
-            <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+            <Ionicons name="chevron-forward" size={20} color={isDark ? "#64748b" : "#cbd5e1"} />
           </SettingItem>
 
           <Divider />
 
           <SettingItem>
-            <IconBox bg="#f0fdf4">
+            <IconBox bg={isDark ? "#14532d" : "#f0fdf4"}>
               <MaterialCommunityIcons
                 name="fingerprint"
                 size={22}
@@ -45,7 +46,7 @@ const SettingsScreen = () => {
             <Switch
               value={isBiometricEnabled}
               onValueChange={setBiometricEnabled}
-              trackColor={{ false: "#e2e8f0", true: "#93c5fd" }}
+              trackColor={{ false: isDark ? "#475569" : "#e2e8f0", true: "#93c5fd" }}
             />
           </SettingItem>
         </SettingsGroup>
@@ -53,7 +54,7 @@ const SettingsScreen = () => {
         <SectionHeader>Preferences</SectionHeader>
         <SettingsGroup>
           <SettingItem>
-            <IconBox bg="#fff7ed">
+            <IconBox bg={isDark ? "#7c2d12" : "#fff7ed"}>
               <MaterialCommunityIcons
                 name="bell-outline"
                 size={22}
@@ -64,43 +65,48 @@ const SettingsScreen = () => {
             <Switch
               value={isNotificationsEnabled}
               onValueChange={setNotificationsEnabled}
+              trackColor={{ false: isDark ? "#475569" : "#e2e8f0", true: "#93c5fd" }}
             />
           </SettingItem>
 
           <Divider />
 
           <SettingItem>
-            <IconBox bg="#fafafa">
+            <IconBox bg={isDark ? "#334155" : "#fafafa"}>
               <MaterialCommunityIcons
                 name="theme-light-dark"
                 size={22}
-                color="#475569"
+                color={isDark ? "#f8fafc" : "#475569"}
               />
             </IconBox>
             <SettingLabel>Dark Mode</SettingLabel>
-            <Switch value={isDarkMode} onValueChange={setDarkMode} />
+            <Switch 
+              value={isDark} 
+              onValueChange={(val) => setThemeMode(val ? "dark" : "light")}
+              trackColor={{ false: isDark ? "#475569" : "#e2e8f0", true: "#93c5fd" }} 
+            />
           </SettingItem>
 
           <Divider />
 
           <SettingItem>
-            <IconBox bg="#f5f3ff">
+            <IconBox bg={isDark ? "#4c1d95" : "#f5f3ff"}>
               <MaterialCommunityIcons
                 name="translate"
                 size={22}
-                color="#7c3aed"
+                color="#8b5cf6"
               />
             </IconBox>
             <SettingLabel>Language</SettingLabel>
             <ValueText>English</ValueText>
-            <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+            <Ionicons name="chevron-forward" size={20} color={isDark ? "#64748b" : "#cbd5e1"} />
           </SettingItem>
         </SettingsGroup>
 
         <SectionHeader>Storage & Data</SectionHeader>
         <SettingsGroup>
           <SettingItem>
-            <IconBox bg="#fdf2f8">
+            <IconBox bg={isDark ? "#831843" : "#fdf2f8"}>
               <MaterialCommunityIcons
                 name="cloud-upload-outline"
                 size={22}
@@ -108,13 +114,13 @@ const SettingsScreen = () => {
               />
             </IconBox>
             <SettingLabel>Auto Backup</SettingLabel>
-            <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+            <Ionicons name="chevron-forward" size={20} color={isDark ? "#64748b" : "#cbd5e1"} />
           </SettingItem>
 
           <Divider />
 
           <SettingItem>
-            <IconBox bg="#f1f5f9">
+            <IconBox bg={isDark ? "#7f1d1d" : "#f1f5f9"}>
               <MaterialCommunityIcons
                 name="trash-can-outline"
                 size={22}
@@ -139,7 +145,7 @@ export default SettingsScreen;
 
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: #f8fafc; /* Slightly off-white background for modern feel */
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const StyledScrollView = styled.ScrollView`
@@ -150,7 +156,7 @@ const StyledScrollView = styled.ScrollView`
 const SectionHeader = styled.Text`
   font-size: 14px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-bottom: 10px;
   margin-left: 10px;
   text-transform: uppercase;
@@ -158,7 +164,7 @@ const SectionHeader = styled.Text`
 `;
 
 const SettingsGroup = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 24px;
   margin-bottom: 25px;
   overflow: hidden;
@@ -186,20 +192,20 @@ const SettingLabel = styled.Text`
   flex: 1;
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   margin-left: 15px;
 `;
 
 const ValueText = styled.Text`
   font-size: 14px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-right: 10px;
 `;
 
 const Divider = styled.View`
   height: 1px;
-  background-color: #f1f5f9;
-  margin-left: 70px; /* Aligns with the text, skipping the icon */
+  background-color: ${({ theme }: any) => theme.colors.divider};
+  margin-left: 70px;
 `;
 
 const FooterContainer = styled.View`
@@ -213,6 +219,6 @@ const FooterNote = styled.Text`
   text-align: center;
   font-size: 14px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   padding-bottom: 20px;
 `;

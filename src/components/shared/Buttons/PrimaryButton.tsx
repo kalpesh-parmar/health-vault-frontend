@@ -1,6 +1,7 @@
 import React from "react";
 import { ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
+import { useAppTheme } from "../../../context/ThemeContext";
 
 type TextParam = {
   text: string;
@@ -9,6 +10,7 @@ type TextParam = {
 };
 
 const PrimaryButton = ({ text, onPress, isLoading }: TextParam) => {
+
   return (
     <PrimaryBtn onPress={onPress} disabled={isLoading}>
       {isLoading ? (
@@ -23,7 +25,7 @@ const PrimaryButton = ({ text, onPress, isLoading }: TextParam) => {
 export default PrimaryButton;
 
 const PrimaryBtn = styled.TouchableOpacity`
-  background-color: #1d60ff;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   width: 100%;
   padding: 16px;
   border-radius: 15px;
@@ -33,7 +35,7 @@ const PrimaryBtn = styled.TouchableOpacity`
 `;
 
 const PrimaryButtonText = styled.Text`
-  color: white;
+  color: ${({ theme }: any) => theme.colors.background};
   font-size: 17px;
   font-weight: 700;
 `;

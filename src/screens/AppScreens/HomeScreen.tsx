@@ -1,54 +1,96 @@
 import React, { useState, useRef } from "react";
-import { Linking } from "react-native";
+import { Modal } from "react-native";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useCameraPermissions, CameraView } from "expo-camera";
+import { CameraView } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import LogoutModal from "../../components/Auth/LogoutModal";
 import BottomSheet from "../../components/shared/BottomSheet";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
-import Toast from "react-native-toast-message";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import ImagePreview from "../../components/shared/ImagePreview";
 import Loader from "../../components/shared/Loader";
-import { RootStackParamList } from "../../navigation/types";
 import HomeCard from "../../components/Documents/HomeCard";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { documentUpload } from "../../services/authService";
-import { useMutation } from "@tanstack/react-query";
 import { useFonts } from "expo-font";
 import { Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import {
   Montserrat_600SemiBold,
   Montserrat_700Bold,
 } from "@expo-google-fonts/montserrat";
-import { BlurView } from "expo-blur";
+import { useDocumentMedia } from "../../hooks/useDocumentMedia";
+import { useSaveDocument } from "../../hooks/useSaveDocument";
+import ModernLoader from "../../components/shared/Loader";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
-  handleCapture,
-  handleGalleryPick,
-  handleRetake,
-  takePicture,
-} from "../../utils/ImageUpload";
+  AppStackParamList,
+  DocumentsStackParamList,
+} from "../../navigation/types";
+import { useAppTheme } from "../../context/ThemeContext";
+
+type CategoryType =
+  | "family"
+  | "medical_document"
+  | "insurance"
+  | "medication"
+  | "other";
+
+type HomeCardConfig = {
+  title: string;
+  subtitle: string;
+  category: CategoryType;
+  accentColor: string;
+};
+
+const homeCards: HomeCardConfig[] = [
+  {
+    title: "Family",
+    subtitle: "Manage members",
+    category: "family",
+    accentColor: "#6366F1",
+  },
+  {
+    title: "Medical Documents",
+    subtitle: "Reports & history",
+    category: "medical_document",
+    accentColor: "#0EA5E9",
+  },
+  {
+    title: "Insurance",
+    subtitle: "Policies & claims",
+    category: "insurance",
+    accentColor: "#8B5CF6",
+  },
+  {
+    title: "Medication",
+    subtitle: "Track medicines",
+    category: "medication",
+    accentColor: "#10B981",
+  },
+  {
+    title: "Others",
+    subtitle: "Other documents",
+    category: "other",
+    accentColor: "#F59E0B",
+  },
+];
 
 const HomeScreen = () => {
   const refRBSheet = useRef<BottomSheetModal>(null);
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [isCameraVisible, setIsCameraVisible] = useState<boolean>(false);
-  const [isCapturing, setIsCapturing] = useState<boolean>(false);
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [isPreviewVisible, setIsPreviewVisible] = useState<boolean>(false);
-  const [previewSource, setPreviewSource] = useState<"camera" | "gallery">(
-    "camera",
-  );
   const cameraRef = useRef<any>(null);
-  const [filename, setFilename] = useState<string>("");
-  const [category, setCategory] = useState<string>("");
+  const {
+    setIsPreviewVisible,
+    isCameraVisible,
+    setIsCameraVisible,
+    isCapturing,
+    handleGalleryPick,
+    handleOpenCamera,
+    takePicture,
+    setSelectedImages,
+  } = useDocumentMedia();
 
   const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
   const fontsLoaded = useFonts({
     Inter_400Regular,
@@ -61,108 +103,47 @@ const HomeScreen = () => {
     return <Loader visible={true} />;
   }
 
-  const { mutateAsync: saveDocumentMutation, isPending } = useMutation({
-    mutationFn: documentUpload,
-    onSuccess: () => {
-      Toast.show({
-        type: "success",
-        text1: "Document Added",
-        text2: "Your selected images are ready in the local list.",
-      });
-    },
-    onError: (error) => {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: error?.message,
-      });
-    },
-  });
-
-  const handleSave = async (
-    fileName: string,
-    category: string,
-    images: string[],
-  ) => {
-    if (!images || images.length === 0) return;
-
-    if (!fileName || !category) {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Please fill both filename and category.",
-      });
-      return;
-    }
-
-    setFilename(fileName);
-    setCategory(category);
-
-    try {
-      const formData = new FormData();
-
-      const uri = images[0];
-      const filename = uri.split("/").pop();
-      const type = filename?.split(".").pop();
-
-      formData.append("file", {
-        uri: uri,
-        name: `${fileName}.${type}`,
-        type: `image/jpeg`,
-      } as any);
-
-      formData.append("fileName", `${fileName}.${type}`);
-      console.log("Filename :-", `${fileName}.${type}`);
-      formData.append("category", category);
-
-      await saveDocumentMutation(formData);
-    } catch (error) {
-      console.log("Error :- ", error);
-    }
-
-    setIsPreviewVisible(false);
-    setSelectedImages([]);
-
-    Toast.show({
-      type: "success",
-      text1: "Document Added",
-      text2: "Your selected images are ready in the local list.",
-    });
-  };
+  const { isSaving } = useSaveDocument();
+  const { isDark } = useAppTheme();
 
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
+      {isSaving && <ModernLoader visible={isSaving} />}
 
       {isCameraVisible && (
-        <CameraContainer>
-          <CameraView ref={cameraRef} facing="back" style={{ flex: 1 }}>
-            <CameraControls>
-              <CloseBtn onPress={() => setIsCameraVisible(false)}>
-                <Ionicons name="close" size={28} color="white" />
-              </CloseBtn>
+        <Modal
+          visible={isCameraVisible}
+          animationType="slide"
+          presentationStyle="fullScreen"
+        >
+          <CameraContainer style={{ opacity: isCapturing ? 0.8 : 1 }}>
+            <CameraView ref={cameraRef} facing="back" style={{ flex: 1 }}>
+              <CameraControls>
+                <CloseBtn
+                  onPress={() => {
+                    setIsCameraVisible(false);
+                  }}
+                >
+                  <Ionicons name="close" size={28} color="white" />
+                </CloseBtn>
 
-              <CaptureBtn onPress={takePicture}>
-                <CaptureInner />
-              </CaptureBtn>
-            </CameraControls>
-          </CameraView>
-        </CameraContainer>
+                <CaptureBtn
+                  onPress={async () => {
+                    await takePicture(cameraRef);
+                  }}
+                >
+                  <CaptureInner />
+                </CaptureBtn>
+              </CameraControls>
+            </CameraView>
+          </CameraContainer>
+        </Modal>
       )}
 
       <LogoutModal
         showModal={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}
-      />
-
-      <ImagePreview
-        images={selectedImages}
-        isVisible={isPreviewVisible}
-        setIsVisible={setIsPreviewVisible}
-        onRetake={() => handleRetake()}
-        onSave={handleSave}
-        retakeLabel={previewSource === "camera" ? "Retake" : "Choose Another"}
-        isPending={isPending}
       />
 
       <Container>
@@ -172,7 +153,7 @@ const HomeScreen = () => {
           <Ionicons
             name="menu-outline"
             size={30}
-            color="#2563eb"
+            color={isDark ? "#f8fafc" : "#2563eb"}
             onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
           />
 
@@ -187,40 +168,24 @@ const HomeScreen = () => {
         </WelcomeSection>
 
         <CardsWrapper>
-          <HomeCard
-            title="Family"
-            subtitle="Manage members"
-            // onPress={() => navigation.navigate("Family")}
-            accentColor="#6366F1"
-          />
-
-          <HomeCard
-            title="Medical Documents"
-            subtitle="Reports & history"
-            onPress={() => navigation.navigate("DocumentList")}
-            accentColor="#0EA5E9"
-          />
-
-          <HomeCard
-            title="Insurance"
-            subtitle="Policies & claims"
-            // onPress={() => navigation.navigate("DocumentList")}
-            accentColor="#8B5CF6"
-          />
-
-          <HomeCard
-            title="Medication"
-            subtitle="Track medicines"
-            onPress={() => navigation.navigate("Medication")}
-            accentColor="#10B981"
-          />
-
-          <HomeCard
-            title="Others"
-            subtitle="Other documents"
-            // onPress={() => navigation.navigate("Others")}
-            accentColor="#F59E0B"
-          />
+          {homeCards.map(
+            (item) => (
+              (
+                <HomeCard
+                  key={item.category}
+                  title={item.title}
+                  subtitle={item.subtitle}
+                  accentColor={item.accentColor}
+                  onPress={() =>
+                    navigation.navigate("DocumentStack", {
+                      screen: "DocumentList",
+                      params: { category: item.category },
+                    })
+                  }
+                />
+              )
+            ),
+          )}
         </CardsWrapper>
 
         <FABWrapper>
@@ -241,19 +206,27 @@ const HomeScreen = () => {
             </SheetSubtitle>
 
             <SheetButtonsContainer>
-              <SheetActionButton onPress={() => void handleGalleryPick()}>
-                <IconWrapper style={{ backgroundColor: "#eff6ff" }}>
+              <SheetActionButton
+                onPress={() =>
+                  handleGalleryPick(() => refRBSheet.current?.dismiss())
+                }
+              >
+                <IconWrapper style={{ backgroundColor: isDark ? "#1e3a8a" : "#eff6ff" }}>
                   <MaterialCommunityIcons
                     name="image-plus"
                     size={28}
-                    color="#2563eb"
+                    color="#3b82f6"
                   />
                 </IconWrapper>
                 <SheetActionButtonText>Gallery</SheetActionButtonText>
               </SheetActionButton>
 
-              <SheetActionButton onPress={handleCapture}>
-                <IconWrapper style={{ backgroundColor: "#f0fdf4" }}>
+              <SheetActionButton
+                onPress={() =>
+                  handleOpenCamera(() => refRBSheet.current?.dismiss())
+                }
+              >
+                <IconWrapper style={{ backgroundColor: isDark ? "#14532d" : "#f0fdf4" }}>
                   <MaterialCommunityIcons
                     name="camera-plus"
                     size={28}
@@ -274,7 +247,7 @@ export default HomeScreen;
 
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const Header = styled.View`
@@ -282,10 +255,10 @@ const Header = styled.View`
   justify-content: space-between;
   align-items: center;
   padding: 55px 20px 18px;
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: ${({ theme }: any) => theme.colors.surfaceTransparent};
   border-bottom-left-radius: 30px;
   border-bottom-right-radius: 30px;
-  shadow-color: #3b82f6;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.15;
   elevation: 8;
 `;
@@ -294,7 +267,7 @@ const AppNameHeader = styled.Text`
   flex: 1;
   text-align: center;
   font-size: 24px;
-  color: #2563eb;
+  color: ${({ theme }: any) => theme.colors.primary};
   font-family: "Montserrat_700Bold";
 `;
 const WelcomeSection = styled.View`
@@ -304,12 +277,12 @@ const WelcomeSection = styled.View`
 const WelcomeText = styled.Text`
   font-size: 26px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const SubWelcomeText = styled.Text`
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 6px;
   line-height: 20px;
 `;
@@ -334,10 +307,10 @@ const FABButton = styled.TouchableOpacity`
   width: 65px;
   height: 65px;
   border-radius: 24px;
-  background-color: #2563eb;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   justify-content: center;
   align-items: center;
-  shadow-color: #2563eb;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.4;
   shadow-radius: 20px;
   elevation: 12;
@@ -351,12 +324,12 @@ const SheetContentWrapper = styled.View`
 const SheetTitle = styled.Text`
   font-size: 22px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const SheetSubtitle = styled.Text`
   font-size: 14px;
-  color: #303843ff;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 6px;
   margin-bottom: 30px;
   text-align: center;
@@ -371,7 +344,7 @@ const SheetButtonsContainer = styled.View`
 const SheetActionButton = styled.TouchableOpacity`
   align-items: center;
   width: 100px;
-  background-color: white;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   padding: 16px;
   border-radius: 20px;
   shadow-color: #000;
@@ -392,7 +365,7 @@ const IconWrapper = styled.View`
 const SheetActionButtonText = styled.Text`
   font-size: 14px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const CameraContainer = styled.View`
@@ -402,7 +375,7 @@ const CameraContainer = styled.View`
   right: 0;
   bottom: 0;
   background-color: black;
-  z-index: 2000;
+  z-index: 9000;
 `;
 
 const CameraControls = styled.View`

@@ -1,6 +1,7 @@
 // components/shared/Buttons/DualButtons.tsx
 import React from "react";
 import styled from "styled-components/native";
+import { useAppTheme } from "../../../context/ThemeContext";
 
 type DualBtnParams = {
   secondaryBtnText: string;
@@ -19,6 +20,8 @@ const DualButtons = ({
   onSecondaryPress,
   onMainPress,
 }: DualBtnParams) => {
+  const { theme } = useAppTheme();
+
   return (
     <DualButtonContainer>
       <SecondaryBtn onPress={onSecondaryPress} activeOpacity={0.7} style={{ backgroundColor: secondaryBtnColor }}>
@@ -45,8 +48,8 @@ const SecondaryBtn = styled.TouchableOpacity`
   margin-right: 8px;
   padding-vertical: 13px;
   border-radius: 14px;
-  background-color: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
+  border: 1px solid ${({ theme }: any) => theme.colors.border};
   align-items: center;
   justify-content: center;
 `;
@@ -63,11 +66,11 @@ const MainBtn = styled.TouchableOpacity`
 const SecondaryBtnText = styled.Text`
   font-size: 14px;
   font-weight: 600;
-  color: white;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const MainBtnText = styled.Text`
   font-size: 14px;
   font-weight: 700;
-  color: #ffffff;
+  color: ${({ theme }: any) => theme.colors.background};
 `;

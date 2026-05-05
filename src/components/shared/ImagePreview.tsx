@@ -1,340 +1,168 @@
-import {
-  LayoutChangeEvent,
-  ListRenderItem,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-} from "react-native";
-import styled from "styled-components/native";
 import React, { useState } from "react";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import DualButtons from "./Buttons/DualButtons";
-import Loader from "./Loader";
+import { ActivityIndicator, Dimensions, StatusBar } from "react-native";
+import styled from "styled-components/native";
+import { RouteProp, useNavigation } from "@react-navigation/native";
+import { AppStackParamList } from "../../navigation/types";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import ScreenHeader from "./Header";
+import { useAppTheme } from "../../context/ThemeContext";
 
-interface ImagePreviewProps {
-  images: string[];
-  isVisible: boolean;
-  setIsVisible: (modal: boolean) => void;
-  onRetake: () => void;
-  onSave: (fileName: string, category: string, images: string[]) => void;
-  retakeLabel?: string;
-  isPending: boolean;
-}
+type Props = {
+  route: RouteProp<AppStackParamList, "ImagePreview">;
+};
 
-const ImagePreview = ({
-  images,
-  isVisible,
-  setIsVisible,
-  onRetake,
-  onSave,
-  retakeLabel = "Retake",
-  isPending,
-}: ImagePreviewProps) => {
-  if (!images || images.length === 0) return null;
+const { height } = Dimensions.get("window");
 
-  const [showInput, setShowInput] = useState<boolean>(false);
-  const [fileName, setFileName] = useState("");
-  const [category, setCategory] = useState("");
-  const [error, setError] = useState("");
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [width, setWidth] = useState(0);
+const ImagePreviewScreen = ({ route }: Props) => {
+  const { images } = route.params;
+  const navigation =
+    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const [loading, setLoading] = useState(false);
+  const { isDark, theme } = useAppTheme();
 
-  const handleLayout = (event: LayoutChangeEvent) => {
-    setWidth(event.nativeEvent.layout.width);
+  const handleProceed = async () => {
+    try {
+      setLoading(true);
+
+      // 👉 Call OCR API
+      // const response = await callOCRApi(images[0]);
+      // assume it returns { summary: string }
+
+      navigation.navigate("SaveDocument", {
+        images,
+        aiSummary: "response-summary",
+      });
+    } catch (err) {
+      console.error("OCR Error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const handleMomentumScrollEnd = (
-    event: NativeSyntheticEvent<NativeScrollEvent>,
-  ) => {
-    const index = Math.round(
-      event.nativeEvent.contentOffset.x /
-        event.nativeEvent.layoutMeasurement.width,
-    );
-    setCurrentIndex(index);
-  };
-
-  const renderImage: ListRenderItem<string> = ({ item }) => (
-    <ImageWrapper style={{ width }}>
-      <PreviewImage source={{ uri: item }} resizeMode="contain" />
-    </ImageWrapper>
-  );
-
-  const resetPreviewState = () => {
-    setShowInput(false);
-    setFileName("");
-    setCategory("");
-    setError("");
-  };
-
+  
   return (
     <>
-      {isPending && <Loader visible={true} />}
-      <Modal visible={isVisible} animationType="fade" transparent={false}>
-        <Container>
-          <CloseBtn
-            onPress={() => {
-              setIsVisible(false);
-              resetPreviewState();
-              setCurrentIndex(0);
-            }}
-          >
-            <Ionicons name="close" size={24} color="black" />
-          </CloseBtn>
-          <Header>
-            <HeaderText>
-              Preview ({currentIndex + 1} / {images.length})
-            </HeaderText>
-          </Header>
-
-          <CenterArea>
-            <PreviewContainer onLayout={handleLayout}>
-              <ImagesList<any>
-                data={images}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={(_item: string, index: number) =>
-                  index.toString()
-                }
-                onMomentumScrollEnd={handleMomentumScrollEnd}
-                renderItem={renderImage}
-              />
-            </PreviewContainer>
-          </CenterArea>
-
-          <ActionBar>
-            <SecondaryButton
-              onPress={() => {
-                setCurrentIndex(0);
-                onRetake();
-              }}
-            >
-              <MaterialCommunityIcons
-                name="camera-retake"
-                size={18}
-                color="#cbd5f5"
-              />
-              <SecondaryText>{retakeLabel}</SecondaryText>
-            </SecondaryButton>
-
-            <PrimaryButton
-              onPress={() => {
-                setShowInput(true);
-              }}
-            >
-              <MaterialCommunityIcons name="check" size={20} color="#fff" />
-              <PrimaryText style={{ color: "white" }}>Save</PrimaryText>
-            </PrimaryButton>
-          </ActionBar>
-
-          {showInput && (
-            <InputOverlay>
-              <InputBox>
-                <InputLabel>Enter File Name</InputLabel>
-
-                <FileInput
-                  value={fileName}
-                  placeholder="E.G :- my_scan"
-                  placeholderTextColor="#000000"
-                  cursorColor="black"
-                  onChangeText={(text: string) => {
-                    setFileName(text);
-                    setError("");
-                    if (!text) setError("Filename is required.");
-                  }}
-                  autoFocus
-                />
-                {error && <PrimaryText>Filename is required.</PrimaryText>}
-
-                <InputLabel>Enter Category</InputLabel>
-                <FileInput
-                  value={category}
-                  placeholder="Family, Insurance, Medication, Medical Documents, Others"
-                  placeholderTextColor="#000000"
-                  cursorColor="black"
-                  onChangeText={(text: string) => {
-                    setCategory(text);
-                    setError("");
-                    if (!text) setError("Category is required.");
-                  }}
-                />
-                {error && <PrimaryText>Category is required.</PrimaryText>}
-
-                <DualButtons
-                  secondaryBtnText="Cancel"
-                  secondaryBtnColor="black"
-                  mainBtnText="Proceed"
-                  mainBtnColor="#2563eb"
-                  onSecondaryPress={() => {
-                    setShowInput(false);
-                    setFileName("");
-                    setError("");
-                  }}
-                  onMainPress={() => {
-                    if (!fileName?.trim()) {
-                      setError("Filename is required.");
-                    } else if (!category?.trim()) {
-                      setError("Category is required.");
-                    } else {
-                      onSave(fileName.trim(), category.trim(), images);
-                      resetPreviewState();
-                    }
-                  }}
-                />
-              </InputBox>
-            </InputOverlay>
-          )}
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <ScreenHeader title="Image Preview" showBack={true} />
+      <Container>
+        <Container style={{ paddingTop: 84 }}>
+          <ImageWrapper>
+            <PreviewImage source={{ uri: images || "" }} resizeMode="cover" />
+          </ImageWrapper>
         </Container>
-      </Modal>
+        <Label>
+          1 Image Selected
+        </Label>
+
+        <ActionArea>
+          {loading ? (
+            <LoadingWrapper>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <LoadingText>Analysing document…</LoadingText>
+            </LoadingWrapper>
+          ) : (
+            <ProceedButton onPress={handleProceed} activeOpacity={0.85}>
+              <ProceedButtonText>Proceed</ProceedButtonText>
+              <ArrowIcon>
+                <ArrowText>→</ArrowText>
+              </ArrowIcon>
+            </ProceedButton>
+          )}
+        </ActionArea>
+      </Container>
     </>
   );
 };
 
-export default ImagePreview;
+export default ImagePreviewScreen;
 
 const Container = styled.View`
   flex: 1;
-  background-color: #020617; /* deeper black for premium feel */
-`;
-
-const CloseBtn = styled.TouchableOpacity`
-  position: absolute;
-  top: 60px;
-  right: 20px;
-  height: 40px;
-  width: 40px;
-  border-radius: 20px;
-  background-color: rgba(255, 255, 255, 0.9);
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-`;
-
-const Header = styled.View`
-  position: absolute;
-  top: 60px;
-  width: 100%;
-  align-items: center;
-  z-index: 10;
-`;
-
-const HeaderText = styled.Text`
-  color: #e2e8f0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 1px;
-`;
-
-const CenterArea = styled.View`
-  flex: 1;
-  justify-content: center;
-  align-items: center;
-`;
-
-const PreviewContainer = styled.View`
-  width: 95%;
-  height: 70%;
-  border-radius: 20px;
-  overflow: hidden;
-  background-color: #020617;
-  border: 2px solid white;
-  shadow-color: #000;
-  shadow-opacity: 0.4;
-  shadow-radius: 10px;
-  elevation: 10;
-`;
-
-const ImagesList = styled.FlatList`
-  flex: 1;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const ImageWrapper = styled.View`
-  flex: 1;
-  padding: 30px;
+  margin: 20px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 16px;
+  overflow: hidden;
+  shadow-color: #000;
+  shadow-offset: 0px 8px;
+  shadow-opacity: 0.1;
+  shadow-radius: 20px;
+  elevation: 10;
 `;
 
 const PreviewImage = styled.Image`
   width: 100%;
-  height: 100%;
+  height: ${height * 0.52}px;
+  background-color: #f0f0f0;
 `;
 
-const ActionBar = styled.View`
+const Label = styled.Text`
   position: absolute;
-  bottom: 25px;
+  top: 10%;
+  left: 31.5%;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+`;
+
+const ActionArea = styled.View`
+  position: absolute;
+  bottom: 40px;
   left: 20px;
   right: 20px;
-  flex-direction: row;
-  gap: 12px;
-  background-color: rgba(15, 23, 42, 0.85);
-  padding: 12px;
-  border-radius: 20px;
 `;
 
-const SecondaryButton = styled.TouchableOpacity`
-  flex: 1;
-  height: 52px;
-  border-radius: 16px;
+const ProceedButton = styled.TouchableOpacity`
   flex-direction: row;
-  justify-content: center;
   align-items: center;
-  background-color: rgba(255, 255, 255, 0.06);
-`;
-
-const SecondaryText = styled.Text`
-  color: #cbd5f5;
-  font-weight: 600;
-  margin-left: 6px;
-`;
-
-const PrimaryButton = styled.TouchableOpacity`
-  flex: 1;
-  height: 52px;
-  border-radius: 16px;
-  flex-direction: row;
   justify-content: center;
-  align-items: center;
-  background-color: #2563eb;
-  shadow-color: #2563eb;
-  shadow-opacity: 0.5;
+  background-color: ${({ theme }: any) => theme.colors.textPrimary};
+  border-radius: 14px;
+  padding-vertical: 18px;
+  padding-horizontal: 32px;
+  gap: 10px;
+  shadow-color: #000;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.2;
   shadow-radius: 12px;
-  elevation: 6;
+  elevation: 8;
 `;
 
-const PrimaryText = styled.Text`
-  color: black;
+const ProceedButtonText = styled.Text`
+  font-size: 16px;
   font-weight: 700;
-  margin-left: 6px;
+  color: ${({ theme }: any) => theme.colors.background};
+  letter-spacing: 0.5px;
 `;
 
-const InputOverlay = styled.View`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(2, 6, 23, 0.7);
-  justify-content: center;
+const ArrowIcon = styled.View`
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  background-color: rgba(255, 255, 255, 0.15);
   align-items: center;
-  elevation: 100000;
+  justify-content: center;
 `;
 
-const InputBox = styled.View`
-  width: 85%;
-  background-color: #ffffff;
-  border-radius: 20px;
-  padding: 20px;
+const ArrowText = styled.Text`
+  font-size: 14px;
+  color: ${({ theme }: any) => theme.colors.background};
+  font-weight: 700;
 `;
 
-const InputLabel = styled.Text`
-  color: #000;
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 10px;
+const LoadingWrapper = styled.View`
+  align-items: center;
+  gap: 12px;
+  padding-vertical: 20px;
 `;
 
-const FileInput = styled.TextInput`
-  background-color: #bcbfd0;
-  border-radius: 12px;
-  padding: 12px;
-  color: white;
+const LoadingText = styled.Text`
+  font-size: 13px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  letter-spacing: 0.5px;
 `;

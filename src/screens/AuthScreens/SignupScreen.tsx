@@ -7,6 +7,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
@@ -14,51 +15,43 @@ import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { registerUser } from "../../services/authService";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import * as SecureStore from "expo-secure-store";
 import PasswordInfoModal from "../../components/PasswordInfo";
 import PhoneInput from "react-native-phone-number-input";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import BottomSheet from "../../components/shared/BottomSheet";
+import { useAppTheme } from "../../context/ThemeContext";
 
 const SignupScreen = () => {
   const navigation = useNavigation();
   const isSubmitting = useRef(false);
 
   // ✅ STATES
-  const [username, setUsername] = useState("");
-  const [firstname, setFirstname] = useState("");
-  const [lastname, setLastname] = useState("");
-  const [email, setEmail] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [firstname, setFirstname] = useState<string>("");
+  const [lastname, setLastname] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
+  const [mobileNum, setMobileNum] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [gender, setGender] = useState<string | null>(null);
-  const [age, setAge] = useState<Date>(new Date());
-  const [showDate, setShowDate] = useState(false);
+  const [age, setAge] = useState<string>("");
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showPasswordInfo, setShowPasswordInfo] = useState<boolean>(false);
-  const [formattedValue, setFormattedValue] = useState("");
+  const [formattedValue, setFormattedValue] = useState<string>("");
+  const genderSheetRef = useRef<BottomSheetModal>(null);
+  const { isDark, theme } = useAppTheme();
 
-  type IconName = keyof typeof Ionicons.glyphMap;
+  const genderOptions = [
+    { label: "Male", value: "male" },
+    { label: "Female", value: "female" },
+    { label: "Other", value: "other" },
+  ];
 
-  const genderConfig: Record<
-    "male" | "female" | "other",
-    { icon: IconName; label: string }
-  > = {
-    male: {
-      icon: "man",
-      label: "Male",
-    },
-    female: {
-      icon: "woman",
-      label: "Female",
-    },
-    other: {
-      icon: "person",
-      label: "Other",
-    },
+  const openGenderSheet = () => {
+    genderSheetRef.current?.present();
   };
 
-  // ✅ VALIDATION
   const validate = () => {
     let newErrors: { [key: string]: string } = {};
 
@@ -69,9 +62,11 @@ const SignupScreen = () => {
     if (!email) newErrors.email = "Email is required";
     else if (!emailReg.test(email)) newErrors.email = "Invalid email";
 
-    if (!mobile) newErrors.mobile = "Mobile number required";
-    else if (!/^\d{10}$/.test(mobile))
-      newErrors.mobile = "Enter valid 10-digit number";
+    const cleanNumber = mobileNum.replace(/\D/g, "");
+
+    if (!cleanNumber) newErrors.mobileNum = "Mobile number required";
+    else if (cleanNumber.length !== 10)
+      newErrors.mobileNum = "Enter valid 10-digit number";
 
     if (!password) newErrors.password = "Password required";
     else if (password.length < 6) newErrors.password = "Minimum 6 characters";
@@ -88,10 +83,10 @@ const SignupScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const registerMutation = useMutation({
+  const { mutateAsync: registerMutation, isPending: isLoading } = useMutation({
     mutationFn: registerUser,
     onSuccess: async (result) => {
-      const userId = result?.data?.id;
+      const userId = result?.patient?.id;
       await SecureStore.setItemAsync("userId", String(userId));
       Toast.show({
         type: "success",
@@ -121,18 +116,19 @@ const SignupScreen = () => {
 
     isSubmitting.current = true;
 
-    const formData = {
-      firstname,
-      lastname,
-      email,
-      mobile,
-      password,
-      gender,
-      age: age,
+    const payload = {
+      userName: userName,
+      firstName: firstname,
+      lastName: lastname,
+      email: email,
+      password: password,
+      gender: gender,
+      age: age ? Number(age) : null,
+      phone: mobileNum,
     };
 
     try {
-      await registerMutation.mutateAsync(formData as any);
+      await registerMutation(payload as any);
     } finally {
       isSubmitting.current = false;
     }
@@ -140,7 +136,7 @@ const SignupScreen = () => {
 
   return (
     <>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -184,10 +180,26 @@ const SignupScreen = () => {
                     }}
                     placeholder="Enter Last Name"
                     placeholderTextColor="#acababff"
+                    onBlur={() => {
+                      setUserName(
+                        `${firstname}${lastname}`.toLowerCase() +
+                          Math.floor(100 + Math.random() * 900),
+                      );
+                    }}
                   />
                 </InputWrapper>
                 {errors.lastname && <ErrorText>{errors.lastname}</ErrorText>}
               </InputGroup>
+
+              {userName && (
+                <Label
+                  style={{
+                    textAlign: "center",
+                    color: "#3b82f6ff",
+                    fontWeight: "500",
+                  }}
+                >{`Username :- ${userName}`}</Label>
+              )}
 
               <InputGroup>
                 <Label>Email</Label>
@@ -212,17 +224,20 @@ const SignupScreen = () => {
                 <View
                   style={{
                     borderWidth: 1,
-                    borderColor: "#e2e8f0",
+                    borderColor: theme.colors.border,
                     borderRadius: 10,
                   }}
                 >
                   <PhoneInput
-                    defaultValue={mobile}
+                    value={mobileNum}
                     defaultCode="IN"
                     layout="second"
+                    withDarkTheme={isDark}
+                    placeholder="Phone Number"
+                    withShadow={false}
                     onChangeText={(text) => {
-                      setMobile(text);
-                      setErrors((prev) => ({ ...prev, mobile: "" }));
+                      setMobileNum(text);
+                      setErrors((prev) => ({ ...prev, mobileNum: "" }));
                     }}
                     onChangeFormattedText={(text) => {
                       setFormattedValue(text);
@@ -230,11 +245,10 @@ const SignupScreen = () => {
                     textInputProps={{
                       maxLength: 10,
                     }}
-                    withShadow={false}
                     autoFocus={false}
                     containerStyle={{
                       width: "100%",
-                      backgroundColor: "#fff",
+                      backgroundColor: theme.colors.surfaceLight,
                       borderRadius: 10,
                       height: 50,
                     }}
@@ -245,83 +259,112 @@ const SignupScreen = () => {
                       paddingVertical: 0,
                     }}
                     textInputStyle={{
-                      fontSize: 14,
-                      color: "#0f172a",
+                      fontSize: 16,
                       padding: 0,
                       margin: 0,
                     }}
                     codeTextStyle={{
-                      fontSize: 14,
-                      color: "#0f172a",
+                      fontSize: 16,
+                      color: isDark ? "white" : "black",
                     }}
                     flagButtonStyle={{
                       borderRightWidth: 1,
-                      borderRightColor: "#e2e8f0",
+                      borderRightColor: isDark ? "white" : "black",
                     }}
                   />
                 </View>
-                {errors.mobile && <ErrorText>{errors.mobile}</ErrorText>}
+                {errors.mobileNum && <ErrorText>{errors.mobileNum}</ErrorText>}
               </InputGroup>
 
               <InputGroup>
                 <Label>Gender</Label>
-                <InputWrapper
+
+                <TouchableOpacity
+                  onPress={openGenderSheet}
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-around",
-                    borderWidth: 0,
-                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 10,
+                    padding: 14,
+                    backgroundColor: theme.colors.surfaceLight,
                   }}
                 >
-                  {Object.keys(genderConfig).map((key: string) => {
-                    const item = genderConfig[key as keyof typeof genderConfig];
-                    const isSelected = gender === key;
+                  <Text style={{ color: gender ? theme.colors.textPrimary : theme.colors.textMuted }}>
+                    {gender
+                      ? genderOptions.find((g) => g.value === gender)?.label
+                      : "Select Gender"}
+                  </Text>
+                </TouchableOpacity>
 
-                    return (
-                      <TouchableOpacity
-                        key={key}
-                        style={{
-                          alignItems: "center",
-                          marginRight: 20,
-                        }}
-                        onPress={() => {
-                          setGender(key);
-                          setErrors((prev) => ({ ...prev, gender: "" }));
-                        }}
-                      >
-                        {/* Icon */}
-                        <Ionicons
-                          name={item.icon}
-                          size={28}
-                          color={isSelected ? "#2563eb" : "#64748b"}
-                        />
-
-                        {/* Label */}
-                        <Text
-                          style={{
-                            marginTop: 4,
-                            fontSize: 13,
-                            color: isSelected ? "#2563eb" : "#334155",
-                          }}
-                        >
-                          {item.label}
-                        </Text>
-
-                        {/* Radio */}
-                        <RadioOuter style={{ marginTop: 6 }}>
-                          {isSelected && <RadioInner />}
-                        </RadioOuter>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </InputWrapper>
                 {errors.gender && <ErrorText>{errors.gender}</ErrorText>}
               </InputGroup>
 
+              <BottomSheet ref={genderSheetRef}>
+                <View style={{ padding: 16 }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      marginBottom: 12,
+                      color: theme.colors.textPrimary,
+                    }}
+                  >
+                    Select Gender
+                  </Text>
+
+                  {genderOptions.map((item) => {
+                    const isSelected = gender === item.value;
+
+                    return (
+                      <TouchableOpacity
+                        key={item.value}
+                        onPress={() => {
+                          setGender(item.value);
+                          setErrors((prev) => ({ ...prev, gender: "" }));
+                          genderSheetRef.current?.close();
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          borderWidth: 1,
+                          borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+                          borderRadius: 10,
+                          paddingVertical: 12,
+                          paddingHorizontal: 10,
+                          backgroundColor: isSelected ? (isDark ? "#1e3a8a" : "#f0f9ff") : theme.colors.surfaceLight,
+                          marginVertical: 5,
+                        }}
+                      >
+                        <View
+                          style={{ flexDirection: "row", alignItems: "center" }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              color: isSelected ? theme.colors.primary : theme.colors.textPrimary,
+                            }}
+                          >
+                            {item.label}
+                          </Text>
+                        </View>
+
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={20}
+                            color={theme.colors.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </BottomSheet>
+
               <InputGroup>
                 <Label>Age</Label>
-                <TouchableOpacity onPress={() => setShowDate(true)}>
+                <TouchableOpacity>
                   <InputWrapper>
                     <Ionicons
                       name="calendar-outline"
@@ -433,8 +476,15 @@ const SignupScreen = () => {
                 )}
               </InputGroup>
 
-              <SignupButton onPress={handleSignup}>
-                <ButtonText>Create Account</ButtonText>
+              <SignupButton onPress={handleSignup} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={{ color: "#fff" }}>Creating Account...</Text>
+                  </>
+                ) : (
+                  <ButtonText>Create Account</ButtonText>
+                )}
               </SignupButton>
             </FormCard>
 
@@ -456,6 +506,7 @@ export default SignupScreen;
 const InnerContainer = styled.View`
   flex: 1;
   padding: 24px;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const Header = styled.View`
@@ -479,12 +530,15 @@ const LogoText = styled.Text`
 const Title = styled.Text`
   font-size: 26px;
   font-weight: bold;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const FormCard = styled.View`
-  background: #fff;
+  background: ${({ theme }: any) => theme.colors.surface};
   padding: 20px;
   border-radius: 20px;
+  border-width: 0.5px;
+  border-color: ${({ theme }: any) => theme.colors.border};
 `;
 
 const InputGroup = styled.View`
@@ -494,32 +548,33 @@ const InputGroup = styled.View`
 const Label = styled.Text`
   font-weight: bold;
   margin-bottom: 5px;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const InputWrapper = styled.View`
   flex-direction: row;
   align-items: center;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 14px;
   padding: 5px 0 5px 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }: any) => theme.colors.border};
 `;
 
 const StyledInput = styled.TextInput`
   flex: 1;
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const SignupButton = styled.TouchableOpacity`
-  background: black;
+  background: ${({ theme }: any) => theme.colors.textPrimary};
   padding: 15px;
   border-radius: 10px;
   align-items: center;
 `;
 
 const ButtonText = styled.Text`
-  color: white;
+  color: ${({ theme }: any) => theme.colors.background};
   font-weight: bold;
 `;
 
@@ -552,11 +607,11 @@ const Footer = styled.View`
 `;
 
 const FooterText = styled.Text`
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const LinkText = styled.Text`
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 700;
 `;
 

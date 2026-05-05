@@ -5,13 +5,15 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation, DrawerActions } from "@react-navigation/native";
 import ScreenHeader from "../../components/shared/Header";
+import { useAppTheme } from "../../context/ThemeContext";
 
 const AboutScreen = () => {
   const navigation = useNavigation();
+  const { isDark, theme } = useAppTheme();
 
   return (
     <Container>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <ScreenHeader title="About Us" showBack={true} />
 
       <StyledScrollView showsVerticalScrollIndicator={false}>
@@ -32,7 +34,7 @@ const AboutScreen = () => {
 
         <SectionTitle>Our Mission</SectionTitle>
         <Card>
-          <IconCircle style={{ backgroundColor: "#eff6ff" }}>
+          <IconCircle style={{ backgroundColor: theme.colors.surfaceLight }}>
             <MaterialCommunityIcons
               name="eye-outline"
               size={24}
@@ -49,7 +51,7 @@ const AboutScreen = () => {
         </Card>
 
         <Card>
-          <IconCircle style={{ backgroundColor: "#f0fdf4" }}>
+          <IconCircle style={{ backgroundColor: theme.colors.success + '20' }}>
             <MaterialCommunityIcons
               name="lock-check-outline"
               size={24}
@@ -67,7 +69,7 @@ const AboutScreen = () => {
         <SectionTitle>Our Projects</SectionTitle>
         <HorizontalScroll horizontal showsHorizontalScrollIndicator={false}>
           <ProjectCard>
-            <ProjectIcon bg="#fef3c7">
+            <ProjectIcon bg={isDark ? "#78350f" : "#fef3c7"}>
               <MaterialCommunityIcons name="brain" size={24} color="#d97706" />
             </ProjectIcon>
             <ProjectName>Health AI</ProjectName>
@@ -75,7 +77,7 @@ const AboutScreen = () => {
           </ProjectCard>
 
           <ProjectCard>
-            <ProjectIcon bg="#ede9fe">
+            <ProjectIcon bg={isDark ? "#4c1d95" : "#ede9fe"}>
               <MaterialCommunityIcons
                 name="family-tree"
                 size={24}
@@ -95,7 +97,7 @@ const AboutScreen = () => {
             <MaterialCommunityIcons
               name="email-outline"
               size={24}
-              color="black"
+              color={theme.colors.textPrimary}
             />
             <ContactText>Email Us</ContactText>
           </ContactButton>
@@ -103,7 +105,7 @@ const AboutScreen = () => {
           <ContactButton
             onPress={() => Linking.openURL("https://techrover.us")}
           >
-            <MaterialCommunityIcons name="web" size={24} color="black" />
+            <MaterialCommunityIcons name="web" size={24} color={theme.colors.textPrimary} />
             <ContactText>Website</ContactText>
           </ContactButton>
         </ContactGrid>
@@ -120,7 +122,7 @@ export default AboutScreen;
 
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const StyledScrollView = styled.ScrollView`
@@ -138,18 +140,18 @@ const LogoContainer = styled.View`
   width: 70px;
   height: 70px;
   border-radius: 15px;
-  background-color: #2563eb;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   justify-content: center;
   align-items: center;
-  shadow-color: #2563eb;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.5;
   shadow-radius: 20px;
   elevation: 10;
 `;
 
 const VersionBadge = styled.Text`
-  background-color: #f1f5f9;
-  color: #64748b;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
+  color: ${({ theme }: any) => theme.colors.textMuted};
   padding: 4px 12px;
   border-radius: 10px;
   font-size: 12px;
@@ -162,7 +164,7 @@ const MissionText = styled.Text`
   text-align: center;
   font-size: 16px;
   font-weight: 500;
-  color: #475569;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 15px;
   line-height: 20px;
   padding-horizontal: 19px;
@@ -171,17 +173,17 @@ const MissionText = styled.Text`
 const SectionTitle = styled.Text`
   font-size: 18px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   margin-bottom: 15px;
 `;
 
 const Card = styled.View`
   flex-direction: row;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   padding: 16px;
   border-radius: 20px;
   margin-bottom: 12px;
-  border: 1px solid #b7c4d1;
+  border: 1px solid ${({ theme }: any) => theme.colors.border};
   align-items: center;
 `;
 
@@ -201,12 +203,12 @@ const CardContent = styled.View`
 const CardTitle = styled.Text`
   font-size: 16px;
   font-weight: 700;
-  color: blue;
+  color: ${({ theme }: any) => theme.colors.primary};
 `;
 
 const CardDescription = styled.Text`
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 2px;
 `;
 
@@ -215,11 +217,11 @@ const HorizontalScroll = styled.ScrollView`
 `;
 
 const ProjectCard = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   width: 140px;
   padding: 16px;
   border-radius: 24px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid ${({ theme }: any) => theme.colors.border};
   margin-right: 15px;
   align-items: center;
 `;
@@ -234,12 +236,12 @@ const ProjectIcon = styled.View<{ bg: string }>`
 const ProjectName = styled.Text`
   font-size: 14px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const ProjectStatus = styled.Text`
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 4px;
 `;
 
@@ -254,24 +256,24 @@ const ContactButton = styled.TouchableOpacity`
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   padding: 15px;
   border-radius: 18px;
-  border: 1px solid black;
+  border: 1px solid ${({ theme }: any) => theme.colors.border};
 `;
 
 const ContactText = styled.Text`
   margin-left: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const FooterText = styled.Text`
   text-align: center;
   font-size: 14px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-bottom: 60px;
   line-height: 18px;
 `;

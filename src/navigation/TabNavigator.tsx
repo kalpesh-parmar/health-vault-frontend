@@ -20,9 +20,17 @@ const TabNavigator = () => {
         {() => <HomeStack />}
       </Tab.Screen>
 
-      <Tab.Screen name="Profile" component={ProfileStack} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileStack}
+        options={{ tabBarLabelPosition: "beside-icon" }}
+      />
 
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ tabBarLabelPosition: "beside-icon" }}
+      />
     </Tab.Navigator>
   );
 };

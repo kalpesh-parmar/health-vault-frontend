@@ -6,10 +6,13 @@ import AboutScreen from "../screens/AppScreens/AboutScreen";
 import ProfileScreen from "../screens/AppScreens/ProfileScreen";
 import CustomDrawerContent from "./CustomDrawerContent";
 import ProfileStack from "./stacks/ProfileStack";
+import { useAppTheme } from "../context/ThemeContext";
 
 const Drawer = createDrawerNavigator();
 
 const CustomDrawerNavigator = () => {
+  const { theme } = useAppTheme();
+
   return (
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
@@ -17,12 +20,12 @@ const CustomDrawerNavigator = () => {
         headerShown: false,
 
         drawerStyle: {
-          backgroundColor: "#F8FAFC",
+          backgroundColor: theme.colors.background,
           width: 260,
         },
 
-        drawerActiveTintColor: "#2563EB",
-        drawerInactiveTintColor: "#64748B",
+        drawerActiveTintColor: theme.colors.primary,
+        drawerInactiveTintColor: theme.colors.textMuted,
 
         drawerLabelStyle: {
           fontSize: 16,
@@ -31,8 +34,9 @@ const CustomDrawerNavigator = () => {
       }}
     >
       <Drawer.Screen
-        name="Home"
+        name="HomeTab"
         options={{
+          drawerLabel: "Home",
           drawerIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),

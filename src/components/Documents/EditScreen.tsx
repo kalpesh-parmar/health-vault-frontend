@@ -1,38 +1,129 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import styled from "styled-components/native";
 import ScreenHeader from "../shared/Header";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { Alert } from "react-native";
 import Toast from "react-native-toast-message";
 import LogoutModal from "../Auth/LogoutModal";
 import DualButtons from "../shared/Buttons/DualButtons";
 import { useNavigation } from "@react-navigation/native";
-import { ProfileStackParamList, RootStackParamList } from "../../navigation/types";
+import { AppStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useMutation } from "@tanstack/react-query";
+import { updateDocument } from "../../services/authService";
+import { MedicalDocument } from "./DocumentCard";
+import BottomSheet from "../shared/BottomSheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { useAppTheme } from "../../context/ThemeContext";
+
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
+type categoryItems = {
+  label: string;
+  value: string;
+  icon: IconName;
+  color: string;
+  iconColor: string;
+}
+
+interface FocusProps {
+  focused?: boolean;
+  hasError?: boolean;
+}
+interface OpenProps {
+  hasError?: boolean;
+  hasValue?: boolean;
+}
+interface SelProps {
+  selected: boolean;
+}
+interface BgProps {
+  bgColor: string;
+}
+interface ColProps {
+  color: string;
+}
+
+const CATEGORIES: categoryItems[] = [
+  {
+    label: "Family",
+    value: "family",
+    icon: "people-outline",
+    color: "#dbeafe",
+    iconColor: "#1d4ed8",
+  },
+  {
+    label: "Medical Documents",
+    value: "medical_document",
+    icon: "reader-outline",
+    color: "#ede9fe",
+    iconColor: "#7c3aed",
+  },
+  {
+    label: "Medication",
+    value: "medication",
+    icon: "bandage-outline",
+    color: "#d1fae5",
+    iconColor: "#059669",
+  },
+  {
+    label: "Insurance",
+    value: "insurance",
+    icon: "briefcase-outline",
+    color: "#fef3c7",
+    iconColor: "#d97706",
+  },
+  {
+    label: "Other",
+    value: "other",
+    icon: "apps-outline",
+    color: "#f1f5f9",
+    iconColor: "#475569",
+  },
+];
 
 const EditScreen = ({ route }: any) => {
   const { document } = route.params;
-  const [filename, setFilename] = useState(document?.title ?? "");
-  const [category, setCategory] = useState(document?.category ?? "");
+  console.log(document?.id);
+
+  const [filename, setFilename] = useState(document?.fileName ?? "");
+  const [category, setCategory] = useState(document?.documentType ?? "");
   const [notes, setNotes] = useState(document?.notes ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [showModal, setShowModal] = useState<boolean>(false);
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const { isDark } = useAppTheme();
 
   const handleSave = async () => {
     setIsSaving(true);
-    const payload = {
-      title: filename.trim(),
-      notes: notes.trim(),
-    };
-    setIsSaving(false);
-    Toast.show({
-      type: "success",
-      text1: "Hurrahhh!!! 🥳",
-      text2: `Document Updated Successfully.`,
+
+    const updateDocumentMutation = useMutation({
+      mutationFn: updateDocument,
+      onSuccess: () => {
+        Toast.show({
+          type: "success",
+          text1: "Document Updated Successfully.",
+        });
+        navigation.navigate("DocumentList" as never);
+      },
+      onError: () => {
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: "Failed to update document",
+        });
+        setIsSaving(false);
+      },
     });
-    navigation.navigate("DocumentSummary", {document: {id: document.id, title: filename, category, notes, createdAt: document.createdAt}});
+    const payload: Partial<MedicalDocument> = {
+      id: document?.id || 0,
+      fileName: filename.trim() || "",
+      notes: notes.trim() || "",
+      category: category.trim() || "",
+      createdAt: document.createdAt,
+    };
+    await updateDocumentMutation.mutateAsync(payload);
   };
 
   const handleDelete = () => {
@@ -47,6 +138,7 @@ const EditScreen = ({ route }: any) => {
           setShowModal(false);
         }}
         mode="Delete Document"
+        documentId={document?.id}
       />
       <ScreenHeader title="Edit Document" showBack={true} />
 
@@ -57,7 +149,7 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="document-text-outline" size={14} color={BLUE} />
+                <Ionicons name="document-text-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
               </FieldIconBadge>
               <FieldMeta>
                 <FieldLabel>File Name</FieldLabel>
@@ -77,7 +169,7 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="pricetag-outline" size={14} color={BLUE} />
+                <Ionicons name="pricetag-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
               </FieldIconBadge>
               <FieldMeta>
                 <FieldLabel>Category</FieldLabel>
@@ -97,7 +189,7 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="create-outline" size={14} color={BLUE} />
+                <Ionicons name="create-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
               </FieldIconBadge>
               <FieldMeta>
                 <FieldLabel>Notes</FieldLabel>
@@ -119,12 +211,13 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock style={{ marginBottom: 0 }}>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="calendar-outline" size={14} color={BLUE} />
+                <Ionicons name="calendar-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
               </FieldIconBadge>
               <FieldMeta>
-                <FieldLabel>Created On {document?.createdAt ?? "—"}</FieldLabel>
+                <FieldLabel>Created On</FieldLabel>
               </FieldMeta>
             </FieldRow>
+            <ReadOnlyText style={{marginTop: 6, marginLeft: 40, fontSize: 14}}>{new Date(document?.createdAt).toISOString().split('T')[0] ?? "—"}</ReadOnlyText>
           </FieldBlock>
         </FormCard>
 
@@ -138,6 +231,33 @@ const EditScreen = ({ route }: any) => {
         />
         <BottomSpacer />
       </ScrollContent>
+
+      <BottomSheet ref={bottomSheetRef} enablePanDownToClose={true}>
+          <SheetContentWrapper>
+            <BSTitle>Select Category</BSTitle>
+            <BSSub>Choose the type of medical document</BSSub>
+            {CATEGORIES.map((item, idx) => (
+              <BSItem
+                key={item.label}
+                selected={category === item.value}
+                onPress={() => {
+                  setCategory(item.value);
+                  bottomSheetRef.current?.dismiss();
+                }}
+                activeOpacity={0.7}
+                style={
+                  idx === CATEGORIES.length - 1 ? { borderBottomWidth: 0 } : {}
+                }
+              >
+                <BSIconBadge bgColor={item.color}>
+                  <Ionicons name={item.icon} size={20} color={item.iconColor} />
+                </BSIconBadge>
+                <BSLbl selected={category === item.value}>{item.label}</BSLbl>
+                {category === item.value && <BSCheck>✓</BSCheck>}
+              </BSItem>
+            ))}
+          </SheetContentWrapper>
+        </BottomSheet>
     </Container>
   );
 };
@@ -153,7 +273,7 @@ const SLATE = "#94A3B8";
 
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const ScrollContent = styled.ScrollView.attrs({
@@ -167,21 +287,21 @@ const ScrollContent = styled.ScrollView.attrs({
 const SectionLabel = styled.Text`
   font-size: 10px;
   font-weight: 700;
-  color: ${SLATE};
+  color: ${({ theme }: any) => theme.colors.textMuted};
   letter-spacing: 1.4px;
   margin-bottom: 10px;
   margin-left: 4px;
 `;
 
 const FormCard = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 20px;
   padding: 6px 16px;
   margin-bottom: 14px;
   border-width: 0.5px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
   elevation: 4;
-  shadow-color: ${BLUE};
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.07;
   shadow-radius: 12px;
   shadow-offset: 0px 4px;
@@ -202,9 +322,9 @@ const FieldIconBadge = styled.View`
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background-color: ${BLUE_LIGHT};
+  background-color: ${({ theme }: any) => theme.colors.iconBox};
   border-width: 0.5px;
-  border-color: ${BLUE_BORDER};
+  border-color: ${({ theme }: any) => theme.colors.border};
   align-items: center;
   justify-content: center;
 `;
@@ -219,7 +339,7 @@ const FieldMeta = styled.View`
 const FieldLabel = styled.Text`
   font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const ReadOnlyPill = styled.View`
@@ -236,28 +356,28 @@ const ReadOnlyPill = styled.View`
 const ReadOnlyText = styled.Text`
   font-size: 10px;
   font-weight: 600;
-  color: ${SLATE};
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const StyledInput = styled.TextInput`
-  background-color: ${BLUE_LIGHT};
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 12px;
   border-width: 1px;
-  border-color: ${BLUE_BORDER};
+  border-color: ${({ theme }: any) => theme.colors.border};
   padding: 12px 14px;
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 500;
 `;
 
 const StyledTextArea = styled.TextInput`
-  background-color: ${BLUE_LIGHT};
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 12px;
   border-width: 1px;
-  border-color: ${BLUE_BORDER};
+  border-color: ${({ theme }: any) => theme.colors.border};
   padding: 12px 14px;
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 500;
   min-height: 96px;
 `;
@@ -275,7 +395,7 @@ const ReadOnlyValue = styled.TextInput`
 
 const Divider = styled.View`
   height: 0.5px;
-  background-color: #f1f5f9;
+  background-color: ${({ theme }: any) => theme.colors.border};
   margin-horizontal: -16px;
 `;
 
@@ -386,4 +506,53 @@ const DeleteButtonText = styled.Text`
 
 const BottomSpacer = styled.View`
   height: 70px;
+`;
+
+const SheetContentWrapper = styled.View`
+  padding: 25px 20px;
+  padding-bottom: 50px;
+  align-items: center;
+`;
+
+const BSTitle = styled.Text`
+  font-size: 17px;
+  font-weight: 800;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+  margin-bottom: 3px;
+  letter-spacing: -0.3px;
+`;
+const BSSub = styled.Text`
+  font-size: 12px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  margin-bottom: 18px;
+`;
+const BSItem = styled.TouchableOpacity<SelProps>`
+  flex-direction: row;
+  align-items: center;
+  padding: 12px 0px;
+  border-bottom-width: 1px;
+  border-bottom-color: ${({ theme }: any) => theme.colors.border};
+`;
+const BSIconBadge = styled.View<BgProps>`
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background-color: ${({ bgColor }: BgProps) => bgColor};
+  align-items: center;
+  justify-content: center;
+  margin-right: 13px;
+`;
+const BSIconTxt = styled.Text`
+  font-size: 17px;
+`;
+const BSLbl = styled.Text<SelProps>`
+  flex: 1;
+  font-size: 14px;
+  font-weight: ${({ selected }: SelProps) => (selected ? "700" : "400")};
+  color: ${({ selected, theme }: any) => (selected ? theme.colors.primary : theme.colors.textPrimary)};
+`;
+const BSCheck = styled.Text`
+  font-size: 15px;
+  color: #2563eb;
+  font-weight: 700;
 `;

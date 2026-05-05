@@ -1,29 +1,51 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components/native";
 import ScreenHeader from "../shared/Header";
-import { MedicalDocument } from "./DocumentCard";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as MailComposer from 'expo-mail-composer'; 
+import * as MailComposer from "expo-mail-composer";
 import Toast from "react-native-toast-message";
 import { generateProfessionalEmail } from "../../utils/ShareTemplate";
+import { useAppTheme } from "../../context/ThemeContext";
+import { getSignedUrl } from "../../services/authService";
+import * as SecureStore from "expo-secure-store";
 
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
-  console.log("Document :-", document);
+  const [imageUri, setImageUri] = useState<string>("");
+  const { isDark } = useAppTheme();
+  console.log("Document :-", document?.s3Key);
+  const token = async () => {
+    const token = await SecureStore.getItemAsync("token");
+    return token;
+  }
 
-  const handleDelete = (id: string) => {};
-  const handleEdit = (id: string, updatedData?: Partial<MedicalDocument>) => {
+  const getSignedURL = async () => {
+    try {
+      const response = await getSignedUrl(document?.s3Key);
+      console.log("Signed URL", response?.data);
+      setImageUri(response?.data);
+
+    } catch (error) {
+      console.log("Error getting signed URL", error);
+    }
+  };
+
+  useEffect(() => {
+    getSignedURL();
+  }, []);
+
+  const handleEdit = () => {
     navigation.navigate("EditDocument", { document });
   };
 
   const handleShare = async () => {
     const result = await MailComposer.isAvailableAsync();
-    if(!result) {
+    if (!result) {
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Mail is not available'
+        type: "error",
+        text1: "Error",
+        text2: "Mail is not available",
       });
       return;
     }
@@ -36,22 +58,22 @@ const SummaryScreen = ({ route, navigation }: any) => {
       subject: subject,
       body: body,
       attachments: attachment ? [attachment] : [],
-    }
+    };
 
     const share = await MailComposer.composeAsync(mail);
 
-    if(share.status === "cancelled") {
+    if (share.status === "cancelled") {
       Toast.show({
-        type: 'info',
-        text1: 'Cancelled',
-        text2: 'Mail not sent'
-      })
+        type: "info",
+        text1: "Cancelled",
+        text2: "Mail not sent",
+      });
     } else {
       Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: 'Mail sent successfully'
-      })
+        type: "success",
+        text1: "Success",
+        text2: "Mail sent successfully",
+      });
     }
   };
 
@@ -66,21 +88,40 @@ const SummaryScreen = ({ route, navigation }: any) => {
           <MetaLeft>
             <CategoryRow>
               <CategoryDot />
-              <CategoryLabel>{document.category}</CategoryLabel>
+              <CategoryLabel>{document.documentType}</CategoryLabel>
             </CategoryRow>
-            <DocumentTitle>{document?.title}</DocumentTitle>
+            <DocumentTitle>{document?.fileName}</DocumentTitle>
             <DateRow>
-              <Ionicons name="calendar-outline" size={12} color="#94A3B8" />
-              <DocumentDate>Created {document?.createdAt}</DocumentDate>
+              <Ionicons
+                name="calendar-outline"
+                size={12}
+                color={isDark ? "#64748b" : "#94A3B8"}
+              />
+              <DocumentDate>
+                Created On{" "}
+                {new Date(document?.createdAt).toLocaleDateString("en-US", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </DocumentDate>
             </DateRow>
           </MetaLeft>
-          <EditButton onPress={() => handleEdit(document?.id || "")}>
-            <Ionicons name="pencil-sharp" size={16} color="#1246A8" />
+          <EditButton onPress={handleEdit}>
+            <Ionicons
+              name="pencil-sharp"
+              size={16}
+              color={isDark ? "#60a5fa" : "#1246A8"}
+            />
           </EditButton>
 
           <SummaryCard>
             <SummaryGradient
-              colors={["#E8EFFD", "#EDE6FF", "#F5F0FF"]}
+              colors={
+                isDark
+                  ? ["#1e293b", "#334155"]
+                  : ["#E8EFFD", "#EDE6FF", "#F5F0FF"]
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -101,7 +142,11 @@ const SummaryScreen = ({ route, navigation }: any) => {
         {document?.notes && (
           <NotesCard>
             <NotesGradient
-              colors={["#FFFDF0", "#FFF8D6", "#FFF4C2"]}
+              colors={
+                isDark
+                  ? ["#332d1e", "#42381e"]
+                  : ["#FFFDF0", "#FFF8D6", "#FFF4C2"]
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -123,20 +168,33 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
         <PreviewCard>
           <PreviewHeader>
-            <Ionicons name="document-outline" size={13} color="#94A3B8" />
+            <Ionicons
+              name="document-outline"
+              size={13}
+              color={isDark ? "#64748b" : "#94A3B8"}
+            />
             <PreviewLabel>Document Preview</PreviewLabel>
           </PreviewHeader>
-          {document?.imageUri ? (
-            <PreviewImage source={{ uri: document?.imageUri }} />
+          {imageUri ? (
+            <PreviewImage
+              source={{
+                uri: imageUri,
+              }}
+              onError={(e: any) => console.log("Image error:", e.nativeEvent)}
+            />
           ) : (
             <EmptyPreview>
-              <Ionicons name="image-outline" size={36} color="#CBD5E1" />
+              <Ionicons
+                name="image-outline"
+                size={36}
+                color={isDark ? "#475569" : "#CBD5E1"}
+              />
               <EmptyText>No image attached</EmptyText>
             </EmptyPreview>
           )}
         </PreviewCard>
 
-        <ActionButton onPress={() => handleShare}>
+        <ActionButton onPress={handleShare}>
           <ActionButtonText>Share Document</ActionButtonText>
           <Ionicons name="share" size={24} color="#ffffff" />
         </ActionButton>
@@ -147,17 +205,13 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
 export default SummaryScreen;
 
-const BLUE = "#1246A8";
-const BLUE_LIGHT = "#EEF3FD";
-const BLUE_BORDER = "#C5D5F7";
-
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const HeaderBand = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   padding-bottom: 24px;
   overflow: hidden;
 `;
@@ -171,7 +225,7 @@ const ScrollContent = styled.ScrollView.attrs({
 `;
 
 const MetaCard = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 20px;
   padding: 18px;
   flex: 1;
@@ -179,9 +233,9 @@ const MetaCard = styled.View`
   align-items: flex-start;
   margin-bottom: 14px;
   border-width: 0.5px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
   elevation: 4;
-  shadow-color: ${BLUE};
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.08;
   shadow-radius: 12px;
   shadow-offset: 0px 4px;
@@ -202,13 +256,13 @@ const CategoryDot = styled.View`
   width: 8px;
   height: 8px;
   border-radius: 4px;
-  background-color: ${BLUE};
+  background-color: ${({ theme }: any) => theme.colors.primary};
 `;
 
 const CategoryLabel = styled.Text`
   font-size: 11px;
   font-weight: 600;
-  color: ${BLUE};
+  color: ${({ theme }: any) => theme.colors.primary};
   letter-spacing: 1px;
   text-transform: uppercase;
 `;
@@ -216,7 +270,7 @@ const CategoryLabel = styled.Text`
 const DocumentTitle = styled.Text`
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   line-height: 24px;
   margin-bottom: 8px;
 `;
@@ -229,7 +283,7 @@ const DateRow = styled.View`
 
 const DocumentDate = styled.Text`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const EditButton = styled.TouchableOpacity`
@@ -239,9 +293,9 @@ const EditButton = styled.TouchableOpacity`
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  background-color: ${BLUE_LIGHT};
+  background-color: ${({ theme }: any) => theme.colors.iconBox};
   border-width: 0.5px;
-  border-color: ${BLUE_BORDER};
+  border-color: ${({ theme }: any) => theme.colors.border};
   align-items: center;
   justify-content: center;
 `;
@@ -252,8 +306,8 @@ const SummaryCard = styled.View`
   border-radius: 20px;
   overflow: hidden;
   border-width: 0.5px;
-  border-color: ${BLUE_BORDER};
-  shadow-color: #6b8cda;
+  border-color: ${({ theme }: any) => theme.colors.border};
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-offset: 0px 8px;
   shadow-opacity: 0.18;
   shadow-radius: 20px;
@@ -275,10 +329,10 @@ const SummaryIconBadge = styled.View`
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background-color: ${BLUE};
+  background-color: ${({ theme }: any) => theme.colors.primary};
   align-items: center;
   justify-content: center;
-  shadow-color: ${BLUE};
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-offset: 0px 3px;
   shadow-opacity: 0.45;
   shadow-radius: 6px;
@@ -288,14 +342,14 @@ const SummaryIconBadge = styled.View`
 const SummaryTitle = styled.Text`
   font-size: 15px;
   font-weight: 800;
-  color: ${BLUE};
+  color: ${({ theme }: any) => theme.colors.primary};
   flex: 1;
   letter-spacing: 0.2px;
 `;
 
 const SummaryText = styled.Text`
   font-size: 13px;
-  color: #2d3b5a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   line-height: 22px;
 `;
 
@@ -304,8 +358,8 @@ const NotesCard = styled.View`
   overflow: hidden;
   margin-bottom: 14px;
   border-width: 0.5px;
-  border-color: #e8d9a0;
-  shadow-color: #c4a84f;
+  border-color: ${({ theme }: any) => theme.colors.warning};
+  shadow-color: ${({ theme }: any) => theme.colors.warning};
   shadow-offset: 0px 4px;
   shadow-opacity: 0.12;
   shadow-radius: 14px;
@@ -320,7 +374,7 @@ const NotesGradient = styled(LinearGradient)`
 const NotesMarginLine = styled.View`
   width: 3px;
   border-radius: 3px;
-  background-color: #f0c040;
+  background-color: ${({ theme }: any) => theme.colors.warning};
   margin-left: 16px;
   margin-right: 14px;
   opacity: 0.75;
@@ -341,10 +395,10 @@ const NotesIconBadge = styled.View`
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background-color: #c68a00;
+  background-color: ${({ theme }: any) => theme.colors.warning};
   align-items: center;
   justify-content: center;
-  shadow-color: #c68a00;
+  shadow-color: ${({ theme }: any) => theme.colors.warning};
   shadow-offset: 0px 3px;
   shadow-opacity: 0.35;
   shadow-radius: 5px;
@@ -354,7 +408,7 @@ const NotesIconBadge = styled.View`
 const NotesTitle = styled.Text`
   font-size: 15px;
   font-weight: 800;
-  color: #8a6200;
+  color: ${({ theme }: any) => theme.colors.warning};
   flex: 1;
   letter-spacing: 0.2px;
 `;
@@ -365,18 +419,18 @@ const NotesRuledContainer = styled.View`
 
 const NotesText = styled.Text`
   font-size: 13px;
-  color: #4a3800;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   line-height: 22px;
   opacity: 0.9;
 `;
 
 const PreviewCard = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 20px;
   overflow: hidden;
   margin-bottom: 14px;
   border-width: 0.5px;
-  border-color: #797c7fff;
+  border-color: ${({ theme }: any) => theme.colors.border};
 `;
 
 const PreviewHeader = styled.View`
@@ -385,19 +439,20 @@ const PreviewHeader = styled.View`
   gap: 7px;
   padding: 10px 16px;
   border-bottom-width: 0.5px;
-  border-bottom-color: #797c7fff;
-  background-color: #f8fafc;
+  border-bottom-color: ${({ theme }: any) => theme.colors.border};
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
 `;
 
 const PreviewLabel = styled.Text`
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const PreviewImage = styled.Image`
   width: 100%;
-  height: fit-content;
+  height: 230px;
+  resize-mode: contain;
 `;
 
 const EmptyPreview = styled.View`
@@ -405,16 +460,16 @@ const EmptyPreview = styled.View`
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
 `;
 
 const EmptyText = styled.Text`
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const ActionButton = styled.TouchableOpacity`
-  background-color: #000000;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   flex: 1;
   align-items: center;
   justify-content: center;
@@ -424,13 +479,13 @@ const ActionButton = styled.TouchableOpacity`
   flex-direction: row;
   align-items: center;
   border-width: 0.5px;
-  border-color: ${BLUE_BORDER};
+  border-color: ${({ theme }: any) => theme.colors.border};
 `;
 
 const ActionButtonText = styled.Text`
   font-size: 16px;
   font-weight: 700;
-  color: #ffffffff;
+  color: #ffffff;
   letter-spacing: 0.5px;
   padding-right: 10px;
 `;
