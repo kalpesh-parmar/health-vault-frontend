@@ -16,14 +16,14 @@
       "supportsTablet": true
     },
     "android": {
-      "googleServicesFile": "./google-services.json",
+      "package": "com.anonymous.DocumentsVaultApp",
+      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/Splash.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.DocumentsVaultApp",
       "usesCleartextTraffic": true
     },
     "web": {

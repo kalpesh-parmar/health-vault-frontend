@@ -5,10 +5,12 @@ import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Animated } from "react-native";
 import { getFocusedRouteNameFromRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAppTheme } from "../context/ThemeContext";
 
 const TabBar = ({ state, navigation }: BottomTabBarProps) => {
   const translateY = useRef(new Animated.Value(0)).current;
   const currentRoute = state.routes[state.index];
+  const { isDark, theme } = useAppTheme();
   const nestedRouteName =
     getFocusedRouteNameFromRoute(currentRoute) ?? currentRoute.name;
 
@@ -33,7 +35,7 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
       }}
     >
       <GradientBackground
-        colors={["#e0f7fa", "#f3e5f5"]}
+        colors={isDark ? ["#1e293b", "#334155"] : ["#e0f7fa", "#f3e5f5"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
@@ -64,7 +66,7 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
 
           return (
             <TabButton key={route.key} onPress={onPress}>
-              <Ionicons name={iconName} size={24} color={isFocused ? "#000" : "#777"} />
+              <Ionicons name={iconName} size={24} color={isFocused ? theme.colors.primary : theme.colors.textMuted} />
               <Label focused={isFocused}>{route.name}</Label>
             </TabButton>
           );
@@ -106,6 +108,6 @@ const TabButton = styled.TouchableOpacity`
 const Label = styled.Text<{ focused: boolean }>`
   font-size: 12px;
   margin-top: 3px;
-  color: ${(props: any) => (props.focused ? "#000" : "#777")};
+  color: ${({ focused, theme }: any) => (focused ? theme.colors.primary : theme.colors.textMuted)};
   font-weight: 700;
 `;

@@ -14,9 +14,8 @@ import {
   Montserrat_700Bold,
 } from "@expo-google-fonts/montserrat";
 import Loader from "../../../../components/shared/Loader";
-import { RootStackParamList } from "../../../../navigation/types";
 import ScreenHeader from "../../../../components/shared/Header";
-
+import { AppStackParamList } from "../../../../navigation/types";
 type MedType = "Tablet" | "Capsule" | "Syrup" | "Drop" | "Injection";
 type FoodTiming = "With food" | "Before food" | "After food" | "Empty stomach";
 type FrequencyKey = "once" | "twice" | "thrice" | "as_needed";
@@ -76,7 +75,7 @@ const TIMES_OF_DAY: { key: TimeOfDay; emoji: string }[] = [
 
 const AddMedicationScreen = () => {
   const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
   const [form, setForm] = useState<MedicationFormData>({
     name: "",

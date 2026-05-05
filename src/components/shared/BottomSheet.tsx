@@ -4,29 +4,32 @@ import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../constants/theme";
 import { View } from "react-native";
+import { useAppTheme } from "../../context/ThemeContext";
 
-const BottomSheet = forwardRef(({children}:any, ref : any) => {
+const BottomSheet = forwardRef(({ children }: any, ref: any) => {
+  const { theme } = useAppTheme();
 
   return (
     <BottomSheetModal
       ref={ref}
+      snapPoints={["60%"]}
       enablePanDownToClose={true}
       backgroundStyle={{
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
-        backgroundColor: COLORS.emptyText,
+        backgroundColor: theme.colors.surface,
         paddingBottom: 15,
       }}
       handleIndicatorStyle={{
         width: 23,
         height: 5,
+        backgroundColor: theme.colors.textMuted,
       }}
-      
     >
-      <BottomSheetView style={{ flex: 1, height: 230 }}>
+      <BottomSheetView style={{ flex: 1 }}>
         <CloseIconWrapper>
           <CloseIcon onPress={() => ref.current?.dismiss()}>
-            <Ionicons name="close" size={24} color="white" />
+            <Ionicons name="close" size={24} color={theme.colors.background} />
           </CloseIcon>
         </CloseIconWrapper>
 
@@ -46,7 +49,7 @@ const CloseIconWrapper = styled.View`
 `;
 
 const CloseIcon = styled.TouchableOpacity`
-  background-color: black;
+  background-color: ${({ theme }: any) => theme.colors.textPrimary};
   height: 32px;
   width: 32px;
   border-radius: 16px;

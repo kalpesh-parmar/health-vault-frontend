@@ -4,23 +4,30 @@ import styled from "styled-components/native";
 import DualButtons from "../shared/Buttons/DualButtons";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
-import { useAuth } from "../../context/AuthContext";
-import { deleteUserAccount, logoutUser } from "../../services/authService";
+import { useAuth } from "../../context/ContextAPI";
+import { deleteDocument, deleteUserAccount, logoutUser } from "../../services/authService";
 import { useMutation } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
+import { queryClient } from "../../config/queryClient";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { AppStackParamList } from "../../navigation/types";
 
 interface LogoutModalProps {
   showModal: boolean;
   onClose: () => void;
   mode?: "Log Out" | "Delete Account" | "Delete Document";
+  documentId?: number;
 }
 
 const LogoutModal = ({
   showModal,
   onClose,
   mode = "Log Out",
+  documentId,
 }: LogoutModalProps) => {
   const { logout } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
   const logoutMutation = useMutation({
     mutationFn: logoutUser,
@@ -43,7 +50,7 @@ const LogoutModal = ({
     },
   });
 
-  const deleteMutation = useMutation({
+  const deleteUserMutation = useMutation({
     mutationFn: deleteUserAccount,
     onSuccess: async () => {
       await SecureStore.deleteItemAsync("userId");
@@ -65,20 +72,39 @@ const LogoutModal = ({
     },
   });
 
-  const handleAuthAction = async () => {
+  const deleteDocumentMutation = useMutation({
+    mutationFn: deleteDocument,
+    onSuccess: async (result) => {
+      queryClient.invalidateQueries({
+        queryKey: ['documents'],
+      });
+      console.log("Document Deleted Successfully.", result);
+      onClose();
+      Toast.show({
+        type: "success",
+        text1: "Document Deleted Successfully !!!",
+        text2: "Document Deleted Successfully.",
+      });
+      navigation.navigate("DocumentList");
+    },
+    onError: (error: any) => {
+      Toast.show({
+        type: "error",
+        text1: "OOPS!!! 😣",
+        text2: error.message || "Error Deleting Document.",
+      });
+    },
+  });
+
+  const handleAction = async () => {
     try {
       if (mode === "Log Out") {
         logoutMutation.mutate();
-      } else if(mode === "Delete Account"){
-        deleteMutation.mutate();
+      } else if (mode === "Delete Account") {
+        deleteUserMutation.mutate();
       } else {
-        Toast.show({
-          type: "success",
-          text1: "Document Deletion. !!!",
-          text2: "Document Deleted Successfully.",
-        });
+        await deleteDocumentMutation.mutateAsync(documentId as number);
         onClose();
-        // Document Deletion API call will be made here.
       }
     } catch (error: any) {
       console.error(`Error during ${mode}:`, error);
@@ -144,7 +170,7 @@ const LogoutModal = ({
             }
             mainBtnColor="red"
             onSecondaryPress={onClose}
-            onMainPress={handleAuthAction}
+            onMainPress={handleAction}
           />
         </ModalCard>
       </Overlay>

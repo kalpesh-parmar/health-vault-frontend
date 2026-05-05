@@ -3,7 +3,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   View,
-  TouchableOpacity,
 } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,7 +15,6 @@ import { updateUser } from "../services/authService";
 import { queryClient } from "../config/queryClient";
 import Toast from "react-native-toast-message";
 import PrimaryButton from "./shared/Buttons/PrimaryButton";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 const ICON_COLORS = {
@@ -32,12 +30,8 @@ type EditProfileRouteProp = RouteProp<ProfileStackParamList, "EditProfile">;
 
 type ProfileFormState = {
   username: string;
-  fullname: string;
-  email: string;
-  password: string;
-  dob: Date;
-  phone: string;
-  gender: "male" | "female" | "other";
+  firstName: string;
+  lastName: string;
 };
 
 export default function EditProfile({
@@ -52,16 +46,9 @@ export default function EditProfile({
 
   const [form, setForm] = useState<ProfileFormState>({
     username: formData.username,
-    fullname: formData.fullname,
-    email: formData.email,
-    password: formData.password,
-    dob: new Date(formData.dob),
-    phone: formData.phone,
-    gender: formData.gender?.toLowerCase() as "male",
+    firstName: formData.firstName,
+    lastName: formData.lastName,
   });
-
-  const [showPassword, setShowPassword] = useState(false);
-  const [showDate, setShowDate] = useState(false);
 
   const updateField = <K extends keyof ProfileFormState>(
     key: K,
@@ -81,15 +68,9 @@ export default function EditProfile({
 
       const payload = {
         userName: form.username,
-        fullName: form.fullname,
-        email: form.email,
-        password: form.password,
-        gender: form.gender,
-        dateOfBirth: formatDate(form.dob),
-        phone: form.phone,
+        firstName: form.firstName,
+        lastName: form.lastName,
       };
-
-      console.log("Payload :- ", payload);
 
       return await updateUser(userId, payload);
     },
@@ -110,15 +91,6 @@ export default function EditProfile({
       });
     },
   });
-
-  const formatDate = (date: Date) => {
-    return date ? date.toISOString().split("T")[0] : "";
-  };
-
-  const onChangeDate = (_: any, selectedDate?: Date) => {
-    setShowDate(false);
-    if (selectedDate) updateField("dob", selectedDate);
-  };
 
   return (
     <KeyboardAvoidingView
@@ -148,7 +120,8 @@ export default function EditProfile({
           <Card>
             {[
               { key: "username", label: "Username", icon: "at" },
-              { key: "fullname", label: "Full Name", icon: "person-outline" },
+              { key: "firstName", label: "First Name", icon: "person-outline" },
+              { key: "lastName", label: "Last Name", icon: "person-outline" },
             ].map((field, idx) => (
               <View key={field.key}>
                 <FieldRow>
@@ -177,100 +150,6 @@ export default function EditProfile({
                 {idx < 1 && <FieldDivider />}
               </View>
             ))}
-          </Card>
-
-          {/* Gender */}
-          <SectionLabel>Gender</SectionLabel>
-          <Card>
-            <GenderRow>
-              {(["male", "female", "other"] as const).map((g) => (
-                <GenderChip
-                  key={g}
-                  selected={form.gender === g}
-                  onPress={() => updateField("gender", g)}
-                >
-                  <GenderChipText selected={form.gender === g}>
-                    {g.charAt(0).toUpperCase() + g.slice(1)}
-                  </GenderChipText>
-                </GenderChip>
-              ))}
-            </GenderRow>
-          </Card>
-
-          {/* DOB */}
-          <SectionLabel>Date of Birth</SectionLabel>
-          <Card>
-            <FieldRow>
-              <FieldIconBox style={{ backgroundColor: ICON_COLORS.dob.bg }}>
-                <Ionicons name="calendar-outline" size={18} />
-              </FieldIconBox>
-
-              <FieldContent>
-                <FieldLabel>Date of Birth</FieldLabel>
-
-                <TouchableOpacity onPress={() => setShowDate(true)}>
-                  <FieldValue>{formatDate(form.dob)}</FieldValue>
-                </TouchableOpacity>
-
-                {showDate && (
-                  <DateTimePicker
-                    value={form.dob}
-                    mode="date"
-                    onChange={onChangeDate}
-                    maximumDate={new Date()}
-                  />
-                )}
-              </FieldContent>
-            </FieldRow>
-          </Card>
-
-          {/* Contact */}
-          <SectionLabel>Contact</SectionLabel>
-          <Card>
-            <FieldRow>
-              <FieldContent>
-                <FieldLabel>Email</FieldLabel>
-                <FieldInput
-                  value={form.email}
-                  onChangeText={(text: string) => updateField("email", text)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </FieldContent>
-            </FieldRow>
-
-            <FieldDivider />
-
-            <FieldRow>
-              <FieldContent>
-                <FieldLabel>Phone</FieldLabel>
-                <FieldInput
-                  value={form.phone}
-                  onChangeText={(text: string) => updateField("phone", text)}
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                />
-              </FieldContent>
-            </FieldRow>
-          </Card>
-
-          {/* Password */}
-          <SectionLabel>Security</SectionLabel>
-          <Card>
-            <FieldRow>
-              <FieldContent>
-                <FieldLabel>Password</FieldLabel>
-                <FieldInput
-                  value={form.password}
-                  onChangeText={(text: string) => updateField("password", text)}
-                  secureTextEntry={!showPassword}
-                />
-              </FieldContent>
-
-              <EyeToggle onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} />
-              </EyeToggle>
-            </FieldRow>
           </Card>
 
           <PrimaryButton

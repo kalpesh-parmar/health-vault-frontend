@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { ScrollView, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import styled from "styled-components/native";
@@ -17,17 +17,16 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ProfileStackParamList } from "../../navigation/types";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
+import { useAuth } from "../../context/ContextAPI";
+import { useAppTheme } from "../../context/ThemeContext";
 
 type Gender = "Male" | "Female" | "Other";
 
 const ProfileScreen = () => {
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
-  const [password, setPassword] = useState<string | null>(null);
-  const [fullname, setFullname] = useState<string | null>(null);
-  const [phone, setPhone] = useState<string | null>(null);
-  const [dateOfBirth, setDateOfBirth] = useState<Date | null>(new Date());
-  const [gender, setGender] = useState<Gender | null>(null);
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const [lastName, setLastName] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<"Log Out" | "Delete Account">(
     "Log Out",
@@ -35,6 +34,7 @@ const ProfileScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
   const queryClient = useQueryClient();
+  const { isDark, theme } = useAppTheme();
 
   useFocusEffect(
     useCallback(() => {
@@ -44,37 +44,24 @@ const ProfileScreen = () => {
 
   const formData = {
     username: username ?? "",
-    fullname: fullname ?? "",
-    email: email ?? "",
-    password: password ?? "",
-    dob: dateOfBirth ?? new Date(),
-    phone: phone ?? "",
-    gender:
-      gender === "Male" || gender === "Female" || gender === "Other"
-        ? gender
-        : "Male",
+    firstName: firstName ?? "",
+    lastName: lastName ?? "",
   };
 
   const { data: userData, isLoading } = useQuery({
     queryKey: ["userProfile"],
     queryFn: async () => {
-      const userId = await SecureStore.getItemAsync("userId");
-      console.log("userId :- ", userId);
-      if (!userId) throw new Error("No user ID found in SecureStore.");
       const response = await getUser();
       return response?.data || response;
     },
   });
 
   useEffect(() => {
-    console.log("userData :- ", userData);
     if (userData) {
       setUsername(userData?.userName || "Guest");
       setEmail(userData?.email || "No Email");
-      setFullname(userData?.fullName || "No Name");
-      setDateOfBirth(userData?.dateOfBirth || "No DOB");
-      setPhone(userData?.phone || "No Mobile");
-      setGender(userData?.gender || "No Gender");
+      setFirstName(userData?.firstName || "");
+      setLastName(userData?.lastName || "");
     }
   }, [userData]);
 
@@ -97,13 +84,13 @@ const ProfileScreen = () => {
           <HeroSection>
             <AvatarContainer>
               <AvatarCircle>
-                <Ionicons name="person" size={45} color="#2563eb" />
+                <Ionicons name="person" size={45} color={theme.colors.primary} />
               </AvatarCircle>
               <EditBadge>
                 <MaterialCommunityIcons
                   name="camera-outline"
                   size={16}
-                  color="white"
+                  color={theme.colors.background}
                 />
               </EditBadge>
             </AvatarContainer>
@@ -111,21 +98,13 @@ const ProfileScreen = () => {
             {isLoading ? (
               <ActivityIndicator
                 size="small"
-                color="#2563eb"
+                color={theme.colors.primary}
                 style={{ marginTop: 15 }}
               />
             ) : (
               <IdentityWrapper>
                 <EditNameWrapper>
                   <UserName>{username || "Guest User"}</UserName>
-                  <EditIconWrapper
-                    onPress={() => {
-                      if (!userData) return;
-                      navigation.navigate("EditProfile", { formData });
-                    }}
-                  >
-                    <MaterialIcons name="edit" size={16} color="#2563eb" />
-                  </EditIconWrapper>
                 </EditNameWrapper>
 
                 <UserEmail>{email}</UserEmail>
@@ -143,22 +122,29 @@ const ProfileScreen = () => {
 
           <SectionLabel>General</SectionLabel>
           <MenuCard>
-            <MenuItem onPress={() => navigation.navigate("DocumentList" as never)}>
-              <IconWrapper style={{ backgroundColor: "#eff6ff" }}>
-                <Ionicons name="document-text" size={20} color="#2563eb" />
+            <MenuItem
+              onPress={() => navigation.navigate("Home" as never)}
+            >
+              <IconWrapper style={{ backgroundColor: theme.colors.surfaceLight }}>
+                <Ionicons name="document-text" size={20} color={theme.colors.primary} />
               </IconWrapper>
               <MenuText>My Documents</MenuText>
-              <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
             </MenuItem>
 
             <MenuDivider />
 
-            <MenuItem>
-              <IconWrapper style={{ backgroundColor: "#f0fdf4" }}>
-                <Ionicons name="shield-checkmark" size={20} color="#22c55e" />
+            <MenuItem
+              onPress={() => {
+                if (!userData) return;
+                navigation.navigate("EditProfile", { formData });
+              }}
+            >
+              <IconWrapper style={{ backgroundColor: theme.colors.success + '20' }}>
+                <Ionicons name="person-outline" size={20} color={theme.colors.success} />
               </IconWrapper>
-              <MenuText>Security & Privacy</MenuText>
-              <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+              <MenuText>Edit Profile</MenuText>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
             </MenuItem>
           </MenuCard>
 
@@ -189,7 +175,7 @@ export default ProfileScreen;
 
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const Content = styled.View`
@@ -210,11 +196,11 @@ const AvatarCircle = styled.View`
   width: 100px;
   height: 100px;
   border-radius: 50px;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   justify-content: center;
   align-items: center;
   border-width: 1px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
   shadow-color: #000;
   shadow-opacity: 0.1;
   shadow-radius: 10px;
@@ -225,7 +211,7 @@ const EditBadge = styled.TouchableOpacity`
   position: absolute;
   bottom: 0;
   right: 0;
-  background-color: #2563eb;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   width: 30px;
   height: 30px;
   border-radius: 15px;
@@ -247,15 +233,15 @@ const EditNameWrapper = styled.View`
 const UserName = styled.Text`
   font-size: 20px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const UsernameInput = styled.TextInput`
   padding: 5px;
   width: 40%;
-  border: 1px solid black;
+  border: 1px solid ${({ theme }: any) => theme.colors.border};
   border-radius: 10px;
-  color: black;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 600;
 `;
 
@@ -271,14 +257,14 @@ const EditIconWrapper = styled.TouchableOpacity`
 
 const UserEmail = styled.Text`
   font-size: 15px;
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 4px;
   font-weight: 600;
 `;
 
 const StatsRow = styled.View`
   flex-direction: row;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 20px;
   padding: 15px;
   margin-bottom: 30px;
@@ -297,12 +283,12 @@ const StatBox = styled.View`
 const StatValue = styled.Text`
   font-size: 18px;
   font-weight: 800;
-  color: #2563eb;
+  color: ${({ theme }: any) => theme.colors.primary};
 `;
 
 const StatLabel = styled.Text`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 2px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -311,13 +297,13 @@ const StatLabel = styled.Text`
 const StatDivider = styled.View`
   width: 1px;
   height: 30px;
-  background-color: #f1f5f9;
+  background-color: ${({ theme }: any) => theme.colors.border};
 `;
 
 const SectionLabel = styled.Text`
   font-size: 13px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-bottom: 5px;
   margin-left: 5px;
   text-transform: uppercase;
@@ -325,7 +311,7 @@ const SectionLabel = styled.Text`
 `;
 
 const MenuCard = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 24px;
   margin-bottom: 30px;
   overflow: hidden;
@@ -353,12 +339,12 @@ const MenuText = styled.Text`
   flex: 1;
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const MenuDivider = styled.View`
   height: 1px;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.border};
   margin-left: 70px;
 `;
 

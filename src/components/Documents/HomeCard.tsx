@@ -75,6 +75,7 @@ import styled from "styled-components/native";
 import { GestureResponderEvent } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ScrollView } from "react-native-gesture-handler";
+import { useAppTheme } from "../../context/ThemeContext";
 
 interface HomeCardProps {
   title: string;
@@ -101,6 +102,7 @@ const HomeCard = ({
   accentColor = "#2563eb",
 }: HomeCardProps) => {
   const icon = getDefaultIcon(title);
+  const { theme } = useAppTheme();
 
   return (
     <CardTouchable activeOpacity={0.9} onPress={onPress}>
@@ -141,10 +143,10 @@ const CardContainer = styled.View`
   width: 100%;
   height: 132px;
   border-radius: 22px;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   justify-content: flex-end;
   padding: 14px 16px 16px 16px;
-  shadow-color: #2563eb;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.1;
   shadow-radius: 14px;
   elevation: 5;
@@ -180,12 +182,12 @@ const TextGroup = styled.View`
 const Title = styled.Text`
   font-size: 15px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const Subtitle = styled.Text`
   font-size: 11.5px;
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 4px;
   line-height: 15px;
 `;

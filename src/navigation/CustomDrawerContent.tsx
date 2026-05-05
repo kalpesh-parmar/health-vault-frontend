@@ -11,18 +11,22 @@ import { LinearGradient } from "expo-linear-gradient";
 import { TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "./types";
+import { useAppTheme } from "../context/ThemeContext";
+import { AppStackParamList } from "./types";
 
 const CustomDrawerContent = (props: any) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { isDark, theme } = useAppTheme();
 
   return (
     <Container>
       <DrawerContentScrollView contentContainerStyle={{ paddingTop: 0 }}>
         <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
-          <Header>
+          <Header
+            colors={isDark ? ["#1e293b", "#334155"] : ["#4f46e5", "#7c3aed"]}
+          >
             <ProfileImage source={{ uri: "https://i.pravatar.cc/150" }} />
 
             <UserInfo>
@@ -43,9 +47,9 @@ const CustomDrawerContent = (props: any) => {
           onPress={() => {
             setShowModal(true);
           }}
-          icon={() => <Ionicons name="log-out-outline" size={30} color="red" />}
+          icon={() => <Ionicons name="log-out-outline" size={30} color={theme.colors.error} />}
           labelStyle={{
-            color: "red",
+            color: theme.colors.error,
             fontWeight: "600",
             fontSize: 16,
             letterSpacing: 1,
@@ -67,11 +71,10 @@ export default CustomDrawerContent;
 
 const Container = styled.View`
   flex: 1;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const Header = styled(LinearGradient).attrs({
-  colors: ["#4f46e5", "#7c3aed"],
   start: { x: 0, y: 1 },
   end: { x: 1, y: 0 },
 })`
@@ -89,7 +92,7 @@ const ProfileImage = styled.Image`
   width: 52px;
   height: 52px;
   border-radius: 26px;
-  border: 2px solid #6366f1;
+  border: 2px solid ${({ theme }: any) => theme.colors.primary};
 `;
 
 const UserInfo = styled.View`
@@ -104,7 +107,7 @@ const Username = styled.Text`
 
 const Subtitle = styled.Text`
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 2px;
 `;
 
@@ -116,6 +119,6 @@ const DrawerSection = styled.View`
 
 const BottomSection = styled.View`
   border-top-width: 1px;
-  border-top-color: #d1d3d7ff;
+  border-top-color: ${({ theme }: any) => theme.colors.divider};
   padding: 10px 0 20px;
 `;

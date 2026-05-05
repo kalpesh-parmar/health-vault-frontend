@@ -9,6 +9,9 @@ import {
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../../../components/shared/Header";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { AppStackParamList } from "../../../../navigation/types";
 
 export interface Medication {
   id: string;
@@ -41,6 +44,8 @@ const MOCK_MEDICATIONS: Medication[] = [
 const MedicationScreen = () => {
   const [loading, setLoading] = useState(true);
   const [meds, setMeds] = useState<Medication[]>([]);
+  const navigation =
+    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
   useEffect(() => {
     //API
@@ -98,7 +103,12 @@ const MedicationScreen = () => {
           <HeaderTitle>Active Medications</HeaderTitle>
           <HeaderSubtitle>{meds.length} Active Prescriptions</HeaderSubtitle>
         </View>
-        <AddButton activeOpacity={0.8}>
+        <AddButton
+          activeOpacity={0.8}
+          onPress={() => {
+            navigation.navigate("AddMedication" as never);
+          }}
+        >
           <Ionicons name="add" size={28} color="#ffffff" />
         </AddButton>
       </Header>

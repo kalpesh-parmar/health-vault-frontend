@@ -1,5 +1,11 @@
-import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, StatusBar } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+  Text
+} from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
@@ -7,7 +13,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { login } from "../../services/authService";
 import * as SecureStore from "expo-secure-store";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/ContextAPI";
+import { useAppTheme } from "../../context/ThemeContext";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
@@ -16,6 +23,15 @@ const LoginScreen = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const navigation = useNavigation();
   const { login: authLogin } = useAuth();
+  const { isDark } = useAppTheme();
+
+  useEffect(() => {
+    const fetchDeviceToken = async () => {
+      const deviceToken = await SecureStore.getItemAsync("deviceToken");
+      console.log("Device Token :- ", deviceToken);
+    };
+    fetchDeviceToken();
+  }, []);
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -33,15 +49,20 @@ const LoginScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const loginMutation = useMutation({
+  const { mutateAsync: loginMutation, isPending: isLoading } = useMutation({
     mutationFn: login,
     onSuccess: async (result) => {
       console.log(result);
-      const token = result?.data;
-      console.log("Token :- ", token);
-      await SecureStore.setItemAsync("authToken", String(token));
-      const userId = await SecureStore.getItemAsync("userId");
-      await authLogin(String(userId));
+      const refreshToken = result?.data?.refreshToken;
+      const accessToken = result?.data?.accessToken;
+      const userId = result?.data?.patient?.id;
+      console.log("Refresh Token :- ", refreshToken);
+      console.log("User Id From Login Screen :- ", userId);
+      await SecureStore.setItemAsync("authToken", String(refreshToken));
+      await SecureStore.setItemAsync("accessToken", String(accessToken));
+      await SecureStore.setItemAsync("userId", String(userId));
+      await authLogin();
+
       Toast.show({
         type: "success",
         text1: "Hurrahhh!!! 🥳",
@@ -59,9 +80,12 @@ const LoginScreen = () => {
   });
 
   const handleLogin = async () => {
+    const deviceToken = await SecureStore.getItemAsync("deviceToken");
+
     const formData = {
       email: email,
       password: password,
+      deviceToken: deviceToken,
     };
 
     if (!validateForm()) {
@@ -74,7 +98,7 @@ const LoginScreen = () => {
     }
 
     try {
-      await loginMutation.mutateAsync(formData);
+      await loginMutation(formData);
     } catch (error) {
     } finally {
     }
@@ -82,7 +106,7 @@ const LoginScreen = () => {
 
   return (
     <Container>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -143,12 +167,25 @@ const LoginScreen = () => {
                 {passwordError && <ErrorText>{passwordError}</ErrorText>}
               </InputGroup>
 
-              <ForgotBtn>
+              <ForgotBtn
+                onPress={() => navigation.navigate("ForgotPassword" as never)}
+              >
                 <ForgotText>Forgot Password?</ForgotText>
               </ForgotBtn>
 
-              <LoginButton onPress={handleLogin} activeOpacity={0.9}>
-                <LoginButtonText>Sign In</LoginButtonText>
+              <LoginButton
+                onPress={handleLogin}
+                activeOpacity={0.9}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={{ color: "#fff" }}>Signing In...</Text>
+                  </>
+                ) : (
+                  <LoginButtonText>Sign In</LoginButtonText>
+                )}
               </LoginButton>
             </FormCard>
           </CenterWrapper>
@@ -170,7 +207,7 @@ export default LoginScreen;
 const Container = styled.View`
   flex: 1;
   padding: 60px 0;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const InnerContainer = styled.View`
@@ -187,7 +224,7 @@ const BackgroundBlob = styled.View`
   width: 350px;
   height: 350px;
   border-radius: 175px;
-  background-color: #eff6ff;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   top: -150px;
   right: -100px;
   z-index: -1;
@@ -197,11 +234,11 @@ const LogoCircle = styled.View`
   width: 90px;
   height: 90px;
   border-radius: 30px;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   justify-content: center;
   align-items: center;
   margin-bottom: 10px;
-  shadow-color: #3b82f6;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-offset: 0px 10px;
   shadow-opacity: 0.15;
   shadow-radius: 20px;
@@ -211,13 +248,13 @@ const LogoCircle = styled.View`
 const Title = styled.Text`
   font-size: 34px;
   font-weight: 900;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   letter-spacing: -1px;
 `;
 
 const Subtitle = styled.Text`
   font-size: 15px;
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   font-weight: 400;
 `;
 
@@ -230,11 +267,11 @@ const FormCard = styled.View`
   align-self: center;
   width: 92%;
   max-width: 380px;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   padding: 22px;
   border-radius: 24px;
   border-width: 1px;
-  border-color: #f1f5f9;
+  border-color: ${({ theme }: any) => theme.colors.border};
   shadow-color: #000;
   shadow-offset: 0px 10px;
   shadow-opacity: 0.05;
@@ -249,7 +286,7 @@ const InputGroup = styled.View`
 const Label = styled.Text`
   font-size: 14px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   margin-bottom: 8px;
   margin-left: 4px;
 `;
@@ -257,17 +294,17 @@ const Label = styled.Text`
 const InputWrapper = styled.View`
   flex-direction: row;
   align-items: center;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 14px;
   padding: 12px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }: any) => theme.colors.border};
 `;
 
 const StyledInput = styled.TextInput`
   flex: 1;
   margin-left: 10px;
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const ForgotBtn = styled.TouchableOpacity`
@@ -278,22 +315,22 @@ const ForgotBtn = styled.TouchableOpacity`
 
 const ForgotText = styled.Text`
   font-size: 14px;
-  color: #3b82f6;
+  color: ${({ theme }: any) => theme.colors.primary};
   font-weight: 700;
 `;
 
 const LoginButton = styled.TouchableOpacity`
-  background-color: #0f172a;
+  background-color: ${({ theme }: any) => theme.colors.textPrimary};
   padding: 16px;
   border-radius: 16px;
   align-items: center;
-  shadow-color: #0f172a;
+  shadow-color: ${({ theme }: any) => theme.colors.textPrimary};
   shadow-opacity: 0.25;
   shadow-radius: 10px;
 `;
 
 const LoginButtonText = styled.Text`
-  color: #ffffff;
+  color: ${({ theme }: any) => theme.colors.background};
   font-size: 17px;
   font-weight: 800;
   letter-spacing: 0.5px;
@@ -305,12 +342,12 @@ const Footer = styled.View`
 `;
 
 const FooterText = styled.Text`
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   font-size: 15px;
 `;
 
 const SignupText = styled.Text`
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 800;
   font-size: 15px;
 `;
