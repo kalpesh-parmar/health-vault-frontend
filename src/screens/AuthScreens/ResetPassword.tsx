@@ -57,8 +57,7 @@ const ResetPassword = () => {
 
   const {mutateAsync: resetPasswordMutation, isPending: isLoading} = useMutation({
     mutationFn: resetPassword,
-    onSuccess: (data: any) => {
-      console.log("Password Reset :- ", data);
+    onSuccess: () => {
       Toast.show({
         type: "success",
         text1: "Password Reset Successfully.",
@@ -67,7 +66,6 @@ const ResetPassword = () => {
       navigation.reset({ index: 0, routes: [{ name: "Login" }] });
     },
     onError: (error: any) => {
-      console.log("Error :- ", error);
       Toast.show({
         type: "error",
         text1: "Failed to Reset Password.",

@@ -1,8 +1,8 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { DocumentsStackParamList } from "../types";
-import DocumentList from "../../components/Documents/DocumentList";
-import DocumentSummary from "../../components/Documents/SummaryScreen";
-import EditScreen from "../../components/Documents/EditScreen";
+import DocumentList from "../../screens/AppScreens/DocumentListScreen";
+import DocumentSummary from "../../screens/AppScreens/DocumentSummaryScreen";
+import EditScreen from "../../screens/AppScreens/EditDocumentScreen";
 
 const Stack = createNativeStackNavigator<DocumentsStackParamList>();
 

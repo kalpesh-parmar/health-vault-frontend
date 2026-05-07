@@ -1,80 +1,7 @@
-// import React from "react";
-// import styled from "styled-components/native";
-// import { GestureResponderEvent } from "react-native";
-
-// interface HomeCardProps {
-//   title: string;
-//   subtitle: string;
-//   onPress?: (event: GestureResponderEvent) => void;
-// }
-
-// const HomeCard = ({
-//   title,
-//   subtitle,
-//   onPress,
-// }: HomeCardProps) => {
-//   return (
-//     <CardTouchable activeOpacity={0.85} onPress={onPress}>
-//       <CardContainer>
-//         <Title numberOfLines={1}>{title}</Title>
-//         <Subtitle numberOfLines={2}>{subtitle}</Subtitle>
-//         <Glow />
-//       </CardContainer>
-//     </CardTouchable>
-//   );
-// };
-
-// export default HomeCard;
-
-// const CardTouchable = styled.TouchableOpacity`
-//   width: 48%;
-//   margin-bottom: 16px;
-// `;
-
-// const CardContainer = styled.View`
-//   height: 120px;
-//   border-radius: 24px;
-//   background-color: #ffffff;
-//   justify-content: center;
-//   align-items: center;
-//   padding: 16px;
-//   shadow-color: #2563eb;
-//   shadow-opacity: 0.12;
-//   shadow-radius: 16px;
-//   elevation: 6;
-//   overflow: hidden;
-// `;
-
-// const Title = styled.Text`
-//   font-size: 16px;
-//   font-weight: 800;
-//   color: #0f172a;
-//   text-align: center;
-// `;
-
-// const Subtitle = styled.Text`
-//   font-size: 12px;
-//   color: #64748b;
-//   margin-top: 6px;
-//   text-align: center;
-//   line-height: 16px;
-// `;
-
-// const Glow = styled.View`
-//   position: absolute;
-//   bottom: -25px;
-//   right: -25px;
-//   width: 100px;
-//   height: 100px;
-//   background-color: rgba(37, 99, 235, 0.06);
-//   border-radius: 50px;
-// `;
-
 import React from "react";
 import styled from "styled-components/native";
 import { GestureResponderEvent } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { ScrollView } from "react-native-gesture-handler";
 import { useAppTheme } from "../../context/ThemeContext";
 
 interface HomeCardProps {
@@ -82,6 +9,7 @@ interface HomeCardProps {
   subtitle: string;
   onPress?: (event: GestureResponderEvent) => void;
   accentColor?: string;
+  isOther?: boolean;
 }
 
 const getDefaultIcon = (title: string) => {
@@ -100,6 +28,7 @@ const HomeCard = ({
   subtitle,
   onPress,
   accentColor = "#2563eb",
+  isOther,
 }: HomeCardProps) => {
   const icon = getDefaultIcon(title);
   const { theme } = useAppTheme();
@@ -107,14 +36,14 @@ const HomeCard = ({
   return (
     <CardTouchable activeOpacity={0.9} onPress={onPress}>
       <BorderRing accentColor={accentColor}>
-        <CardContainer>
+        <CardContainer isOther={isOther}>
           <ShimmerLine accentColor={accentColor} />
 
-          <IconWrapper accentColor={accentColor}>
+          <IconWrapper accentColor={accentColor} isOther={isOther}>
             <Ionicons name={icon} size={20} color={accentColor} />
           </IconWrapper>
 
-          <TextGroup>
+          <TextGroup isOther={isOther}>
             <Title numberOfLines={1}>{title}</Title>
             <Subtitle numberOfLines={2}>{subtitle}</Subtitle>
           </TextGroup>
@@ -139,13 +68,17 @@ const BorderRing = styled.View<{ accentColor: string }>`
   background-color: ${({ accentColor }: any) => accentColor}20;
 `;
 
-const CardContainer = styled.View`
+const CardContainer = styled.View<{ isOther?: boolean }>`
   width: 100%;
-  height: 132px;
+  height: ${({ isOther }: any) => (isOther ? "70px" : "140px")};
   border-radius: 22px;
   background-color: ${({ theme }: any) => theme.colors.surface};
-  justify-content: flex-end;
-  padding: 14px 16px 16px 16px;
+  flex-direction: ${({ isOther }: any) => (isOther ? "row" : "column")};
+  justify-content: ${({ isOther }: any) =>
+    isOther ? "flex-start" : "flex-end"};
+  align-items: ${({ isOther }: any) => (isOther ? "center" : "flex-start")};
+  padding: ${({ isOther }: any) =>
+    isOther ? "0px 16px" : "14px 16px 16px 16px"};
   shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.1;
   shadow-radius: 14px;
@@ -163,23 +96,33 @@ const ShimmerLine = styled.View<{ accentColor: string }>`
   border-radius: 1px;
 `;
 
-const IconWrapper = styled.View<{ accentColor: string }>`
+const IconWrapper = styled.View<{ accentColor: string; isOther?: boolean }>`
+  ${({ isOther }: any) =>
+    !isOther &&
+    `
   position: absolute;
   top: 16px;
   left: 16px;
+  `}
   width: 36px;
   height: 36px;
   border-radius: 12px;
   background-color: ${({ accentColor }: any) => accentColor}14;
   justify-content: center;
   align-items: center;
+  ${({ isOther }: any) =>
+    isOther &&
+    `
+  margin-right: 12px;
+  `}
 `;
 
-const TextGroup = styled.View`
-  margin-top: 6px;
+const TextGroup = styled.View<{ isOther?: boolean }>`
+  margin-top: ${({ isOther }: any) => (isOther ? "0px" : "6px")};
+  flex: ${({ isOther }: any) => (isOther ? "1" : "none")};
 `;
 
-const Title = styled.Text`
+const Title = styled.Text<{ isOther?: boolean }>`
   font-size: 15px;
   font-weight: 800;
   color: ${({ theme }: any) => theme.colors.textPrimary};

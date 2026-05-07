@@ -26,7 +26,10 @@ export const useDocumentMedia = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
-  const handleGalleryPick = async (onClose?: () => void) => {
+  const handleGalleryPick = async (
+    onClose?: () => void,
+    fromProfile?: boolean,
+  ) => {
     const permission = await requestGalleryPermission();
 
     if (!permission.granted) {
@@ -51,9 +54,11 @@ export const useDocumentMedia = () => {
 
     setPreviewSource("gallery");
     setSelectedImages(images);
-    navigation.navigate("ImagePreview", {
-      images: images,
-    });
+    if (!fromProfile) {
+      navigation.navigate("ImagePreview", {
+        images: images,
+      });
+    }
   };
 
   const handleOpenCamera = async (onClose?: () => void) => {
@@ -80,14 +85,18 @@ export const useDocumentMedia = () => {
 
     try {
       const images = await capturePhoto(cameraRef);
-      if (!images) return;
+      if (!images) {
+        setIsCapturing(false);
+        setIsCameraVisible(false);
+        return;
+      }
 
       setPreviewSource("camera");
       navigation.navigate("ImagePreview", {
         images: images,
       });
     } catch (error) {
-      console.log("Capture error:", error);
+      console.error("Capture error:", error);
     } finally {
       setIsCapturing(false);
       setIsCameraVisible(false);

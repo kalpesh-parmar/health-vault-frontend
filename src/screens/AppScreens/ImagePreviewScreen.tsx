@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Dimensions, StatusBar } from "react-native";
+import { ActivityIndicator, Dimensions, StatusBar, View } from "react-native";
 import styled from "styled-components/native";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { AppStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import ScreenHeader from "./Header";
+import ScreenHeader from "../../components/shared/Header";
 import { useAppTheme } from "../../context/ThemeContext";
 
 type Props = {
@@ -38,20 +38,21 @@ const ImagePreviewScreen = ({ route }: Props) => {
       setLoading(false);
     }
   };
-  
+
   return (
     <>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
-      <ScreenHeader title="Image Preview" showBack={true} />
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.colors.background}
+      />
       <Container>
-        <Container style={{ paddingTop: 84 }}>
+        <ScreenHeader title="Image Preview" showBack={true} />
+        <View style={{ flex: 1, paddingTop: 100 }}>
           <ImageWrapper>
             <PreviewImage source={{ uri: images || "" }} resizeMode="cover" />
           </ImageWrapper>
-        </Container>
-        <Label>
-          1 Image Selected
-        </Label>
+        </View>
+        <Label>1 Image Selected</Label>
 
         <ActionArea>
           {loading ? (
@@ -101,7 +102,7 @@ const PreviewImage = styled.Image`
 
 const Label = styled.Text`
   position: absolute;
-  top: 10%;
+  top: 22%;
   left: 31.5%;
   font-size: 14px;
   font-weight: 600;

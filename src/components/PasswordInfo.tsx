@@ -39,7 +39,7 @@ const Overlay = styled.View`
 `;
 
 const Container = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   padding: 20px;
   border-radius: 16px;
   width: 80%;
@@ -49,12 +49,12 @@ const Title = styled.Text`
   font-size: 16px;
   font-weight: bold;
   margin-bottom: 12px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const RuleText = styled.Text`
   font-size: 14px;
-  color: #475569;
+  color: ${({ theme }: any) => theme.colors.textSecondary};
   margin-bottom: 4px;
 `;
 
@@ -64,6 +64,6 @@ const CloseButton = styled.TouchableOpacity`
 `;
 
 const CloseText = styled.Text`
-  color: #2563eb;
+  color: ${({ theme }: any) => theme.colors.primary};
   font-weight: 500;
 `;

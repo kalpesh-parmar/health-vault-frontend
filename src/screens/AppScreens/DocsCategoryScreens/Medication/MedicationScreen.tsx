@@ -12,6 +12,7 @@ import ScreenHeader from "../../../../components/shared/Header";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../../../navigation/types";
+import { useAppTheme } from "../../../../context/ThemeContext";
 
 export interface Medication {
   id: string;
@@ -46,6 +47,7 @@ const MedicationScreen = () => {
   const [meds, setMeds] = useState<Medication[]>([]);
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { theme } = useAppTheme();
 
   useEffect(() => {
     //API
@@ -61,26 +63,26 @@ const MedicationScreen = () => {
       <CardHeader>
         <TitleSection>
           <IconWrapper>
-            <Ionicons name="medkit-outline" size={20} color="#2563eb" />
+            <Ionicons name="medkit-outline" size={20} color={theme.colors.primary} />
           </IconWrapper>
           <MedName>{item.name}</MedName>
         </TitleSection>
         <IconButton activeOpacity={0.7}>
-          <Ionicons name="create-outline" size={20} color="#64748b" />
+          <Ionicons name="create-outline" size={20} color={theme.colors.textMuted} />
         </IconButton>
       </CardHeader>
 
       <InfoGrid>
         <InfoItem>
-          <Ionicons name="time-outline" size={16} color="#94a3b8" />
+          <Ionicons name="time-outline" size={16} color={theme.colors.textMuted} />
           <InfoText>{item.time}</InfoText>
           <Tag context={item.mealContext}>
-            <TagText>{item.mealContext}</TagText>
+            <TagText context={item.mealContext}>{item.mealContext}</TagText>
           </Tag>
         </InfoItem>
 
         <InfoItem>
-          <Ionicons name="calendar-outline" size={16} color="#94a3b8" />
+          <Ionicons name="calendar-outline" size={16} color={theme.colors.textMuted} />
           <DateText>
             {item.startDate} — {item.endDate}
           </DateText>
@@ -115,7 +117,7 @@ const MedicationScreen = () => {
 
       {loading ? (
         <LoadingContainer>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <LoadingText>Syncing your schedule...</LoadingText>
         </LoadingContainer>
       ) : (
@@ -136,6 +138,7 @@ export default MedicationScreen;
 
 const SafeContainer = styled.SafeAreaView`
   flex: 1;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const Header = styled.View`
@@ -148,13 +151,13 @@ const Header = styled.View`
 const HeaderTitle = styled.Text`
   font-size: 28px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   letter-spacing: -0.5px;
 `;
 
 const HeaderSubtitle = styled.Text`
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   font-weight: 500;
 `;
 
@@ -162,22 +165,22 @@ const AddButton = styled.TouchableOpacity`
   width: 52px;
   height: 52px;
   border-radius: 18px;
-  background-color: #2563eb;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   justify-content: center;
   align-items: center;
-  shadow-color: #2563eb;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.35;
   shadow-radius: 10px;
   elevation: 6;
 `;
 
 const Card = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 28px;
   padding: 20px;
   margin-bottom: 18px;
   border-width: 1px;
-  border-color: #f1f5f9;
+  border-color: ${({ theme }: any) => theme.colors.border};
   ${Platform.select({
     ios: `
       shadow-color: #000;
@@ -205,7 +208,7 @@ const IconWrapper = styled.View`
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  background-color: #f0f7ff;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   justify-content: center;
   align-items: center;
   margin-right: 14px;
@@ -214,18 +217,18 @@ const IconWrapper = styled.View`
 const MedName = styled.Text`
   font-size: 18px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const IconButton = styled.TouchableOpacity`
   padding: 10px;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 12px;
 `;
 
 const InfoGrid = styled.View`
   border-top-width: 1px;
-  border-top-color: #f8fafc;
+  border-top-color: ${({ theme }: any) => theme.colors.surfaceLight};
   padding-top: 18px;
   gap: 14px;
 `;
@@ -238,32 +241,32 @@ const InfoItem = styled.View`
 const InfoText = styled.Text`
   font-size: 15px;
   font-weight: 600;
-  color: #334155;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   margin-left: 10px;
   margin-right: 12px;
 `;
 
 const DateText = styled.Text`
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   font-weight: 500;
   margin-left: 10px;
 `;
 
 const Tag = styled.View<{ context: string }>`
-  background-color: ${(props: any) =>
-    props.context === "Before Meal" ? "#fff7ed" : "#f0fdf4"};
+  background-color: ${({ context, theme }: any) =>
+    context === "Before Meal" ? "#fff7ed" : "#f0fdf4"};
   padding: 4px 12px;
   border-radius: 8px;
 `;
 
-const TagText = styled.Text`
+const TagText = styled.Text<{ context: string }>`
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: ${(props: any) =>
-    props.context === "Before Meal" ? "#9a3412" : "#166534"};
+  color: ${({ context }: any) =>
+    context === "Before Meal" ? "#9a3412" : "#166534"};
 `;
 
 const DeleteButton = styled.TouchableOpacity`
@@ -273,7 +276,7 @@ const DeleteButton = styled.TouchableOpacity`
   margin-top: 22px;
   padding-top: 18px;
   border-top-width: 1px;
-  border-top-color: #f1f5f9;
+  border-top-color: ${({ theme }: any) => theme.colors.border};
 `;
 
 const DeleteText = styled.Text`
@@ -291,14 +294,14 @@ const LoadingContainer = styled.View`
 
 const LoadingText = styled.Text`
   margin-top: 16px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   font-size: 15px;
   font-weight: 500;
 `;
 
 const EmptyText = styled.Text`
   text-align: center;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 60px;
   font-size: 16px;
 `;

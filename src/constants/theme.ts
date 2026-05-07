@@ -6,6 +6,8 @@ export interface ThemeColors {
   surfaceTransparent: string;
   card: string;
   textPrimary: string;
+  bottomSheet: string;
+  bottomSheetBorder: string;
   textSecondary: string;
   textMuted: string;
   accent: string;
@@ -28,12 +30,14 @@ export interface AppTheme {
 export const LIGHT_THEME: AppTheme = {
   colors: {
     primary: "#2563eb",
-    background: "#ffffff", // Changed from #f0f4ff to white to match HomeScreen, or we'll let components pick. Documents uses #f0f4ff as background. We'll use #f8fafc as default.
+    background: "#f8fafc",
     surface: "#ffffff",
-    surfaceLight: "#f0f4ff", // Used by DocumentList
+    surfaceLight: "#f8fafc",
     surfaceTransparent: "rgba(255, 255, 255, 0.9)",
     card: "#ffffff",
     textPrimary: "#0f172a",
+    bottomSheet: "#f1f5f9",
+    bottomSheetBorder: "#e2e8f0",
     textSecondary: "#334155",
     textMuted: "#64748b",
     accent: "#3b82f6",
@@ -59,6 +63,8 @@ export const DARK_THEME: AppTheme = {
     surfaceTransparent: "rgba(30, 41, 59, 0.9)",
     card: "#1e293b",
     textPrimary: "#f8fafc",
+    bottomSheet: "#0f172a",
+    bottomSheetBorder: "#1e293b",
     textSecondary: "#cbd5e1",
     textMuted: "#94a3b8",
     accent: "#60a5fa",

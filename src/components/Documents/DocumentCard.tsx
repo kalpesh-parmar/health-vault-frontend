@@ -1,104 +1,141 @@
-import React from "react";
+import React, { useRef, useState, useCallback, memo } from "react";
 import styled from "styled-components/native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { AppStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { TouchableOpacity } from "react-native";
-import * as MailComposer from "expo-mail-composer";
-import Toast from "react-native-toast-message";
-import { generateProfessionalEmail } from "../../utils/ShareTemplate";
+import { TouchableOpacity, Modal } from "react-native";
 import { useAppTheme } from "../../context/ThemeContext";
-
-export interface MedicalDocument {
-  id: string;
-  fileName: string;
-  category: string;
-  createdAt: string;
-  imageUri?: string;
-  documentId?: string;
-  AISummary?: string;
-  notes?: string;
-}
+import { AppStackParamList } from "../../navigation/types";
+import ConfirmationModal from "../shared/ConfirmationModal";
+import type { MedicalDocument } from "../../types";
 
 interface Props {
   document: MedicalDocument;
 }
 
-const DocumentCard = ({ document }: Props) => {
+const DocumentCard = memo(({ document }: Props) => {
   const { isDark } = useAppTheme();
-  const filename = document?.fileName?.replaceAll("%20", " ");
-  const fileNameWOExt = filename.split(".").slice(0, -1).join(".");
-
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
-  const handleShare = async (item: MedicalDocument) => {
-    const result = await MailComposer.isAvailableAsync();
-    if (!result) {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Mail is not available",
-      });
-      return;
-    }
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const modalMode = "Delete Document";
 
-    const subject = `Document Shared - ${fileNameWOExt}`;
-    const body = generateProfessionalEmail(document);
-    const attachment = item?.imageUri;
+  const filename = document?.fileName?.replaceAll("%20", " ");
+  const fileNameWOExt = filename.split(".").slice(0, -1).join(".");
 
-    const mail = {
-      subject: subject,
-      body: body,
-      attachments: attachment ? [attachment] : [],
-    };
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
-    const share = await MailComposer.composeAsync(mail);
+  const moreButtonRef = useRef<any>(null);
 
-    if (share.status === "cancelled") {
-      Toast.show({
-        type: "info",
-        text1: "Cancelled",
-        text2: "Mail not sent",
-      });
-    } else {
-      Toast.show({
-        type: "success",
-        text1: "Success",
-        text2: "Mail sent successfully",
-      });
-    }
-  };
-  return (
-    <DocCard
-      onPress={() =>
-        navigation.navigate("DocumentSummary", {
-          document: document,
-        })
-      }
-    >
-      <DocIconBox>
-        <Ionicons name={"document-text"} size={20} color={isDark ? "#60a5fa" : "#1246A8"} />
-      </DocIconBox>
-      <DocInfo>
-        <DocTitle numberOfLines={1}>{fileNameWOExt}</DocTitle>
-        <DocDate>
-          {new Date(document.createdAt).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-          })}
-        </DocDate>
-      </DocInfo>
-      <DocRight>
-        <TouchableOpacity onPress={() => handleShare(document)}>
-          <MaterialIcons name="share" size={24} color={isDark ? "#60a5fa" : "#1246A8"} />
-        </TouchableOpacity>
-      </DocRight>
-    </DocCard>
+  const handleDelete = useCallback(() => {
+    setShowModal(true);
+    setMenuVisible(false);
+  }, []);
+
+  const handleNavigateToSummary = useCallback(() => {
+    navigation.navigate("DocumentSummary", { document });
+  }, [navigation, document]);
+
+  const handleNavigateToEdit = useCallback(() => {
+    setMenuVisible(false);
+    navigation.navigate("EditDocument", { document });
+  }, [navigation, document]);
+
+  const handleMorePress = useCallback(
+    (e: any) => {
+      e.stopPropagation();
+      moreButtonRef.current.measure(
+        (
+          x: number,
+          y: number,
+          width: number,
+          height: number,
+          px: number,
+          py: number,
+        ) => {
+          setMenuPosition({
+            x: px - 125,
+            y: py + height + 4,
+          });
+          setMenuVisible(true);
+        },
+      );
+    },
+    [],
   );
-};
+
+  return (
+    <>
+      <ConfirmationModal
+        showModal={showModal}
+        onClose={() => setShowModal(false)}
+        mode={modalMode}
+        documentId={document?.id}
+      />
+
+      <DocCard
+        activeOpacity={0.85}
+        onPress={handleNavigateToSummary}
+      >
+        <DocIconBox>
+          <Ionicons
+            name="document-text"
+            size={20}
+            color={isDark ? "#60a5fa" : "#1246A8"}
+          />
+        </DocIconBox>
+
+        <DocInfo>
+          <DocTitle numberOfLines={1}>{fileNameWOExt}</DocTitle>
+          <DocDate>
+            {new Date(document.createdAt).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </DocDate>
+        </DocInfo>
+
+        <DocRight>
+          <TouchableOpacity ref={moreButtonRef} onPress={handleMorePress}>
+            <MaterialIcons
+              name="more-vert"
+              size={24}
+              color={isDark ? "#60a5fa" : "#1246A8"}
+            />
+          </TouchableOpacity>
+        </DocRight>
+      </DocCard>
+
+      <Modal visible={menuVisible} transparent animationType="fade">
+        <Overlay onPress={() => setMenuVisible(false)} />
+
+        <MenuContainer
+          style={{
+            top: menuPosition.y,
+            left: menuPosition.x,
+          }}
+        >
+          <MenuItem onPress={handleNavigateToEdit}>
+            <Ionicons name="create-outline" size={18} color="#3b82f6" />
+            <MenuText>Edit</MenuText>
+          </MenuItem>
+
+          <Divider />
+
+          <MenuItem onPress={handleDelete}>
+            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            <MenuText style={{ color: "#ef4444" }}>Delete</MenuText>
+          </MenuItem>
+        </MenuContainer>
+      </Modal>
+    </>
+  );
+});
+
+DocumentCard.displayName = "DocumentCard";
 
 export default DocumentCard;
 
@@ -136,7 +173,6 @@ const DocTitle = styled.Text`
   font-size: 14px;
   font-weight: 700;
   color: ${({ theme }: any) => theme.colors.textPrimary};
-  margin-bottom: 3px;
 `;
 
 const DocDate = styled.Text`
@@ -147,5 +183,47 @@ const DocDate = styled.Text`
 const DocRight = styled.View`
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+`;
+
+const Overlay = styled.TouchableOpacity`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+`;
+
+const MenuContainer = styled.View`
+  position: absolute;
+  width: 140px;
+  background-color: ${({ theme }: any) => theme.colors.surface};
+  border-radius: 12px;
+  padding: 6px 0;
+  border-width: 0.5px;
+  border-color: ${({ theme }: any) => theme.colors.border};
+
+  shadow-color: #000;
+  shadow-opacity: 0.15;
+  shadow-radius: 12px;
+  shadow-offset: 0px 6px;
+  elevation: 6;
+`;
+
+const MenuItem = styled.TouchableOpacity`
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 12px;
+  gap: 10px;
+`;
+
+const MenuText = styled.Text`
+  font-size: 14px;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+  font-weight: 500;
+`;
+
+const Divider = styled.View`
+  height: 0.5px;
+  background-color: ${({ theme }: any) => theme.colors.border};
+  margin: 4px 0;
 `;

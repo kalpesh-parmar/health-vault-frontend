@@ -27,8 +27,7 @@ const ForgotPasswordScreen = () => {
 
   const {mutateAsync: forgotPasswordMutation, isPending: isLoading} = useMutation({
     mutationFn: sendForgotPasswordOTP,
-    onSuccess: (data: any) => {
-      console.log("OTP Sent :- ", data);
+    onSuccess: () => {
       Toast.show({
         type: "success",
         text1: "OTP Sent Successfully.",
@@ -37,7 +36,6 @@ const ForgotPasswordScreen = () => {
       navigation.navigate("VerifyOTP", { email });
     },
     onError: (error: any) => {
-      console.log("Error :- ", error);
       Toast.show({
         type: "error",
         text1: "Failed to Send OTP.",

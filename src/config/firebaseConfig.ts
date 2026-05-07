@@ -2,28 +2,26 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import Constants from "expo-constants";
+
+const extra = Constants.expoConfig?.extra;
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC_1tRpxQXQMKhTMoRtpxfGIYDeOTAwN70",
-  authDomain: "documentsvaultapp.firebaseapp.com",
-  projectId: "documentsvaultapp",
-  storageBucket: "documentsvaultapp.firebasestorage.app",
-  messagingSenderId: "14636545690",
-  appId: "1:14636545690:web:d22f81ed95045149d0d123",
+  apiKey: extra?.FIREBASE_API_KEY,
+  authDomain: extra?.FIREBASE_AUTH_DOMAIN,
+  projectId: extra?.FIREBASE_PROJECT_ID,
+  storageBucket: extra?.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: extra?.FIREBASE_MESSAGING_SENDER_ID,
+  appId: extra?.FIREBASE_APP_ID,
 };
 
-// ✅ Prevent multiple app initialization (VERY IMPORTANT in Expo)
 const app = getApps().length === 0
   ? initializeApp(firebaseConfig)
   : getApp();
 
-// ✅ Safe auth instance
 const authInstance = getAuth(app);
 
-// ✅ Export SAME instance everywhere
 export { authInstance as auth };
-
-// Firestore
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 

@@ -1,28 +1,30 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, ActivityIndicator } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import styled from "styled-components/native";
 import ScreenHeader from "../../components/shared/Header";
 import {
   Ionicons,
   MaterialCommunityIcons,
-  MaterialIcons,
 } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/core";
 import DualButtons from "../../components/shared/Buttons/DualButtons";
-import LogoutModal from "../../components/Auth/LogoutModal";
-import { getUser } from "../../services/authService";
-import * as SecureStore from "expo-secure-store";
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
+import { getUser } from "../../services/userService";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ProfileStackParamList } from "../../navigation/types";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
-import { useAuth } from "../../context/ContextAPI";
 import { useAppTheme } from "../../context/ThemeContext";
+import BottomSheet from "../../components/shared/BottomSheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { useDocumentMedia } from "../../hooks/useDocumentMedia";
+import { getProfileImage } from "../../services/mediaServices";
 
 type Gender = "Male" | "Female" | "Other";
 
 const ProfileScreen = () => {
+  const refRBSheet = useRef<BottomSheetModal>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
@@ -35,10 +37,18 @@ const ProfileScreen = () => {
     useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
   const queryClient = useQueryClient();
   const { isDark, theme } = useAppTheme();
+  const { handleGalleryPick } = useDocumentMedia();
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  const fetchProfileImage = async () => {
+    const image = await getProfileImage();
+    setProfileImage(image);
+  };
 
   useFocusEffect(
     useCallback(() => {
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      fetchProfileImage();
     }, []),
   );
 
@@ -83,10 +93,11 @@ const ProfileScreen = () => {
         <Content>
           <HeroSection>
             <AvatarContainer>
-              <AvatarCircle>
-                <Ionicons name="person" size={45} color={theme.colors.primary} />
-              </AvatarCircle>
-              <EditBadge>
+              <AvatarCircle
+                source={{ uri: profileImage }}
+                imageStyle={{width: 100, height: 100, borderRadius: 50}}
+              />
+              <EditBadge onPress={() => refRBSheet.current?.present()}>
                 <MaterialCommunityIcons
                   name="camera-outline"
                   size={16}
@@ -149,7 +160,6 @@ const ProfileScreen = () => {
           </MenuCard>
 
           <ActionsWrapper>
-            <SectionLabel>Account Actions</SectionLabel>
             <DualButtons
               secondaryBtnText="Delete Account"
               secondaryBtnColor="grey"
@@ -162,11 +172,39 @@ const ProfileScreen = () => {
         </Content>
       </ScrollView>
 
-      <LogoutModal
+      <ConfirmationModal
         showModal={showModal}
         onClose={() => setShowModal(false)}
         mode={modalMode}
       />
+
+      <BottomSheet ref={refRBSheet}>
+          <SheetContentWrapper>
+            <SheetTitle>Add Document</SheetTitle>
+            <SheetSubtitle>
+              Securely upload or capture your record
+            </SheetSubtitle>
+
+            <SheetButtonsContainer>
+              <SheetActionButton
+                onPress={() =>
+                  handleGalleryPick(() => refRBSheet.current?.dismiss(), true)
+                }
+              >
+                <IconWrapperr
+                  style={{ backgroundColor: isDark ? "#1e3a8a" : "#eff6ff" }}
+                >
+                  <MaterialCommunityIcons
+                    name="image-plus"
+                    size={28}
+                    color="#3b82f6"
+                  />
+                </IconWrapperr>
+                <SheetActionButtonText>Gallery</SheetActionButtonText>
+              </SheetActionButton>
+            </SheetButtonsContainer>
+          </SheetContentWrapper>
+        </BottomSheet>
     </Container>
   );
 };
@@ -192,7 +230,7 @@ const AvatarContainer = styled.View`
   position: relative;
 `;
 
-const AvatarCircle = styled.View`
+const AvatarCircle = styled.ImageBackground`
   width: 100px;
   height: 100px;
   border-radius: 50px;
@@ -349,6 +387,57 @@ const MenuDivider = styled.View`
 `;
 
 const ActionsWrapper = styled.View`
-  margin-top: 80px;
-  margin-bottom: 10px;
+  margin-top: 100px;
+`;
+
+const SheetContentWrapper = styled.View`
+  padding: 25px 20px;
+  align-items: center;
+`;
+
+const SheetTitle = styled.Text`
+  font-size: 22px;
+  font-weight: 800;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+`;
+
+const SheetSubtitle = styled.Text`
+  font-size: 14px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  margin-top: 6px;
+  margin-bottom: 30px;
+  text-align: center;
+`;
+
+const SheetButtonsContainer = styled.View`
+  flex-direction: row;
+  justify-content: space-evenly;
+  width: 100%;
+`;
+
+const SheetActionButton = styled.TouchableOpacity`
+  align-items: center;
+  width: 100px;
+  background-color: ${({ theme }: any) => theme.colors.surface};
+  padding: 16px;
+  border-radius: 20px;
+  shadow-color: #000;
+  shadow-opacity: 0.05;
+  shadow-radius: 10px;
+  elevation: 3;
+`;
+
+const IconWrapperr = styled.View`
+  width: 30px;
+  height: 30px;
+  border-radius: 20px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 12px;
+`;
+
+const SheetActionButtonText = styled.Text`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;

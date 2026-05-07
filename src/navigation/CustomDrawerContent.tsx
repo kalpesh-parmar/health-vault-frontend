@@ -6,7 +6,7 @@ import {
 } from "@react-navigation/drawer";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
-import LogoutModal from "../components/Auth/LogoutModal";
+import ConfirmationModal from "../components/shared/ConfirmationModal";
 import { LinearGradient } from "expo-linear-gradient";
 import { TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -58,7 +58,7 @@ const CustomDrawerContent = (props: any) => {
       </BottomSection>
 
       {showModal && (
-        <LogoutModal
+        <ConfirmationModal
           showModal={showModal}
           onClose={() => setShowModal(false)}
         />

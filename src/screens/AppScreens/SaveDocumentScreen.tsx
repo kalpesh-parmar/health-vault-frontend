@@ -1,16 +1,17 @@
 import React, { useRef, useState } from "react";
 import { StatusBar, Platform, Keyboard } from "react-native";
 import styled from "styled-components/native";
-import DualButtons from "../shared/Buttons/DualButtons";
-import BottomSheet from "../shared/BottomSheet";
-import ScreenHeader from "../shared/Header";
+import DualButtons from "../../components/shared/Buttons/DualButtons";
+import BottomSheet from "../../components/shared/BottomSheet";
+import ScreenHeader from "../../components/shared/Header";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { AppStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useSaveDocument } from "../../hooks/useSaveDocument";
-import ModernLoader from "../shared/Loader";
+import ModernLoader from "../../components/shared/Loader";
 import { Ionicons } from "@expo/vector-icons";
+import { useAppTheme } from "../../context/ThemeContext";
 
 type categoryItems = {
   label: string;
@@ -88,6 +89,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
     route?.params?.aiSummary ||
     "Patient presented with acute respiratory symptoms over a 3-day period. BP: 128/82 mmHg. Prescribed Amoxicillin 500mg twice daily for 7 days. Follow-up recommended in 2 weeks. No known allergies noted.";
 
+  const { isDark } = useAppTheme();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [docName, setDocName] = useState("");
   const [category, setCategory] = useState("");
@@ -130,7 +132,11 @@ const SaveDocumentScreen = ({ route }: Props) => {
   return (
     <>
       {isSaving && (
-        <ModernLoader visible={isSaving} text="Uploading Document..." />
+        <ModernLoader
+          visible={isSaving}
+          title="Saving Document..."
+          subtitle="Please wait while we save your document."
+        />
       )}
       <Screen>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
@@ -184,7 +190,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
                 >
                   {selected ? (
                     <CatPill bgColor={selected.color}>
-                      <CatLabel color={selected.iconColor}>
+                      <CatLabel color={selected.iconColor} isDark={isDark}>
                         {selected.label}
                       </CatLabel>
                     </CatPill>
@@ -238,7 +244,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
         <BottomBar>
           <DualButtons
             secondaryBtnText="Discard"
-            secondaryBtnColor="black"
+            secondaryBtnColor={`${({ isDark, theme }: any) => (isDark ? theme.colors.error : theme.colors.error)}`}
             mainBtnText="Save Document"
             mainBtnColor="#2563eb"
             onSecondaryPress={() => navigation?.goBack?.()}
@@ -282,7 +288,7 @@ export default SaveDocumentScreen;
 
 const Screen = styled.View`
   flex: 1;
-  background-color: #f0f4ff;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const Header = styled.View`
@@ -299,7 +305,7 @@ const HGroup = styled.View`
 
 const HSubtitle = styled.Text`
   font-size: 20px;
-  color: black;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-family: "Inter_600SemiBold";
 `;
 
@@ -311,10 +317,10 @@ const BodyPadding = styled.View`
 `;
 
 const MainCard = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 24px;
   overflow: hidden;
-  shadow-color: #1e3a8a;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-offset: 0px 4px;
   shadow-opacity: 0.08;
   shadow-radius: 20px;
@@ -323,7 +329,7 @@ const MainCard = styled.View`
 
 const InnerDivider = styled.View`
   height: 1px;
-  background-color: #f1f5f9;
+  background-color: ${({ theme }: any) => theme.colors.border};
   margin: 0px 0px;
 `;
 
@@ -346,7 +352,7 @@ const SectionDot = styled.View<{ bg?: string }>`
 const SectionTitle = styled.Text`
   font-size: 11px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   letter-spacing: 1px;
   text-transform: uppercase;
 `;
@@ -354,7 +360,7 @@ const SectionTitle = styled.Text`
 const FieldLabel = styled.Text`
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   letter-spacing: 0.8px;
   text-transform: uppercase;
   margin-bottom: 7px;
@@ -363,10 +369,18 @@ const FieldLabel = styled.Text`
 const InputRow = styled.View<FocusProps>`
   flex-direction: row;
   align-items: center;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-width: 1.5px;
-  border-color: ${({ focused, hasError }: FocusProps) =>
-    hasError ? "#ef4444" : focused ? "#2563eb" : "#e8edf8"};
+  border-color: ${({
+    focused,
+    hasError,
+    theme,
+  }: FocusProps & { theme: any }) =>
+    hasError
+      ? "#ef4444"
+      : focused
+        ? theme.colors.primary
+        : theme.colors.border};
   border-radius: 13px;
   padding: 0px 5px;
   height: 50px;
@@ -375,7 +389,7 @@ const InputRow = styled.View<FocusProps>`
 const TInput = styled.TextInput`
   flex: 1;
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 700;
 `;
 const ErrText = styled.Text`
@@ -389,10 +403,18 @@ const ErrText = styled.Text`
 const CatBtn = styled.TouchableOpacity<OpenProps>`
   flex-direction: row;
   align-items: center;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-width: 1.5px;
-  border-color: ${({ hasError, hasValue }: OpenProps) =>
-    hasError ? "#ef4444" : hasValue ? "#2563eb" : "#e8edf8"};
+  border-color: ${({
+    hasError,
+    hasValue,
+    theme,
+  }: OpenProps & { theme: any }) =>
+    hasError
+      ? "#ef4444"
+      : hasValue
+        ? theme.colors.primary
+        : theme.colors.border};
   border-radius: 13px;
   padding: 0px 5px;
   height: 50px;
@@ -405,22 +427,28 @@ const CatPill = styled.View<BgProps>`
   margin-right: 6px;
 `;
 
-const CatLabel = styled.Text<ColProps>`
+const CatLabel = styled.Text<ColProps & { isDark?: boolean }>`
   font-size: 14px;
   font-weight: 700;
+  color: ${({ isDark, theme }: any) =>
+    isDark ? theme.colors.white : theme.colors.textPrimary};
 `;
 const CatPlaceholder = styled.Text`
   flex: 1;
   font-size: 14px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
-const AIHeader = styled.View`
-  background-color: #1e3a8a;
+const AIHeader = styled.View<{
+  isDark: boolean;
+}>`
+  background-color: ${({ theme, isDark }: any) =>
+    isDark ? theme.colors.white : theme.colors.textPrimary};
   padding: 14px 20px;
   flex-direction: row;
   align-items: center;
 `;
+
 const AIBadge = styled.View`
   background-color: rgba(255, 255, 255, 0.16);
   border-radius: 20px;
@@ -455,7 +483,7 @@ const AIBody = styled.View`
 const AIText = styled.Text`
   font-size: 13px;
   line-height: 21px;
-  color: #334155;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 400;
 `;
 
@@ -464,7 +492,7 @@ const PreviewSectionHeader = styled.View`
   align-items: center;
   padding: 14px 20px 12px 20px;
   border-bottom-width: 1px;
-  border-bottom-color: #f8fafc;
+  border-bottom-color: ${({ theme }: any) => theme.colors.surfaceLight};
 `;
 const PreviewSectionLeft = styled.View`
   flex: 1;
@@ -472,12 +500,12 @@ const PreviewSectionLeft = styled.View`
 const PreviewSectionTitle = styled.Text`
   font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   letter-spacing: -0.1px;
 `;
 const PreviewSectionSub = styled.Text`
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 1px;
 `;
 
@@ -492,9 +520,9 @@ const Thumb = styled.View`
   height: 70px;
   border-radius: 7px;
   overflow: hidden;
-  background-color: #f1f5f9;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-width: 1px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
 `;
 const ThumbImg = styled.Image`
   width: 100%;
@@ -504,23 +532,23 @@ const ThumbPH = styled.View`
   flex: 1;
   align-items: center;
   justify-content: center;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
 `;
 
 const ThumbPHTxt = styled.Text`
   font-size: 10px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-top: 5px;
   text-align: center;
   font-weight: 500;
 `;
 
 const BottomBar = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   padding: 14px 20px ${Platform.OS === "ios" ? "30px" : "18px"} 20px;
   border-top-width: 1px;
-  border-top-color: #e8edf8;
-  shadow-color: #1e3a8a;
+  border-top-color: ${({ theme }: any) => theme.colors.border};
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-offset: 0px -3px;
   shadow-opacity: 0.06;
   shadow-radius: 10px;
@@ -536,13 +564,13 @@ const SheetContentWrapper = styled.View`
 const BSTitle = styled.Text`
   font-size: 17px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   margin-bottom: 3px;
   letter-spacing: -0.3px;
 `;
 const BSSub = styled.Text`
   font-size: 12px;
-  color: #000000ff;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   margin-bottom: 18px;
 `;
 const BSItem = styled.TouchableOpacity<SelProps>`
@@ -550,7 +578,7 @@ const BSItem = styled.TouchableOpacity<SelProps>`
   align-items: center;
   padding: 12px 0px;
   border-bottom-width: 1px;
-  border-bottom-color: #f1f5f9;
+  border-bottom-color: ${({ theme }: any) => theme.colors.border};
 `;
 const BSIconBadge = styled.View<BgProps>`
   width: 38px;
@@ -568,10 +596,11 @@ const BSLbl = styled.Text<SelProps>`
   flex: 1;
   font-size: 14px;
   font-weight: ${({ selected }: SelProps) => (selected ? "700" : "400")};
-  color: ${({ selected }: SelProps) => (selected ? "#1d4ed8" : "#0f172a")};
+  color: ${({ selected, theme }: any) =>
+    selected ? theme.colors.primary : theme.colors.textPrimary};
 `;
 const BSCheck = styled.Text`
   font-size: 15px;
-  color: #2563eb;
+  color: ${({ theme }: any) => theme.colors.primary};
   font-weight: 700;
 `;
