@@ -1,18 +1,18 @@
 import React from "react";
-import AuthStack from "./stacks/AuthStack";
-import AppStack from "./stacks/AppStack";
+import CustomDrawerNavigator from "./CustomDrawerNavigator";
 import { useAuth } from "../context/ContextAPI";
 import { NavigationContainer } from "@react-navigation/native";
-import Loader from "../components/shared/Loader";
+import AuthStack from "./stacks/AuthStack";
+import ModernLoader from "../components/shared/Loader";
 
 const RootNavigator = () => {
   const { isLoggedIn, isLoading } = useAuth();
   return (
     <NavigationContainer>
       {isLoading ? (
-        <Loader visible={true} />
+        <ModernLoader visible={true} title="Just There..." subtitle="Thank You For Your Patience." />
       ) : isLoggedIn ? (
-        <AppStack />
+        <CustomDrawerNavigator />
       ) : (
         <AuthStack />
       )}

@@ -1,33 +1,69 @@
 import React, { useEffect, useState } from "react";
+import { Modal, TouchableOpacity } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+} from "react-native-reanimated";
 import styled from "styled-components/native";
-import ScreenHeader from "../shared/Header";
+import ScreenHeader from "../../components/shared/Header";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as MailComposer from "expo-mail-composer";
 import Toast from "react-native-toast-message";
 import { generateProfessionalEmail } from "../../utils/ShareTemplate";
 import { useAppTheme } from "../../context/ThemeContext";
-import { getSignedUrl } from "../../services/authService";
-import * as SecureStore from "expo-secure-store";
+import { getSignedUrl } from "../../services/documentService";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
   const [imageUri, setImageUri] = useState<string>("");
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const { isDark } = useAppTheme();
-  console.log("Document :-", document?.s3Key);
-  const token = async () => {
-    const token = await SecureStore.getItemAsync("token");
-    return token;
-  }
+
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      scale.value = savedScale.value * event.scale;
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  const panGesture = Gesture.Pan().onUpdate((event) => {
+    if (scale.value > 1) {
+      translateX.value = event.translationX;
+      translateY.value = event.translationY;
+    }
+  });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: scale.value },
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+      ],
+    };
+  });
 
   const getSignedURL = async () => {
     try {
       const response = await getSignedUrl(document?.s3Key);
-      console.log("Signed URL", response?.data);
       setImageUri(response?.data);
-
-    } catch (error) {
-      console.log("Error getting signed URL", error);
+    } catch {
+      // Error handled silently — no signed URL means no preview
     }
   };
 
@@ -176,12 +212,18 @@ const SummaryScreen = ({ route, navigation }: any) => {
             <PreviewLabel>Document Preview</PreviewLabel>
           </PreviewHeader>
           {imageUri ? (
-            <PreviewImage
-              source={{
-                uri: imageUri,
-              }}
-              onError={(e: any) => console.log("Image error:", e.nativeEvent)}
-            />
+            <TouchableOpacity
+              style={{ width: "100%" }}
+              activeOpacity={0.8}
+              onPress={() => setIsPreviewModalOpen(true)}
+            >
+              <PreviewImage
+                source={{
+                  uri: imageUri,
+                }}
+                onError={() => {}}
+              />
+            </TouchableOpacity>
           ) : (
             <EmptyPreview>
               <Ionicons
@@ -199,6 +241,42 @@ const SummaryScreen = ({ route, navigation }: any) => {
           <Ionicons name="share" size={24} color="#ffffff" />
         </ActionButton>
       </ScrollContent>
+
+      <Modal
+        visible={isPreviewModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsPreviewModalOpen(false)}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <ModalContainer pointerEvents="box-none">
+            <ModalBackdrop
+              pointerEvents="auto"
+              onPress={() => setIsPreviewModalOpen(false)}
+            />
+
+            <CloseButton onPress={() => setIsPreviewModalOpen(false)}>
+              <Ionicons name="close" size={28} color="#ffffff" />
+            </CloseButton>
+
+            <GestureDetector gesture={composedGesture}>
+              <ImageWrapper>
+                <Animated.Image
+                  source={{ uri: imageUri }}
+                  style={[
+                    {
+                      width: "100%",
+                      height: "100%",
+                    },
+                    animatedStyle,
+                  ]}
+                  resizeMode="contain"
+                />
+              </ImageWrapper>
+            </GestureDetector>
+          </ModalContainer>
+        </GestureHandlerRootView>
+      </Modal>
     </Container>
   );
 };
@@ -488,4 +566,41 @@ const ActionButtonText = styled.Text`
   color: #ffffff;
   letter-spacing: 0.5px;
   padding-right: 10px;
+`;
+
+const ModalContainer = styled.View`
+  height: 300px;
+  width: 100%;
+  flex: 1;
+  background-color: transparent;
+  justify-content: center;
+  align-items: center;
+`;
+
+const ImageWrapper = styled.View`
+  width: 90%;
+  height: 70%;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 16px;
+`;
+
+const ModalBackdrop = styled.TouchableOpacity`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.9);
+`;
+
+const CloseButton = styled.TouchableOpacity`
+  position: absolute;
+  top: 50px;
+  right: 20px;
+  z-index: 10;
+  padding: 8px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
 `;

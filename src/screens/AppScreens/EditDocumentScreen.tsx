@@ -1,20 +1,21 @@
 import React, { useRef, useState } from "react";
 import styled from "styled-components/native";
-import ScreenHeader from "../shared/Header";
+import ScreenHeader from "../../components/shared/Header";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Toast from "react-native-toast-message";
-import LogoutModal from "../Auth/LogoutModal";
-import DualButtons from "../shared/Buttons/DualButtons";
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
+import DualButtons from "../../components/shared/Buttons/DualButtons";
 import { useNavigation } from "@react-navigation/native";
 import { AppStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation } from "@tanstack/react-query";
-import { updateDocument } from "../../services/authService";
-import { MedicalDocument } from "./DocumentCard";
-import BottomSheet from "../shared/BottomSheet";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { updateDocument } from "../../services/documentService";
+import type { MedicalDocument } from "../../types";
+import BottomSheet from "../../components/shared/BottomSheet";
+import { BottomSheetModal, TouchableOpacity } from "@gorhom/bottom-sheet";
 import { useAppTheme } from "../../context/ThemeContext";
+import { Keyboard } from "react-native";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -24,7 +25,7 @@ type categoryItems = {
   icon: IconName;
   color: string;
   iconColor: string;
-}
+};
 
 interface FocusProps {
   focused?: boolean;
@@ -84,40 +85,47 @@ const CATEGORIES: categoryItems[] = [
 
 const EditScreen = ({ route }: any) => {
   const { document } = route.params;
-  console.log(document?.id);
+
 
   const [filename, setFilename] = useState(document?.fileName ?? "");
   const [category, setCategory] = useState(document?.documentType ?? "");
   const [notes, setNotes] = useState(document?.notes ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [showModal, setShowModal] = useState<boolean>(false);
-  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const { isDark } = useAppTheme();
+
+  const selected = CATEGORIES.find((c) => c.value === category);
+
+  const updateDocumentMutation = useMutation({
+    mutationFn: updateDocument,
+    onSuccess: () => {
+      Toast.show({
+        type: "success",
+        text1: "Document Updated Successfully.",
+      });
+      navigation.navigate("DocumentStack", {
+        screen: "DocumentList",
+        params: { category },
+      });
+    },
+    onError: () => {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to update document",
+      });
+      setIsSaving(false);
+    },
+  });
 
   const handleSave = async () => {
     setIsSaving(true);
 
-    const updateDocumentMutation = useMutation({
-      mutationFn: updateDocument,
-      onSuccess: () => {
-        Toast.show({
-          type: "success",
-          text1: "Document Updated Successfully.",
-        });
-        navigation.navigate("DocumentList" as never);
-      },
-      onError: () => {
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: "Failed to update document",
-        });
-        setIsSaving(false);
-      },
-    });
     const payload: Partial<MedicalDocument> = {
-      id: document?.id || 0,
+      id: document?.id || "",
       fileName: filename.trim() || "",
       notes: notes.trim() || "",
       category: category.trim() || "",
@@ -132,7 +140,7 @@ const EditScreen = ({ route }: any) => {
 
   return (
     <Container>
-      <LogoutModal
+      <ConfirmationModal
         showModal={showModal}
         onClose={() => {
           setShowModal(false);
@@ -149,7 +157,11 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="document-text-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
+                <Ionicons
+                  name="document-text-outline"
+                  size={14}
+                  color={isDark ? "#60a5fa" : "#1246A8"}
+                />
               </FieldIconBadge>
               <FieldMeta>
                 <FieldLabel>File Name</FieldLabel>
@@ -169,19 +181,35 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="pricetag-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
+                <Ionicons
+                  name="pricetag-outline"
+                  size={14}
+                  color={isDark ? "#60a5fa" : "#1246A8"}
+                />
               </FieldIconBadge>
               <FieldMeta>
                 <FieldLabel>Category</FieldLabel>
               </FieldMeta>
             </FieldRow>
-            <StyledInput
-              value={category}
-              onChangeText={setCategory}
-              placeholder="Enter document category"
-              placeholderTextColor="#94A3B8"
-              returnKeyType="done"
-            />
+            <CatBtn
+              onPress={() => {
+                Keyboard.dismiss();
+                bottomSheetRef.current?.present();
+              }}
+              activeOpacity={0.75}
+            >
+              {selected ? (
+                <CatPill bgColor={selected.color}>
+                  <CatLabel color={selected.iconColor}>
+                    {selected.label}
+                  </CatLabel>
+                </CatPill>
+              ) : (
+                <>
+                  <CatPlaceholder>Select a category</CatPlaceholder>
+                </>
+              )}
+            </CatBtn>
           </FieldBlock>
 
           <Divider />
@@ -189,7 +217,11 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="create-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
+                <Ionicons
+                  name="create-outline"
+                  size={14}
+                  color={isDark ? "#60a5fa" : "#1246A8"}
+                />
               </FieldIconBadge>
               <FieldMeta>
                 <FieldLabel>Notes</FieldLabel>
@@ -211,17 +243,25 @@ const EditScreen = ({ route }: any) => {
           <FieldBlock style={{ marginBottom: 0 }}>
             <FieldRow>
               <FieldIconBadge>
-                <Ionicons name="calendar-outline" size={14} color={isDark ? "#60a5fa" : "#1246A8"} />
+                <Ionicons
+                  name="calendar-outline"
+                  size={14}
+                  color={isDark ? "#60a5fa" : "#1246A8"}
+                />
               </FieldIconBadge>
               <FieldMeta>
                 <FieldLabel>Created On</FieldLabel>
               </FieldMeta>
             </FieldRow>
-            <ReadOnlyText style={{marginTop: 6, marginLeft: 40, fontSize: 14}}>{new Date(document?.createdAt).toISOString().split('T')[0] ?? "—"}</ReadOnlyText>
+            <ReadOnlyText
+              style={{ marginTop: 6, marginLeft: 40, fontSize: 14 }}
+            >
+              {new Date(document?.createdAt).toISOString().split("T")[0] ?? "—"}
+            </ReadOnlyText>
           </FieldBlock>
         </FormCard>
 
-        <DualButtons 
+        <DualButtons
           mainBtnText="Save Changes"
           mainBtnColor="blue"
           secondaryBtnText="Delete Document"
@@ -233,31 +273,31 @@ const EditScreen = ({ route }: any) => {
       </ScrollContent>
 
       <BottomSheet ref={bottomSheetRef} enablePanDownToClose={true}>
-          <SheetContentWrapper>
-            <BSTitle>Select Category</BSTitle>
-            <BSSub>Choose the type of medical document</BSSub>
-            {CATEGORIES.map((item, idx) => (
-              <BSItem
-                key={item.label}
-                selected={category === item.value}
-                onPress={() => {
-                  setCategory(item.value);
-                  bottomSheetRef.current?.dismiss();
-                }}
-                activeOpacity={0.7}
-                style={
-                  idx === CATEGORIES.length - 1 ? { borderBottomWidth: 0 } : {}
-                }
-              >
-                <BSIconBadge bgColor={item.color}>
-                  <Ionicons name={item.icon} size={20} color={item.iconColor} />
-                </BSIconBadge>
-                <BSLbl selected={category === item.value}>{item.label}</BSLbl>
-                {category === item.value && <BSCheck>✓</BSCheck>}
-              </BSItem>
-            ))}
-          </SheetContentWrapper>
-        </BottomSheet>
+        <SheetContentWrapper>
+          <BSTitle>Select Category</BSTitle>
+          <BSSub>Choose the type of medical document</BSSub>
+          {CATEGORIES.map((item, idx) => (
+            <BSItem
+              key={item.label}
+              selected={category === item.value}
+              onPress={() => {
+                setCategory(item.value);
+                bottomSheetRef.current?.dismiss();
+              }}
+              activeOpacity={0.7}
+              style={
+                idx === CATEGORIES.length - 1 ? { borderBottomWidth: 0 } : {}
+              }
+            >
+              <BSIconBadge bgColor={item.color}>
+                <Ionicons name={item.icon} size={20} color={item.iconColor} />
+              </BSIconBadge>
+              <BSLbl selected={category === item.value}>{item.label}</BSLbl>
+              {category === item.value && <BSCheck>✓</BSCheck>}
+            </BSItem>
+          ))}
+        </SheetContentWrapper>
+      </BottomSheet>
     </Container>
   );
 };
@@ -370,6 +410,39 @@ const StyledInput = styled.TextInput`
   font-weight: 500;
 `;
 
+const CatBtn = styled.TouchableOpacity`
+  flex-direction: row;
+  align-items: center;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
+  border-radius: 12px;
+  border-width: 1px;
+  border-color: ${({ theme }: any) => theme.colors.border};
+  padding: 0px 10px;
+  height: 46px;
+`;
+
+const CatPill = styled.View<BgProps>`
+  flex-direction: row;
+  align-items: center;
+  border-radius: 20px;
+  padding: 4px 10px;
+  margin-right: 6px;
+  background-color: ${({ bgColor }: BgProps) => bgColor};
+`;
+
+const CatLabel = styled.Text<ColProps>`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ color }: ColProps) => color};
+`;
+
+const CatPlaceholder = styled.Text`
+  flex: 1;
+  font-size: 14px;
+  color: #94a3b8;
+  padding-left: 4px;
+`;
+
 const StyledTextArea = styled.TextInput`
   background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 12px;
@@ -426,7 +499,7 @@ const SaveButtonText = styled.Text`
 `;
 
 const DangerCard = styled.View`
-margin-top: 14px;
+  margin-top: 14px;
   border-radius: 20px;
   overflow: hidden;
   border-width: 0.5px;
@@ -549,7 +622,8 @@ const BSLbl = styled.Text<SelProps>`
   flex: 1;
   font-size: 14px;
   font-weight: ${({ selected }: SelProps) => (selected ? "700" : "400")};
-  color: ${({ selected, theme }: any) => (selected ? theme.colors.primary : theme.colors.textPrimary)};
+  color: ${({ selected, theme }: any) =>
+    selected ? theme.colors.primary : theme.colors.textPrimary};
 `;
 const BSCheck = styled.Text`
   font-size: 15px;

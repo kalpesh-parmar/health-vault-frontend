@@ -1,0 +1,401 @@
+import React, { useState } from "react";
+import { View, FlatList } from "react-native";
+import styled from "styled-components/native";
+import { Ionicons } from "@expo/vector-icons";
+import ScreenHeader from "../../components/shared/Header";
+
+type NotificationType = "alert" | "info" | "success" | "promo" | "reminder";
+
+interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  time: string;
+  isRead: boolean;
+  avatar?: string;
+}
+
+const MOCK_NOTIFICATIONS: Notification[] = [
+  {
+    id: "1",
+    type: "alert",
+    title: "New Order Received",
+    message:
+      "You have a new order #ORD-2048 from Riya Shah. Tap to view details.",
+    time: "2 min ago",
+    isRead: false,
+  },
+  {
+    id: "2",
+    type: "success",
+    title: "Payment Confirmed",
+    message:
+      "Payment of ₹1,450 has been successfully received for order #ORD-2041.",
+    time: "15 min ago",
+    isRead: false,
+  },
+  {
+    id: "3",
+    type: "reminder",
+    title: "Reminder: Restock Needed",
+    message:
+      "Item 'Wireless Earbuds' is running low. Only 3 units left in inventory.",
+    time: "1 hr ago",
+    isRead: false,
+  },
+  {
+    id: "4",
+    type: "info",
+    title: "App Update Available",
+    message:
+      "Version 3.2.0 is ready. Update now to get the latest features and improvements.",
+    time: "3 hrs ago",
+    isRead: true,
+  },
+  {
+    id: "5",
+    type: "promo",
+    title: "Weekend Sale is Live 🎉",
+    message:
+      "Boost your sales! Share your store link and get 20% off on your next plan renewal.",
+    time: "Yesterday",
+    isRead: true,
+  },
+  {
+    id: "6",
+    type: "success",
+    title: "Order Delivered",
+    message: "Order #ORD-2035 has been successfully delivered to the customer.",
+    time: "Yesterday",
+    isRead: true,
+  },
+  {
+    id: "7",
+    type: "alert",
+    title: "Login from New Device",
+    message:
+      "A sign-in was detected from a new device in Mumbai. If this wasn't you, secure your account.",
+    time: "2 days ago",
+    isRead: true,
+  },
+  {
+    id: "8",
+    type: "reminder",
+    title: "Complete Your Profile",
+    message: "Add your store logo and bio to build trust with your customers.",
+    time: "3 min ago",
+    isRead: true,
+  },
+];
+
+const TYPE_CONFIG: Record<
+  NotificationType,
+  { icon: string; bg: string; color: string }
+> = {
+  alert: { icon: "warning-outline", bg: "#FFF3E0", color: "#F57C00" },
+  info: { icon: "information-circle-outline", bg: "#E3F2FD", color: "#1976D2" },
+  success: {
+    icon: "checkmark-circle-outline",
+    bg: "#E8F5E9",
+    color: "#388E3C",
+  },
+  promo: { icon: "gift-outline", bg: "#F3E5F5", color: "#7B1FA2" },
+  reminder: { icon: "alarm-outline", bg: "#FCE4EC", color: "#C2185B" },
+};
+
+const FILTERS = ["All"];
+
+export default function NotificationScreen() {
+  const [notifications, setNotifications] =
+    useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [activeFilter, setActiveFilter] = useState("All");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
+
+  const markRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+    );
+  };
+
+  const getFiltered = () => {
+    switch (activeFilter) {
+      case "Unread":
+        return notifications.filter((n) => !n.isRead);
+      case "Alerts":
+        return notifications.filter(
+          (n) => n.type === "alert" || n.type === "reminder",
+        );
+      default:
+        return notifications;
+    }
+  };
+
+  const filtered = getFiltered();
+
+  const todayItems = filtered.filter((n) =>
+    ["min ago", "hr ago", "hrs ago"].some((s) => n.time.includes(s)),
+  );
+  const earlierItems = filtered.filter(
+    (n) => !["min ago", "hr ago", "hrs ago"].some((s) => n.time.includes(s)),
+  );
+
+  const renderCard = ({ item }: { item: Notification }) => {
+    const cfg = TYPE_CONFIG[item.type];
+    const isExpanded = expandedId === item.id;
+
+    return (
+      <View>
+        <CardWrapper
+          isRead={item.isRead}
+          onPress={() => {
+            setExpandedId(isExpanded ? null : item.id);
+            if (!item.isRead) markRead(item.id);
+          }}
+          activeOpacity={0.85}
+        >
+          <CardContent>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+              <CardTitle
+                isRead={item.isRead}
+                style={{ flex: 1, marginRight: 8 }}
+              >
+                {item.title}
+              </CardTitle>
+              {!item.isRead && <UnreadDot />}
+            </View>
+
+            <CardMessage numberOfLines={isExpanded ? undefined : 2}>
+              {item.message}
+            </CardMessage>
+
+            <CardMeta>
+              <Ionicons name="time-outline" size={11} color="#9E9E9E" />
+              <CardTime>{item.time}</CardTime>
+            </CardMeta>
+          </CardContent>
+        </CardWrapper>
+      </View>
+    );
+  };
+
+  return (
+    <Container>
+      <ScreenHeader
+        title="Notifications"
+        showBack
+        rightAction={{
+          icon: "checkmark-done-outline",
+          onPress: markAllRead,
+        }}
+      />
+
+      <SubHeaderRow>
+        {unreadCount > 0 ? (
+          <UnreadCountText>{unreadCount} unread messages</UnreadCountText>
+        ) : (
+          <View />
+        )}
+      </SubHeaderRow>
+
+      <FilterRow>
+        {FILTERS.map((f) => (
+          <FilterChip
+            key={f}
+            active={activeFilter === f}
+            onPress={() => setActiveFilter(f)}
+          >
+            <FilterChipText active={activeFilter === f}>{f}</FilterChipText>
+          </FilterChip>
+        ))}
+      </FilterRow>
+
+      {filtered.length === 0 ? (
+        <EmptyWrapper>
+          <EmptyIcon>
+            <Ionicons
+              name="notifications-off-outline"
+              size={40}
+              color="#BDBDBD"
+            />
+          </EmptyIcon>
+          <EmptyTitle>All Caught Up!</EmptyTitle>
+          <EmptySubtitle>
+            No notifications here. We'll let you know when something new
+            arrives.
+          </EmptySubtitle>
+        </EmptyWrapper>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={null}
+          ListHeaderComponent={
+            <>
+              {todayItems.map((item) => (
+                <React.Fragment key={item.id}>
+                  {renderCard({ item })}
+                </React.Fragment>
+              ))}
+              {earlierItems.map((item) => (
+                <React.Fragment key={item.id}>
+                  {renderCard({ item })}
+                </React.Fragment>
+              ))}
+            </>
+          }
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 30 }}
+        />
+      )}
+    </Container>
+  );
+}
+
+const Container = styled.SafeAreaView`
+  flex: 1;
+  background-color: ${({ theme }: any) => theme.colors.background};
+`;
+
+const SubHeaderRow = styled.View`
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px 5px;
+`;
+
+const UnreadCountText = styled.Text`
+  font-size: 13px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  font-family: "Montserrat_400Regular";
+`;
+
+const MarkAllButton = styled.TouchableOpacity`
+  align-items: flex-end;
+`;
+
+const MarkAllText = styled.Text`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }: any) => theme.colors.primary};
+  font-family: "Montserrat_700Bold";
+`;
+
+const FilterRow = styled.View`
+  flex-direction: row;
+  padding: 16px 20px 8px;
+  gap: 10px;
+`;
+
+const FilterChip = styled.TouchableOpacity<{ active: boolean }>`
+  padding: 7px 18px;
+  border-radius: 20px;
+  background-color: ${({ active, theme }: any) =>
+    active ? theme.colors.primary : theme.colors.surface};
+  elevation: ${({ active }: any) => (active ? 4 : 1)};
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
+  shadow-opacity: ${({ active }: any) => (active ? 0.25 : 0)};
+`;
+
+const FilterChipText = styled.Text<{ active: boolean }>`
+  font-size: 13px;
+  font-weight: 700;
+  font-family: "Montserrat_700Bold";
+  color: ${({ active, theme }: any) =>
+    active ? "#fff" : theme.colors.textMuted};
+`;
+
+const CardWrapper = styled.TouchableOpacity<{ isRead: boolean }>`
+  flex-direction: row;
+  align-items: flex-start;
+  margin: 5px 16px;
+  padding: 14px 14px;
+  border: 2px;
+  border-color: ${({ theme }: any) => theme.colors.border || "transparent"};
+  border-radius: 20px;
+`;
+
+const CardContent = styled.View`
+  flex: 1;
+`;
+
+const CardTitle = styled.Text<{ isRead: boolean }>`
+  font-size: 14px;
+  font-weight: ${({ isRead }: any) => (isRead ? "600" : "800")};
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+  font-family: "Montserrat_700Bold";
+  margin-bottom: 4px;
+`;
+
+const CardMessage = styled.Text`
+  font-size: 12.5px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  line-height: 18px;
+  font-family: "Montserrat_400Regular";
+`;
+
+const CardMeta = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-top: 8px;
+  gap: 6px;
+`;
+
+const CardTime = styled.Text`
+  font-size: 11px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  font-family: "Montserrat_400Regular";
+`;
+
+const UnreadDot = styled.View`
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background-color: ${({ theme }: any) => theme.colors.primary};
+`;
+
+const EmptyWrapper = styled.View`
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 40px;
+`;
+
+const EmptyIcon = styled.View`
+  width: 90px;
+  height: 90px;
+  border-radius: 45px;
+  background-color: ${({ theme }: any) => theme.colors.surface};
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+  elevation: 4;
+`;
+
+const EmptyTitle = styled.Text`
+  font-size: 18px;
+  font-weight: 800;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+  font-family: "Montserrat_700Bold";
+  margin-bottom: 8px;
+`;
+
+const EmptySubtitle = styled.Text`
+  font-size: 13px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  text-align: center;
+  line-height: 20px;
+  font-family: "Montserrat_400Regular";
+`;

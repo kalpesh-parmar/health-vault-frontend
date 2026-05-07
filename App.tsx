@@ -26,16 +26,11 @@ Notifications.setNotificationHandler({
 export default function App() {
   useEffect(() => {
     async function registerForPushNotifications() {
-      const channels = await Notifications.getNotificationChannelsAsync();
-      console.log(channels);
-
       try {
         if (!Device.isDevice) {
           console.warn("Must use a physical device for push notifications");
           return;
         }
-
-        console.log("Requesting notification permissions...");
 
         const { status: existingStatus } =
           await Notifications.getPermissionsAsync();
@@ -56,7 +51,6 @@ export default function App() {
           projectId: Constants.expoConfig?.extra?.eas?.projectId,
         });
         const deviceToken = tokenData.data;
-        console.log(deviceToken);
 
         await SecureStore.setItemAsync("deviceToken", String(deviceToken));
 
@@ -74,7 +68,6 @@ export default function App() {
     registerForPushNotifications();
 
     const subscription = Notifications.addPushTokenListener((token) => {
-      console.log("Token updated:", token.data);
       SecureStore.setItemAsync("deviceToken", String(token.data));
     });
 

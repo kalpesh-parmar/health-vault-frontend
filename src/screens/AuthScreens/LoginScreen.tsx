@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -25,14 +25,6 @@ const LoginScreen = () => {
   const { login: authLogin } = useAuth();
   const { isDark } = useAppTheme();
 
-  useEffect(() => {
-    const fetchDeviceToken = async () => {
-      const deviceToken = await SecureStore.getItemAsync("deviceToken");
-      console.log("Device Token :- ", deviceToken);
-    };
-    fetchDeviceToken();
-  }, []);
-
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
     const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w\w+)+$/;
@@ -52,12 +44,9 @@ const LoginScreen = () => {
   const { mutateAsync: loginMutation, isPending: isLoading } = useMutation({
     mutationFn: login,
     onSuccess: async (result) => {
-      console.log(result);
       const refreshToken = result?.data?.refreshToken;
       const accessToken = result?.data?.accessToken;
       const userId = result?.data?.patient?.id;
-      console.log("Refresh Token :- ", refreshToken);
-      console.log("User Id From Login Screen :- ", userId);
       await SecureStore.setItemAsync("authToken", String(refreshToken));
       await SecureStore.setItemAsync("accessToken", String(accessToken));
       await SecureStore.setItemAsync("userId", String(userId));
@@ -70,7 +59,6 @@ const LoginScreen = () => {
       });
     },
     onError: (error: any) => {
-      console.log("Login Screen Displayed :-", error);
       Toast.show({
         type: "error",
         text1: "Login Failed.",

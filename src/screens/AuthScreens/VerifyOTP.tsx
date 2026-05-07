@@ -4,7 +4,7 @@ import { ActivityIndicator, TextInput } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { RouteProp, useNavigation } from "@react-navigation/native";
 import { AuthStackParamList } from "../../navigation/types";
 import { useMutation } from "@tanstack/react-query";
 import { resendOTP, verifyOTP } from "../../services/authService";
@@ -85,8 +85,7 @@ const VerifyOTP = ({ route }: verifyOTPProps) => {
 
   const { mutateAsync: verifyOTPMutation, isPending: isLoading } = useMutation({
     mutationFn: verifyOTP,
-    onSuccess: (data: any) => {
-      console.log("OTP Verified :- ", data);
+    onSuccess: () => {
       Toast.show({
         type: "success",
         text1: "OTP Verified Successfully.",
@@ -95,7 +94,6 @@ const VerifyOTP = ({ route }: verifyOTPProps) => {
       navigation.navigate("ResetPassword", { email });
     },
     onError: (error: any) => {
-      console.log("Error :- ", error);
       Toast.show({
         type: "error",
         text1: "Failed to Verify OTP.",
@@ -116,14 +114,12 @@ const VerifyOTP = ({ route }: verifyOTPProps) => {
       email: email,
       otp: otp.join(""),
     };
-    console.log("Payload :- ", payload);
     await verifyOTPMutation(payload);
   };
 
   const {mutateAsync: resendOTPMutation, isPending: resendLoading} = useMutation({
     mutationFn: resendOTP,
-    onSuccess: (data: any) => {
-      console.log("OTP Resend :- ", data);
+    onSuccess: () => {
       Toast.show({
         type: "success",
         text1: "OTP Resend Successfully.",
@@ -132,7 +128,6 @@ const VerifyOTP = ({ route }: verifyOTPProps) => {
       startTimer();
     },
     onError: (error: any) => {
-      console.log("Error :- ", error);
       Toast.show({
         type: "error",
         text1: "Failed to resend OTP.",
@@ -150,7 +145,6 @@ const VerifyOTP = ({ route }: verifyOTPProps) => {
     const payload = {
       email: email,
     };
-    console.log("Resend Payload :- ", payload);
     await resendOTPMutation(payload);
   };
 

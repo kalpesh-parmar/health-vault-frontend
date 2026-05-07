@@ -1,25 +1,24 @@
 import React from "react";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
+import { useAppTheme } from "../../context/ThemeContext";
 
 interface EmptyStateProps {
   title?: string;
-  description?: string;
 }
 
-import { useAppTheme } from "../../context/ThemeContext";
-
-const EmptyContent = ({
-  title = "No Documents Found",
-  description = "Your vault is empty. Upload your first document to keep your health records organized.",
-}: EmptyStateProps) => {
-  const { theme }: any = useAppTheme();
+const EmptyContent = ({ title = "No Documents Found" }: EmptyStateProps) => {
+  const { theme } = useAppTheme();
 
   return (
     <Container>
       <IconCircle>
         <InnerCircle>
-          <Ionicons name="document-text-outline" size={60} color={theme.colors.textMuted} />
+          <Ionicons
+            name="document-text-outline"
+            size={60}
+            color={theme.colors.textMuted}
+          />
         </InnerCircle>
         <DecorationDot style={{ top: 10, right: 10 }} />
         <DecorationDot style={{ bottom: 20, left: -5, width: 12, height: 12 }} />
@@ -27,7 +26,6 @@ const EmptyContent = ({
 
       <TextContainer>
         <Title>{title}</Title>
-        <Description>{description}</Description>
       </TextContainer>
     </Container>
   );
@@ -40,7 +38,6 @@ const Container = styled.View`
   justify-content: center;
   align-items: center;
   padding: 40px;
-  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const IconCircle = styled.View`
@@ -62,7 +59,6 @@ const InnerCircle = styled.View`
   background-color: ${({ theme }: any) => theme.colors.surface};
   justify-content: center;
   align-items: center;
-  /* Soft inner glow shadow */
   shadow-color: ${({ theme }: any) => theme.colors.textMuted};
   shadow-offset: 0px 4px;
   shadow-opacity: 0.1;

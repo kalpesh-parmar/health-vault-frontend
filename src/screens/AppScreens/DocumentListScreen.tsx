@@ -1,29 +1,23 @@
-import React, {
-  useRef,
-  useState,
-  useEffect,
-} from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-} from "react-native";
+import React, { useRef, useState, useCallback } from "react";
+import { ActivityIndicator, FlatList } from "react-native";
 import styled from "styled-components/native";
-import EmptyContent from "../shared/EmptyContent";
-import ScreenHeader from "../shared/Header";
-import DocumentCard, { MedicalDocument } from "./DocumentCard";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import EmptyContent from "../../components/shared/EmptyContent";
+import ScreenHeader from "../../components/shared/Header";
+import DocumentCard from "../../components/Documents/DocumentCard";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import BottomSheet from "../shared/BottomSheet";
-import { documentListpaginated } from "../../services/authService";
+import BottomSheet from "../../components/shared/BottomSheet";
+import { documentListPaginated } from "../../services/documentService";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
-import { CameraView } from "expo-camera";
 import { useQuery } from "@tanstack/react-query";
-import { RouteProp, useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { AppStackParamList, DocumentsStackParamList } from "../../navigation/types";
-import ModernLoader from "../shared/Loader";
+import { RouteProp } from "@react-navigation/native";
+import { DocumentsStackParamList } from "../../navigation/types";
+import ModernLoader from "../../components/shared/Loader";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/ContextAPI";
+import CameraModal from "../../components/shared/CameraModal";
+import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
+import type { MedicalDocument } from "../../types";
 
 const PAGE_SIZE = 7;
 
@@ -47,9 +41,17 @@ const DocumentList = ({ route }: Props) => {
   } = useDocumentMedia();
   const { isDark } = useAppTheme();
 
+  const { userId } = useAuth();
+
   const { data: documentListData, isFetching } = useQuery({
-    queryKey: ["documents", { category, page }],
-    queryFn: () => documentListpaginated({ activeCategory: category, page, pageLimit: PAGE_SIZE }),
+    queryKey: ["documents", userId, category, page],
+    queryFn: () =>
+      documentListPaginated({
+        activeCategory: category,
+        page,
+        pageLimit: PAGE_SIZE,
+      }),
+    enabled: !!userId,
   });
 
   const documents: MedicalDocument[] = documentListData?.data || [];
@@ -58,9 +60,20 @@ const DocumentList = ({ route }: Props) => {
   const hasNext = page < totalPages;
   const hasPrev = page > 1;
 
-  const renderItem = ({ item }: { item: MedicalDocument }) => (
-    <DocumentCard document={item} />
+  const renderItem = useCallback(
+    ({ item }: { item: MedicalDocument }) => <DocumentCard document={item} />,
+    [],
   );
+
+  const keyExtractor = useCallback((item: MedicalDocument) => item.id, []);
+
+  const handleGalleryPickSheet = useCallback(() => {
+    handleGalleryPick(() => refRBSheet?.current?.dismiss());
+  }, [handleGalleryPick]);
+
+  const handleCameraOpenSheet = useCallback(() => {
+    handleOpenCamera(() => refRBSheet?.current?.dismiss());
+  }, [handleOpenCamera]);
 
   return (
     <Container>
@@ -73,27 +86,18 @@ const DocumentList = ({ route }: Props) => {
         </HeaderContent>
       </HeaderBand>
 
-      {isCameraVisible && (
-        <Modal visible={isCameraVisible} animationType="slide" presentationStyle="fullScreen">
-          <CameraContainer style={{ opacity: isCapturing ? 0.8 : 1 }}>
-            <CameraView ref={cameraRef} facing="back" style={{ flex: 1 }}>
-              <CameraControls>
-                <CloseBtn onPress={() => setIsCameraVisible(false)}>
-                  <Ionicons name="close" size={28} color="white" />
-                </CloseBtn>
-                <CaptureBtn onPress={async () => await takePicture(cameraRef)}>
-                  <CaptureInner />
-                </CaptureBtn>
-              </CameraControls>
-            </CameraView>
-          </CameraContainer>
-        </Modal>
-      )}
+      <CameraModal
+        visible={isCameraVisible}
+        onClose={() => setIsCameraVisible(false)}
+        onCapture={takePicture}
+        isCapturing={isCapturing}
+        cameraRef={cameraRef}
+      />
 
       <FlatList
         data={documents}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 14,
@@ -104,9 +108,7 @@ const DocumentList = ({ route }: Props) => {
         ListHeaderComponent={
           <SectionLabel>
             <SectionLabelText>Recent</SectionLabelText>
-            {totalCount > 0 && (
-              <SectionCount>{totalCount} total</SectionCount>
-            )}
+            {totalCount > 0 && <SectionCount>{totalCount} total</SectionCount>}
           </SectionLabel>
         }
         ListEmptyComponent={
@@ -118,7 +120,9 @@ const DocumentList = ({ route }: Props) => {
           ) : (
             <EmptyStateWrapper>
               <EmptyContent />
-              <EmptySubText>No documents yet. Add your first record.</EmptySubText>
+              <EmptySubText>
+                No documents yet. Add your first record.
+              </EmptySubText>
             </EmptyStateWrapper>
           )
         }
@@ -134,16 +138,28 @@ const DocumentList = ({ route }: Props) => {
                 <MaterialCommunityIcons
                   name="chevron-left"
                   size={20}
-                  color={!hasPrev || isFetching ? (isDark ? "#475569" : "#94a3b8") : (isDark ? "#60a5fa" : "#2563eb")}
+                  color={
+                    !hasPrev || isFetching
+                      ? isDark
+                        ? "#475569"
+                        : "#94a3b8"
+                      : isDark
+                        ? "#60a5fa"
+                        : "#2563eb"
+                  }
                 />
-                <PageNavText isDisabled={!hasPrev || isFetching}>Prev</PageNavText>
+                <PageNavText isDisabled={!hasPrev || isFetching}>
+                  Prev
+                </PageNavText>
               </PageNavButton>
 
               <PageIndicator>
                 {isFetching ? (
                   <ActivityIndicator size="small" color="#2563eb" />
                 ) : (
-                  <PageIndicatorText>{page} / {totalPages}</PageIndicatorText>
+                  <PageIndicatorText>
+                    {page} / {totalPages}
+                  </PageIndicatorText>
                 )}
               </PageIndicator>
 
@@ -153,11 +169,21 @@ const DocumentList = ({ route }: Props) => {
                 isDisabled={!hasNext || isFetching}
                 isDark={isDark}
               >
-                <PageNavText isDisabled={!hasNext || isFetching}>Next</PageNavText>
+                <PageNavText isDisabled={!hasNext || isFetching}>
+                  Next
+                </PageNavText>
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={20}
-                  color={!hasNext || isFetching ? (isDark ? "#475569" : "#94a3b8") : (isDark ? "#60a5fa" : "#2563eb")}
+                  color={
+                    !hasNext || isFetching
+                      ? isDark
+                        ? "#475569"
+                        : "#94a3b8"
+                      : isDark
+                        ? "#60a5fa"
+                        : "#2563eb"
+                  }
                 />
               </PageNavButton>
             </PaginationRow>
@@ -172,28 +198,10 @@ const DocumentList = ({ route }: Props) => {
       </FABWrapper>
 
       <BottomSheet ref={refRBSheet}>
-        <SheetContentWrapper>
-          <SheetTitle>Add Document</SheetTitle>
-          <SheetSubtitle>Securely upload or capture your record</SheetSubtitle>
-          <SheetButtonsContainer>
-            <SheetActionButton
-              onPress={() => handleGalleryPick(() => refRBSheet?.current?.dismiss())}
-            >
-              <IconWrapper style={{ backgroundColor: isDark ? "#1e3a8a" : "#eff6ff" }}>
-                <MaterialCommunityIcons name="image-plus" size={28} color="#3b82f6" />
-              </IconWrapper>
-              <SheetActionButtonText>Gallery</SheetActionButtonText>
-            </SheetActionButton>
-            <SheetActionButton
-              onPress={() => handleOpenCamera(() => refRBSheet?.current?.dismiss())}
-            >
-              <IconWrapper style={{ backgroundColor: isDark ? "#14532d" : "#f0fdf4" }}>
-                <MaterialCommunityIcons name="camera-plus" size={28} color="#22c55e" />
-              </IconWrapper>
-              <SheetActionButtonText>Camera</SheetActionButtonText>
-            </SheetActionButton>
-          </SheetButtonsContainer>
-        </SheetContentWrapper>
+        <AddDocumentSheet
+          onGalleryPick={handleGalleryPickSheet}
+          onCameraOpen={handleCameraOpenSheet}
+        />
       </BottomSheet>
     </Container>
   );
@@ -226,6 +234,7 @@ const SectionLabel = styled.View`
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  margin-top: 20px;
 `;
 
 const SectionLabelText = styled.Text`
@@ -250,14 +259,17 @@ const PaginationRow = styled.View`
   gap: 16px;
 `;
 
-const PageNavButton = styled.TouchableOpacity<{ isDisabled: boolean; isDark: boolean }>`
+const PageNavButton = styled.TouchableOpacity<{
+  isDisabled: boolean;
+  isDark: boolean;
+}>`
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  background-color: ${({ isDisabled, isDark, theme }: any) => 
+  background-color: ${({ isDisabled, isDark, theme }: any) =>
     isDisabled ? (isDark ? "#334155" : "#f1f5f9") : theme.colors.iconBox};
   border-width: 1.5px;
-  border-color: ${({ isDisabled, isDark, theme }: any) => 
+  border-color: ${({ isDisabled, isDark, theme }: any) =>
     isDisabled ? (isDark ? "#475569" : "#e2e8f0") : theme.colors.border};
   border-radius: 20px;
   padding-horizontal: 16px;
@@ -267,7 +279,8 @@ const PageNavButton = styled.TouchableOpacity<{ isDisabled: boolean; isDark: boo
 const PageNavText = styled.Text<{ isDisabled: boolean }>`
   font-size: 13px;
   font-weight: 700;
-  color: ${({ isDisabled, theme }: any) => (isDisabled ? theme.colors.textMuted : theme.colors.primary)};
+  color: ${({ isDisabled, theme }: any) =>
+    isDisabled ? theme.colors.textMuted : theme.colors.primary};
 `;
 
 const PageIndicator = styled.View`
@@ -298,14 +311,14 @@ const EmptySubText = styled.Text`
 
 const FABWrapper = styled.View`
   position: absolute;
-  top: 60px;
-  right: 25px;
+  top: 114px;
+  right: 20px;
 `;
 
 const FABButton = styled.TouchableOpacity`
-  width: 65px;
-  height: 65px;
-  border-radius: 24px;
+  width: 50px;
+  height: 50px;
+  border-radius: 25px;
   background-color: ${({ theme }: any) => theme.colors.primary};
   justify-content: center;
   align-items: center;
@@ -313,97 +326,4 @@ const FABButton = styled.TouchableOpacity`
   shadow-opacity: 0.4;
   shadow-radius: 20px;
   elevation: 12;
-`;
-
-const SheetContentWrapper = styled.View`
-  padding: 25px 20px;
-  align-items: center;
-`;
-
-const SheetTitle = styled.Text`
-  font-size: 22px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-`;
-
-const SheetSubtitle = styled.Text`
-  font-size: 14px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-  margin-top: 6px;
-  margin-bottom: 30px;
-  text-align: center;
-`;
-
-const SheetButtonsContainer = styled.View`
-  flex-direction: row;
-  justify-content: space-evenly;
-  width: 100%;
-`;
-
-const SheetActionButton = styled.TouchableOpacity`
-  align-items: center;
-  width: 100px;
-  background-color: ${({ theme }: any) => theme.colors.surface};
-  padding: 16px;
-  border-radius: 20px;
-  shadow-color: #000;
-  shadow-opacity: 0.05;
-  shadow-radius: 10px;
-  elevation: 3;
-`;
-
-const IconWrapper = styled.View`
-  width: 30px;
-  height: 30px;
-  border-radius: 20px;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 12px;
-`;
-
-const SheetActionButtonText = styled.Text`
-  font-size: 14px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-`;
-
-const CameraContainer = styled.View`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: black;
-  z-index: 9000;
-`;
-
-const CameraControls = styled.View`
-  flex: 1;
-  justify-content: flex-end;
-  padding-bottom: 50px;
-`;
-
-const CloseBtn = styled.TouchableOpacity`
-  position: absolute;
-  top: 50px;
-  right: 20px;
-  background-color: rgba(0, 0, 0, 0.6);
-  padding: 12px;
-  border-radius: 30px;
-`;
-
-const CaptureBtn = styled.TouchableOpacity`
-  align-self: center;
-  width: 85px;
-  height: 85px;
-  border-radius: 45px;
-  border-width: 6px;
-  border-color: rgba(255, 255, 255, 0.4);
-  padding: 6px;
-`;
-
-const CaptureInner = styled.View`
-  flex: 1;
-  background-color: white;
-  border-radius: 35px;
 `;

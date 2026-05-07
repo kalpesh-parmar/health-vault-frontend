@@ -2,8 +2,6 @@ import React, { forwardRef } from "react";
 import styled from "styled-components/native";
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../../constants/theme";
-import { View } from "react-native";
 import { useAppTheme } from "../../context/ThemeContext";
 
 const BottomSheet = forwardRef(({ children }: any, ref: any) => {
@@ -12,13 +10,14 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
   return (
     <BottomSheetModal
       ref={ref}
-      snapPoints={["60%"]}
       enablePanDownToClose={true}
       backgroundStyle={{
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: theme.colors.bottomSheet,
         paddingBottom: 15,
+        borderTopWidth: 25,
+        borderColor: theme.colors.bottomSheetBorder,
       }}
       handleIndicatorStyle={{
         width: 23,

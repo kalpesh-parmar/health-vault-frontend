@@ -1,13 +1,14 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import HomeScreen from "../../screens/AppScreens/HomeScreen";
-import SummaryScreen from "../../components/Documents/SummaryScreen";
-import EditScreen from "../../components/Documents/EditScreen";
+import SummaryScreen from "../../screens/AppScreens/DocumentSummaryScreen";
+import EditScreen from "../../screens/AppScreens/EditDocumentScreen";
 import MedicationScreen from "../../screens/AppScreens/DocsCategoryScreens/Medication/MedicationScreen";
 import AddMedication from "../../screens/AppScreens/DocsCategoryScreens/Medication/AddMedication";
-import SaveDocumentScreen from "../../components/Documents/SaveDocumentScreen";
+import SaveDocumentScreen from "../../screens/AppScreens/SaveDocumentScreen";
 import { AppStackParamList } from "../types";
-import ImagePreview from "../../components/shared/ImagePreview";
+import ImagePreview from "../../screens/AppScreens/ImagePreviewScreen";
 import DocumentStack from "./DocumentStack";
+import NotificationScreen from "../../screens/AppScreens/Notifications";
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -25,6 +26,7 @@ const HomeStack = () => {
       <Stack.Screen name="EditDocument" component={EditScreen} />
       <Stack.Screen name="ImagePreview" component={ImagePreview} />
       <Stack.Screen name="SaveDocument" component={SaveDocumentScreen} />
+      <Stack.Screen name="Notifications" component={NotificationScreen} />
     </Stack.Navigator>
   );
 };

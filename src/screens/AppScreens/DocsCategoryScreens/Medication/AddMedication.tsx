@@ -73,9 +73,12 @@ const TIMES_OF_DAY: { key: TimeOfDay; emoji: string }[] = [
   { key: "Night", emoji: "🌙" },
 ];
 
+import { useAppTheme } from "../../../../context/ThemeContext";
+
 const AddMedicationScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { theme } = useAppTheme();
 
   const [form, setForm] = useState<MedicationFormData>({
     name: "",
@@ -111,7 +114,6 @@ const AddMedicationScreen = () => {
     mutationFn: async (data: MedicationFormData) => {
       // TODO: replace with your real API service call
       // e.g. return await medicationService.add(data);
-      console.log("Saving medication:", data);
       return data;
     },
     onSuccess: () => {
@@ -329,7 +331,7 @@ const AddMedicationScreen = () => {
               <Ionicons
                 name="information-circle-outline"
                 size={16}
-                color="#2563eb"
+                color={theme.colors.primary}
                 style={{ marginTop: 1 }}
               />
               <InfoTipText>
@@ -533,13 +535,13 @@ export default AddMedicationScreen;
 
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const SectionLabel = styled.Text`
   font-family: "Inter_600SemiBold";
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   letter-spacing: 0.8px;
   text-transform: uppercase;
   padding-left: 4px;
@@ -547,10 +549,10 @@ const SectionLabel = styled.Text`
 `;
 
 const Card = styled.View`
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 18px;
   border-width: 0.5px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
   padding: 16px;
   gap: 14px;
 `;
@@ -581,24 +583,24 @@ const LabelDot = styled.View<{ color: string }>`
 const LabelText = styled.Text`
   font-family: "Inter_600SemiBold";
   font-size: 12px;
-  color: #475569;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const HintText = styled.Text`
   font-family: "Inter_400Regular";
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const InputBox = styled.TextInput`
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-width: 1px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
   border-radius: 12px;
   padding: 10px 13px;
   font-family: "Inter_400Regular";
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const PillRow = styled.View`
@@ -611,11 +613,11 @@ const Pill = styled.TouchableOpacity<{
   selected: boolean;
   selectedColor: string;
 }>`
-  background-color: ${({ selected, selectedColor }: any) =>
-    selected ? selectedColor : "#f1f5f9"};
+  background-color: ${({ selected, selectedColor, theme }: any) =>
+    selected ? selectedColor : theme.colors.surfaceLight};
   border-width: 1px;
-  border-color: ${({ selected, selectedColor }: any) =>
-    selected ? selectedColor : "#e2e8f0"};
+  border-color: ${({ selected, selectedColor, theme }: any) =>
+    selected ? selectedColor : theme.colors.border};
   border-radius: 50px;
   padding: 6px 14px;
 `;
@@ -623,15 +625,15 @@ const Pill = styled.TouchableOpacity<{
 const PillText = styled.Text<{ selected: boolean }>`
   font-family: "Inter_600SemiBold";
   font-size: 12px;
-  color: ${({ selected }: any) => (selected ? "#ffffff" : "#475569")};
+  color: ${({ selected, theme }: any) => (selected ? "#ffffff" : theme.colors.textPrimary)};
 `;
 
 const Stepper = styled.View`
   flex-direction: row;
   align-items: center;
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-width: 1px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
   border-radius: 12px;
   padding: 8px 13px;
   gap: 12px;
@@ -640,7 +642,7 @@ const Stepper = styled.View`
 const StepBtn = styled.TouchableOpacity`
   width: 32px;
   height: 32px;
-  background-color: #e2e8f0;
+  background-color: ${({ theme }: any) => theme.colors.border};
   border-radius: 9px;
   justify-content: center;
   align-items: center;
@@ -649,7 +651,7 @@ const StepBtn = styled.TouchableOpacity`
 const StepBtnText = styled.Text`
   font-size: 20px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   line-height: 24px;
 `;
 
@@ -664,13 +666,13 @@ const StepValue = styled.View`
 const StepValueText = styled.Text`
   font-family: "Montserrat_700Bold";
   font-size: 20px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const StepUnit = styled.Text`
   font-family: "Inter_400Regular";
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const FreqGrid = styled.View`
@@ -681,10 +683,10 @@ const FreqGrid = styled.View`
 
 const FreqItem = styled.TouchableOpacity<{ selected: boolean }>`
   flex-basis: 48%;
-  background-color: ${({ selected }: any) =>
-    selected ? "#eff6ff" : "#f8fafc"};
+  background-color: ${({ selected, theme }: any) =>
+    selected ? (theme.colors.primary + '1A') : theme.colors.surfaceLight};
   border-width: 1px;
-  border-color: ${({ selected }: any) => (selected ? "#2563eb" : "#e2e8f0")};
+  border-color: ${({ selected, theme }: any) => (selected ? theme.colors.primary : theme.colors.border)};
   border-radius: 12px;
   padding: 10px 12px;
 `;
@@ -692,13 +694,13 @@ const FreqItem = styled.TouchableOpacity<{ selected: boolean }>`
 const FreqTitle = styled.Text<{ selected: boolean }>`
   font-family: "Montserrat_600SemiBold";
   font-size: 13px;
-  color: ${({ selected }: any) => (selected ? "#2563eb" : "#0f172a")};
+  color: ${({ selected, theme }: any) => (selected ? theme.colors.primary : theme.colors.textPrimary)};
 `;
 
 const FreqSub = styled.Text<{ selected: boolean }>`
   font-family: "Inter_400Regular";
   font-size: 10px;
-  color: ${({ selected }: any) => (selected ? "#93c5fd" : "#94a3b8")};
+  color: ${({ selected, theme }: any) => (selected ? theme.colors.primary : theme.colors.textMuted)};
   margin-top: 2px;
 `;
 
@@ -709,10 +711,10 @@ const TimeChipRow = styled.View`
 
 const TimeChip = styled.TouchableOpacity<{ selected: boolean }>`
   flex: 1;
-  background-color: ${({ selected }: any) =>
-    selected ? "#eff6ff" : "#f1f5f9"};
+  background-color: ${({ selected, theme }: any) =>
+    selected ? (theme.colors.primary + '1A') : theme.colors.surfaceLight};
   border-width: 1px;
-  border-color: ${({ selected }: any) => (selected ? "#2563eb" : "#e2e8f0")};
+  border-color: ${({ selected, theme }: any) => (selected ? theme.colors.primary : theme.colors.border)};
   border-radius: 11px;
   padding: 9px 4px;
   align-items: center;
@@ -726,13 +728,13 @@ const TimeEmoji = styled.Text`
 const TimeLabel = styled.Text<{ selected: boolean }>`
   font-family: "Inter_600SemiBold";
   font-size: 10px;
-  color: ${({ selected }: any) => (selected ? "#2563eb" : "#64748b")};
+  color: ${({ selected, theme }: any) => (selected ? theme.colors.primary : theme.colors.textMuted)};
 `;
 
 const InfoTip = styled.View`
-  background-color: #eff6ff;
+  background-color: ${({ theme }: any) => theme.colors.primary + '1A'};
   border-width: 1px;
-  border-color: #bfdbfe;
+  border-color: ${({ theme }: any) => theme.colors.primary + '4D'};
   border-radius: 10px;
   padding: 10px 12px;
   flex-direction: row;
@@ -743,7 +745,7 @@ const InfoTip = styled.View`
 const InfoTipText = styled.Text`
   font-family: "Inter_400Regular";
   font-size: 11px;
-  color: #1d4ed8;
+  color: ${({ theme }: any) => theme.colors.primary};
   line-height: 17px;
   flex: 1;
 `;
@@ -754,7 +756,7 @@ const TwoCol = styled.View`
 `;
 
 const ProgressBarWrap = styled.View`
-  background-color: #e2e8f0;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 50px;
   height: 6px;
 `;
@@ -762,13 +764,13 @@ const ProgressBarWrap = styled.View`
 const ProgressFill = styled.View<{ percent: number }>`
   height: 6px;
   border-radius: 50px;
-  background-color: #2563eb;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   width: ${({ percent }: any) => `${percent}%`};
 `;
 
 const Divider = styled.View`
   height: 0.5px;
-  background-color: #e2e8f0;
+  background-color: ${({ theme }: any) => theme.colors.border};
 `;
 
 const ToggleRow = styled.View`
@@ -799,20 +801,20 @@ const ToggleTextGroup = styled.View`
 const ToggleTitle = styled.Text`
   font-family: "Montserrat_600SemiBold";
   font-size: 13px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const ToggleSub = styled.Text`
   font-family: "Inter_400Regular";
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
 const Toggle = styled.TouchableOpacity<{ active: boolean }>`
   width: 44px;
   height: 26px;
   border-radius: 13px;
-  background-color: ${({ active }: any) => (active ? "#2563eb" : "#e2e8f0")};
+  background-color: ${({ active, theme }: any) => (active ? theme.colors.primary : theme.colors.surfaceLight)};
   justify-content: center;
   padding-horizontal: 3px;
 `;
@@ -829,12 +831,12 @@ const ToggleThumb = styled.View<{ active: boolean }>`
 `;
 
 const NotesInput = styled.TextInput`
-  background-color: #f8fafc;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-radius: 12px;
   padding: 12px 13px;
   font-family: "Inter_400Regular";
   font-size: 13px;
-  color: #0f172a;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   min-height: 80px;
 `;
 
@@ -843,18 +845,18 @@ const SaveBar = styled.View`
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-top-width: 0.5px;
-  border-top-color: #e2e8f0;
+  border-top-color: ${({ theme }: any) => theme.colors.border};
   padding: 14px 16px 32px;
   flex-direction: row;
   gap: 10px;
 `;
 
 const DiscardBtn = styled.TouchableOpacity`
-  background-color: #f1f5f9;
+  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
   border-width: 1px;
-  border-color: #e2e8f0;
+  border-color: ${({ theme }: any) => theme.colors.border};
   border-radius: 14px;
   padding: 14px 18px;
   justify-content: center;
@@ -864,19 +866,19 @@ const DiscardBtn = styled.TouchableOpacity`
 const DiscardText = styled.Text`
   font-family: "Inter_600SemiBold";
   font-size: 14px;
-  color: #475569;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
 const SaveBtn = styled.TouchableOpacity`
   flex: 1;
-  background-color: #2563eb;
+  background-color: ${({ theme }: any) => theme.colors.primary};
   border-radius: 14px;
   padding: 14px;
   flex-direction: row;
   justify-content: center;
   align-items: center;
   gap: 8px;
-  shadow-color: #2563eb;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.35;
   shadow-radius: 12px;
   elevation: 8;

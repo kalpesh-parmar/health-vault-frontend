@@ -1,11 +1,13 @@
 import { Modal } from "react-native";
 import React from "react";
 import styled from "styled-components/native";
-import DualButtons from "../shared/Buttons/DualButtons";
+import DualButtons from "./Buttons/DualButtons";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import { useAuth } from "../../context/ContextAPI";
-import { deleteDocument, deleteUserAccount, logoutUser } from "../../services/authService";
+import { logoutUser } from "../../services/authService";
+import { deleteDocument } from "../../services/documentService";
+import { deleteUserAccount } from "../../services/userService";
 import { useMutation } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { queryClient } from "../../config/queryClient";
@@ -13,26 +15,25 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../navigation/types";
 
-interface LogoutModalProps {
+interface ConfirmationModalProps {
   showModal: boolean;
   onClose: () => void;
   mode?: "Log Out" | "Delete Account" | "Delete Document";
-  documentId?: number;
+  documentId?: string;
 }
 
-const LogoutModal = ({
+const ConfirmationModal = ({
   showModal,
   onClose,
   mode = "Log Out",
   documentId,
-}: LogoutModalProps) => {
+}: ConfirmationModalProps) => {
   const { logout } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
   const logoutMutation = useMutation({
     mutationFn: logoutUser,
     onSuccess: async () => {
-      console.log("Logged out successfully.");
       await logout();
       onClose();
       Toast.show({
@@ -54,7 +55,6 @@ const LogoutModal = ({
     mutationFn: deleteUserAccount,
     onSuccess: async () => {
       await SecureStore.deleteItemAsync("userId");
-      console.log("Account Deleted Successfully.");
       await logout();
       onClose();
       Toast.show({
@@ -78,14 +78,13 @@ const LogoutModal = ({
       queryClient.invalidateQueries({
         queryKey: ['documents'],
       });
-      console.log("Document Deleted Successfully.", result);
       onClose();
       Toast.show({
         type: "success",
         text1: "Document Deleted Successfully !!!",
         text2: "Document Deleted Successfully.",
       });
-      navigation.navigate("DocumentList");
+      navigation.navigate("DocumentStack" as never);
     },
     onError: (error: any) => {
       Toast.show({
@@ -103,7 +102,7 @@ const LogoutModal = ({
       } else if (mode === "Delete Account") {
         deleteUserMutation.mutate();
       } else {
-        await deleteDocumentMutation.mutateAsync(documentId as number);
+        await deleteDocumentMutation.mutateAsync(documentId || "");
         onClose();
       }
     } catch (error: any) {
@@ -145,11 +144,10 @@ const LogoutModal = ({
             <Description>
               Are you sure you want to{" "}
               {mode === "Delete Document"
-                ? "delete"
+                ? "delete this Document?"
                 : isLogout
-                  ? "leave"
-                  : "delete your account from"}{" "}
-              this Document ?{" "}
+                  ? "leave?"
+                  : "delete your account from Health Vault?"}{" "}
               {mode === "Delete Document"
                 ? "This action will permanently delete this document and it cannot be undone."
                 : isLogout
@@ -178,7 +176,7 @@ const LogoutModal = ({
   );
 };
 
-export default LogoutModal;
+export default ConfirmationModal;
 
 /* --- Styled Components --- */
 
@@ -193,7 +191,7 @@ const Overlay = styled.View`
 const ModalCard = styled.View`
   width: 100%;
   max-width: 350px;
-  background-color: #ffffff;
+  background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 32px; /* Extra rounded for modern feel */
   padding: 30px 24px 24px 24px;
   align-items: center;
@@ -207,7 +205,7 @@ const ModalCard = styled.View`
 const Indicator = styled.View`
   width: 40px;
   height: 4px;
-  background-color: #e5e7eb;
+  background-color: ${({ theme }: any) => theme.colors.border};
   border-radius: 2px;
   position: absolute;
   top: 12px;
@@ -238,14 +236,14 @@ const ContentContainer = styled.View`
 const Title = styled.Text`
   font-size: 24px;
   font-weight: 800;
-  color: #111827;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
   margin-bottom: 10px;
   letter-spacing: -0.5px;
 `;
 
 const Description = styled.Text`
   font-size: 15px;
-  color: #6b7280;
+  color: ${({ theme }: any) => theme.colors.textMuted};
   text-align: center;
   line-height: 22px;
   padding-horizontal: 10px;

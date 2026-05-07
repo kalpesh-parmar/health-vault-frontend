@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
-import { documentUpload } from "../services/authService";
+import { documentUpload } from "../services/documentService";
 import { buildDocumentFormData } from "../utils/DocumentData";
 
 export const useSaveDocument = (onSuccessGlobal?: () => void) => {
@@ -11,7 +11,6 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
     mutationKey: ["documents"],
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
-      console.log("Document Added");
       Toast.show({
         type: "success",
         text1: "Document Added",
@@ -22,7 +21,6 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
     },
 
     onError: (error: any) => {
-      console.log(error);
       Toast.show({
         type: "error",
         text1: "Upload Failed",
@@ -47,10 +45,6 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
       documentType,
       images
     );
-    console.log("Filename :- ", fileName);
-    console.log("Category :- ", documentType);
-    console.log("Images :- ", images);
-    console.log("Formdata :- ", formData);
 
     mutation.mutateAsync(formData);
   };

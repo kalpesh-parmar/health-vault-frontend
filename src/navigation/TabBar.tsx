@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
@@ -22,7 +22,22 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
       duration: 320,
       useNativeDriver: true,
     }).start();
-  }, [nestedRouteName]);
+  }, [nestedRouteName, translateY]);
+
+  const handlePress = useCallback(
+    (route: (typeof state.routes)[number], isFocused: boolean) => {
+      const event = navigation.emit({
+        type: "tabPress",
+        target: route.key,
+        canPreventDefault: true,
+      });
+
+      if (!isFocused && !event.defaultPrevented) {
+        navigation.navigate(route.name);
+      }
+    },
+    [navigation],
+  );
 
   return (
     <AnimatedContainer
@@ -39,22 +54,9 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        {state.routes.map((route: any, index: number) => {
+        {state.routes.map((route, index: number) => {
           const isFocused = state.index === index;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          let iconName: any;
+          let iconName: keyof typeof Ionicons.glyphMap = "ellipse-outline";
 
           if (route.name === "Home") {
             iconName = isFocused ? "home" : "home-outline";
@@ -65,8 +67,15 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
           }
 
           return (
-            <TabButton key={route.key} onPress={onPress}>
-              <Ionicons name={iconName} size={24} color={isFocused ? theme.colors.primary : theme.colors.textMuted} />
+            <TabButton
+              key={route.key}
+              onPress={() => handlePress(route, isFocused)}
+            >
+              <Ionicons
+                name={iconName}
+                size={24}
+                color={isFocused ? theme.colors.primary : theme.colors.textMuted}
+              />
               <Label focused={isFocused}>{route.name}</Label>
             </TabButton>
           );

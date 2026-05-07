@@ -1,6 +1,5 @@
-import { BlurView } from "expo-blur";
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { Text } from "react-native";
 import styled from "styled-components/native";
 
 interface ToastActionProps {
@@ -137,7 +136,7 @@ const ToastTitle = styled.Text`
 
 const ToastMsg = styled.Text`
   font-size: 14px;
-  color: #000000ff;
+  color: #1e293b;
   line-height: 20px;
   font-weight: 600;
 `;

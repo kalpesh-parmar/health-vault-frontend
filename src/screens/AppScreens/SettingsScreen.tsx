@@ -17,44 +17,10 @@ const SettingsScreen = () => {
       <ScreenHeader title="Settings" showBack={true} />
 
       <StyledScrollView showsVerticalScrollIndicator={false}>
-
-        <SectionHeader>Account Settings</SectionHeader>
-        <SettingsGroup>
-          <SettingItem>
-            <IconBox bg={isDark ? "#1e3a8a" : "#eff6ff"}>
-              <MaterialCommunityIcons
-                name="shield-lock-outline"
-                size={22}
-                color="#3b82f6"
-              />
-            </IconBox>
-            <SettingLabel>Security & Password</SettingLabel>
-            <Ionicons name="chevron-forward" size={20} color={isDark ? "#64748b" : "#cbd5e1"} />
-          </SettingItem>
-
-          <Divider />
-
-          <SettingItem>
-            <IconBox bg={isDark ? "#14532d" : "#f0fdf4"}>
-              <MaterialCommunityIcons
-                name="fingerprint"
-                size={22}
-                color="#22c55e"
-              />
-            </IconBox>
-            <SettingLabel>Biometric Unlock</SettingLabel>
-            <Switch
-              value={isBiometricEnabled}
-              onValueChange={setBiometricEnabled}
-              trackColor={{ false: isDark ? "#475569" : "#e2e8f0", true: "#93c5fd" }}
-            />
-          </SettingItem>
-        </SettingsGroup>
-
         <SectionHeader>Preferences</SectionHeader>
         <SettingsGroup>
           <SettingItem>
-            <IconBox bg={isDark ? "#7c2d12" : "#fff7ed"}>
+            <IconBox bg={isDark ? "   white" : "#fff7ed"}>
               <MaterialCommunityIcons
                 name="bell-outline"
                 size={22}
@@ -80,61 +46,15 @@ const SettingsScreen = () => {
               />
             </IconBox>
             <SettingLabel>Dark Mode</SettingLabel>
-            <Switch 
+            <Switch
               value={isDark} 
               onValueChange={(val) => setThemeMode(val ? "dark" : "light")}
               trackColor={{ false: isDark ? "#475569" : "#e2e8f0", true: "#93c5fd" }} 
             />
           </SettingItem>
-
-          <Divider />
-
-          <SettingItem>
-            <IconBox bg={isDark ? "#4c1d95" : "#f5f3ff"}>
-              <MaterialCommunityIcons
-                name="translate"
-                size={22}
-                color="#8b5cf6"
-              />
-            </IconBox>
-            <SettingLabel>Language</SettingLabel>
-            <ValueText>English</ValueText>
-            <Ionicons name="chevron-forward" size={20} color={isDark ? "#64748b" : "#cbd5e1"} />
-          </SettingItem>
-        </SettingsGroup>
-
-        <SectionHeader>Storage & Data</SectionHeader>
-        <SettingsGroup>
-          <SettingItem>
-            <IconBox bg={isDark ? "#831843" : "#fdf2f8"}>
-              <MaterialCommunityIcons
-                name="cloud-upload-outline"
-                size={22}
-                color="#db2777"
-              />
-            </IconBox>
-            <SettingLabel>Auto Backup</SettingLabel>
-            <Ionicons name="chevron-forward" size={20} color={isDark ? "#64748b" : "#cbd5e1"} />
-          </SettingItem>
-
-          <Divider />
-
-          <SettingItem>
-            <IconBox bg={isDark ? "#7f1d1d" : "#f1f5f9"}>
-              <MaterialCommunityIcons
-                name="trash-can-outline"
-                size={22}
-                color="#ef4444"
-              />
-            </IconBox>
-            <SettingLabel style={{ color: "#ef4444" }}>
-              Clear Cache
-            </SettingLabel>
-            <ValueText>124 MB</ValueText>
-          </SettingItem>
         </SettingsGroup>
         <FooterContainer>
-          <FooterNote>Version 2.0.4 • HealthVault Pro</FooterNote>
+          <FooterNote>Version 1.0.0 • HealthVault</FooterNote>
         </FooterContainer>
       </StyledScrollView>
     </Container>
