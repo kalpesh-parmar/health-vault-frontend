@@ -74,6 +74,25 @@ export interface PaginatedDocumentRequest {
   pageLimit: number;
 }
 
+// ─── Medication Types ────────────────────────────────────────
+export interface AddOrEditMedication {
+  id?: string;
+  medicationName: string;
+  medicationType: string;
+  prescribedBy: string;
+  dosePerIntake: number;
+  frequency: string;
+  bestTaken: string[];
+  medicationTime: string;
+  withFood: string;
+  startDate: string;
+  ongoing: boolean;
+  totalPills: number;
+  doseReminders: boolean;
+  refillAlert: boolean;
+  notes: string;
+}
+
 // ─── API Response Wrapper ──────────────────────────────────────
 
 export interface ApiResponse<T = unknown> {

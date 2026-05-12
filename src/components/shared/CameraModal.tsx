@@ -34,7 +34,11 @@ const CameraModal = ({
               <Ionicons name="close" size={28} color="white" />
             </CloseBtn>
 
-            <CaptureBtn onPress={async () => await onCapture(cameraRef)}>
+            <CaptureBtn
+              onPress={async () =>
+                await onCapture(cameraRef)
+              }
+            >
               <CaptureInner />
             </CaptureBtn>
           </CameraControls>

@@ -1,206 +1,114 @@
 import React, { useRef, useState, useCallback } from "react";
-import { ActivityIndicator, FlatList } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  ScrollView,
+  StatusBar,
+} from "react-native";
 import styled from "styled-components/native";
-import EmptyContent from "../../components/shared/EmptyContent";
-import ScreenHeader from "../../components/shared/Header";
-import DocumentCard from "../../components/Documents/DocumentCard";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
+
 import BottomSheet from "../../components/shared/BottomSheet";
-import { documentListPaginated } from "../../services/documentService";
+import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
+import EmptyContent from "../../components/shared/EmptyContent";
+
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useQuery } from "@tanstack/react-query";
-import { RouteProp } from "@react-navigation/native";
-import { DocumentsStackParamList } from "../../navigation/types";
-import ModernLoader from "../../components/shared/Loader";
-import { useAppTheme } from "../../context/ThemeContext";
+import { documentListPaginated } from "../../services/documentService";
 import { useAuth } from "../../context/ContextAPI";
-import CameraModal from "../../components/shared/CameraModal";
-import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
 import type { MedicalDocument } from "../../types";
+import DocumentCard from "../../components/Documents/DocumentCard";
+import { useAppNavigation } from "../../types/navigation";
 
-const PAGE_SIZE = 7;
+const CATEGORIES = ["All", "Family", "Medical Documents", "Insurance", "Other"];
 
-type DocumentListRouteProp = RouteProp<DocumentsStackParamList, "DocumentList">;
-type Props = { route: DocumentListRouteProp };
-
-const DocumentList = ({ route }: Props) => {
-  const category = route.params?.category;
-
+const DocumentList = () => {
+  const navigation = useAppNavigation();
   const refRBSheet = useRef<BottomSheetModal>(null);
-  const cameraRef = useRef<any>(null);
-  const [page, setPage] = useState(1);
+  const { userId } = useAuth();
+  const [activeTab, setActiveTab] = useState("All");
 
   const {
-    isCameraVisible,
-    setIsCameraVisible,
     handleGalleryPick,
     handleOpenCamera,
-    takePicture,
-    isCapturing,
   } = useDocumentMedia();
-  const { isDark } = useAppTheme();
-
-  const { userId } = useAuth();
 
   const { data: documentListData, isFetching } = useQuery({
-    queryKey: ["documents", userId, category, page],
+    queryKey: ["documents", userId, activeTab],
     queryFn: () =>
       documentListPaginated({
-        activeCategory: category,
-        page,
-        pageLimit: PAGE_SIZE,
+        activeCategory: activeTab,
+        page: 1,
+        pageLimit: 10,
       }),
     enabled: !!userId,
   });
 
-  const documents: MedicalDocument[] = documentListData?.data || [];
-  const totalCount: number = documents.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const hasNext = page < totalPages;
-  const hasPrev = page > 1;
+  const documents = documentListData?.data || [];
 
   const renderItem = useCallback(
-    ({ item }: { item: MedicalDocument }) => <DocumentCard document={item} />,
+    ({ item }: any) => (
+      <DocumentCard document={item} />
+    ),
     [],
   );
 
-  const keyExtractor = useCallback((item: MedicalDocument) => item.id, []);
-
-  const handleGalleryPickSheet = useCallback(() => {
-    handleGalleryPick(() => refRBSheet?.current?.dismiss());
-  }, [handleGalleryPick]);
-
-  const handleCameraOpenSheet = useCallback(() => {
-    handleOpenCamera(() => refRBSheet?.current?.dismiss());
-  }, [handleOpenCamera]);
-
   return (
     <Container>
-      {isCapturing && <ModernLoader visible={isCapturing} />}
+      <StatusBar barStyle="light-content" />
 
-      <HeaderBand>
-        <ScreenHeader title="Documents" showBack />
-        <HeaderContent>
-          <HeaderTitle>Your Health Records</HeaderTitle>
-        </HeaderContent>
-      </HeaderBand>
+      <HeaderWrapper>
+        <HeaderMain>
+          <BackButton onPress={() => navigation.navigate("Home")}>
+            <Ionicons name="arrow-back" size={28} color="white" />
+          </BackButton>
+          <HeaderTitle>My Documents</HeaderTitle>
+        </HeaderMain>
+      </HeaderWrapper>
 
-      <CameraModal
-        visible={isCameraVisible}
-        onClose={() => setIsCameraVisible(false)}
-        onCapture={takePicture}
-        isCapturing={isCapturing}
-        cameraRef={cameraRef}
-      />
+      <ContentContainer>
+        <FilterWrapper>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 20 }}
+          >
+            {CATEGORIES.map((cat) => (
+              <TabItem
+                key={cat}
+                active={activeTab === cat}
+                onPress={() => setActiveTab(cat)}
+              >
+                <TabText active={activeTab === cat}>{cat}</TabText>
+              </TabItem>
+            ))}
+          </ScrollView>
+        </FilterWrapper>
 
-      <FlatList
-        data={documents}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 14,
-          paddingBottom: 20,
-          paddingTop: 0,
-          flexGrow: 1,
-        }}
-        ListHeaderComponent={
-          <SectionLabel>
-            <SectionLabelText>Recent</SectionLabelText>
-            {totalCount > 0 && <SectionCount>{totalCount} total</SectionCount>}
-          </SectionLabel>
-        }
-        ListEmptyComponent={
-          isFetching ? (
-            <EmptyStateWrapper>
-              <ActivityIndicator size="large" color="#2563eb" />
-              <EmptySubText>Loading documents...</EmptySubText>
-            </EmptyStateWrapper>
-          ) : (
-            <EmptyStateWrapper>
+        <FlatList
+          data={documents}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+          ListEmptyComponent={
+            isFetching ? (
+              <ActivityIndicator size={"large"} style={{ marginTop: 50 }} color="#8b5cf6" />
+            ) : (
               <EmptyContent />
-              <EmptySubText>
-                No documents yet. Add your first record.
-              </EmptySubText>
-            </EmptyStateWrapper>
-          )
-        }
-        ListFooterComponent={
-          documents.length >= PAGE_SIZE ? (
-            <PaginationRow>
-              <PageNavButton
-                onPress={() => setPage((p) => p - 1)}
-                disabled={!hasPrev || isFetching}
-                isDisabled={!hasPrev || isFetching}
-                isDark={isDark}
-              >
-                <MaterialCommunityIcons
-                  name="chevron-left"
-                  size={20}
-                  color={
-                    !hasPrev || isFetching
-                      ? isDark
-                        ? "#475569"
-                        : "#94a3b8"
-                      : isDark
-                        ? "#60a5fa"
-                        : "#2563eb"
-                  }
-                />
-                <PageNavText isDisabled={!hasPrev || isFetching}>
-                  Prev
-                </PageNavText>
-              </PageNavButton>
-
-              <PageIndicator>
-                {isFetching ? (
-                  <ActivityIndicator size="small" color="#2563eb" />
-                ) : (
-                  <PageIndicatorText>
-                    {page} / {totalPages}
-                  </PageIndicatorText>
-                )}
-              </PageIndicator>
-
-              <PageNavButton
-                onPress={() => setPage((p) => p + 1)}
-                disabled={!hasNext || isFetching}
-                isDisabled={!hasNext || isFetching}
-                isDark={isDark}
-              >
-                <PageNavText isDisabled={!hasNext || isFetching}>
-                  Next
-                </PageNavText>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={
-                    !hasNext || isFetching
-                      ? isDark
-                        ? "#475569"
-                        : "#94a3b8"
-                      : isDark
-                        ? "#60a5fa"
-                        : "#2563eb"
-                  }
-                />
-              </PageNavButton>
-            </PaginationRow>
-          ) : null
-        }
-      />
-
-      <FABWrapper>
-        <FABButton onPress={() => refRBSheet.current?.present()}>
-          <MaterialCommunityIcons name="plus" size={30} color="white" />
-        </FABButton>
-      </FABWrapper>
+            )
+          }
+        />
+      </ContentContainer>
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
-          onGalleryPick={handleGalleryPickSheet}
-          onCameraOpen={handleCameraOpenSheet}
+          onGalleryPick={() =>
+            handleGalleryPick(() => refRBSheet.current?.dismiss())
+          }
+          onCameraOpen={() =>
+            handleOpenCamera(() => refRBSheet.current?.dismiss())
+          }
         />
       </BottomSheet>
     </Container>
@@ -211,119 +119,66 @@ export default DocumentList;
 
 const Container = styled.View`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
+  background-color: #8b5cf6; /* Matching the primary purple from the header */
 `;
 
-const HeaderBand = styled.View`
-  margin-bottom: 12px;
+const HeaderWrapper = styled.SafeAreaView`
+  background-color: transparent;
+  padding-top: 30px;
+  padding-bottom: 25px;
 `;
 
-const HeaderContent = styled.View`
-  padding: 8px 20px 0;
+const HeaderMain = styled.View`
+  flex-direction: row;
+  align-items: center;
+  padding-horizontal: 20px;
+  height: 50px; /* Give it a fixed height for better alignment */
+  position: relative;
+`;
+
+const BackButton = styled.TouchableOpacity`
+  position: absolute;
+  left: 20px;
+  z-index: 10; /* Ensures it sits above the title layer */
+  padding: 5px; /* Increases touch target area */
 `;
 
 const HeaderTitle = styled.Text`
-  font-size: 26px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  margin-top: 13px;
-`;
-
-const SectionLabel = styled.View`
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  margin-top: 20px;
-`;
-
-const SectionLabelText = styled.Text`
-  font-size: 14px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  padding-left: 13px;
-`;
-
-const SectionCount = styled.Text`
-  font-size: 12px;
-  color: ${({ theme }: any) => theme.colors.primary};
+  font-size: 20px;
   font-weight: 600;
-  padding-right: 4px;
-`;
-
-const PaginationRow = styled.View`
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  padding-vertical: 20px;
-  gap: 16px;
-`;
-
-const PageNavButton = styled.TouchableOpacity<{
-  isDisabled: boolean;
-  isDark: boolean;
-}>`
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-  background-color: ${({ isDisabled, isDark, theme }: any) =>
-    isDisabled ? (isDark ? "#334155" : "#f1f5f9") : theme.colors.iconBox};
-  border-width: 1.5px;
-  border-color: ${({ isDisabled, isDark, theme }: any) =>
-    isDisabled ? (isDark ? "#475569" : "#e2e8f0") : theme.colors.border};
-  border-radius: 20px;
-  padding-horizontal: 16px;
-  padding-vertical: 9px;
-`;
-
-const PageNavText = styled.Text<{ isDisabled: boolean }>`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ isDisabled, theme }: any) =>
-    isDisabled ? theme.colors.textMuted : theme.colors.primary};
-`;
-
-const PageIndicator = styled.View`
-  width: 60px;
-  align-items: center;
-  justify-content: center;
-`;
-
-const PageIndicatorText = styled.Text`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-`;
-
-const EmptyStateWrapper = styled.View`
-  flex: 1;
-  justify-content: center;
-  align-items: center;
-  padding: 40px 20px;
-`;
-
-const EmptySubText = styled.Text`
-  margin-top: 8px;
-  font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
+  color: white;
+  width: 100%;
   text-align: center;
 `;
 
-const FABWrapper = styled.View`
-  position: absolute;
-  top: 114px;
-  right: 20px;
+const ContentContainer = styled.View`
+  flex: 1;
+  background-color: white;
+  border-top-left-radius: 30px;
+  border-top-right-radius: 30px;
 `;
 
-const FABButton = styled.TouchableOpacity`
-  width: 50px;
-  height: 50px;
+const FilterWrapper = styled.View`
+  padding-vertical: 25px;
+`;
+
+const TabItem = styled.TouchableOpacity<{ active: boolean }>`
+  padding-horizontal: 25px;
+  padding-vertical: 10px;
   border-radius: 25px;
-  background-color: ${({ theme }: any) => theme.colors.primary};
-  justify-content: center;
-  align-items: center;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-opacity: 0.4;
-  shadow-radius: 20px;
-  elevation: 12;
+  background-color: ${({ active }: { active: boolean }) =>
+    active ? "#6d48ddff" : "white"};
+  margin-right: 12px;
+  border-width: 1px;
+  border-color: ${({ active }: { active: boolean }) =>
+    active ? "#a78bfa" : "#f1f5f9"};
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.05);
+  elevation: 2;
+`;
+
+const TabText = styled.Text<{ active: boolean }>`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ active }: { active: boolean }) =>
+    active ? "white" : "#1e293b"};
 `;

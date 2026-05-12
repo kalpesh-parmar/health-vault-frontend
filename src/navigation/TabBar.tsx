@@ -74,7 +74,9 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
               <Ionicons
                 name={iconName}
                 size={24}
-                color={isFocused ? theme.colors.primary : theme.colors.textMuted}
+                color={
+                  isFocused ? theme.colors.primary : theme.colors.textMuted
+                }
               />
               <Label focused={isFocused}>{route.name}</Label>
             </TabButton>
@@ -117,6 +119,7 @@ const TabButton = styled.TouchableOpacity`
 const Label = styled.Text<{ focused: boolean }>`
   font-size: 12px;
   margin-top: 3px;
-  color: ${({ focused, theme }: any) => (focused ? theme.colors.primary : theme.colors.textMuted)};
+  color: ${({ focused, theme }: any) =>
+    focused ? theme.colors.primary : theme.colors.textMuted};
   font-weight: 700;
 `;

@@ -27,3 +27,17 @@ export const DOCUMENT_ENDPOINTS = {
   DELETE_DOCUMENT: `${URL}/documents/{id}`,
   UPDATE_DOCUMENT: `${URL}/documents/{id}`,
 } as const;
+
+export const NOTIFICATION_ENDPOINTS = {
+  LIST_NOTIFICATION: `${URL}/notifications/list`,
+  GET_NOTIFICATION_COUNT: `${URL}/notifications/count`,
+  MARK_AS_READ: `${URL}/notifications/{id}/read`,
+} as const;
+
+export const MEDICATION_ENDPOINTS = {
+  ADD_MEDICATION: `${URL}/medications/create`,
+  LIST_MEDICATION_PAGINATED: `${URL}/medications/list-paginated`,
+  GET_MEDICATION: `${URL}/medications/list`,
+  UPDATE_MEDICATION: `${URL}/medications/{id}`,
+  DELETE_MEDICATION: `${URL}/medications/{id}`,
+} as const;

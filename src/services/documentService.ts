@@ -3,8 +3,11 @@ import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
 import type { MedicalDocument, PaginatedDocumentRequest } from "../types";
 
 export const documentUpload = async (formData: FormData) => {
-  const response = await apiClient.post(DOCUMENT_ENDPOINTS.ADD_DOCUMENT, formData, {
-    headers: {
+  const response = await apiClient.post(
+    DOCUMENT_ENDPOINTS.ADD_DOCUMENT,
+    formData,
+    {
+      headers: {
       "Content-Type": "multipart/form-data",
     },
   });

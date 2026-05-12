@@ -22,37 +22,66 @@ const CustomDrawerContent = (props: any) => {
 
   return (
     <Container>
-      <DrawerContentScrollView contentContainerStyle={{ paddingTop: 0 }}>
-        <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={{
+          paddingTop: 0,
+          paddingHorizontal: 0,
+        }}
+        bounces={false}
+      >
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate("Profile")}
+        >
           <Header
-            colors={isDark ? ["#1e293b", "#334155"] : ["#4f46e5", "#7c3aed"]}
+            colors={isDark ? ["#1e293b", "#334155"] : ["#8338ec", "#3a86ff"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
             <ProfileImage source={{ uri: "https://i.pravatar.cc/150" }} />
-
             <UserInfo>
-              <Username>Dharmik</Username>
-              <Subtitle>Welcome back 👋</Subtitle>
+              <Username>Priya Sharma</Username>
+              <UserEmail>priya.sharma@email.com</UserEmail>
             </UserInfo>
           </Header>
         </TouchableOpacity>
 
-        <DrawerSection>
-          <DrawerItemList {...props} />
-        </DrawerSection>
+        <MainContent>
+          <DrawerSection>
+            {/* If you use DrawerItemList, you can control its internal 
+                spacing via screenOptions in your Navigator file 
+            */}
+            <DrawerItemList
+              {...props}
+              descriptor={{
+                ...props.descriptor,
+                options: {
+                  ...props.options,
+                  drawerItemStyle: {
+                    marginHorizontal: 0,
+                    width: "100%",
+                  },
+                },
+              }}
+            />
+          </DrawerSection>
+        </MainContent>
       </DrawerContentScrollView>
 
       <BottomSection>
+        <Separator />
         <DrawerItem
           label="Logout"
-          onPress={() => {
-            setShowModal(true);
-          }}
-          icon={() => <Ionicons name="log-out-outline" size={30} color={theme.colors.error} />}
+          onPress={() => setShowModal(true)}
+          icon={({ size }) => (
+            <Ionicons name="power-outline" size={size} color="#ff4d4d" />
+          )}
           labelStyle={{
-            color: theme.colors.error,
-            fontWeight: "600",
+            color: "#ff4d4d",
+            fontWeight: "bold",
             fontSize: 16,
-            letterSpacing: 1,
+            marginLeft: -10,
           }}
         />
       </BottomSection>
@@ -69,34 +98,32 @@ const CustomDrawerContent = (props: any) => {
 
 export default CustomDrawerContent;
 
+/** * Styled Components
+ */
+
 const Container = styled.View`
   flex: 1;
   background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
-const Header = styled(LinearGradient).attrs({
-  start: { x: 0, y: 1 },
-  end: { x: 1, y: 0 },
-})`
-  padding: 10px;
-  height: 70px;
-  margin-top: 50px;
-  border-radius: 26px;
+const Header = styled(LinearGradient)`
+  padding: 60px 20px 30px 20px;
+  /* Removed border radius to ensure it touches the side edges perfectly */
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  elevation: 10;
 `;
 
 const ProfileImage = styled.Image`
-  width: 52px;
-  height: 52px;
-  border-radius: 26px;
-  border: 2px solid ${({ theme }: any) => theme.colors.primary};
+  width: 65px;
+  height: 65px;
+  border-radius: 32.5px;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.5);
 `;
 
 const UserInfo = styled.View`
-  margin-left: 14px;
+  margin-left: 15px;
+  flex: 1;
 `;
 
 const Username = styled.Text`
@@ -105,20 +132,37 @@ const Username = styled.Text`
   color: #ffffff;
 `;
 
-const Subtitle = styled.Text`
+const UserEmail = styled.Text`
   font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
+  color: rgba(255, 255, 255, 0.8);
   margin-top: 2px;
 `;
 
-const DrawerSection = styled.View`
+const MainContent = styled.View`
   flex: 1;
-  justify-content: space-between;
-  padding-top: 20px;
+  background-color: ${({ theme }: any) => theme.colors.background};
+  border-top-left-radius: 25px;
+  border-top-right-radius: 25px;
+  margin-top: -20px;
+  /* Ensure no horizontal padding here */
+  padding-horizontal: 0px;
+  padding-top: 10px;
+`;
+
+const DrawerSection = styled.View`
+  /* Setting padding to 0 so the active background indicator 
+     of the DrawerItem touches the edges */
+  padding-horizontal: 0px;
 `;
 
 const BottomSection = styled.View`
-  border-top-width: 1px;
-  border-top-color: ${({ theme }: any) => theme.colors.divider};
-  padding: 10px 0 20px;
+  padding-bottom: 20px;
+  padding-horizontal: 0px;
+`;
+
+const Separator = styled.View`
+  height: 1px;
+  background-color: ${({ theme }: any) => theme.colors.divider || "#eeeeee"};
+  margin-bottom: 10px;
+  opacity: 0.5;
 `;

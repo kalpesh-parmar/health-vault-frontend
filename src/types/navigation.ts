@@ -1,7 +1,7 @@
 import { NavigatorScreenParams, RouteProp, useRoute } from "@react-navigation/native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { MedicalDocument } from "./index";
+import type { AddOrEditMedication, MedicalDocument } from "./index";
 
 // ─── Auth Stack ────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ export type SaveDocumentParams = {
 // ─── Documents Stack ───────────────────────────────────────────
 
 export type DocumentsStackParamList = {
+  DocumentsCategories: undefined;
   DocumentList: { category: string };
   DocumentSummary: { document: MedicalDocument };
   EditDocument: { document: MedicalDocument };
@@ -41,10 +42,8 @@ export type AppStackParamList = {
   Profile: undefined;
   Settings: undefined;
   "About Us": undefined;
-  DocumentSummary: { document: MedicalDocument };
   Medication: undefined;
-  AddMedication: undefined;
-  EditDocument: { document: MedicalDocument };
+  MedicationOperation: {operation: string, medication?: AddOrEditMedication};
   ImagePreview: ImagePreviewParams;
   SaveDocument: SaveDocumentParams;
   DocumentStack: NavigatorScreenParams<DocumentsStackParamList>;
@@ -63,6 +62,7 @@ export type ProfileStackParamList = {
     };
   };
   ProfileDocuments: undefined;
+  Settings: undefined;
 };
 
 // ─── Tab Navigator ─────────────────────────────────────────────

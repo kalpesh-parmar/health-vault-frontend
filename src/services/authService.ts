@@ -14,6 +14,8 @@ export const login = async ({ email, password, deviceToken }: LoginRequest) => {
     password,
     deviceToken,
   });
+  console.log(response.data);
+
   return response.data;
 };
 

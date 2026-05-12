@@ -9,7 +9,7 @@ export default {
       bundleIdentifier: "com.anonymous.DocumentsVaultApp",
     },
     extra: {
-      BASE_URL: "https://lullaby-balmy-pope.ngrok-free.dev",
+      BASE_URL: "https://negligee-jubilance-camper.ngrok-free.dev",
       FIREBASE_API_KEY: "AIzaSyC_1tRpxQXQMKhTMoRtpxfGIYDeOTAwN70",
       FIREBASE_AUTH_DOMAIN: "documentsvaultapp.firebaseapp.com",
       FIREBASE_PROJECT_ID: "documentsvaultapp",

@@ -14,15 +14,14 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
       backgroundStyle={{
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
-        backgroundColor: theme.colors.bottomSheet,
+        backgroundColor: theme.colors.surface,
         paddingBottom: 15,
-        borderTopWidth: 25,
-        borderColor: theme.colors.bottomSheetBorder,
       }}
       handleIndicatorStyle={{
-        width: 23,
+        width: 40,
         height: 5,
-        backgroundColor: theme.colors.textMuted,
+        backgroundColor: theme.colors.bottomSheetBorder,
+        borderRadius: 20,
       }}
     >
       <BottomSheetView style={{ flex: 1 }}>

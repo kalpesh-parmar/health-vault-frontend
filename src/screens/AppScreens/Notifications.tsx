@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, FlatList } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
+import { useMutation } from "@tanstack/react-query";
+import { listNotifications } from "../../services/notificationService";
 
 type NotificationType = "alert" | "info" | "success" | "promo" | "reminder";
 
@@ -89,30 +91,11 @@ const MOCK_NOTIFICATIONS: Notification[] = [
   },
 ];
 
-const TYPE_CONFIG: Record<
-  NotificationType,
-  { icon: string; bg: string; color: string }
-> = {
-  alert: { icon: "warning-outline", bg: "#FFF3E0", color: "#F57C00" },
-  info: { icon: "information-circle-outline", bg: "#E3F2FD", color: "#1976D2" },
-  success: {
-    icon: "checkmark-circle-outline",
-    bg: "#E8F5E9",
-    color: "#388E3C",
-  },
-  promo: { icon: "gift-outline", bg: "#F3E5F5", color: "#7B1FA2" },
-  reminder: { icon: "alarm-outline", bg: "#FCE4EC", color: "#C2185B" },
-};
-
 const FILTERS = ["All"];
 
 export default function NotificationScreen() {
-  const [notifications, setNotifications] =
-    useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeFilter, setActiveFilter] = useState("All");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
@@ -124,38 +107,26 @@ export default function NotificationScreen() {
     );
   };
 
-  const getFiltered = () => {
-    switch (activeFilter) {
-      case "Unread":
-        return notifications.filter((n) => !n.isRead);
-      case "Alerts":
-        return notifications.filter(
-          (n) => n.type === "alert" || n.type === "reminder",
-        );
-      default:
-        return notifications;
-    }
-  };
+  const { mutateAsync: getNotificationsList } = useMutation({
+    mutationFn: listNotifications,
+    onSuccess: (data) => {
+      setNotifications(data.data);
+    },
+    onError: (error) => {
+      console.log(error);
+    },
+  });
 
-  const filtered = getFiltered();
-
-  const todayItems = filtered.filter((n) =>
-    ["min ago", "hr ago", "hrs ago"].some((s) => n.time.includes(s)),
-  );
-  const earlierItems = filtered.filter(
-    (n) => !["min ago", "hr ago", "hrs ago"].some((s) => n.time.includes(s)),
-  );
+  useEffect(() => {
+    getNotificationsList();
+  }, []);
 
   const renderCard = ({ item }: { item: Notification }) => {
-    const cfg = TYPE_CONFIG[item.type];
-    const isExpanded = expandedId === item.id;
-
     return (
       <View>
         <CardWrapper
           isRead={item.isRead}
           onPress={() => {
-            setExpandedId(isExpanded ? null : item.id);
             if (!item.isRead) markRead(item.id);
           }}
           activeOpacity={0.85}
@@ -177,7 +148,7 @@ export default function NotificationScreen() {
               {!item.isRead && <UnreadDot />}
             </View>
 
-            <CardMessage numberOfLines={isExpanded ? undefined : 2}>
+            <CardMessage numberOfLines={2}>
               {item.message}
             </CardMessage>
 
@@ -202,14 +173,6 @@ export default function NotificationScreen() {
         }}
       />
 
-      <SubHeaderRow>
-        {unreadCount > 0 ? (
-          <UnreadCountText>{unreadCount} unread messages</UnreadCountText>
-        ) : (
-          <View />
-        )}
-      </SubHeaderRow>
-
       <FilterRow>
         {FILTERS.map((f) => (
           <FilterChip
@@ -222,7 +185,7 @@ export default function NotificationScreen() {
         ))}
       </FilterRow>
 
-      {filtered.length === 0 ? (
+      {notifications.length === 0 ? (
         <EmptyWrapper>
           <EmptyIcon>
             <Ionicons
@@ -240,21 +203,7 @@ export default function NotificationScreen() {
       ) : (
         <FlatList
           data={notifications}
-          renderItem={null}
-          ListHeaderComponent={
-            <>
-              {todayItems.map((item) => (
-                <React.Fragment key={item.id}>
-                  {renderCard({ item })}
-                </React.Fragment>
-              ))}
-              {earlierItems.map((item) => (
-                <React.Fragment key={item.id}>
-                  {renderCard({ item })}
-                </React.Fragment>
-              ))}
-            </>
-          }
+          renderItem={renderCard}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 30 }}
