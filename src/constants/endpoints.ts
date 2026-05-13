@@ -1,6 +1,4 @@
-import { ENV } from "../env";
-
-const URL = ENV.BASE_URL;
+const URL = process.env.EXPO_PUBLIC_API_URL;
 
 export const AUTH_ENDPOINTS = {
   LOGIN: `${URL}/auth/login`,
@@ -30,7 +28,7 @@ export const DOCUMENT_ENDPOINTS = {
 
 export const NOTIFICATION_ENDPOINTS = {
   LIST_NOTIFICATION: `${URL}/notifications/list`,
-  GET_NOTIFICATION_COUNT: `${URL}/notifications/count`,
+  GET_NOTIFICATION_COUNT: `${URL}/notifications/badge-count`,
   MARK_AS_READ: `${URL}/notifications/{id}/read`,
 } as const;
 
@@ -40,4 +38,5 @@ export const MEDICATION_ENDPOINTS = {
   GET_MEDICATION: `${URL}/medications/list`,
   UPDATE_MEDICATION: `${URL}/medications/{id}`,
   DELETE_MEDICATION: `${URL}/medications/{id}`,
+  LIST_ALL_MEDICATIONS: `${URL}/medications/list`,
 } as const;

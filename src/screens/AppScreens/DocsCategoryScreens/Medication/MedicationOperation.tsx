@@ -1,5 +1,5 @@
 import React from "react";
-import { TouchableOpacity, View } from "react-native";
+import { Animated, TouchableOpacity, View } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -11,9 +11,13 @@ import { useMutation } from "@tanstack/react-query";
 
 import { AppStackParamList } from "../../../../navigation/types";
 import { useAppTheme } from "../../../../context/ThemeContext";
-import { addMedication } from "../../../../services/medicationservice";
+import {
+  addMedication,
+  updateMedication,
+} from "../../../../services/medicationservice";
 import MedicationForm from "../../../../components/MedicationForm";
 import { AddOrEditMedication } from "../../../../types";
+import { queryClient } from "../../../../config/queryClient";
 
 type AddMedicationScreenRouteProp = RouteProp<
   AppStackParamList,
@@ -24,12 +28,56 @@ const MedicationOperation = ({
   route,
 }: {
   route: AddMedicationScreenRouteProp;
-  }) => {
+}) => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark } = useAppTheme();
   const { operation, medication } = route.params;
-  console.log("medication", medication);
+  const medicationId = medication?.id;
+  const scrollY = React.useRef(new Animated.Value(0)).current;
+  const headerTitle =
+    operation === "add" ? "Add Medication" : "Edit Medication";
+
+  const headerPaddingTop = scrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [50, 44],
+    extrapolate: "clamp",
+  });
+  const headerPaddingBottom = scrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [40, 14],
+    extrapolate: "clamp",
+  });
+  const headerRadius = scrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [30, 20],
+    extrapolate: "clamp",
+  });
+  const summaryOpacity = scrollY.interpolate({
+    inputRange: [0, 45, 90],
+    outputRange: [1, 0.25, 0],
+    extrapolate: "clamp",
+  });
+  const summaryTranslateY = scrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [0, -28],
+    extrapolate: "clamp",
+  });
+  const summaryHeight = scrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [62, 0],
+    extrapolate: "clamp",
+  });
+  const summaryMarginTop = scrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [25, 0],
+    extrapolate: "clamp",
+  });
+
+  const handleFormScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: false },
+  );
 
   const { mutateAsync: addMedicationMutation, isPending: isLoading } =
     useMutation({
@@ -39,6 +87,26 @@ const MedicationOperation = ({
           type: "success",
           text1: `Medication ${operation === "add" ? "added" : "updated"} successfully`,
         });
+        queryClient.invalidateQueries({ queryKey: ["medications"] });
+        navigation.goBack();
+      },
+      onError: (error: any) => {
+        Toast.show({
+          type: "error",
+          text1: error.message || "Something went wrong",
+        });
+      },
+    });
+
+  const { mutateAsync: editMedicationMutation, isPending: isEditingLoading } =
+    useMutation({
+      mutationFn: updateMedication,
+      onSuccess: () => {
+        Toast.show({
+          type: "success",
+          text1: `Medication edited successfully`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["medications"] });
         navigation.goBack();
       },
       onError: (error: any) => {
@@ -50,43 +118,60 @@ const MedicationOperation = ({
     });
 
   const handleSubmit = async (formData: AddOrEditMedication) => {
-    console.log(formData?.startDate);
-    console.log("Time :- ", formData?.medicationTime)
-    await addMedicationMutation(formData);
+    if (operation === "add") {
+      await addMedicationMutation(formData);
+    } else {
+      console.log(medicationId, formData);
+      await editMedicationMutation({
+        medicationId: medicationId || "",
+        data: formData,
+      });
+    }
   };
 
   return (
     <Container>
       <StatusBar style="light" />
       <HeaderGradient
-        colors={isDark ? ["#312E81", "#4F46E5"] : ["#6366f1", "#a855f7"]}
+        colors={
+          isDark
+            ? ["#064e3b", "#0369a1", "#312e81"]
+            : ["#0f766e", "#0ea5e9", "#4f46e5"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
+        style={{
+          paddingTop: headerPaddingTop,
+          paddingBottom: headerPaddingBottom,
+          borderBottomLeftRadius: headerRadius,
+          borderBottomRightRadius: headerRadius,
+        }}
       >
         <TopRow>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={28} color="#fff" />
           </TouchableOpacity>
-          <HeaderTitle>
-            {operation === "add" ? "New Prescription" : "Edit Prescription"}
-          </HeaderTitle>
+          <HeaderTitle>{headerTitle}</HeaderTitle>
           <View style={{ width: 28 }} />
         </TopRow>
-        <SummaryRow>
-          <SummaryTitle>
-            {operation === "add" ? "Add" : "Edit"} Medication
-          </SummaryTitle>
+        <SummaryRow
+          style={{
+            height: summaryHeight,
+            marginTop: summaryMarginTop,
+            opacity: summaryOpacity,
+            transform: [{ translateY: summaryTranslateY }],
+          }}
+        >
+          <SummaryTitle>{headerTitle}</SummaryTitle>
           <SummarySub>Maintain your medical schedule</SummarySub>
         </SummaryRow>
       </HeaderGradient>
 
-      {/* REUSABLE FORM COMPONENT 
-          Passing initialData (null for add, object for edit) 
-      */}
       <MedicationForm
         initialData={medication}
         onSubmit={handleSubmit}
-        isLoading={isLoading}
+        isLoading={operation === "add" ? isLoading : isEditingLoading}
+        onScroll={handleFormScroll}
       />
     </Container>
   );
@@ -100,7 +185,9 @@ const Container = styled.View`
   background-color: #f8fafc;
 `;
 
-const HeaderGradient = styled(LinearGradient)`
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+
+const HeaderGradient = styled(AnimatedLinearGradient)`
   padding: 50px 20px 40px;
   border-bottom-left-radius: 30px;
   border-bottom-right-radius: 30px;
@@ -118,8 +205,9 @@ const HeaderTitle = styled.Text`
   font-weight: 700;
 `;
 
-const SummaryRow = styled.View`
+const SummaryRow = styled(Animated.View)`
   margin-top: 25px;
+  overflow: hidden;
 `;
 
 const SummaryTitle = styled.Text`

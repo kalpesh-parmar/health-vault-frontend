@@ -24,6 +24,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
@@ -201,17 +202,20 @@ const LoginScreen = () => {
                     <StyledInput
                       placeholder="Password"
                       placeholderTextColor="#9CA3AF"
-                      secureTextEntry
                       value={password}
+                      secureTextEntry={!showPassword}
                       onChangeText={(text: string) => {
                         setPassword(text);
                         setPasswordError("");
                       }}
                     />
 
-                    <TouchableOpacity activeOpacity={0.7}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
                       <Ionicons
-                        name="eye-off-outline"
+                        name={showPassword ? "eye-outline" : "eye-off-outline"}
                         size={20}
                         color="#9CA3AF"
                       />

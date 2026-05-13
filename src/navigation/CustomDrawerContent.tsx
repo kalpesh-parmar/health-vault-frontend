@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   DrawerContentScrollView,
   DrawerItem,
@@ -13,12 +13,40 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAppTheme } from "../context/ThemeContext";
 import { AppStackParamList } from "./types";
+import { useMutation } from "@tanstack/react-query";
+import { getUser } from "../services/userService";
+
+type userDetails = {
+  userName: string;
+  email: string;
+}
 
 const CustomDrawerContent = (props: any) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark, theme } = useAppTheme();
+  const [userDetails, setUserDetails] = useState<userDetails>({
+    userName: "",
+    email: "",
+  });
+
+  const { mutateAsync: getProfile } = useMutation({
+    mutationFn: getUser,
+    onSuccess: (result) => {
+      setUserDetails({
+        userName: result?.data?.userName,
+        email: result?.data?.email,
+      });
+    },
+    onError: (error) => {
+      console.log(error);
+    },
+  });
+
+  useEffect(() => {
+    getProfile();
+  }, []);
 
   return (
     <Container>
@@ -41,8 +69,8 @@ const CustomDrawerContent = (props: any) => {
           >
             <ProfileImage source={{ uri: "https://i.pravatar.cc/150" }} />
             <UserInfo>
-              <Username>Priya Sharma</Username>
-              <UserEmail>priya.sharma@email.com</UserEmail>
+              <Username>{userDetails?.userName}</Username>
+              <UserEmail>{userDetails?.email}</UserEmail>
             </UserInfo>
           </Header>
         </TouchableOpacity>
@@ -127,7 +155,7 @@ const UserInfo = styled.View`
 `;
 
 const Username = styled.Text`
-  font-size: 18px;
+  font-size: 12px;
   font-weight: 700;
   color: #ffffff;
 `;

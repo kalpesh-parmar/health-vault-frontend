@@ -48,6 +48,7 @@ export type AppStackParamList = {
   SaveDocument: SaveDocumentParams;
   DocumentStack: NavigatorScreenParams<DocumentsStackParamList>;
   Notifications: undefined;
+  AIChat: undefined;
 };
 
 // ─── Profile Stack ─────────────────────────────────────────────
@@ -70,6 +71,7 @@ export type ProfileStackParamList = {
 export type TabParamList = {
   Home: undefined;
   Profile: undefined;
+  AIChatScreen: undefined;
   Settings: undefined;
 };
 

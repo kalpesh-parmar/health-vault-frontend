@@ -11,6 +11,7 @@ import HomeStack from "./stacks/HomeStack";
 import ProfileStack from "./stacks/ProfileStack";
 
 import { TabParamList } from "./types";
+import AIChatScreen from "../screens/AppScreens/AIChatScreen";
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -27,17 +28,19 @@ const TabNavigator = () => {
         {() => <HomeStack />}
       </Tab.Screen>
 
+      <Tab.Screen name="AIChatScreen" component={AIChatScreen} />
+
       <Tab.Screen
         name="Profile"
         component={ProfileStack}
         options={{ tabBarLabelPosition: "beside-icon" }}
       />
 
-      <Tab.Screen
+      {/* <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{ tabBarLabelPosition: "beside-icon" }}
-      />
+      /> */}
     </Tab.Navigator>
   );
 };

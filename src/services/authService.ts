@@ -9,6 +9,7 @@ import type {
 } from "../types";
 
 export const login = async ({ email, password, deviceToken }: LoginRequest) => {
+  console.log(AUTH_ENDPOINTS.LOGIN)
   const response = await apiClient.post(AUTH_ENDPOINTS.LOGIN, {
     email,
     password,

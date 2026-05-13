@@ -4,8 +4,11 @@ import {
   FlatList,
   ScrollView,
   StatusBar,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import styled from "styled-components/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 
@@ -17,14 +20,15 @@ import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useQuery } from "@tanstack/react-query";
 import { documentListPaginated } from "../../services/documentService";
 import { useAuth } from "../../context/ContextAPI";
-import type { MedicalDocument } from "../../types";
 import DocumentCard from "../../components/Documents/DocumentCard";
 import { useAppNavigation } from "../../types/navigation";
+import { useAppTheme } from "../../context/ThemeContext";
 
 const CATEGORIES = ["All", "Family", "Medical Documents", "Insurance", "Other"];
 
 const DocumentList = () => {
   const navigation = useAppNavigation();
+  const { isDark } = useAppTheme();
   const refRBSheet = useRef<BottomSheetModal>(null);
   const { userId } = useAuth();
   const [activeTab, setActiveTab] = useState("All");
@@ -55,7 +59,15 @@ const DocumentList = () => {
   );
 
   return (
-    <Container>
+    <Container
+      colors={
+        isDark
+          ? ["#064e3b", "#0369a1", "#312e81"]
+          : ["#0f766e", "#0ea5e9", "#4f46e5"]
+      }
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
       <StatusBar barStyle="light-content" />
 
       <HeaderWrapper>
@@ -64,6 +76,9 @@ const DocumentList = () => {
             <Ionicons name="arrow-back" size={28} color="white" />
           </BackButton>
           <HeaderTitle>My Documents</HeaderTitle>
+          <RightButton onPress={() => refRBSheet.current?.present()}>
+            <Ionicons name="add" size={30} color="black" />
+          </RightButton>
         </HeaderMain>
       </HeaderWrapper>
 
@@ -117,15 +132,14 @@ const DocumentList = () => {
 
 export default DocumentList;
 
-const Container = styled.View`
+const Container = styled(LinearGradient)`
   flex: 1;
-  background-color: #8b5cf6; /* Matching the primary purple from the header */
 `;
 
 const HeaderWrapper = styled.SafeAreaView`
   background-color: transparent;
-  padding-top: 30px;
-  padding-bottom: 25px;
+  padding-top: 40px;
+  padding-bottom: 20px;
 `;
 
 const HeaderMain = styled.View`
@@ -141,6 +155,15 @@ const BackButton = styled.TouchableOpacity`
   left: 20px;
   z-index: 10; /* Ensures it sits above the title layer */
   padding: 5px; /* Increases touch target area */
+`;
+
+const RightButton = styled.TouchableOpacity`
+  position: absolute;
+  right: 20px;
+  z-index: 10;
+  padding: 5px;
+  background-color: #FFFFFF;
+  border-radius: 24px;
 `;
 
 const HeaderTitle = styled.Text`
@@ -162,19 +185,42 @@ const FilterWrapper = styled.View`
   padding-vertical: 25px;
 `;
 
-const TabItem = styled.TouchableOpacity<{ active: boolean }>`
-  padding-horizontal: 25px;
-  padding-vertical: 10px;
-  border-radius: 25px;
-  background-color: ${({ active }: { active: boolean }) =>
-    active ? "#6d48ddff" : "white"};
-  margin-right: 12px;
-  border-width: 1px;
-  border-color: ${({ active }: { active: boolean }) =>
-    active ? "#a78bfa" : "#f1f5f9"};
-  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.05);
-  elevation: 2;
-`;
+const TabItem = ({ active, onPress, children }: any) => {
+  return (
+    <TouchableOpacity 
+      onPress={onPress} 
+      activeOpacity={0.8} 
+      style={{
+        borderRadius: 25, 
+        overflow: 'hidden', 
+        backgroundColor: active ? 'transparent' : 'white',
+        marginRight: 12,
+        borderWidth: 1,
+        borderColor: active ? 'transparent' : '#f1f5f9',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4
+      }}
+    >
+      {active ? (
+        <LinearGradient
+          colors={["#4f46e5", "#3b82f6", "#2563eb"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ paddingHorizontal: 25, paddingVertical: 10 }}
+        >
+          {children}
+        </LinearGradient>
+      ) : (
+        <View style={{ paddingHorizontal: 25, paddingVertical: 10 }}>
+          {children}
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
 
 const TabText = styled.Text<{ active: boolean }>`
   font-size: 14px;

@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  ScrollView,
 } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -77,10 +78,36 @@ const ResetPassword = () => {
     password: "",
     confirm: "",
   });
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  // const route = useRoute<RouteProp<AuthStackParamList, "ResetPassword">>();
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-  // const email = route.params.email;
+    const onKeyboardShow = (e: any) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    };
+
+    const onKeyboardHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const subShow = Keyboard.addListener(showEvent, onKeyboardShow);
+    const subHide = Keyboard.addListener(hideEvent, onKeyboardHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
+  const route = useRoute<RouteProp<AuthStackParamList, "ResetPassword">>();
+
+  const email = route.params.email;
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
@@ -152,10 +179,10 @@ const ResetPassword = () => {
 
     if (newErrors.password || newErrors.confirm) return;
 
-    // await resetPasswordMutation({
-    //   email,
-    //   password,
-    // });
+    await resetPasswordMutation({
+      email,
+      password,
+    });
 
     Toast.show({
       type: "success",
@@ -187,6 +214,16 @@ const ResetPassword = () => {
           <PatternCircleTwo />
           <PatternDots />
 
+          <PatternDots />
+        </TopGradient>
+
+        <ScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: keyboardHeight }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <TopHeader>
             <BackButton onPress={() => navigation.goBack()}>
               <Ionicons name="chevron-back" size={22} color="#ffffff" />
@@ -208,12 +245,7 @@ const ResetPassword = () => {
               Create a secure new password for your account
             </HeaderSubtitle>
           </HeaderContent>
-        </TopGradient>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
           <CardWrapper>
             <Card>
               <InfoText>
@@ -353,7 +385,7 @@ const ResetPassword = () => {
               </ResetButton>
             </Card>
           </CardWrapper>
-        </KeyboardAvoidingView>
+        </ScrollView>
       </Container>
     </>
   );
@@ -371,6 +403,10 @@ const TopGradient = styled(LinearGradient)`
   border-bottom-left-radius: 34px;
   border-bottom-right-radius: 34px;
   overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
 `;
 
 const PatternCircleOne = styled.View`
@@ -453,19 +489,16 @@ const HeaderSubtitle = styled.Text`
 
 const CardWrapper = styled.View`
   flex: 1;
-  margin-top: -40px;
+  margin-top: 30px;
   padding-horizontal: 22px;
 `;
 
 const Card = styled.View`
   background-color: ${({ theme }: any) => theme.colors.surface};
-
   border-radius: 30px;
   padding: 26px 22px;
-
   border-width: 1px;
   border-color: ${({ theme }: any) => theme.colors.border};
-
   shadow-color: #000;
   shadow-offset: 0px 12px;
   shadow-opacity: 0.08;

@@ -94,7 +94,11 @@ const SummaryScreen = ({ route, navigation }: any) => {
       />
 
       <GradientHeader
-        colors={["#3b82f6", "#2563eb"]}
+        colors={
+          isDark
+            ? ["#064e3b", "#0369a1", "#312e81"]
+            : ["#0f766e", "#0ea5e9", "#4f46e5"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >

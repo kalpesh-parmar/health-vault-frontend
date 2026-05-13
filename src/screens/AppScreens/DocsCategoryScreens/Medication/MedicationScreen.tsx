@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
-  View,
   FlatList,
   ActivityIndicator,
-  Platform,
-  TouchableOpacity,
   ScrollView,
+  View,
+  TouchableOpacity,
 } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -15,12 +14,48 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../../../navigation/types";
 import { useAppTheme } from "../../../../context/ThemeContext";
-import { useQuery } from "@tanstack/react-query";
-import { getMedications } from "../../../../services/medicationservice";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getAllMedications, getMedications, updateMedication } from "../../../../services/medicationservice";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
+import { TimeText } from "../../../../components/MedicationForm";
+import Toast from "react-native-toast-message";
 
-const MED_CATEGORIES = ["Tablet", "Capsule", "Syrup", "Drop", "Injection"];
+const MED_CATEGORIES = [
+  "All",
+  "Tablet",
+  "Capsule",
+  "Syrup",
+  "Drop",
+  "Injection",
+];
+
+const SORT_OPTIONS = [
+  {
+    label: "Newest First",
+    description: "Recently added medications",
+    value: "date_desc",
+    icon: "calendar",
+  },
+  {
+    label: "Oldest First",
+    description: "Earliest added medications",
+    value: "date_asc",
+    icon: "calendar-outline",
+  },
+  {
+    label: "Ongoing",
+    description: "Only ongoing medications",
+    value: "ongoing",
+    icon: "checkmark",
+  },
+  {
+    label: "Completed",
+    description: "Only completed medications",
+    value: "stopped",
+    icon: "checkbox",
+  },
+];
 
 const MOCK_MEDICATIONS: AddOrEditMedication[] = [
   {
@@ -31,7 +66,90 @@ const MOCK_MEDICATIONS: AddOrEditMedication[] = [
     dosePerIntake: 1,
     frequency: "Once Daily",
     bestTaken: ["Morning"],
-    medicationTime: "10:00 AM",
+    medicationTime: [{
+      time: "10:00",
+      period: "AM"
+    }],
+    withFood: "After Meal",
+    startDate: "2022-06-01",
+    ongoing: true,
+    totalPills: 28,
+    doseReminders: true,
+    refillAlert: true,
+    notes: "DAVA TIME EE PII LEVIII...",
+  },
+  {
+    id: "mock-14",
+    medicationName: "Paracetamol",
+    medicationType: "Tablet",
+    prescribedBy: "Dr.xyz",
+    dosePerIntake: 1,
+    frequency: "Once Daily",
+    bestTaken: ["Morning"],
+    medicationTime: [{
+      time: "10:00",
+      period: "AM"
+    }],
+    withFood: "After Meal",
+    startDate: "2026-01-05",
+    ongoing: false,
+    totalPills: 28,
+    doseReminders: true,
+    refillAlert: true,
+    notes: "DAVA TIME EE PII LEVIII...",
+  },
+  {
+    id: "mock-2",
+    medicationName: "Paracetamol",
+    medicationType: "Capsule",
+    prescribedBy: "Dr.xyz",
+    dosePerIntake: 1,
+    frequency: "Once Daily",
+    bestTaken: ["Morning"],
+    medicationTime: [{
+      time: "10:00",
+      period: "AM"
+    }],
+    withFood: "After Meal",
+    startDate: "2022-01-01",
+    ongoing: false,
+    totalPills: 28,
+    doseReminders: true,
+    refillAlert: true,
+    notes: "DAVA TIME EE PII LEVIII...",
+  },
+  {
+    id: "mock-3",
+    medicationName: "Paracetamol",
+    medicationType: "syrup",
+    prescribedBy: "Dr.xyz",
+    dosePerIntake: 1,
+    frequency: "Once Daily",
+    bestTaken: ["Morning"],
+    medicationTime: [{
+      time: "10:00",
+      period: "AM"
+    }],
+    withFood: "After Meal",
+    startDate: "2026-05-12",
+    ongoing: true,
+    totalPills: 28,
+    doseReminders: true,
+    refillAlert: true,
+    notes: "DAVA TIME EE PII LEVIII...",
+  },
+  {
+    id: "mock-4",
+    medicationName: "Paracetamol",
+    medicationType: "Injection",
+    prescribedBy: "Dr.xyz",
+    dosePerIntake: 1,
+    frequency: "Once Daily",
+    bestTaken: ["Morning"],
+    medicationTime: [{
+      time: "10:00",
+      period: "AM"
+    }],
     withFood: "After Meal",
     startDate: "2022-01-01",
     ongoing: true,
@@ -43,36 +161,101 @@ const MOCK_MEDICATIONS: AddOrEditMedication[] = [
 ];
 
 const MedicationScreen = () => {
-  const [activeTab, setActiveTab] = useState("Tablet");
+  const [activeTab, setActiveTab] = useState("All");
+  const [sortOption, setSortOption] = useState("date_desc");
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark } = useAppTheme();
+  const queryClient = useQueryClient();
+
+  const {mutateAsync: toggleMedicationStatus} = useMutation({
+    mutationFn: updateMedication,
+    onSuccess: (variables) => {
+      queryClient.invalidateQueries({ queryKey: ["medications"] });
+      Toast.show({
+        type: "success",
+        text1: "Status Updated",
+        text2: variables.data.ongoing 
+          ? "Medication marked as ongoing." 
+          : "Medication marked as completed.",
+      });
+    },
+    onError: () => {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to update medication status.",
+      });
+    }
+  });
+
+  const handleToggleStatus = async (item: AddOrEditMedication) => {
+    if (!item.id) return;
+    await toggleMedicationStatus({
+      medicationId: item.id,
+      data: {
+        ...item,
+        ongoing: !item.ongoing,
+      }
+    });
+  };
+
+  useEffect(() => {
+    const getAllMedicationsList = async () => {
+      const result = await getAllMedications();
+      console.log("result", result);
+    }
+    getAllMedicationsList();
+  }, [])
 
   const { data: medicationList, isLoading } = useQuery({
     queryKey: ["medications", activeTab],
     queryFn: () => getMedications(activeTab),
   });
 
-  const medicationData: AddOrEditMedication[] = (
-    medicationList?.data ||
-    MOCK_MEDICATIONS
-  ).filter((item: AddOrEditMedication) => {
-    return item.medicationType?.toUpperCase() === activeTab.toUpperCase();
-  });
-  console.log("medicationData", medicationData);
+  const medicationData: AddOrEditMedication[] = (medicationList?.data || MOCK_MEDICATIONS)
+    .filter((item: AddOrEditMedication) => {
+      if (activeTab !== "All" && item.medicationType?.toUpperCase() !== activeTab.toUpperCase()) return false;
+      if (sortOption === "ongoing" && item.ongoing === false) return false;
+      if (sortOption === "stopped" && item.ongoing === true) return false;
+      return true;
+    })
+    .sort((a: AddOrEditMedication, b: AddOrEditMedication) => {
+      switch (sortOption) {
+        case "name_asc":
+          return (a.medicationName || "").localeCompare(b.medicationName || "");
+        case "name_desc":
+          return (b.medicationName || "").localeCompare(a.medicationName || "");
+        case "date_asc":
+          return new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime();
+        case "date_desc":
+          return new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime();
+        default:
+          return 0;
+      }
+    });
 
   const renderMedicationCard = ({ item }: { item: AddOrEditMedication }) => (
     <Card>
       <CardTopRow>
         <MedIconBox>
-          <MaterialCommunityIcons
+          <Ionicons
             name={
-              item.medicationType?.toUpperCase() === "SYRUP"
-                ? "cup-water"
-                : "pill"
+              item.medicationType?.toUpperCase() === "TABLET"
+                ? "medkit"
+                : item.medicationType?.toUpperCase() === "CAPSULE"
+                  ? "medical"
+                  : item.medicationType?.toUpperCase() === "SYRUP"
+                    ? "flask"
+                    : item.medicationType?.toUpperCase() === "DROP"
+                      ? "water"
+                      : item.medicationType?.toUpperCase() === "INJECTION"
+                        ? "bandage"
+                        : "medkit"
             }
             size={24}
             color="#6366f1"
@@ -81,8 +264,17 @@ const MedicationScreen = () => {
         <MedInfoMain>
           <MedName>{item.medicationName}</MedName>
           <MedTime>
-            {item.medicationTime} •{" "}
-            <MedTypeLabel>{item.medicationType}</MedTypeLabel>
+            {item.medicationTime?.map(
+              (t: { time: string; period: string }, index: number) => (
+                <TimeText key={index}>
+                  {t.time} {t.period}{" "}
+                </TimeText>
+              ),
+            )}
+            <MedTypeLabel>
+              {"\n"}
+              {"\n"}• {item.medicationType}
+            </MedTypeLabel>
           </MedTime>
         </MedInfoMain>
         <Tag context={item.withFood}>
@@ -99,6 +291,26 @@ const MedicationScreen = () => {
         </DateWrapper>
 
         <ActionButtons>
+          <IconButton
+            style={{ marginRight: 10 }}
+            onPress={() => handleToggleStatus(item)}
+          >
+            {item.ongoing ? (
+              <Ionicons
+                name={
+                  item.ongoing
+                    ? "checkmark-done-outline"
+                    : "checkmark-done-circle"
+                }
+                size={18}
+                color={item.ongoing ? "#10b981" : "#f59e0b"}
+              />
+            ) : (
+              <Tag>
+                <TagText>COMPLETED</TagText>
+              </Tag>
+            )}
+          </IconButton>
           <IconButton
             onPress={() =>
               navigation.navigate("MedicationOperation", {
@@ -135,26 +347,70 @@ const MedicationScreen = () => {
       />
 
       <HeaderGradient
-        colors={isDark ? ["#312E81", "#4F46E5"] : ["#6366f1", "#a855f7"]}
+        colors={
+          isDark
+            ? ["#064e3b", "#0369a1", "#312e81"]
+            : ["#0f766e", "#0ea5e9", "#4f46e5"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
         <TopRow>
           <BackButton onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={28} color="#fff" />
+            <Ionicons name="arrow-back" size={28} color="#fff" />
           </BackButton>
           <HeaderTitle>Medications</HeaderTitle>
-          <AddButton
-            onPress={() =>
-              navigation.navigate("MedicationOperation", {
-                operation: "add",
-              })
-            }
-          >
-            <Ionicons name="add" size={26} color="#fff" />
-          </AddButton>
+          <RightActions>
+            <HeaderIconButton onPress={() => setShowDropdown(!showDropdown)}>
+              <MaterialCommunityIcons name="filter" size={20} color="#fff" />
+            </HeaderIconButton>
+            <AddButton
+              onPress={() =>
+                navigation.navigate("MedicationOperation", {
+                  operation: "add",
+                })
+              }
+            >
+              <Ionicons name="add" size={26} color="#fff" />
+            </AddButton>
+          </RightActions>
         </TopRow>
       </HeaderGradient>
+
+      {showDropdown && (
+        <>
+          <DropdownOverlay activeOpacity={1} onPress={() => setShowDropdown(false)} />
+          <DropdownContainer isDark={isDark}>
+            {SORT_OPTIONS.map((option) => {
+              const isActive = sortOption === option.value;
+              return (
+                <DropdownItem
+                  key={option.value}
+                  active={isActive}
+                  isDark={isDark}
+                  onPress={() => {
+                    setSortOption(option.value);
+                    setShowDropdown(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons 
+                    name={option.icon as any} 
+                    size={18} 
+                    color={isActive ? (isDark ? "#818cf8" : "#2563eb") : (isDark ? "#94a3b8" : "#64748b")} 
+                  />
+                  <DropdownText active={isActive} isDark={isDark}>
+                    {option.label}
+                  </DropdownText>
+                  {isActive && (
+                    <Ionicons name="checkmark" size={18} color={isDark ? "#818cf8" : "#2563eb"} style={{ marginLeft: "auto" }} />
+                  )}
+                </DropdownItem>
+              );
+            })}
+          </DropdownContainer>
+        </>
+      )}
 
       <FilterWrapper>
         <ScrollView
@@ -223,18 +479,65 @@ const TopRow = styled.View`
 const BackButton = styled.TouchableOpacity``;
 
 const AddButton = styled.TouchableOpacity`
-  background-color: rgba(255, 255, 255, 0.2);
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.2);
   justify-content: center;
   align-items: center;
+`;
+
+const RightActions = styled.View`
+  flex-direction: row;
+  align-items: center;
+`;
+
+const DropdownOverlay = styled.TouchableOpacity`
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 90;
+`;
+
+const DropdownContainer = styled.View<{ isDark: boolean }>`
+  position: absolute;
+  top: 110px;
+  right: 20px;
+  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#1e293b" : "white")};
+  border-radius: 12px;
+  padding: 8px;
+  z-index: 100;
+  elevation: 10;
+  shadow-color: #000;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.15;
+  shadow-radius: 8px;
+  width: 230px;
+`;
+
+const DropdownItem = styled.TouchableOpacity<{ active: boolean; isDark: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: ${({ active, isDark }: { active: boolean; isDark: boolean }) =>
+    active ? (isDark ? "rgba(79, 70, 229, 0.2)" : "#eff6ff") : "transparent"};
+  margin-bottom: 2px;
+`;
+
+const DropdownText = styled.Text<{ active: boolean; isDark: boolean }>`
+  font-size: 14px;
+  font-weight: ${({ active }: { active: boolean }) => (active ? "700" : "500")};
+  color: ${({ active, isDark }: { active: boolean; isDark: boolean }) =>
+    active ? (isDark ? "#818cf8" : "#2563eb") : (isDark ? "#cbd5e1" : "#475569")};
+  margin-left: 10px;
 `;
 
 const HeaderTitle = styled.Text`
   color: white;
   font-size: 20px;
   font-weight: 700;
+  flex-grow: 1;
+  margin-left: 10px;
 `;
 
 const FilterWrapper = styled.View`
@@ -246,11 +549,11 @@ const TabItem = styled.TouchableOpacity<{ active: boolean }>`
   padding-vertical: 8px;
   border-radius: 20px;
   background-color: ${({ active }: { active: boolean }) =>
-    active ? "#6366f1" : "white"};
+    active ? "#2f80edff" : "white"};
   margin-right: 10px;
   border-width: 1px;
   border-color: ${({ active }: { active: boolean }) =>
-    active ? "#6366f1" : "#f1f5f9"};
+    active ? "#2f80edff" : "#f1f5f9"};
   elevation: 3;
   shadow-color: #000;
   shadow-offset: 0px 2px;
@@ -313,6 +616,7 @@ const MedTime = styled.Text`
 const MedTypeLabel = styled.Text`
   color: #6366f1;
   font-weight: 600;
+  font-style: italic;
 `;
 
 const Tag = styled.View<{ context: string }>`
@@ -355,6 +659,16 @@ const DateText = styled.Text`
 
 const ActionButtons = styled.View`
   flex-direction: row;
+`;
+
+const HeaderIconButton = styled.TouchableOpacity`
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.2);
+  justify-content: center;
+  align-items: center;
+  margin-right: 12px;
 `;
 
 const IconButton = styled.TouchableOpacity`

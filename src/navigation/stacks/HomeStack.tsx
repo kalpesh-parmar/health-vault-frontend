@@ -10,6 +10,7 @@ import ImagePreview from "../../screens/AppScreens/ImagePreviewScreen";
 import DocumentStack from "./DocumentStack";
 import NotificationScreen from "../../screens/AppScreens/Notifications";
 import MedicationOperation from "../../screens/AppScreens/DocsCategoryScreens/Medication/MedicationOperation";
+import AIChatScreen from "../../screens/AppScreens/AIChatScreen";
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -26,6 +27,7 @@ const HomeStack = () => {
       <Stack.Screen name="ImagePreview" component={ImagePreview} />
       <Stack.Screen name="SaveDocument" component={SaveDocumentScreen} />
       <Stack.Screen name="Notifications" component={NotificationScreen} />
+      <Stack.Screen name="AIChat" component={AIChatScreen} />
     </Stack.Navigator>
   );
 };

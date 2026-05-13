@@ -1,30 +1,33 @@
 import React, { useState, useEffect } from "react";
-import {
-  Switch,
-  View,
-  Platform,
-} from "react-native";
+import { Animated, Switch, View, Platform } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { format, addDays } from "date-fns";
-import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { format, isEqual } from "date-fns";
+import DatePicker from "react-native-date-picker";
 import styled from "styled-components/native";
+import Toast from "react-native-toast-message";
+import { AddOrEditMedication } from "../types";
+import ModernLoader from "./shared/Loader";
 
 type MedType = {
   key: "Tablet" | "Capsule" | "Syrup" | "Drop" | "Injection";
   value: "TABLET" | "CAPSULE" | "SYRUP" | "DROP" | "INJECTION";
 };
 type FoodTiming = {
-  key: "With Food" | "Before Food" | "After Food" | "Empty Stomach";
-  value: "WITH_FOOD" | "BEFORE_FOOD" | "AFTER_FOOD" | "EMPTY_STOMACH";
+  key: "Before Food" | "After Food";
+  value: "BEFORE_FOOD" | "AFTER_FOOD";
 };
 type Frequency = {
   key: "Once Daily" | "Twice Daily" | "3x Daily";
-  value: "Once_Daily" | "Twice_Daily" | "3x_Daily";
+  value: "ONCE_DAILY" | "TWICE_DAILY" | "THREE_TIMES_DAILY";
 };
 type TimeOfDay = {
-  key: "Morning" | "Noon" | "Evening" | "Night";
-  value: "MORNING" | "NOON" | "EVENING" | "NIGHT";
+  key: "Morning" | "Noon" | "Night" | "Specific Time";
+  value: "MORNING" | "NOON" | "NIGHT" | "SPECIFIC_TIME";
 };
+
+const ACCENT = "#0ea5e9";
+const ACCENT_DARK = "#0f766e";
+const ACCENT_SOFT = "#e0f2fe";
 
 const MED_TYPES: MedType[] = [
   { key: "Tablet", value: "TABLET" },
@@ -34,41 +37,39 @@ const MED_TYPES: MedType[] = [
   { key: "Injection", value: "INJECTION" },
 ];
 const FREQUENCIES: Frequency[] = [
-  { key: "Once Daily", value: "Once_Daily" },
-  { key: "Twice Daily", value: "Twice_Daily" },
-  { key: "3x Daily", value: "3x_Daily" },
+  { key: "Once Daily", value: "ONCE_DAILY" },
+  { key: "Twice Daily", value: "TWICE_DAILY" },
+  { key: "3x Daily", value: "THREE_TIMES_DAILY" },
 ];
 const FOOD_TIMINGS: FoodTiming[] = [
-  { key: "With Food", value: "WITH_FOOD" },
   { key: "Before Food", value: "BEFORE_FOOD" },
   { key: "After Food", value: "AFTER_FOOD" },
-  { key: "Empty Stomach", value: "EMPTY_STOMACH" },
 ];
 const TIMES_OF_DAY: TimeOfDay[] = [
   { key: "Morning", value: "MORNING" },
   { key: "Noon", value: "NOON" },
-  { key: "Evening", value: "EVENING" },
   { key: "Night", value: "NIGHT" },
+  { key: "Specific Time", value: "SPECIFIC_TIME" },
 ];
 
 interface MedicationFormProps {
-  initialData?: any;
-  onSubmit: (data: any) => void;
+  initialData?: AddOrEditMedication;
+  onSubmit: (data: AddOrEditMedication) => void;
   isLoading: boolean;
+  onScroll?: (...args: any[]) => void;
 }
 
 const MedicationForm = ({
   initialData,
   onSubmit,
   isLoading,
+  onScroll,
 }: MedicationFormProps) => {
   const isValidDate = (d: any) => d instanceof Date && !isNaN(d.getTime());
-  const [name, setName] = useState(
-    initialData?.medicationName || initialData?.name || "",
-  );
+  const [name, setName] = useState(initialData?.medicationName || "");
   const [type, setType] = useState<MedType>(() => {
     const found = MED_TYPES.find(
-      (t) => t.value === (initialData?.medicationType || initialData?.type),
+      (t) => t.value === initialData?.medicationType,
     );
     return found || MED_TYPES[0];
   });
@@ -81,13 +82,17 @@ const MedicationForm = ({
     const found = FREQUENCIES.find((f) => f.value === initialData?.frequency);
     return found || FREQUENCIES[0];
   });
+
   const [timesOfDay, setTimesOfDay] = useState<TimeOfDay[]>(() => {
     const rawBestTaken = initialData?.bestTaken || [];
-    return TIMES_OF_DAY.filter((t) => rawBestTaken.includes(t.key));
+    const found = TIMES_OF_DAY.filter(
+      (t) => rawBestTaken?.includes(t.value) || rawBestTaken?.includes(t.key),
+    );
+    return found.length > 0 ? found : [TIMES_OF_DAY[0]];
   });
+
   const [foodTiming, setFoodTiming] = useState<FoodTiming>(() => {
-    const rawMeal =
-      initialData?.withFood || initialData?.mealContext || "WITH_FOOD";
+    const rawMeal = initialData?.withFood || "BEFORE_FOOD";
     const found = FOOD_TIMINGS.find((f) => f.value === rawMeal);
     return found || FOOD_TIMINGS[0];
   });
@@ -100,9 +105,6 @@ const MedicationForm = ({
 
   const [startDate, setStartDate] = useState<Date>(
     parseInitialDate(initialData?.startDate) || new Date(),
-  );
-  const [endDate, setEndDate] = useState<Date | null>(
-    parseInitialDate(initialData?.endDate),
   );
 
   const parseTime = (timeStr: string) => {
@@ -119,20 +121,26 @@ const MedicationForm = ({
     return date;
   };
 
-  const [preferredTime, setPreferredTime] = useState<Date>(
-    parseTime(initialData?.medicationTime),
-  );
+  const [preferredTimes, setPreferredTimes] = useState<Date[]>(() => {
+    if (
+      initialData?.medicationTime &&
+      Array.isArray(initialData?.medicationTime)
+    ) {
+      return initialData?.medicationTime?.map(
+        (t: { time: string; period: string }) => parseTime(t?.time),
+      );
+    }
+    return [];
+  });
 
   const [isOngoing, setIsOngoing] = useState(
     initialData
       ? initialData.ongoing !== undefined
         ? initialData.ongoing
-        : initialData.endDate === "Ongoing"
+        : true
       : true,
   );
-  const [pillsRemaining, setPillsRemaining] = useState(
-    initialData?.pillsRemaining?.toString() || "",
-  );
+
   const [totalPills, setTotalPills] = useState(
     initialData?.totalPills?.toString() || "",
   );
@@ -146,11 +154,24 @@ const MedicationForm = ({
 
   const [picker, setPicker] = useState<{
     visible: boolean;
-    type: "start" | "end" | "time";
+    type: "start" | "time";
   }>({ visible: false, type: "start" });
 
-  const getUnitString = (val: string | number, medType: MedType) => {
-    if (!val || isNaN(Number(val))) return "";
+  useEffect(() => {
+    const isSpecificTime = timesOfDay.some((t) => t.value === "SPECIFIC_TIME");
+    const currentMax = isSpecificTime
+      ? 5
+      : frequency.key === "Once Daily"
+        ? 1
+        : frequency.key === "Twice Daily"
+          ? 2
+          : 3;
+    if (preferredTimes.length > currentMax) {
+      setPreferredTimes((prev) => prev.slice(0, currentMax));
+    }
+  }, [frequency, timesOfDay]);
+
+  const getUnitString = (medType: MedType) => {
     const units: Record<MedType["key"], string> = {
       Tablet: "Tablets",
       Capsule: "Capsules",
@@ -158,35 +179,31 @@ const MedicationForm = ({
       Drop: "Drops",
       Injection: "Units",
     };
-    return `${val} ${units[medType.key]}`;
+    return units[medType.key];
   };
 
   useEffect(() => {
-    setDisplayDose(getUnitString(doseValue, type));
-  }, [type, doseValue]);
-
-  useEffect(() => {
-    const dose = Number(doseValue);
-    const remaining = Number(pillsRemaining);
-    if (
-      !isNaN(dose) &&
-      !isNaN(remaining) &&
-      dose > 0 &&
-      remaining > 0 &&
-      isValidDate(startDate)
-    ) {
-      const dailyFreq =
-        frequency.key === "Once Daily"
-          ? 1
-          : frequency.key === "Twice Daily"
-            ? 2
-            : 3;
-      const totalDays = Math.ceil(remaining / (dose * dailyFreq));
-      setEndDate(addDays(startDate, totalDays));
-    }
-  }, [pillsRemaining, doseValue, frequency, startDate]);
+    setDisplayDose(getUnitString(type));
+  }, [type]);
 
   const handleSubmit = () => {
+    if (preferredTimes.length !== maxTimes) {
+      Toast.show({
+        type: "error",
+        text1: `${frequency.key} needs ${maxTimes} reminder ${maxTimes === 1 ? "time" : "times"}.`,
+        text2: `Please add ${maxTimes - preferredTimes.length} more reminder timings.`,
+      });
+      return;
+    }
+
+    const reminderTimings = preferredTimes.map((t) =>
+      format(t, "HH:mm").toString(),
+    );
+    const period = preferredTimes.map((t) => format(t, "a"));
+
+    console.log("reminderTimings", reminderTimings);
+    console.log("period", period);
+
     onSubmit({
       medicationName: name,
       medicationType: type.value,
@@ -197,7 +214,12 @@ const MedicationForm = ({
       withFood: foodTiming.value,
       startDate: format(startDate, "yyyy-MM-dd"),
       ongoing: isOngoing,
-      medicationTime: format(preferredTime, "HH:mm"),
+      medicationTime: preferredTimes.map((t) => {
+        return {
+          time: format(t, "hh:mm"),
+          period: format(t, "a"),
+        };
+      }),
       totalPills: Number(totalPills),
       doseReminders: reminders,
       refillAlert,
@@ -205,14 +227,27 @@ const MedicationForm = ({
     });
   };
 
+  const maxTimes = timesOfDay.some((t) => t.value === "SPECIFIC_TIME")
+    ? 5
+    : frequency.key === "Once Daily"
+      ? 1
+      : frequency.key === "Twice Daily"
+        ? 2
+        : 3;
+
   return (
-    <ScrollContent showsVerticalScrollIndicator={false}>
+    <ScrollContent
+      showsVerticalScrollIndicator={false}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+    >
+      <ModernLoader visible={isLoading} title="This May Take A While." />
       <Card style={{ marginTop: 0 }}>
         <SectionHeaderRow>
           <MaterialCommunityIcons
             name="information-outline"
             size={20}
-            color="#6366f1"
+            color={ACCENT}
           />
           <SectionTitle>Basic Information</SectionTitle>
         </SectionHeaderRow>
@@ -244,10 +279,9 @@ const MedicationForm = ({
         />
       </Card>
 
-      {/* DOSAGE & TIMING */}
       <Card>
         <SectionHeaderRow>
-          <MaterialCommunityIcons name="pill" size={20} color="#6366f1" />
+          <MaterialCommunityIcons name="pill" size={20} color={ACCENT} />
           <SectionTitle>Dosage & Timing</SectionTitle>
         </SectionHeaderRow>
         <Row>
@@ -277,7 +311,10 @@ const MedicationForm = ({
             <TypePill
               key={f.key}
               active={frequency.key === f.key}
-              onPress={() => setFrequency(f)}
+              onPress={() => {
+                setFrequency(f);
+                setTimesOfDay([timesOfDay[0]]);
+              }}
             >
               <TypePillText active={frequency.key === f.key}>
                 {f.key}
@@ -291,13 +328,44 @@ const MedicationForm = ({
             <TimeBox
               key={item.key}
               active={timesOfDay.some((t) => t.key === item.key)}
-              onPress={() =>
-                setTimesOfDay((prev) =>
-                  prev.some((t) => t.key === item.key)
-                    ? prev.filter((t) => t.key !== item.key)
-                    : [...prev, item],
-                )
-              }
+              onPress={() => {
+                setTimesOfDay((prev) => {
+                  const isSelected = prev.some((t) => t.key === item.key);
+                  const hasSpecificTime = prev.some(
+                    (t) => t.value === "SPECIFIC_TIME",
+                  );
+
+                  if (frequency.value === "ONCE_DAILY") {
+                    return isSelected ? prev : [item];
+                  }
+
+                  if (item.value === "SPECIFIC_TIME") {
+                    return [item];
+                  }
+
+                  if (hasSpecificTime) {
+                    return [item];
+                  }
+
+                  if (isSelected) {
+                    if (prev.length > 1) {
+                      return prev.filter((t) => t.key !== item.key);
+                    }
+                    return prev;
+                  } else {
+                    const limit =
+                      frequency.value === "TWICE_DAILY"
+                        ? 2
+                        : frequency.value === "THREE_TIMES_DAILY"
+                          ? 3
+                          : Infinity;
+                    if (prev.length < limit) {
+                      return [...prev, item];
+                    }
+                    return prev;
+                  }
+                });
+              }}
             >
               <TimeText active={timesOfDay.some((t) => t.key === item.key)}>
                 {item.key}
@@ -320,15 +388,37 @@ const MedicationForm = ({
             </TypePill>
           ))}
         </PillContainer>
-        <InputLabel style={{ marginTop: 15 }}>Preferred Intake Time</InputLabel>
-        <DateBtn onPress={() => setPicker({ visible: true, type: "time" })}>
-          <Ionicons name="time-outline" size={18} color="#6366f1" />
-          <DateBtnText>
-            {isValidDate(preferredTime)
-              ? format(preferredTime, "hh:mm aa")
-              : "Select Time"}
-          </DateBtnText>
-        </DateBtn>
+
+        <InputLabel style={{ marginTop: 15 }}>Reminder Timings</InputLabel>
+
+        {preferredTimes.length > 0 && (
+          <SelectedTimesContainer>
+            {preferredTimes.map((timings, index) => (
+              <TimeChip key={index}>
+                <TimeChipText>{format(timings, "hh:mm a")}</TimeChipText>
+                <RemoveTimeBtn
+                  onPress={() => {
+                    setPreferredTimes((prev) =>
+                      prev.filter((_, i) => i !== index),
+                    );
+                  }}
+                >
+                  <Ionicons name="close" size={16} color="#fff" />
+                </RemoveTimeBtn>
+              </TimeChip>
+            ))}
+          </SelectedTimesContainer>
+        )}
+
+        {preferredTimes.length < maxTimes && (
+          <DateBtn
+            style={{ marginTop: preferredTimes.length > 0 ? 12 : 0 }}
+            onPress={() => setPicker({ visible: true, type: "time" })}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={ACCENT} />
+            <DateBtnText>Add Reminder Timings</DateBtnText>
+          </DateBtn>
+        )}
       </Card>
 
       {/* SCHEDULE & SUPPLY */}
@@ -337,13 +427,13 @@ const MedicationForm = ({
           <MaterialCommunityIcons
             name="calendar-clock"
             size={20}
-            color="#6366f1"
+            color={ACCENT}
           />
           <SectionTitle>Schedule & Supply</SectionTitle>
         </SectionHeaderRow>
         <Row>
           <View style={{ flex: 1 }}>
-            <InputLabel>Total Pills</InputLabel>
+            <InputLabel>Pills To Be Taken</InputLabel>
             <StyledInput
               placeholder="e.g. 30"
               keyboardType="numeric"
@@ -353,22 +443,11 @@ const MedicationForm = ({
           </View>
           <SpacerHorizontal width={12} />
           <View style={{ flex: 1 }}>
-            <InputLabel>Pills Remaining</InputLabel>
-            <StyledInput
-              placeholder="e.g. 15"
-              keyboardType="numeric"
-              value={pillsRemaining}
-              onChangeText={setPillsRemaining}
-            />
-          </View>
-        </Row>
-        <Row style={{ marginTop: 15 }}>
-          <View style={{ flex: 1 }}>
             <InputLabel>Start Date</InputLabel>
             <DateBtn
               onPress={() => setPicker({ visible: true, type: "start" })}
             >
-              <Ionicons name="calendar-outline" size={18} color="#6366f1" />
+              <Ionicons name="calendar-outline" size={18} color={ACCENT} />
               <DateBtnText>
                 {isValidDate(startDate)
                   ? format(startDate, "dd MMM yyyy")
@@ -376,29 +455,15 @@ const MedicationForm = ({
               </DateBtnText>
             </DateBtn>
           </View>
-          <SpacerHorizontal width={12} />
-          <View style={{ flex: 1 }}>
-            <InputLabel>End Date</InputLabel>
-            <DateBtn
-              disabled={isOngoing}
-              style={{ opacity: isOngoing ? 0.4 : 1 }}
-            >
-              <Ionicons name="flag-outline" size={18} color="#ef4444" />
-              <DateBtnText>
-                {isValidDate(endDate)
-                  ? format(String(endDate), "dd MMM")
-                  : "Auto"}
-              </DateBtnText>
-            </DateBtn>
-          </View>
         </Row>
+        <Row style={{ marginTop: 15 }}></Row>
         <ToggleRow>
           <ToggleLeftSection>
             <ToggleIconBox>
               <MaterialCommunityIcons
                 name="infinity"
                 size={22}
-                color="#6366f1"
+                color={ACCENT}
               />
             </ToggleIconBox>
             <View>
@@ -409,8 +474,8 @@ const MedicationForm = ({
           <Switch
             value={isOngoing}
             onValueChange={setIsOngoing}
-            trackColor={{ false: "#cbd5e1", true: "#6366f1" }}
-            thumbColor={Platform.OS === "ios" ? undefined : "#2b2dabff"}
+            trackColor={{ false: "#cbd5e1", true: ACCENT }}
+            thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
           />
         </ToggleRow>
       </Card>
@@ -421,7 +486,7 @@ const MedicationForm = ({
           <MaterialCommunityIcons
             name="bell-outline"
             size={20}
-            color="#6366f1"
+            color={ACCENT}
           />
           <SectionTitle>Alerts & Extra Info</SectionTitle>
         </SectionHeaderRow>
@@ -433,8 +498,8 @@ const MedicationForm = ({
           <Switch
             value={reminders}
             onValueChange={setReminders}
-            trackColor={{ false: "#cbd5e1", true: "#6366f1" }}
-            thumbColor={Platform.OS === "ios" ? undefined : "#2b2dabff"}
+            trackColor={{ false: "#cbd5e1", true: ACCENT }}
+            thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
           />
         </ToggleRow>
         <ToggleRow>
@@ -445,8 +510,8 @@ const MedicationForm = ({
           <Switch
             value={refillAlert}
             onValueChange={setRefillAlert}
-            trackColor={{ false: "#cbd5e1", true: "#6366f1" }}
-            thumbColor={Platform.OS === "ios" ? undefined : "#2b2dabff"}
+            trackColor={{ false: "#cbd5e1", true: ACCENT }}
+            thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
           />
         </ToggleRow>
         <InputLabel style={{ marginTop: 20 }}>Notes</InputLabel>
@@ -467,20 +532,24 @@ const MedicationForm = ({
         </SaveButton>
       </Footer>
 
-      <DateTimePickerModal
-        isVisible={picker.visible}
+      <DatePicker
+        modal
+        open={picker.visible}
         mode={picker.type === "time" ? "time" : "date"}
-        date={
-          picker.type === "start"
-            ? startDate
-            : picker.type === "end"
-              ? endDate || new Date()
-              : preferredTime
-        }
+        date={picker.type === "start" ? startDate : new Date()}
         onConfirm={(date) => {
           if (picker.type === "start") setStartDate(date);
-          else if (picker.type === "end") setEndDate(date);
-          else setPreferredTime(date);
+          else {
+            if (preferredTimes.some((t) => isEqual(t, date))) {
+              Toast.show({
+                type: "error",
+                text1: "Time already Selected.",
+                text2: "Please select a different time.",
+              });
+              return;
+            }
+            setPreferredTimes((prev) => [...prev, date]);
+          }
           setPicker({ ...picker, visible: false });
         }}
         onCancel={() => setPicker({ ...picker, visible: false })}
@@ -491,7 +560,7 @@ const MedicationForm = ({
 
 export default MedicationForm;
 
-const ScrollContent = styled.ScrollView`
+const ScrollContent = styled(Animated.ScrollView)`
   flex: 1;
   padding-horizontal: 20px;
   padding-top: 20px;
@@ -548,7 +617,7 @@ export const TypePill = styled.TouchableOpacity<{ active: boolean }>`
   padding: 10px 16px;
   border-radius: 12px;
   background-color: ${({ active }: { active: boolean }) =>
-    active ? "#6366f1" : "#f1f5f9"};
+    active ? ACCENT_DARK : "#f1f5f9"};
 `;
 
 export const TypePillText = styled.Text<{ active: boolean }>`
@@ -580,10 +649,10 @@ export const TimeBox = styled.TouchableOpacity<{ active: boolean }>`
   padding: 12px;
   border-radius: 12px;
   background-color: ${({ active }: { active: boolean }) =>
-    active ? "#eef2ff" : "#f8fafc"};
+    active ? ACCENT_SOFT : "#f8fafc"};
   border-width: 1.5px;
   border-color: ${({ active }: { active: boolean }) =>
-    active ? "#6366f1" : "#f1f5f9"};
+    active ? ACCENT : "#f1f5f9"};
 `;
 
 export const TimeText = styled.Text<{ active: boolean }>`
@@ -591,7 +660,7 @@ export const TimeText = styled.Text<{ active: boolean }>`
   font-size: 13px;
   font-weight: 700;
   color: ${({ active }: { active: boolean }) =>
-    active ? "#6366f1" : "#64748b"};
+    active ? ACCENT_DARK : "#64748b"};
 `;
 
 export const DateBtn = styled.TouchableOpacity`
@@ -659,7 +728,7 @@ export const SaveButton = styled.TouchableOpacity`
   padding: 18px;
   border-radius: 18px;
   align-items: center;
-  shadow-color: #6366f1;
+  shadow-color: ${ACCENT};
   shadow-opacity: 0.3;
   elevation: 8;
 `;
@@ -668,4 +737,32 @@ const SaveButtonText = styled.Text`
   color: white;
   font-size: 16px;
   font-weight: 800;
+`;
+
+export const SelectedTimesContainer = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
+
+export const TimeChip = styled.View`
+  flex-direction: row;
+  align-items: center;
+  border-width: 1.5px;
+  border-color: ${ACCENT};
+  padding: 8px;
+  border-radius: 20px;
+  gap: 6px;
+`;
+
+export const TimeChipText = styled.Text`
+  color: ${ACCENT_DARK};
+  font-size: 13px;
+  font-weight: 700;
+`;
+
+export const RemoveTimeBtn = styled.TouchableOpacity`
+  background-color: ${ACCENT_DARK};
+  border-radius: 10px;
+  padding: 2px;
 `;

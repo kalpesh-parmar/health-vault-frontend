@@ -4,7 +4,7 @@
     "slug": "health-vault",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/health_vault_logo.png",
+    "icon": "./assets/AppLogo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -19,7 +19,7 @@
       "package": "com.anonymous.DocumentsVaultApp",
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/Splash.png",
+        "foregroundImage": "./assets/AppLogo.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,

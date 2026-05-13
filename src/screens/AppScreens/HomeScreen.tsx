@@ -19,6 +19,7 @@ import Loader from "../../components/shared/Loader";
 import { useMutation } from "@tanstack/react-query";
 import { getNotificationCount } from "../../services/notificationService";
 import { getUser } from "../../services/userService";
+import { Text } from "react-native";
 
 // Types for styling props
 interface ThemeProps {
@@ -64,14 +65,18 @@ const HomeScreen = () => {
 
   const { mutateAsync: getProfile } = useMutation({
     mutationFn: getUser,
-    onSuccess: (data) => {
-      setFirstName(data?.firstName);
-      console.log(data);
+    onSuccess: (result) => {
+      setFirstName(result?.data?.firstName);
     },
     onError: (error) => {
       console.log(error);
     }
-  })
+  });
+
+  useEffect(() => {
+    // getNotificationBadgeCount();
+    getProfile();
+  }, []);
 
   return (
     <Container>
@@ -88,7 +93,11 @@ const HomeScreen = () => {
       {isCapturing && <Loader visible={isCapturing} />}
 
       <HeaderGradient
-        colors={isDark ? ["#312E81", "#4F46E5"] : ["#6366f1", "#a855f7"]}
+        colors={
+          isDark
+            ? ["#064e3b", "#0369a1", "#312e81"]
+            : ["#0f766e", "#0ea5e9", "#4f46e5"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
@@ -126,8 +135,7 @@ const HomeScreen = () => {
           <MaterialCommunityIcons
             name="pulse"
             size={40}
-            color="#818cf8"
-            style={{ opacity: 0.5 }}
+            color="blue"
           />
         </OverviewCard>
 
@@ -136,12 +144,12 @@ const HomeScreen = () => {
         </SectionHeader>
 
         <ActionsRow>
-          <ActionItem onPress={() => refRBSheet.current?.present()}>
+          {/* <ActionItem onPress={() => refRBSheet.current?.present()}>
             <ActionIcon color="#ecfdf5">
               <Ionicons name="document-text" size={24} color="#10b981" />
             </ActionIcon>
             <ActionLabel>Upload Documents</ActionLabel>
-          </ActionItem>
+          </ActionItem> */}
           <ActionItem
             onPress={() =>
               navigation.navigate("DocumentStack", {
@@ -166,6 +174,20 @@ const HomeScreen = () => {
 
         <BottomSpacing />
       </ScrollContent>
+
+      <FloatingAddButton activeOpacity={0.8} onPress={() => refRBSheet.current?.present()}>
+        <FabGradient
+          colors={
+            isDark
+              ? ["#064e3b", "#0369a1", "#312e81"]
+              : ["#0f766e", "#0ea5e9", "#4f46e5"]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Ionicons name="add" size={32} color="#fff" />
+        </FabGradient>
+      </FloatingAddButton>
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
@@ -299,17 +321,11 @@ const SectionTitle = styled.Text`
   color: #1e293b;
 `;
 
-const ViewAll = styled.Text`
-  color: #6366f1;
-  font-size: 13px;
-  font-weight: 600;
-`;
-
 const ActionsRow = styled.View`
   flex-direction: row;
   justify-content: flex-start;
   padding: 0 20px;
-  gap: 20px;
+  gap: 25px;
 `;
 
 const ActionItem = styled.TouchableOpacity`
@@ -327,59 +343,35 @@ const ActionIcon = styled.View<{ color: string }>`
 `;
 
 const ActionLabel = styled.Text`
-  font-size: 10px;
+  font-size: 11px;
   text-align: center;
   color: #475569;
   margin-top: 8px;
-  font-weight: 500;
-`;
-
-const AppointmentCard = styled.TouchableOpacity`
-  background-color: white;
-  margin: 0 20px;
-  padding: 15px;
-  border-radius: 20px;
-`;
-
-const DoctorInfo = styled.View`
-  flex-direction: row;
-  align-items: center;
-`;
-
-const DocIconBox = styled.View`
-  background-color: #f5f3ff;
-  padding: 10px;
-  border-radius: 12px;
-`;
-
-const DocTextWrapper = styled.View`
-  flex: 1;
-  margin-left: 12px;
-`;
-
-const DocName = styled.Text`
-  font-size: 15px;
   font-weight: 700;
-  color: #1e293b;
-`;
-
-const DocSpec = styled.Text`
-  font-size: 12px;
-  color: #64748b;
-`;
-
-const DocDateTime = styled.Text`
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 4px;
-`;
-
-const DocAvatar = styled.Image`
-  width: 45px;
-  height: 45px;
-  border-radius: 22.5px;
 `;
 
 const BottomSpacing = styled.View`
   height: 100px;
+`;
+
+const FloatingAddButton = styled.TouchableOpacity`
+  position: absolute;
+  bottom: 100px;
+  right: 24px;
+  width: 58px;
+  height: 58px;
+  border-radius: 29px;
+  elevation: 10;
+  opacity: 0.9;
+  shadow-color: #6366f1;
+  shadow-opacity: 0.4;
+  shadow-radius: 12px;
+  shadow-offset: 0px 6px;
+`;
+
+const FabGradient = styled(LinearGradient)`
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  border-radius: 29px;
 `;

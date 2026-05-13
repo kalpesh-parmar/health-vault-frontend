@@ -14,14 +14,7 @@ export interface MedicalDocument {
   title?: string;
 }
 
-export type DocumentCategory =
-  | "family"
-  | "medical_document"
-  | "insurance"
-  | "medication"
-  | "other";
-
-// ─── Auth Request/Response Types ───────────────────────────────
+// ─── Request/Response Types ───────────────────────────────
 
 export interface LoginRequest {
   email: string;
@@ -83,7 +76,10 @@ export interface AddOrEditMedication {
   dosePerIntake: number;
   frequency: string;
   bestTaken: string[];
-  medicationTime: string;
+  medicationTime: {
+    time: string;
+    period: string;
+  }[];
   withFood: string;
   startDate: string;
   ongoing: boolean;
@@ -91,15 +87,4 @@ export interface AddOrEditMedication {
   doseReminders: boolean;
   refillAlert: boolean;
   notes: string;
-}
-
-// ─── API Response Wrapper ──────────────────────────────────────
-
-export interface ApiResponse<T = unknown> {
-  data: T;
-  status?: {
-    code: number;
-    description: string;
-  };
-  message?: string;
 }

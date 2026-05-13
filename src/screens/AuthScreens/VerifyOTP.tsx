@@ -26,7 +26,7 @@ type VerifyOTPProps = {
 };
 
 const VerifyOTP = ({ route }: VerifyOTPProps) => {
-  // const { email } = route?.params;
+  const { email } = route?.params;
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [otpError, setOtpError] = useState("");
@@ -106,7 +106,7 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
         text2: "Now you can reset your password.",
       });
 
-      // navigation.navigate("ResetPassword", { email });
+      navigation.navigate("ResetPassword", { email });
     },
 
     onError: (error: any) => {
@@ -131,11 +131,11 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
     setOtpError("");
 
     const payload = {
-      // email: email,
+      email: email,
       otp: otp.join(""),
     };
 
-    // await verifyOTPMutation(payload);
+    await verifyOTPMutation(payload);
   };
 
   const { mutateAsync: resendOTPMutation, isPending: resendLoading } =
@@ -172,10 +172,10 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
     inputRefs.current[0]?.focus();
 
     const payload = {
-      // email: email,
+      email: email,
     };
 
-    // await resendOTPMutation(payload);
+    await resendOTPMutation(payload);
   };
 
   return (
@@ -434,28 +434,23 @@ const InfoText = styled.Text`
   line-height: 22px;
 `;
 
-const EmailText = styled.Text`
-  font-size: 15px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  text-align: center;
-  margin-top: 8px;
-  margin-bottom: 28px;
-`;
-
 const OTPContainer = styled.View`
   flex-direction: row;
+  width: 100%;
+  gap: 4px;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-top: 24px;
+  margin-bottom: 24px;
 `;
 
 const OTPInput = styled.TextInput<{
   isFilled: boolean;
   hasError: boolean;
 }>`
-  width: 48px;
-  height: 58px;
-  border-radius: 18px;
+  flex: 1;
+  height: 50px;
+  width: 60px;
+  border-radius: 14px;
   text-align: center;
   font-size: 22px;
   font-weight: 800;

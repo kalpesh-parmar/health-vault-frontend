@@ -5,6 +5,7 @@ import {
   Keyboard,
   Platform,
   ScrollView,
+  View,
 } from "react-native";
 import styled from "styled-components/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -195,7 +196,10 @@ const ForgotPasswordScreen = () => {
                     end={{ x: 1, y: 0 }}
                   >
                     {isLoading ? (
-                      <ActivityIndicator color="#ffffff" />
+                      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                        <ActivityIndicator color="#ffffff" />
+                        <ButtonText>Sending OTP...</ButtonText>
+                      </View>
                     ) : (
                       <ButtonText>Send OTP</ButtonText>
                     )}

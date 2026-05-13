@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { ScrollView, ActivityIndicator, TouchableOpacity } from "react-native";
+import { ScrollView, ActivityIndicator, TouchableOpacity, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import styled, { DefaultTheme } from "styled-components/native";
 import {
@@ -45,12 +45,12 @@ const ProfileScreen: React.FC = () => {
   const [email, setEmail] = useState<string | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
   const [lastName, setLastName] = useState<string | null>(null);
+  const [contact, setContact] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<"Log Out" | "Delete Account">(
     "Log Out",
   );
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [phone] = useState<string>("+91 98765 43210");
 
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
@@ -79,10 +79,12 @@ const ProfileScreen: React.FC = () => {
 
   useEffect(() => {
     if (userData) {
+      console.log(userData);
       setUsername(userData?.userName || "Priya Sharma");
       setEmail(userData?.email || "priya.sharma@email.com");
       setFirstName(userData?.firstName || "");
       setLastName(userData?.lastName || "");
+      setContact(userData?.phone || "");
     }
   }, [userData]);
 
@@ -96,27 +98,11 @@ const ProfileScreen: React.FC = () => {
     {
       icon: "person-outline",
       iconFamily: "Ionicons",
-      label: "Personal Information",
+      label: "Edit Information",
       iconBg: "#EEF2FF",
       iconColor: "#6366F1",
       onPress: () =>
         navigation.navigate("EditProfile", { formData }),
-    },
-    {
-      icon: "alert-circle-outline",
-      iconFamily: "Ionicons",
-      label: "Emergency Contacts",
-      iconBg: "#FFF7ED",
-      iconColor: "#F97316",
-      onPress: () => {},
-    },
-    {
-      icon: "medical-bag",
-      iconFamily: "MaterialCommunityIcons",
-      label: "Medical Information",
-      iconBg: "#F0FDF4",
-      iconColor: "#22C55E",
-      onPress: () => {},
     },
   ];
 
@@ -145,7 +131,11 @@ const ProfileScreen: React.FC = () => {
   return (
     <Container>
       <HeaderGradient
-        colors={["#4F78F1", "#6A9CF8", "#89B4FA"]}
+        colors={
+          isDark
+            ? ["#064e3b", "#0369a1", "#312e81"]
+            : ["#0f766e", "#0ea5e9", "#4f46e5"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
@@ -176,11 +166,11 @@ const ProfileScreen: React.FC = () => {
               {isLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <>
+                <View>
                   <UserName>{username || "Priya Sharma"}</UserName>
                   <UserEmail>{email || "priya.sharma@email.com"}</UserEmail>
-                  <UserPhone>{phone}</UserPhone>
-                </>
+                  <UserPhone>{contact}</UserPhone>
+                </View>
               )}
             </InfoWrapper>
           </AvatarSection>
@@ -324,13 +314,14 @@ const InfoWrapper = styled.View`
 `;
 
 const UserName = styled.Text`
-  font-size: 22px;
+  font-size: 16px;
   font-weight: bold;
   color: white;
 `;
 
 const UserEmail = styled.Text`
-  font-size: 14px;
+  font-size: 10px; 
+  font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
   margin-top: 2px;
 `;
@@ -339,17 +330,7 @@ const UserPhone = styled.Text`
   font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
   font-weight: 600;
-  margin-top: 4px;
-`;
-
-const EditProfileFloating = styled.TouchableOpacity`
-  background-color: #38bdf8;
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
-  justify-content: center;
-  align-items: center;
-  align-self: flex-end;
+  margin-top: 2px;
 `;
 
 const MenuContainer = styled.View`
