@@ -6,7 +6,6 @@ import {
   Ionicons,
   MaterialCommunityIcons,
   FontAwesome5,
-  Feather,
 } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/core";
 import { useFocusEffect } from "@react-navigation/native";
@@ -79,12 +78,11 @@ const ProfileScreen: React.FC = () => {
 
   useEffect(() => {
     if (userData) {
-      console.log(userData);
-      setUsername(userData?.userName || "Priya Sharma");
-      setEmail(userData?.email || "priya.sharma@email.com");
-      setFirstName(userData?.firstName || "");
-      setLastName(userData?.lastName || "");
-      setContact(userData?.phone || "");
+      setUsername(userData?.userName);
+      setEmail(userData?.email);
+      setFirstName(userData?.firstName);
+      setLastName(userData?.lastName);
+      setContact(userData?.phone);
     }
   }, [userData]);
 
@@ -167,8 +165,8 @@ const ProfileScreen: React.FC = () => {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <View>
-                  <UserName>{username || "Priya Sharma"}</UserName>
-                  <UserEmail>{email || "priya.sharma@email.com"}</UserEmail>
+                  <UserName>{username}</UserName>
+                  <UserEmail>{email}</UserEmail>
                   <UserPhone>{contact}</UserPhone>
                 </View>
               )}

@@ -201,9 +201,6 @@ const MedicationForm = ({
     );
     const period = preferredTimes.map((t) => format(t, "a"));
 
-    console.log("reminderTimings", reminderTimings);
-    console.log("period", period);
-
     onSubmit({
       medicationName: name,
       medicationType: type.value,

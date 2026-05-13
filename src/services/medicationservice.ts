@@ -70,7 +70,6 @@ export const updateMedication = async ({
     "{id}",
     medicationId,
   );
-  console.log(endpoint);
   try {
     const response = await apiClient.put(endpoint, data);
     return response.data;

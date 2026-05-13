@@ -59,7 +59,7 @@ const HomeScreen = () => {
       setNotificationBadgeCount(data.count);
     },
     onError: (error) => {
-      console.log(error);
+      // Handle error
     },
   });
 
@@ -69,7 +69,7 @@ const HomeScreen = () => {
       setFirstName(result?.data?.firstName);
     },
     onError: (error) => {
-      console.log(error);
+      // Handle error
     }
   });
 

@@ -113,7 +113,7 @@ export default function NotificationScreen() {
       setNotifications(data.data);
     },
     onError: (error) => {
-      console.log(error);
+      // Error handling can be added here
     },
   });
 

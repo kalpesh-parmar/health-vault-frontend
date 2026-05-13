@@ -85,8 +85,6 @@ const CATEGORIES: categoryItems[] = [
 
 const EditScreen = ({ route }: any) => {
   const { document } = route.params;
-  console.log(document);
-
 
   const [filename, setFilename] = useState(document?.fileName ?? "");
   const [category, setCategory] = useState(document?.documentType ?? "");

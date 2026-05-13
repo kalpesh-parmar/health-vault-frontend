@@ -15,7 +15,11 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../../../navigation/types";
 import { useAppTheme } from "../../../../context/ThemeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAllMedications, getMedications, updateMedication } from "../../../../services/medicationservice";
+import {
+  getAllMedications,
+  getMedications,
+  updateMedication,
+} from "../../../../services/medicationservice";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
 import { TimeText } from "../../../../components/MedicationForm";
@@ -66,10 +70,12 @@ const MOCK_MEDICATIONS: AddOrEditMedication[] = [
     dosePerIntake: 1,
     frequency: "Once Daily",
     bestTaken: ["Morning"],
-    medicationTime: [{
-      time: "10:00",
-      period: "AM"
-    }],
+    medicationTime: [
+      {
+        time: "10:00",
+        period: "AM",
+      },
+    ],
     withFood: "After Meal",
     startDate: "2022-06-01",
     ongoing: true,
@@ -86,10 +92,12 @@ const MOCK_MEDICATIONS: AddOrEditMedication[] = [
     dosePerIntake: 1,
     frequency: "Once Daily",
     bestTaken: ["Morning"],
-    medicationTime: [{
-      time: "10:00",
-      period: "AM"
-    }],
+    medicationTime: [
+      {
+        time: "10:00",
+        period: "AM",
+      },
+    ],
     withFood: "After Meal",
     startDate: "2026-01-05",
     ongoing: false,
@@ -106,10 +114,12 @@ const MOCK_MEDICATIONS: AddOrEditMedication[] = [
     dosePerIntake: 1,
     frequency: "Once Daily",
     bestTaken: ["Morning"],
-    medicationTime: [{
-      time: "10:00",
-      period: "AM"
-    }],
+    medicationTime: [
+      {
+        time: "10:00",
+        period: "AM",
+      },
+    ],
     withFood: "After Meal",
     startDate: "2022-01-01",
     ongoing: false,
@@ -126,10 +136,12 @@ const MOCK_MEDICATIONS: AddOrEditMedication[] = [
     dosePerIntake: 1,
     frequency: "Once Daily",
     bestTaken: ["Morning"],
-    medicationTime: [{
-      time: "10:00",
-      period: "AM"
-    }],
+    medicationTime: [
+      {
+        time: "10:00",
+        period: "AM",
+      },
+    ],
     withFood: "After Meal",
     startDate: "2026-05-12",
     ongoing: true,
@@ -146,10 +158,12 @@ const MOCK_MEDICATIONS: AddOrEditMedication[] = [
     dosePerIntake: 1,
     frequency: "Once Daily",
     bestTaken: ["Morning"],
-    medicationTime: [{
-      time: "10:00",
-      period: "AM"
-    }],
+    medicationTime: [
+      {
+        time: "10:00",
+        period: "AM",
+      },
+    ],
     withFood: "After Meal",
     startDate: "2022-01-01",
     ongoing: true,
@@ -172,15 +186,15 @@ const MedicationScreen = () => {
   const { isDark } = useAppTheme();
   const queryClient = useQueryClient();
 
-  const {mutateAsync: toggleMedicationStatus} = useMutation({
+  const { mutateAsync: toggleMedicationStatus } = useMutation({
     mutationFn: updateMedication,
     onSuccess: (variables) => {
       queryClient.invalidateQueries({ queryKey: ["medications"] });
       Toast.show({
         type: "success",
         text1: "Status Updated",
-        text2: variables.data.ongoing 
-          ? "Medication marked as ongoing." 
+        text2: variables.data.ongoing
+          ? "Medication marked as ongoing."
           : "Medication marked as completed.",
       });
     },
@@ -190,7 +204,7 @@ const MedicationScreen = () => {
         text1: "Error",
         text2: "Failed to update medication status.",
       });
-    }
+    },
   });
 
   const handleToggleStatus = async (item: AddOrEditMedication) => {
@@ -200,7 +214,7 @@ const MedicationScreen = () => {
       data: {
         ...item,
         ongoing: !item.ongoing,
-      }
+      },
     });
   };
 
@@ -208,18 +222,24 @@ const MedicationScreen = () => {
     const getAllMedicationsList = async () => {
       const result = await getAllMedications();
       console.log("result", result);
-    }
+    };
     getAllMedicationsList();
-  }, [])
+  }, []);
 
   const { data: medicationList, isLoading } = useQuery({
     queryKey: ["medications", activeTab],
     queryFn: () => getMedications(activeTab),
   });
 
-  const medicationData: AddOrEditMedication[] = (medicationList?.data || MOCK_MEDICATIONS)
+  const medicationData: AddOrEditMedication[] = (
+    medicationList?.data || MOCK_MEDICATIONS
+  )
     .filter((item: AddOrEditMedication) => {
-      if (activeTab !== "All" && item.medicationType?.toUpperCase() !== activeTab.toUpperCase()) return false;
+      if (
+        activeTab !== "All" &&
+        item.medicationType?.toUpperCase() !== activeTab.toUpperCase()
+      )
+        return false;
       if (sortOption === "ongoing" && item.ongoing === false) return false;
       if (sortOption === "stopped" && item.ongoing === true) return false;
       return true;
@@ -231,9 +251,15 @@ const MedicationScreen = () => {
         case "name_desc":
           return (b.medicationName || "").localeCompare(a.medicationName || "");
         case "date_asc":
-          return new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime();
+          return (
+            new Date(a.startDate || 0).getTime() -
+            new Date(b.startDate || 0).getTime()
+          );
         case "date_desc":
-          return new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime();
+          return (
+            new Date(b.startDate || 0).getTime() -
+            new Date(a.startDate || 0).getTime()
+          );
         default:
           return 0;
       }
@@ -379,7 +405,10 @@ const MedicationScreen = () => {
 
       {showDropdown && (
         <>
-          <DropdownOverlay activeOpacity={1} onPress={() => setShowDropdown(false)} />
+          <DropdownOverlay
+            activeOpacity={1}
+            onPress={() => setShowDropdown(false)}
+          />
           <DropdownContainer isDark={isDark}>
             {SORT_OPTIONS.map((option) => {
               const isActive = sortOption === option.value;
@@ -394,16 +423,29 @@ const MedicationScreen = () => {
                   }}
                   activeOpacity={0.8}
                 >
-                  <Ionicons 
-                    name={option.icon as any} 
-                    size={18} 
-                    color={isActive ? (isDark ? "#818cf8" : "#2563eb") : (isDark ? "#94a3b8" : "#64748b")} 
+                  <Ionicons
+                    name={option.icon as any}
+                    size={18}
+                    color={
+                      isActive
+                        ? isDark
+                          ? "#818cf8"
+                          : "#2563eb"
+                        : isDark
+                          ? "#94a3b8"
+                          : "#64748b"
+                    }
                   />
                   <DropdownText active={isActive} isDark={isDark}>
                     {option.label}
                   </DropdownText>
                   {isActive && (
-                    <Ionicons name="checkmark" size={18} color={isDark ? "#818cf8" : "#2563eb"} style={{ marginLeft: "auto" }} />
+                    <Ionicons
+                      name="checkmark"
+                      size={18}
+                      color={isDark ? "#818cf8" : "#2563eb"}
+                      style={{ marginLeft: "auto" }}
+                    />
                   )}
                 </DropdownItem>
               );
@@ -494,7 +536,10 @@ const RightActions = styled.View`
 
 const DropdownOverlay = styled.TouchableOpacity`
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 90;
 `;
 
@@ -502,7 +547,8 @@ const DropdownContainer = styled.View<{ isDark: boolean }>`
   position: absolute;
   top: 110px;
   right: 20px;
-  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#1e293b" : "white")};
+  background-color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#1e293b" : "white"};
   border-radius: 12px;
   padding: 8px;
   z-index: 100;
@@ -514,12 +560,21 @@ const DropdownContainer = styled.View<{ isDark: boolean }>`
   width: 230px;
 `;
 
-const DropdownItem = styled.TouchableOpacity<{ active: boolean; isDark: boolean }>`
+const DropdownItem = styled.TouchableOpacity<{
+  active: boolean;
+  isDark: boolean;
+}>`
   flex-direction: row;
   align-items: center;
   padding: 12px;
   border-radius: 8px;
-  background-color: ${({ active, isDark }: { active: boolean; isDark: boolean }) =>
+  background-color: ${({
+    active,
+    isDark,
+  }: {
+    active: boolean;
+    isDark: boolean;
+  }) =>
     active ? (isDark ? "rgba(79, 70, 229, 0.2)" : "#eff6ff") : "transparent"};
   margin-bottom: 2px;
 `;
@@ -528,7 +583,7 @@ const DropdownText = styled.Text<{ active: boolean; isDark: boolean }>`
   font-size: 14px;
   font-weight: ${({ active }: { active: boolean }) => (active ? "700" : "500")};
   color: ${({ active, isDark }: { active: boolean; isDark: boolean }) =>
-    active ? (isDark ? "#818cf8" : "#2563eb") : (isDark ? "#cbd5e1" : "#475569")};
+    active ? (isDark ? "#818cf8" : "#2563eb") : isDark ? "#cbd5e1" : "#475569"};
   margin-left: 10px;
 `;
 

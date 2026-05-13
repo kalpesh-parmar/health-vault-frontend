@@ -40,7 +40,7 @@ const CustomDrawerContent = (props: any) => {
       });
     },
     onError: (error) => {
-      console.log(error);
+      // Handle error
     },
   });
 

@@ -121,7 +121,6 @@ const MedicationOperation = ({
     if (operation === "add") {
       await addMedicationMutation(formData);
     } else {
-      console.log(medicationId, formData);
       await editMedicationMutation({
         medicationId: medicationId || "",
         data: formData,
