@@ -6,7 +6,9 @@ import React, {
   ReactNode,
 } from "react";
 import * as SecureStore from "expo-secure-store";
+import Toast from "react-native-toast-message";
 import { queryClient } from "../config/queryClient";
+import { setServerErrorCallback } from "../services/apiClient";
 
 interface AuthContextType {
   userId: string | null;
@@ -67,6 +69,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Error during logout:", error);
     }
   };
+
+  useEffect(() => {
+    setServerErrorCallback(async () => {
+      await logout();
+      Toast.show({
+        type: "error",
+        text1: "Connection Error",
+        text2: "A server or authentication error occurred. Please log in again.",
+      });
+    });
+  }, [logout]);
 
   return (
     <Context.Provider

@@ -13,46 +13,93 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAppTheme } from "../context/ThemeContext";
 import { AppStackParamList } from "./types";
+import { useQuery } from "@tanstack/react-query";
+import { getUser } from "../services/userService";
 
 const CustomDrawerContent = (props: any) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const { isDark, theme } = useAppTheme();
+  const { isDark } = useAppTheme();
+
+  const { data: userDetails } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const response = await getUser();
+      return response?.data || response;
+    },
+  });
+
+  // Exactly matching the HomeScreen header gradient configuration 🔑
+  const headerColors = isDark
+    ? ["#064e3b", "#0369a1", "#312e81"]
+    : ["#0f766e", "#0ea5e9", "#4f46e5"];
 
   return (
-    <Container>
-      <DrawerContentScrollView contentContainerStyle={{ paddingTop: 0 }}>
-        <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
+    <Container isDark={isDark}>
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={{
+          paddingTop: 0,
+          paddingHorizontal: 0,
+        }}
+        bounces={false}
+      >
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate("Profile")}
+        >
           <Header
-            colors={isDark ? ["#1e293b", "#334155"] : ["#4f46e5", "#7c3aed"]}
+            colors={headerColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
-            <ProfileImage source={{ uri: "https://i.pravatar.cc/150" }} />
-
+            <ProfileImage
+              source={{ uri: userDetails?.profileImageKey || "" }}
+            />
             <UserInfo>
-              <Username>Dharmik</Username>
-              <Subtitle>Welcome back 👋</Subtitle>
+              <Username>
+                {userDetails?.userName || "Health Vault User"}
+              </Username>
+              <UserEmail>
+                {userDetails?.email || "user@healthvault.com"}
+              </UserEmail>
             </UserInfo>
           </Header>
         </TouchableOpacity>
 
-        <DrawerSection>
-          <DrawerItemList {...props} />
-        </DrawerSection>
+        <MainContent isDark={isDark}>
+          <DrawerSection>
+            <DrawerItemList
+              {...props}
+              descriptor={{
+                ...props.descriptor,
+                options: {
+                  ...props.options,
+                  drawerItemStyle: {
+                    marginHorizontal: 0,
+                    width: "100%",
+                  },
+                },
+              }}
+            />
+          </DrawerSection>
+        </MainContent>
       </DrawerContentScrollView>
 
       <BottomSection>
+        <Separator isDark={isDark} />
         <DrawerItem
           label="Logout"
-          onPress={() => {
-            setShowModal(true);
-          }}
-          icon={() => <Ionicons name="log-out-outline" size={30} color={theme.colors.error} />}
+          onPress={() => setShowModal(true)}
+          icon={({ size }) => (
+            <Ionicons name="power-outline" size={size} color="#ef4444" />
+          )}
           labelStyle={{
-            color: theme.colors.error,
-            fontWeight: "600",
+            color: "#ef4444",
+            fontWeight: "700",
             fontSize: 16,
-            letterSpacing: 1,
+            marginLeft: -10,
           }}
         />
       </BottomSection>
@@ -69,34 +116,32 @@ const CustomDrawerContent = (props: any) => {
 
 export default CustomDrawerContent;
 
-const Container = styled.View`
+/**
+ * Styled Components 💅
+ */
+
+const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.background};
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#0f172a" : "#f8fafc")};
 `;
 
-const Header = styled(LinearGradient).attrs({
-  start: { x: 0, y: 1 },
-  end: { x: 1, y: 0 },
-})`
-  padding: 10px;
-  height: 70px;
-  margin-top: 50px;
-  border-radius: 26px;
+const Header = styled(LinearGradient)`
+  padding: 60px 20px 30px 20px;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  elevation: 10;
 `;
 
 const ProfileImage = styled.Image`
-  width: 52px;
-  height: 52px;
-  border-radius: 26px;
-  border: 2px solid ${({ theme }: any) => theme.colors.primary};
+  width: 65px;
+  height: 65px;
+  border-radius: 32.5px;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.4);
 `;
 
 const UserInfo = styled.View`
-  margin-left: 14px;
+  margin-left: 15px;
+  flex: 1;
 `;
 
 const Username = styled.Text`
@@ -105,20 +150,35 @@ const Username = styled.Text`
   color: #ffffff;
 `;
 
-const Subtitle = styled.Text`
+const UserEmail = styled.Text`
   font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 4px;
+`;
+
+const MainContent = styled.View<{ isDark: boolean }>`
+  flex: 1;
+  background-color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#0f172a" : "#f8fafc"};
+  border-top-left-radius: 25px;
+  border-top-right-radius: 25px;
+  margin-top: -20px;
+  padding-horizontal: 0px;
+  padding-top: 10px;
 `;
 
 const DrawerSection = styled.View`
-  flex: 1;
-  justify-content: space-between;
-  padding-top: 20px;
+  padding-horizontal: 0px;
 `;
 
 const BottomSection = styled.View`
-  border-top-width: 1px;
-  border-top-color: ${({ theme }: any) => theme.colors.divider};
-  padding: 10px 0 20px;
+  padding-bottom: 20px;
+  padding-horizontal: 0px;
+`;
+
+const Separator = styled.View<{ isDark: boolean }>`
+  height: 1px;
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#334155" : "#e2e8f0")};
+  margin-bottom: 10px;
+  opacity: 0.8;
 `;

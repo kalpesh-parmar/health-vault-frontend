@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "styled-components/native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 
 interface AddDocumentSheetProps {
@@ -16,36 +16,43 @@ const AddDocumentSheet = ({
 
   return (
     <SheetContentWrapper>
-      <SheetTitle>Add Document</SheetTitle>
-      <SheetSubtitle>Securely upload or capture your record</SheetSubtitle>
+      <HeaderSection>
+        <SheetTitle>Upload Document</SheetTitle>
+        <SheetSubtitle>Choose an option to upload</SheetSubtitle>
+      </HeaderSection>
 
-      <SheetButtonsContainer>
-        <SheetActionButton onPress={onGalleryPick}>
-          <IconWrapper
-            style={{ backgroundColor: isDark ? "#1e3a8a" : "#eff6ff" }}
-          >
+      <OptionsContainer>
+        <OptionRow onPress={onCameraOpen} isFirst>
+          <IconContainer bgColor="#f5f3ff">
             <MaterialCommunityIcons
-              name="image-plus"
-              size={28}
-              color="#3b82f6"
+              name="camera-outline"
+              size={26}
+              color="#7c3aed"
             />
-          </IconWrapper>
-          <SheetActionButtonText>Gallery</SheetActionButtonText>
-        </SheetActionButton>
+          </IconContainer>
+          <TextContent>
+            <OptionTitle>Camera</OptionTitle>
+            <OptionDesc>Take a photo</OptionDesc>
+          </TextContent>
+          <Feather name="chevron-right" size={20} color="#94a3b8" />
+        </OptionRow>
 
-        <SheetActionButton onPress={onCameraOpen}>
-          <IconWrapper
-            style={{ backgroundColor: isDark ? "#14532d" : "#f0fdf4" }}
-          >
+        {/* Gallery Option */}
+        <OptionRow onPress={onGalleryPick}>
+          <IconContainer bgColor="#fff1f2">
             <MaterialCommunityIcons
-              name="camera-plus"
-              size={28}
-              color="#22c55e"
+              name="image-outline"
+              size={26}
+              color="#f43f5e"
             />
-          </IconWrapper>
-          <SheetActionButtonText>Camera</SheetActionButtonText>
-        </SheetActionButton>
-      </SheetButtonsContainer>
+          </IconContainer>
+          <TextContent>
+            <OptionTitle>Gallery</OptionTitle>
+            <OptionDesc>Choose from gallery</OptionDesc>
+          </TextContent>
+          <Feather name="chevron-right" size={20} color="#94a3b8" />
+        </OptionRow>
+      </OptionsContainer>
     </SheetContentWrapper>
   );
 };
@@ -53,53 +60,69 @@ const AddDocumentSheet = ({
 export default AddDocumentSheet;
 
 const SheetContentWrapper = styled.View`
-  padding: 25px 20px;
-  align-items: center;
+  padding: 12px 20px 40px;
+  border-top-left-radius: 30px;
+  border-top-right-radius: 30px;
+`;
+
+const HeaderSection = styled.View`
+  margin-bottom: 25px;
 `;
 
 const SheetTitle = styled.Text`
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
+  color: #1e293b;
 `;
 
 const SheetSubtitle = styled.Text`
   font-size: 14px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-  margin-top: 6px;
-  margin-bottom: 30px;
-  text-align: center;
+  color: #64748b;
+  margin-top: 4px;
 `;
 
-const SheetButtonsContainer = styled.View`
+const OptionsContainer = styled.View`
+  border-width: 1px;
+  border-color: #f1f5f9;
+  border-radius: 20px;
+  overflow: hidden;
+`;
+
+const OptionRow = styled.TouchableOpacity<{
+  isFirst?: boolean;
+  isLast?: boolean;
+}>`
   flex-direction: row;
-  justify-content: space-evenly;
-  width: 100%;
-`;
-
-const SheetActionButton = styled.TouchableOpacity`
   align-items: center;
-  width: 100px;
-  background-color: ${({ theme }: any) => theme.colors.surface};
   padding: 16px;
-  border-radius: 20px;
-  shadow-color: #000;
-  shadow-opacity: 0.05;
-  shadow-radius: 10px;
-  elevation: 3;
+  background-color: white;
+  border-bottom-width: 1px;
+  border-bottom-color: ${({ isLast }: { isLast?: boolean }) =>
+    isLast ? "transparent" : "#f1f5f9"};
 `;
 
-const IconWrapper = styled.View`
-  width: 30px;
-  height: 30px;
-  border-radius: 20px;
+const IconContainer = styled.View<{ bgColor: string }>`
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background-color: ${({ bgColor }: { bgColor: string }) => bgColor};
   justify-content: center;
   align-items: center;
-  margin-bottom: 12px;
 `;
 
-const SheetActionButtonText = styled.Text`
-  font-size: 14px;
+const TextContent = styled.View`
+  flex: 1;
+  margin-left: 16px;
+`;
+
+const OptionTitle = styled.Text`
+  font-size: 16px;
   font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
+  color: #1e293b;
+`;
+
+const OptionDesc = styled.Text`
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 2px;
 `;

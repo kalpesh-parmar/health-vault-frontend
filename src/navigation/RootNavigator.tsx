@@ -10,7 +10,11 @@ const RootNavigator = () => {
   return (
     <NavigationContainer>
       {isLoading ? (
-        <ModernLoader visible={true} title="Just There..." subtitle="Thank You For Your Patience." />
+        <ModernLoader
+          visible={true}
+          title="Initializing System..."
+          subtitle="Loading your secure vault"
+        />
       ) : isLoggedIn ? (
         <CustomDrawerNavigator />
       ) : (

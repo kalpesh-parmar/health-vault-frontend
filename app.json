@@ -4,22 +4,28 @@
     "slug": "health-vault",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/health_vault_logo.png",
+    "icon": "./assets/AppIcon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "owner": "dharmik-bapodara",
     "splash": {
-      "image": "./assets/Splash.png",
+      "image": "./assets/AppIcon.png",
       "resizeMode": "cover",
       "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true
     },
+    "extra": {
+      "eas": {
+        "projectId": "b062fe9d-eb5f-437f-adf2-d5d6f4038b83"
+      }
+    },
     "android": {
       "package": "com.anonymous.DocumentsVaultApp",
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/Splash.png",
+        "foregroundImage": "./assets/AppIcon.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
@@ -30,6 +36,14 @@
       "favicon": ""
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "googleServicesFile": "./android/app/google-services.json"
+          }
+        }
+      ],
       [
         "expo-camera",
         {

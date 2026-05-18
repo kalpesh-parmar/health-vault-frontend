@@ -9,10 +9,10 @@ import RootNavigator from "./src/navigation/RootNavigator";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { useEffect } from "react";
-import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import Constants from "expo-constants";
 import { AppThemeProvider } from "./src/context/ThemeContext";
+import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -48,10 +48,9 @@ export default function App() {
         }
 
         const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: Constants.expoConfig?.extra?.eas?.projectId,
+          projectId: Constants.expoConfig?.extra?.eas.projectId,
         });
         const deviceToken = tokenData.data;
-
         await SecureStore.setItemAsync("deviceToken", String(deviceToken));
 
         if (Platform.OS === "android") {
@@ -83,7 +82,11 @@ export default function App() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <BottomSheetModalProvider>
               <RootNavigator />
-              <Toast config={toastConfig} topOffset={60} visibilityTime={4000} />
+              <Toast
+                config={toastConfig}
+                topOffset={60}
+                visibilityTime={4000}
+              />
             </BottomSheetModalProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

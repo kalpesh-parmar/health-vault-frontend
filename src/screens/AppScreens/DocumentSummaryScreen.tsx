@@ -1,280 +1,256 @@
 import React, { useEffect, useState } from "react";
-import { Modal, TouchableOpacity } from "react-native";
+import { Modal, TouchableOpacity, ScrollView, Dimensions } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  withSpring,
 } from "react-native-reanimated";
 import styled from "styled-components/native";
-import ScreenHeader from "../../components/shared/Header";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as MailComposer from "expo-mail-composer";
-import Toast from "react-native-toast-message";
-import { generateProfessionalEmail } from "../../utils/ShareTemplate";
 import { useAppTheme } from "../../context/ThemeContext";
 import { getSignedUrl } from "../../services/documentService";
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const CONTAINER_WIDTH = SCREEN_WIDTH * 0.9;
+const CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.7;
+const IMAGE_WIDTH = SCREEN_WIDTH * 0.7;
+const IMAGE_HEIGHT = SCREEN_WIDTH * 1.7;
+
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
   const [imageUri, setImageUri] = useState<string>("");
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const { isDark } = useAppTheme();
 
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
-
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const offsetX = useSharedValue(0);
+  const offsetY = useSharedValue(0);
 
   const pinchGesture = Gesture.Pinch()
     .onUpdate((event) => {
-      scale.value = savedScale.value * event.scale;
+      const nextScale = savedScale.value * event.scale;
+      scale.value = Math.min(Math.max(nextScale, 1), 4);
     })
     .onEnd(() => {
       savedScale.value = scale.value;
+      if (scale.value <= 1) {
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        offsetX.value = 0;
+        offsetY.value = 0;
+      }
     });
 
-  const panGesture = Gesture.Pan().onUpdate((event) => {
-    if (scale.value > 1) {
-      translateX.value = event.translationX;
-      translateY.value = event.translationY;
-    }
-  });
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (scale.value > 1) {
+        const maxTranslateX = (IMAGE_WIDTH * scale.value - CONTAINER_WIDTH) / 2;
+        const maxTranslateY = Math.max(
+          0,
+          (IMAGE_HEIGHT * scale.value - CONTAINER_HEIGHT) / 2,
+        );
+
+        translateX.value = Math.min(
+          Math.max(offsetX.value + event.translationX, -maxTranslateX),
+          maxTranslateX,
+        );
+        translateY.value = Math.min(
+          Math.max(offsetY.value + event.translationY, -maxTranslateY),
+          maxTranslateY,
+        );
+      }
+    })
+    .onEnd(() => {
+      offsetX.value = translateX.value;
+      offsetY.value = translateY.value;
+    });
 
   const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
 
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { scale: scale.value },
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-      ],
-    };
-  });
-
-  const getSignedURL = async () => {
-    try {
-      const response = await getSignedUrl(document?.s3Key);
-      setImageUri(response?.data);
-    } catch {
-      // Error handled silently — no signed URL means no preview
-    }
-  };
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
 
   useEffect(() => {
-    getSignedURL();
+    (async () => {
+      try {
+        const response = await getSignedUrl(document?.s3Key);
+        setImageUri(response?.data?.downloadUrl || document.imageUri);
+      } catch (e) {}
+    })();
   }, []);
-
-  const handleEdit = () => {
-    navigation.navigate("EditDocument", { document });
-  };
-
-  const handleShare = async () => {
-    const result = await MailComposer.isAvailableAsync();
-    if (!result) {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Mail is not available",
-      });
-      return;
-    }
-
-    const subject = `Document Shared - ${document?.title}`;
-    const body = generateProfessionalEmail(document);
-    const attachment = document?.imageUri;
-
-    const mail = {
-      subject: subject,
-      body: body,
-      attachments: attachment ? [attachment] : [],
-    };
-
-    const share = await MailComposer.composeAsync(mail);
-
-    if (share.status === "cancelled") {
-      Toast.show({
-        type: "info",
-        text1: "Cancelled",
-        text2: "Mail not sent",
-      });
-    } else {
-      Toast.show({
-        type: "success",
-        text1: "Success",
-        text2: "Mail sent successfully",
-      });
-    }
-  };
 
   return (
     <Container>
-      <HeaderBand>
-        <ScreenHeader title="Summary" showBack={true} />
-      </HeaderBand>
+      <ConfirmationModal
+        showModal={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        mode="Delete Document"
+        documentId={document?.id}
+      />
 
-      <ScrollContent>
-        <MetaCard>
-          <MetaLeft>
-            <CategoryRow>
-              <CategoryDot />
-              <CategoryLabel>{document.documentType}</CategoryLabel>
-            </CategoryRow>
-            <DocumentTitle>{document?.fileName}</DocumentTitle>
-            <DateRow>
-              <Ionicons
-                name="calendar-outline"
-                size={12}
-                color={isDark ? "#64748b" : "#94A3B8"}
-              />
-              <DocumentDate>
-                Created On{" "}
-                {new Date(document?.createdAt).toLocaleDateString("en-US", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </DocumentDate>
-            </DateRow>
-          </MetaLeft>
-          <EditButton onPress={handleEdit}>
-            <Ionicons
-              name="pencil-sharp"
-              size={16}
-              color={isDark ? "#60a5fa" : "#1246A8"}
-            />
-          </EditButton>
-
-          <SummaryCard>
-            <SummaryGradient
-              colors={
-                isDark
-                  ? ["#1e293b", "#334155"]
-                  : ["#E8EFFD", "#EDE6FF", "#F5F0FF"]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <SummaryHeader>
-                <SummaryIconBadge>
-                  <Ionicons name="sparkles" size={14} color="#ffffff" />
-                </SummaryIconBadge>
-                <SummaryTitle>AI Summary</SummaryTitle>
-              </SummaryHeader>
-              <SummaryText>
-                {document?.AISummary ||
-                  "AI summary will be generated on OCR API call."}
-              </SummaryText>
-            </SummaryGradient>
-          </SummaryCard>
-        </MetaCard>
-
-        {document?.notes && (
-          <NotesCard>
-            <NotesGradient
-              colors={
-                isDark
-                  ? ["#332d1e", "#42381e"]
-                  : ["#FFFDF0", "#FFF8D6", "#FFF4C2"]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <NotesMarginLine />
-              <NotesContent>
-                <NotesHeader>
-                  <NotesIconBadge>
-                    <Ionicons name="book-outline" size={14} color="#ffffff" />
-                  </NotesIconBadge>
-                  <NotesTitle>Notes</NotesTitle>
-                </NotesHeader>
-                <NotesRuledContainer>
-                  <NotesText>{document?.notes}</NotesText>
-                </NotesRuledContainer>
-              </NotesContent>
-            </NotesGradient>
-          </NotesCard>
-        )}
-
-        <PreviewCard>
-          <PreviewHeader>
-            <Ionicons
-              name="document-outline"
-              size={13}
-              color={isDark ? "#64748b" : "#94A3B8"}
-            />
-            <PreviewLabel>Document Preview</PreviewLabel>
-          </PreviewHeader>
-          {imageUri ? (
-            <TouchableOpacity
-              style={{ width: "100%" }}
-              activeOpacity={0.8}
-              onPress={() => setIsPreviewModalOpen(true)}
-            >
-              <PreviewImage
-                source={{
-                  uri: imageUri,
-                }}
-                onError={() => {}}
-              />
-            </TouchableOpacity>
-          ) : (
-            <EmptyPreview>
-              <Ionicons
-                name="image-outline"
-                size={36}
-                color={isDark ? "#475569" : "#CBD5E1"}
-              />
-              <EmptyText>No image attached</EmptyText>
-            </EmptyPreview>
-          )}
-        </PreviewCard>
-
-        <ActionButton onPress={handleShare}>
-          <ActionButtonText>Share Document</ActionButtonText>
-          <Ionicons name="share" size={24} color="#ffffff" />
-        </ActionButton>
-      </ScrollContent>
-
-      <Modal
-        visible={isPreviewModalOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsPreviewModalOpen(false)}
+      <GradientHeader
+        colors={
+          isDark
+            ? ["#064e3b", "#0369a1", "#312e81"]
+            : ["#0f766e", "#0ea5e9", "#4f46e5"]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <ModalContainer pointerEvents="box-none">
-            <ModalBackdrop
-              pointerEvents="auto"
-              onPress={() => setIsPreviewModalOpen(false)}
-            />
+        <HeaderActions>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <RightActions>
+            <TouchableOpacity onPress={() => setIsDeleteModalOpen(true)}>
+              <Ionicons name="trash-outline" size={24} color="white" />
+            </TouchableOpacity>
+          </RightActions>
+        </HeaderActions>
+      </GradientHeader>
 
+      <ContentContainer>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
+        >
+          <MainInfoCard>
+            <DocHeaderRow>
+              <IconBox>
+                <MaterialCommunityIcons name="file" size={40} color="#ff4d4d" />
+                <FormatLabel>
+                  {document?.fileName.split(".")[1].toUpperCase()}
+                </FormatLabel>
+              </IconBox>
+              <TitleCol>
+                <DocTitle>{document?.fileName}</DocTitle>
+                <DocSubInfo>
+                  {document?.fileSize >= 1024 * 1024
+                    ? (document?.fileSize / (1024 * 1024)).toFixed(1) + " MB"
+                    : (document?.fileSize / 1024).toFixed(1) + " KB"}
+                  •{" "}
+                  {document?.fileName.split(".")[1].toUpperCase()}
+                </DocSubInfo>
+              </TitleCol>
+            </DocHeaderRow>
+            <Divider />
+            <GridInfo>
+              <GridItem>
+                <GridLabel>Date</GridLabel>
+                <GridValue>
+                  {new Date(document?.createdAt).toLocaleDateString("en-US", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </GridValue>
+              </GridItem>
+              <GridItem>
+                <GridLabel>Category</GridLabel>
+                <GridValue>{document?.documentType}</GridValue>
+              </GridItem>
+            </GridInfo>
+          </MainInfoCard>
+
+          {/* AI SUMMARY */}
+          <SectionHeader>
+            <Ionicons name="sparkles" size={18} color="#8b5cf6" />
+            <SectionTitle>AI Summary</SectionTitle>
+          </SectionHeader>
+          <HighlightCard isDark={isDark}>
+            <SummaryContainer>
+              <DescriptionText isDark={isDark}>
+                {document?.AISummary ||
+                  "AI is processing this document to generate a summary."}
+              </DescriptionText>
+            </SummaryContainer>
+          </HighlightCard>
+
+          {/* NOTES (Conditional) */}
+          {document?.notes && (
+            <>
+              <SectionHeader>
+                <Ionicons
+                  name="document-text-outline"
+                  size={18}
+                  color="#065f46"
+                />
+                <SectionTitle>Notes</SectionTitle>
+              </SectionHeader>
+              <HighlightCard>
+                <SummaryContainer>
+                  <DescriptionText>{document.notes}</DescriptionText>
+                </SummaryContainer>
+              </HighlightCard>
+            </>
+          )}
+
+          {/* IMAGE PREVIEW SECTION */}
+          <SectionHeader>
+            <Ionicons name="image-outline" size={18} color="#3b82f6" />
+            <SectionTitle>Document Preview</SectionTitle>
+          </SectionHeader>
+          <PreviewThumbnailContainer
+            activeOpacity={0.9}
+            onPress={() => setIsPreviewModalOpen(true)}
+          >
+            {imageUri ? (
+              <ThumbnailImage source={{ uri: imageUri }} resizeMode="cover" />
+            ) : (
+              <EmptyPreviewBox>
+                <Ionicons
+                  name="cloud-offline-outline"
+                  size={32}
+                  color="#cbd5e1"
+                />
+                <EmptyText>Image preview not available</EmptyText>
+              </EmptyPreviewBox>
+            )}
+            <ZoomOverlay>
+              <Ionicons name="expand-outline" size={20} color="white" />
+              <ZoomText>Tap to zoom</ZoomText>
+            </ZoomOverlay>
+          </PreviewThumbnailContainer>
+        </ScrollView>
+      </ContentContainer>
+
+      {/* FULL SCREEN ZOOM MODAL */}
+      <Modal visible={isPreviewModalOpen} transparent animationType="fade">
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <ModalBackdrop>
             <CloseButton onPress={() => setIsPreviewModalOpen(false)}>
-              <Ionicons name="close" size={28} color="#ffffff" />
+              <Ionicons name="close-circle" size={36} color="white" />
             </CloseButton>
 
-            <GestureDetector gesture={composedGesture}>
-              <ImageWrapper>
+            <ZoomContainer>
+              <GestureDetector gesture={composedGesture}>
                 <Animated.Image
                   source={{ uri: imageUri }}
                   style={[
-                    {
-                      width: "100%",
-                      height: "100%",
-                    },
+                    { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1 },
                     animatedStyle,
                   ]}
                   resizeMode="contain"
                 />
-              </ImageWrapper>
-            </GestureDetector>
-          </ModalContainer>
+              </GestureDetector>
+            </ZoomContainer>
+          </ModalBackdrop>
         </GestureHandlerRootView>
       </Modal>
     </Container>
@@ -283,324 +259,195 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
 export default SummaryScreen;
 
-const Container = styled.SafeAreaView`
+/** STYLED COMPONENTS **/
+
+const Container = styled.View`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.background};
+  background-color: #f8fafc;
 `;
 
-const HeaderBand = styled.View`
-  background-color: ${({ theme }: any) => theme.colors.surface};
-  padding-bottom: 24px;
-  overflow: hidden;
+const GradientHeader = styled(LinearGradient)`
+  height: 200px;
+  padding-top: 50px;
+  padding-horizontal: 20px;
 `;
 
-const ScrollContent = styled.ScrollView.attrs({
-  contentContainerStyle: { padding: 16, paddingBottom: 32 },
-  showsVerticalScrollIndicator: false,
-})`
-  flex: 1;
-  margin-top: -14px;
-`;
-
-const MetaCard = styled.View`
-  background-color: ${({ theme }: any) => theme.colors.surface};
-  border-radius: 20px;
-  padding: 18px;
-  flex: 1;
+const HeaderActions = styled.View`
+  flex-direction: row;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 14px;
-  border-width: 0.5px;
-  border-color: ${({ theme }: any) => theme.colors.border};
-  elevation: 4;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-opacity: 0.08;
-  shadow-radius: 12px;
-  shadow-offset: 0px 4px;
 `;
 
-const MetaLeft = styled.View`
+const RightActions = styled.View`
+  flex-direction: row;
+`;
+
+const ContentContainer = styled.View`
   flex: 1;
+  margin-top: -100px;
+  padding-horizontal: 20px;
 `;
 
-const CategoryRow = styled.View`
+const MainInfoCard = styled.View`
+  background-color: white;
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 20px;
+  elevation: 5;
+  shadow-color: #000;
+  shadow-opacity: 0.05;
+  shadow-radius: 10px;
+`;
+
+const DocHeaderRow = styled.View`
   flex-direction: row;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
 `;
-
-const CategoryDot = styled.View`
-  width: 8px;
-  height: 8px;
-  border-radius: 4px;
-  background-color: ${({ theme }: any) => theme.colors.primary};
+const IconBox = styled.View`
+  width: 65px;
+  height: 65px;
+  background-color: #fff5f5;
+  border-radius: 15px;
+  align-items: center;
+  justify-content: center;
 `;
-
-const CategoryLabel = styled.Text`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }: any) => theme.colors.primary};
-  letter-spacing: 1px;
-  text-transform: uppercase;
+const FormatLabel = styled.Text`
+  font-size: 10px;
+  font-weight: 800;
+  color: #ff4d4d;
 `;
-
-const DocumentTitle = styled.Text`
+const TitleCol = styled.View`
+  margin-left: 15px;
+  flex: 1;
+`;
+const DocTitle = styled.Text`
   font-size: 18px;
   font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  line-height: 24px;
-  margin-bottom: 8px;
+  color: #1e293b;
 `;
-
-const DateRow = styled.View`
-  flex-direction: row;
-  align-items: center;
-  gap: 5px;
-`;
-
-const DocumentDate = styled.Text`
-  font-size: 12px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-`;
-
-const EditButton = styled.TouchableOpacity`
-  position: absolute;
-  top: 40px;
-  right: 20px;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background-color: ${({ theme }: any) => theme.colors.iconBox};
-  border-width: 0.5px;
-  border-color: ${({ theme }: any) => theme.colors.border};
-  align-items: center;
-  justify-content: center;
-`;
-
-const SummaryCard = styled.View`
-  width: 100%;
-  margin-top: 20px;
-  border-radius: 20px;
-  overflow: hidden;
-  border-width: 0.5px;
-  border-color: ${({ theme }: any) => theme.colors.border};
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-offset: 0px 8px;
-  shadow-opacity: 0.18;
-  shadow-radius: 20px;
-  elevation: 6;
-`;
-
-const SummaryGradient = styled(LinearGradient)`
-  padding: 18px;
-`;
-
-const SummaryHeader = styled.View`
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-`;
-
-const SummaryIconBadge = styled.View`
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background-color: ${({ theme }: any) => theme.colors.primary};
-  align-items: center;
-  justify-content: center;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-offset: 0px 3px;
-  shadow-opacity: 0.45;
-  shadow-radius: 6px;
-  elevation: 4;
-`;
-
-const SummaryTitle = styled.Text`
-  font-size: 15px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.primary};
-  flex: 1;
-  letter-spacing: 0.2px;
-`;
-
-const SummaryText = styled.Text`
+const DocSubInfo = styled.Text`
   font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  line-height: 22px;
+  color: #94a3b8;
+`;
+const Divider = styled.View`
+  height: 1px;
+  background-color: #f1f5f9;
+  margin-vertical: 15px;
+`;
+const GridInfo = styled.View`
+  flex-direction: row;
+  justify-content: space-around;
+`;
+const GridItem = styled.View``;
+const GridLabel = styled.Text`
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+`;
+const GridValue = styled.Text`
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
 `;
 
-const NotesCard = styled.View`
-  border-radius: 20px;
+const SectionHeader = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  gap: 8px;
+`;
+const SectionTitle = styled.Text`
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+`;
+
+const HighlightCard = styled.View<{ isDark: boolean }>`
+  border-radius: 16px;
   overflow: hidden;
-  margin-bottom: 14px;
-  border-width: 0.5px;
-  border-color: ${({ theme }: any) => theme.colors.warning};
-  shadow-color: ${({ theme }: any) => theme.colors.warning};
-  shadow-offset: 0px 4px;
-  shadow-opacity: 0.12;
-  shadow-radius: 14px;
-  elevation: 3;
 `;
-
-const NotesGradient = styled(LinearGradient)`
-  padding: 18px 18px 18px 0px;
+const SummaryContainer = styled.View<{ isDark: boolean }>`
   flex-direction: row;
+  padding: 7px;
+  padding-left: 0px;
 `;
 
-const NotesMarginLine = styled.View`
-  width: 3px;
-  border-radius: 3px;
-  background-color: ${({ theme }: any) => theme.colors.warning};
-  margin-left: 16px;
-  margin-right: 14px;
-  opacity: 0.75;
-`;
-
-const NotesContent = styled.View`
+const DescriptionText = styled.Text<{ isDark: boolean }>`
+  font-size: 14px;
+  color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#cbd5e1" : "#334155")};
+  font-weight: 500;
+  line-height: 22px;
   flex: 1;
+  padding-horizontal: 15px;
 `;
 
-const NotesHeader = styled.View`
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-`;
-
-const NotesIconBadge = styled.View`
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background-color: ${({ theme }: any) => theme.colors.warning};
-  align-items: center;
-  justify-content: center;
-  shadow-color: ${({ theme }: any) => theme.colors.warning};
-  shadow-offset: 0px 3px;
-  shadow-opacity: 0.35;
-  shadow-radius: 5px;
-  elevation: 3;
-`;
-
-const NotesTitle = styled.Text`
-  font-size: 15px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.warning};
-  flex: 1;
-  letter-spacing: 0.2px;
-`;
-
-const NotesRuledContainer = styled.View`
+// IMAGE PREVIEW STYLES
+const PreviewThumbnailContainer = styled.TouchableOpacity`
+  height: 230px;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  background-color: #f1f5f9;
+  border-width: 1px;
+  border-color: #e2e8f0;
   position: relative;
 `;
 
-const NotesText = styled.Text`
-  font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  line-height: 22px;
-  opacity: 0.9;
+const ThumbnailImage = styled.Image`
+  width: 100%;
+  height: 100%;
 `;
 
-const PreviewCard = styled.View`
-  background-color: ${({ theme }: any) => theme.colors.surface};
+const ZoomOverlay = styled.View`
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background-color: rgba(0, 0, 0, 0.6);
+  padding: 6px 12px;
   border-radius: 20px;
-  overflow: hidden;
-  margin-bottom: 14px;
-  border-width: 0.5px;
-  border-color: ${({ theme }: any) => theme.colors.border};
-`;
-
-const PreviewHeader = styled.View`
   flex-direction: row;
   align-items: center;
-  gap: 7px;
-  padding: 10px 16px;
-  border-bottom-width: 0.5px;
-  border-bottom-color: ${({ theme }: any) => theme.colors.border};
-  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
+  gap: 6px;
 `;
 
-const PreviewLabel = styled.Text`
-  font-size: 12px;
+const ZoomText = styled.Text`
+  color: white;
+  font-size: 10px;
   font-weight: 600;
-  color: ${({ theme }: any) => theme.colors.textMuted};
 `;
 
-const PreviewImage = styled.Image`
-  width: 100%;
-  height: 230px;
-  resize-mode: contain;
-`;
-
-const EmptyPreview = styled.View`
-  height: 140px;
-  align-items: center;
+const EmptyPreviewBox = styled.View`
+  flex: 1;
   justify-content: center;
+  align-items: center;
   gap: 8px;
-  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
 `;
 
 const EmptyText = styled.Text`
-  font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
+  color: #94a3b8;
+  font-size: 12px;
 `;
 
-const ActionButton = styled.TouchableOpacity`
-  background-color: ${({ theme }: any) => theme.colors.primary};
+// MODAL STYLES
+const ModalBackdrop = styled.View`
   flex: 1;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 10px;
-  flex-direction: row;
-  align-items: center;
-  border-width: 0.5px;
-  border-color: ${({ theme }: any) => theme.colors.border};
-`;
-
-const ActionButtonText = styled.Text`
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: 0.5px;
-  padding-right: 10px;
-`;
-
-const ModalContainer = styled.View`
-  height: 300px;
-  width: 100%;
-  flex: 1;
-  background-color: transparent;
+  background-color: rgba(0, 0, 0, 0.95);
   justify-content: center;
   align-items: center;
 `;
 
-const ImageWrapper = styled.View`
+const ZoomContainer = styled.View`
   width: 90%;
   height: 70%;
+  background-color: #1e293b;
+  border-radius: 20px;
+  overflow: hidden;
   justify-content: center;
   align-items: center;
-  overflow: hidden;
-  border-radius: 16px;
-`;
-
-const ModalBackdrop = styled.TouchableOpacity`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.9);
 `;
 
 const CloseButton = styled.TouchableOpacity`
   position: absolute;
-  top: 50px;
-  right: 20px;
-  z-index: 10;
-  padding: 8px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
+  top: 60px;
+  z-index: 100;
 `;

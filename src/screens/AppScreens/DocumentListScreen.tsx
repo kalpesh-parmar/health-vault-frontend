@@ -1,206 +1,300 @@
-import React, { useRef, useState, useCallback } from "react";
-import { ActivityIndicator, FlatList } from "react-native";
+import React, { useRef, useState, useCallback, useMemo } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  StatusBar,
+  ListRenderItem,
+} from "react-native";
 import styled from "styled-components/native";
-import EmptyContent from "../../components/shared/EmptyContent";
-import ScreenHeader from "../../components/shared/Header";
-import DocumentCard from "../../components/Documents/DocumentCard";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
+
 import BottomSheet from "../../components/shared/BottomSheet";
-import { documentListPaginated } from "../../services/documentService";
-import { useDocumentMedia } from "../../hooks/useDocumentMedia";
-import { useQuery } from "@tanstack/react-query";
-import { RouteProp } from "@react-navigation/native";
-import { DocumentsStackParamList } from "../../navigation/types";
-import ModernLoader from "../../components/shared/Loader";
-import { useAppTheme } from "../../context/ThemeContext";
-import { useAuth } from "../../context/ContextAPI";
-import CameraModal from "../../components/shared/CameraModal";
 import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
-import type { MedicalDocument } from "../../types";
+import EmptyContent from "../../components/shared/EmptyContent";
+import CameraModal from "../../components/shared/CameraModal";
+import Loader from "../../components/shared/Loader";
+import FilterTabs from "../../components/shared/FilterTabs";
 
-const PAGE_SIZE = 7;
+import { useDocumentMedia } from "../../hooks/useDocumentMedia";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { documentListPaginated } from "../../services/documentService";
+import { useAuth } from "../../context/ContextAPI";
+import DocumentCard from "../../components/Documents/DocumentCard";
+import { useAppNavigation } from "../../types/navigation";
+import { useAppTheme } from "../../context/ThemeContext";
+import { MedicalDocument } from "../../types";
 
-type DocumentListRouteProp = RouteProp<DocumentsStackParamList, "DocumentList">;
-type Props = { route: DocumentListRouteProp };
+const CATEGORIES = [
+  { key: "All", value: "All" },
+  { key: "Family", value: "family" },
+  { key: "Medical Documents", value: "medical_document" },
+  { key: "Insurance", value: "insurance" },
+  { key: "Other", value: "other" },
+];
 
-const DocumentList = ({ route }: Props) => {
-  const category = route.params?.category;
+const SORT_OPTIONS = [
+  {
+    label: "Newest First",
+    description: "Recently added documents",
+    value: "date_desc",
+    icon: "calendar",
+  },
+  {
+    label: "Oldest First",
+    description: "Earliest added documents",
+    value: "date_asc",
+    icon: "calendar-outline",
+  },
+  {
+    label: "A-Z",
+    description: "Alphabetical ascending",
+    value: "name_asc",
+    icon: "alpha-a-box",
+  },
+  {
+    label: "Z-A",
+    description: "Alphabetical descending",
+    value: "name_desc",
+    icon: "alpha-z-box",
+  },
+];
 
+type Category = (typeof CATEGORIES)[number]["key"];
+
+const DocumentList = () => {
+  const navigation = useAppNavigation();
+  const { isDark } = useAppTheme();
   const refRBSheet = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
-  const [page, setPage] = useState(1);
+  const { userId } = useAuth();
+  const [activeTab, setActiveTab] = useState<Category>("All");
+  const [sortOption, setSortOption] = useState("date_desc");
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const {
-    isCameraVisible,
-    setIsCameraVisible,
     handleGalleryPick,
     handleOpenCamera,
-    takePicture,
+    isCameraVisible,
+    setIsCameraVisible,
     isCapturing,
+    takePicture,
   } = useDocumentMedia();
-  const { isDark } = useAppTheme();
 
-  const { userId } = useAuth();
-
-  const { data: documentListData, isFetching } = useQuery({
-    queryKey: ["documents", userId, category, page],
-    queryFn: () =>
+  const {
+    data: documentListData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["documents", userId, activeTab],
+    queryFn: ({ pageParam = 1 }) =>
       documentListPaginated({
-        activeCategory: category,
-        page,
-        pageLimit: PAGE_SIZE,
+        activeCategory: activeTab,
+        page: pageParam as number,
+        pageLimit: 10,
       }),
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.data.length === 10 ? allPages.length + 1 : undefined;
+    },
+    initialPageParam: 1,
     enabled: !!userId,
   });
 
-  const documents: MedicalDocument[] = documentListData?.data || [];
-  const totalCount: number = documents.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const hasNext = page < totalPages;
-  const hasPrev = page > 1;
+  const documents = useMemo(() => {
+    const flattened =
+      documentListData?.pages.flatMap((page) => page.data) || [];
 
-  const renderItem = useCallback(
-    ({ item }: { item: MedicalDocument }) => <DocumentCard document={item} />,
+    return flattened
+      .filter((doc: MedicalDocument) => {
+        if (activeTab === "All") return true;
+
+        const activeValue = CATEGORIES.find(
+          (category) => category.key === activeTab,
+        )?.value;
+
+        return doc.documentType?.toUpperCase() === activeValue?.toUpperCase();
+      })
+      .sort((a: MedicalDocument, b: MedicalDocument) => {
+        const firstName = a.title || a.fileName || "";
+        const secondName = b.title || b.fileName || "";
+
+        switch (sortOption) {
+          case "name_asc":
+            return firstName.localeCompare(secondName);
+          case "name_desc":
+            return secondName.localeCompare(firstName);
+          case "date_asc":
+            return (
+              new Date(a.createdAt || 0).getTime() -
+              new Date(b.createdAt || 0).getTime()
+            );
+          case "date_desc":
+            return (
+              new Date(b.createdAt || 0).getTime() -
+              new Date(a.createdAt || 0).getTime()
+            );
+          default:
+            return 0;
+        }
+      });
+  }, [documentListData, activeTab, sortOption]);
+
+  const renderItem: ListRenderItem<MedicalDocument> = useCallback(
+    ({ item }) => <DocumentCard document={item} />,
     [],
   );
 
-  const keyExtractor = useCallback((item: MedicalDocument) => item.id, []);
-
-  const handleGalleryPickSheet = useCallback(() => {
-    handleGalleryPick(() => refRBSheet?.current?.dismiss());
-  }, [handleGalleryPick]);
-
-  const handleCameraOpenSheet = useCallback(() => {
-    handleOpenCamera(() => refRBSheet?.current?.dismiss());
-  }, [handleOpenCamera]);
+  const gradientColors = useMemo(
+    () =>
+      isDark
+        ? ["#064e3b", "#0369a1", "#312e81"]
+        : ["#0f766e", "#0ea5e9", "#4f46e5"],
+    [isDark],
+  );
 
   return (
-    <Container>
-      {isCapturing && <ModernLoader visible={isCapturing} />}
-
-      <HeaderBand>
-        <ScreenHeader title="Documents" showBack />
-        <HeaderContent>
-          <HeaderTitle>Your Health Records</HeaderTitle>
-        </HeaderContent>
-      </HeaderBand>
+    <Container
+      colors={gradientColors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <StatusBar barStyle="light-content" />
 
       <CameraModal
         visible={isCameraVisible}
         onClose={() => setIsCameraVisible(false)}
-        onCapture={takePicture}
+        onCapture={() => takePicture(cameraRef)}
         isCapturing={isCapturing}
         cameraRef={cameraRef}
       />
 
-      <FlatList
-        data={documents}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 14,
-          paddingBottom: 20,
-          paddingTop: 0,
-          flexGrow: 1,
-        }}
-        ListHeaderComponent={
-          <SectionLabel>
-            <SectionLabelText>Recent</SectionLabelText>
-            {totalCount > 0 && <SectionCount>{totalCount} total</SectionCount>}
-          </SectionLabel>
-        }
-        ListEmptyComponent={
-          isFetching ? (
-            <EmptyStateWrapper>
-              <ActivityIndicator size="large" color="#2563eb" />
-              <EmptySubText>Loading documents...</EmptySubText>
-            </EmptyStateWrapper>
-          ) : (
-            <EmptyStateWrapper>
+      {isCapturing && <Loader visible={isCapturing} />}
+
+      <HeaderWrapper>
+        <HeaderMain>
+          <BackButton onPress={() => navigation.navigate("Home")}>
+            <Ionicons name="arrow-back" size={28} color="white" />
+          </BackButton>
+          <HeaderTitle>My Documents</HeaderTitle>
+          <RightActions>
+            <IconButton onPress={() => setShowDropdown(!showDropdown)}>
+              <MaterialCommunityIcons name="filter" size={20} color="white" />
+            </IconButton>
+            <RightButton onPress={() => refRBSheet.current?.present()}>
+              <Ionicons name="add" size={30} color="black" />
+            </RightButton>
+          </RightActions>
+        </HeaderMain>
+      </HeaderWrapper>
+
+      {showDropdown && (
+        <>
+          <DropdownOverlay
+            activeOpacity={1}
+            onPress={() => setShowDropdown(false)}
+          />
+          <DropdownContainer isDark={isDark}>
+            {SORT_OPTIONS.map((option) => {
+              const isActive = sortOption === option.value;
+              return (
+                <DropdownItem
+                  key={option.value}
+                  active={isActive}
+                  isDark={isDark}
+                  onPress={() => {
+                    setSortOption(option.value);
+                    setShowDropdown(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons
+                    name={option.icon as any}
+                    size={18}
+                    color={
+                      isActive
+                        ? isDark
+                          ? "#818cf8"
+                          : "#2563eb"
+                        : isDark
+                          ? "#94a3b8"
+                          : "#64748b"
+                    }
+                  />
+                  <DropdownText active={isActive} isDark={isDark}>
+                    {option.label}
+                  </DropdownText>
+                  {isActive && (
+                    <Ionicons
+                      name="checkmark"
+                      size={18}
+                      color={isDark ? "#818cf8" : "#2563eb"}
+                      style={{ marginLeft: "auto" }}
+                    />
+                  )}
+                </DropdownItem>
+              );
+            })}
+          </DropdownContainer>
+        </>
+      )}
+
+      <ContentContainer>
+        <FilterTabs
+          data={CATEGORIES.map((category) => category.key)}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isDark={isDark}
+        />
+
+        <FlatList
+          data={documents}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+          ListEmptyComponent={
+            isLoading ? (
+              <ActivityIndicator
+                size="large"
+                style={{ marginTop: 50 }}
+                color="#8b5cf6"
+              />
+            ) : (
               <EmptyContent />
-              <EmptySubText>
-                No documents yet. Add your first record.
-              </EmptySubText>
-            </EmptyStateWrapper>
-          )
-        }
-        ListFooterComponent={
-          documents.length >= PAGE_SIZE ? (
-            <PaginationRow>
-              <PageNavButton
-                onPress={() => setPage((p) => p - 1)}
-                disabled={!hasPrev || isFetching}
-                isDisabled={!hasPrev || isFetching}
-                isDark={isDark}
-              >
-                <MaterialCommunityIcons
-                  name="chevron-left"
-                  size={20}
-                  color={
-                    !hasPrev || isFetching
-                      ? isDark
-                        ? "#475569"
-                        : "#94a3b8"
-                      : isDark
-                        ? "#60a5fa"
-                        : "#2563eb"
-                  }
-                />
-                <PageNavText isDisabled={!hasPrev || isFetching}>
-                  Prev
-                </PageNavText>
-              </PageNavButton>
-
-              <PageIndicator>
-                {isFetching ? (
-                  <ActivityIndicator size="small" color="#2563eb" />
-                ) : (
-                  <PageIndicatorText>
-                    {page} / {totalPages}
-                  </PageIndicatorText>
-                )}
-              </PageIndicator>
-
-              <PageNavButton
-                onPress={() => setPage((p) => p + 1)}
-                disabled={!hasNext || isFetching}
-                isDisabled={!hasNext || isFetching}
-                isDark={isDark}
-              >
-                <PageNavText isDisabled={!hasNext || isFetching}>
-                  Next
-                </PageNavText>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={
-                    !hasNext || isFetching
-                      ? isDark
-                        ? "#475569"
-                        : "#94a3b8"
-                      : isDark
-                        ? "#60a5fa"
-                        : "#2563eb"
-                  }
-                />
-              </PageNavButton>
-            </PaginationRow>
-          ) : null
-        }
-      />
-
-      <FABWrapper>
-        <FABButton onPress={() => refRBSheet.current?.present()}>
-          <MaterialCommunityIcons name="plus" size={30} color="white" />
-        </FABButton>
-      </FABWrapper>
+            )
+          }
+          removeClippedSubviews={true}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.2}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator
+                size="small"
+                color="#8b5cf6"
+                style={{ marginVertical: 20 }}
+              />
+            ) : null
+          }
+        />
+      </ContentContainer>
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
-          onGalleryPick={handleGalleryPickSheet}
-          onCameraOpen={handleCameraOpenSheet}
+          onGalleryPick={() =>
+            handleGalleryPick(() => refRBSheet.current?.dismiss())
+          }
+          onCameraOpen={() =>
+            handleOpenCamera(() => refRBSheet.current?.dismiss())
+          }
         />
       </BottomSheet>
     </Container>
@@ -209,121 +303,123 @@ const DocumentList = ({ route }: Props) => {
 
 export default DocumentList;
 
-const Container = styled.View`
+const Container = styled(LinearGradient)`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.surfaceLight};
 `;
 
-const HeaderBand = styled.View`
-  margin-bottom: 12px;
+const HeaderWrapper = styled.SafeAreaView`
+  background-color: transparent;
+  padding-top: 40px;
+  padding-bottom: 20px;
 `;
 
-const HeaderContent = styled.View`
-  padding: 8px 20px 0;
+const HeaderMain = styled.View`
+  flex-direction: row;
+  align-items: center;
+  padding-horizontal: 20px;
+  height: 50px;
+  position: relative;
+`;
+
+const BackButton = styled.TouchableOpacity`
+  position: absolute;
+  left: 20px;
+  z-index: 10;
+  padding: 5px;
+`;
+
+const RightButton = styled.TouchableOpacity`
+  width: 40px;
+  height: 40px;
+  padding: 5px;
+  background-color: #ffffff;
+  border-radius: 24px;
+  align-items: center;
+  justify-content: center;
 `;
 
 const HeaderTitle = styled.Text`
-  font-size: 26px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  margin-top: 13px;
-`;
-
-const SectionLabel = styled.View`
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  margin-top: 20px;
-`;
-
-const SectionLabelText = styled.Text`
-  font-size: 14px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  padding-left: 13px;
-`;
-
-const SectionCount = styled.Text`
-  font-size: 12px;
-  color: ${({ theme }: any) => theme.colors.primary};
+  padding-left: 50px;
+  font-size: 20px;
   font-weight: 600;
-  padding-right: 4px;
+  color: white;
+  text-align: center;
 `;
 
-const PaginationRow = styled.View`
+const RightActions = styled.View`
   flex-direction: row;
+  align-items: center;
+  position: absolute;
+  right: 20px;
+  z-index: 10;
+`;
+
+const IconButton = styled.TouchableOpacity`
+  width: 40px;
+  height: 40px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  margin-right: 8px;
   align-items: center;
   justify-content: center;
-  padding-vertical: 20px;
-  gap: 16px;
 `;
 
-const PageNavButton = styled.TouchableOpacity<{
-  isDisabled: boolean;
+const DropdownOverlay = styled.TouchableOpacity`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+`;
+
+const DropdownContainer = styled.View<{ isDark: boolean }>`
+  position: absolute;
+  top: 110px;
+  right: 20px;
+  background-color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#1e293b" : "white"};
+  border-radius: 12px;
+  padding: 8px;
+  z-index: 100;
+  elevation: 10;
+  shadow-color: #000;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.15;
+  shadow-radius: 8px;
+  width: 230px;
+`;
+
+const DropdownItem = styled.TouchableOpacity<{
+  active: boolean;
   isDark: boolean;
 }>`
   flex-direction: row;
   align-items: center;
-  gap: 4px;
-  background-color: ${({ isDisabled, isDark, theme }: any) =>
-    isDisabled ? (isDark ? "#334155" : "#f1f5f9") : theme.colors.iconBox};
-  border-width: 1.5px;
-  border-color: ${({ isDisabled, isDark, theme }: any) =>
-    isDisabled ? (isDark ? "#475569" : "#e2e8f0") : theme.colors.border};
-  border-radius: 20px;
-  padding-horizontal: 16px;
-  padding-vertical: 9px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: ${({
+    active,
+    isDark,
+  }: {
+    active: boolean;
+    isDark: boolean;
+  }) =>
+    active ? (isDark ? "rgba(79, 70, 229, 0.2)" : "#eff6ff") : "transparent"};
+  margin-bottom: 2px;
 `;
 
-const PageNavText = styled.Text<{ isDisabled: boolean }>`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ isDisabled, theme }: any) =>
-    isDisabled ? theme.colors.textMuted : theme.colors.primary};
+const DropdownText = styled.Text<{ active: boolean; isDark: boolean }>`
+  font-size: 14px;
+  font-weight: ${({ active }: { active: boolean }) => (active ? "700" : "500")};
+  color: ${({ active, isDark }: { active: boolean; isDark: boolean }) =>
+    active ? (isDark ? "#818cf8" : "#2563eb") : isDark ? "#cbd5e1" : "#475569"};
+  margin-left: 10px;
 `;
 
-const PageIndicator = styled.View`
-  width: 60px;
-  align-items: center;
-  justify-content: center;
-`;
-
-const PageIndicatorText = styled.Text`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-`;
-
-const EmptyStateWrapper = styled.View`
+const ContentContainer = styled.View`
   flex: 1;
-  justify-content: center;
-  align-items: center;
-  padding: 40px 20px;
-`;
-
-const EmptySubText = styled.Text`
-  margin-top: 8px;
-  font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-  text-align: center;
-`;
-
-const FABWrapper = styled.View`
-  position: absolute;
-  top: 114px;
-  right: 20px;
-`;
-
-const FABButton = styled.TouchableOpacity`
-  width: 50px;
-  height: 50px;
-  border-radius: 25px;
-  background-color: ${({ theme }: any) => theme.colors.primary};
-  justify-content: center;
-  align-items: center;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-opacity: 0.4;
-  shadow-radius: 20px;
-  elevation: 12;
+  background-color: white;
+  border-top-left-radius: 30px;
+  border-top-right-radius: 30px;
 `;

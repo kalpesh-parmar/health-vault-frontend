@@ -9,17 +9,17 @@ import { logoutUser } from "../../services/authService";
 import { deleteDocument } from "../../services/documentService";
 import { deleteUserAccount } from "../../services/userService";
 import { useMutation } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
 import { queryClient } from "../../config/queryClient";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../navigation/types";
+import { deleteMedication } from "../../services/medicationservice";
 
 interface ConfirmationModalProps {
   showModal: boolean;
   onClose: () => void;
-  mode?: "Log Out" | "Delete Account" | "Delete Document";
-  documentId?: string;
+  mode?: "Log Out" | "Delete Account" | "Delete Document" | "Delete Medication";
+  documentId?: string | null;
 }
 
 const ConfirmationModal = ({
@@ -29,9 +29,10 @@ const ConfirmationModal = ({
   documentId,
 }: ConfirmationModalProps) => {
   const { logout } = useAuth();
-  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
-  const logoutMutation = useMutation({
+  const {mutateAsync: logoutMutation} = useMutation({
     mutationFn: logoutUser,
     onSuccess: async () => {
       await logout();
@@ -51,10 +52,9 @@ const ConfirmationModal = ({
     },
   });
 
-  const deleteUserMutation = useMutation({
+  const {mutateAsync: deleteUserMutation} = useMutation({
     mutationFn: deleteUserAccount,
     onSuccess: async () => {
-      await SecureStore.deleteItemAsync("userId");
       await logout();
       onClose();
       Toast.show({
@@ -72,11 +72,11 @@ const ConfirmationModal = ({
     },
   });
 
-  const deleteDocumentMutation = useMutation({
+  const {mutateAsync: deleteDocumentMutation} = useMutation({
     mutationFn: deleteDocument,
     onSuccess: async (result) => {
       queryClient.invalidateQueries({
-        queryKey: ['documents'],
+        queryKey: ["documents"],
       });
       onClose();
       Toast.show({
@@ -95,15 +95,39 @@ const ConfirmationModal = ({
     },
   });
 
+  const {mutateAsync: deleteMedicationMutation} = useMutation({
+    mutationFn: deleteMedication,
+    onSuccess: async (result) => {
+      queryClient.invalidateQueries({
+        queryKey: ["medications"],
+      });
+      onClose();
+      Toast.show({
+        type: "success",
+        text1: "Medication Deleted Successfully !!!",
+        text2: "Medication Deleted Successfully.",
+      });
+      navigation.navigate("Medication" as never);
+    },
+    onError: (error: any) => {
+      Toast.show({
+        type: "error",
+        text1: "OOPS!!! 😣",
+        text2: error.message || "Error Deleting Medication.",
+      });
+    },
+  })
+
   const handleAction = async () => {
     try {
       if (mode === "Log Out") {
-        logoutMutation.mutate();
+        await logoutMutation();
       } else if (mode === "Delete Account") {
-        deleteUserMutation.mutate();
+        await deleteUserMutation();
+      } else if (mode === "Delete Medication") {
+        await deleteMedicationMutation(documentId || "");
       } else {
-        await deleteDocumentMutation.mutateAsync(documentId || "");
-        onClose();
+        await deleteDocumentMutation(documentId || "");
       }
     } catch (error: any) {
       console.error(`Error during ${mode}:`, error);
@@ -134,38 +158,16 @@ const ConfirmationModal = ({
           </IconWrapper>
 
           <ContentContainer>
-            <Title>
-              {mode === "Delete Document"
-                ? "Delete Document"
-                : isLogout
-                  ? "Log Out"
-                  : "Delete Account"}
-            </Title>
+            <Title>{mode}</Title>
             <Description>
-              Are you sure you want to{" "}
-              {mode === "Delete Document"
-                ? "delete this Document?"
-                : isLogout
-                  ? "leave?"
-                  : "delete your account from Health Vault?"}{" "}
-              {mode === "Delete Document"
-                ? "This action will permanently delete this document and it cannot be undone."
-                : isLogout
-                  ? "You will need to enter your credentials to return."
-                  : "Your account will be deleted permanently."}
+              Are you sure you want to {mode}. This action cannot be undone.
             </Description>
           </ContentContainer>
 
           <DualButtons
             secondaryBtnText="Cancel"
             secondaryBtnColor="grey"
-            mainBtnText={
-              mode === "Delete Document"
-                ? "Delete"
-                : isLogout
-                  ? "Log Out"
-                  : "Delete Account"
-            }
+            mainBtnText={mode}
             mainBtnColor="red"
             onSecondaryPress={onClose}
             onMainPress={handleAction}

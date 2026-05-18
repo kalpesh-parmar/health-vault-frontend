@@ -13,7 +13,7 @@ import { useMutation } from "@tanstack/react-query";
 import { updateDocument } from "../../services/documentService";
 import type { MedicalDocument } from "../../types";
 import BottomSheet from "../../components/shared/BottomSheet";
-import { BottomSheetModal, TouchableOpacity } from "@gorhom/bottom-sheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAppTheme } from "../../context/ThemeContext";
 import { Keyboard } from "react-native";
 
@@ -85,7 +85,6 @@ const CATEGORIES: categoryItems[] = [
 
 const EditScreen = ({ route }: any) => {
   const { document } = route.params;
-
 
   const [filename, setFilename] = useState(document?.fileName ?? "");
   const [category, setCategory] = useState(document?.documentType ?? "");

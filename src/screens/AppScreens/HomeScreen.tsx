@@ -1,70 +1,48 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useMemo } from "react";
 import styled from "styled-components/native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import HomeCard from "../../components/Documents/HomeCard";
+import { LinearGradient } from "expo-linear-gradient";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../navigation/types";
 import { useAppTheme } from "../../context/ThemeContext";
-import ScreenHeader from "../../components/shared/Header";
 import BottomSheet from "../../components/shared/BottomSheet";
-import CameraModal from "../../components/shared/CameraModal";
 import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
+import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
+import { useQuery } from "@tanstack/react-query";
+import { getNotificationCount } from "../../services/notificationService";
+import { getUser } from "../../services/userService";
+import { ActivityIndicator } from "react-native";
 
-type CategoryType =
-  | "family"
-  | "medical_document"
-  | "insurance"
-  | "medication"
-  | "other";
+interface ActionItemProps {
+  onPress: () => void;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  iconColor: string;
+}
 
-type HomeCardConfig = {
-  title: string;
-  subtitle: string;
-  category: CategoryType;
-  accentColor: string;
-};
+const memo = React.memo;
 
-const homeCards: HomeCardConfig[] = [
-  {
-    title: "Family",
-    subtitle: "Manage members",
-    category: "family",
-    accentColor: "#6366F1",
-  },
-  {
-    title: "Medical Documents",
-    subtitle: "Reports & history",
-    category: "medical_document",
-    accentColor: "#0EA5E9",
-  },
-  {
-    title: "Insurance",
-    subtitle: "Policies & claims",
-    category: "insurance",
-    accentColor: "#8B5CF6",
-  },
-  {
-    title: "Medication",
-    subtitle: "Track medicines",
-    category: "medication",
-    accentColor: "#10B981",
-  },
-  {
-    title: "Others",
-    subtitle: "Other documents",
-    category: "other",
-    accentColor: "#F59E0B",
-  },
-];
+const ActionItem = memo(
+  ({ onPress, icon, label, color, iconColor }: ActionItemProps) => (
+    <ActionItemContainer onPress={onPress}>
+      <ActionIcon color={color}>
+        <Ionicons name={icon} size={24} color={iconColor} />
+      </ActionIcon>
+      <ActionLabel>{label}</ActionLabel>
+    </ActionItemContainer>
+  ),
+);
 
 const HomeScreen = () => {
   const refRBSheet = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
+
   const {
     isCameraVisible,
     setIsCameraVisible,
@@ -76,154 +54,325 @@ const HomeScreen = () => {
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-
   const { isDark } = useAppTheme();
 
   const handleOpenDrawer = useCallback(() => {
     navigation.dispatch(DrawerActions.openDrawer());
   }, [navigation]);
 
-  const handleOpenNotifications = useCallback(() => {
-    navigation.navigate("Notifications");
-  }, [navigation]);
-
-  const handleCardPress = useCallback(
-    (category: CategoryType) => {
-      if (category === "medication") {
-        navigation.navigate("Medication");
-      } else {
-        navigation.navigate("DocumentStack", {
-          screen: "DocumentList",
-          params: { category },
-        });
-      }
+  const { data, isLoading } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const response = await getUser();
+      return response?.data || response;
     },
-    [navigation],
+  });
+
+  const { data: notificationData } = useQuery({
+    queryKey: ["notificationCount"],
+    queryFn: getNotificationCount,
+  });
+
+  const notificationBadgeCount = notificationData?.data?.count ?? 0;
+
+  const headerColors = useMemo(
+    () =>
+      isDark
+        ? ["#064e3b", "#0369a1", "#312e81"]
+        : ["#0f766e", "#0ea5e9", "#4f46e5"],
+    [isDark],
   );
 
-  const handleGalleryPickSheet = useCallback(() => {
-    handleGalleryPick(() => refRBSheet.current?.dismiss());
-  }, [handleGalleryPick]);
-
-  const handleCameraOpenSheet = useCallback(() => {
-    handleOpenCamera(() => refRBSheet.current?.dismiss());
-  }, [handleOpenCamera]);
-
   return (
-    <>
-      <StatusBar style={isDark ? "light" : "dark"} />
+    <Container isDark={isDark}>
+      <StatusBar style="light" />
 
       <CameraModal
         visible={isCameraVisible}
         onClose={() => setIsCameraVisible(false)}
-        onCapture={takePicture}
+        onCapture={() => takePicture(cameraRef)}
         isCapturing={isCapturing}
         cameraRef={cameraRef}
       />
 
-      <Container>
-        {isCapturing && <Loader visible={isCapturing} />}
+      {isCapturing && <Loader visible={isCapturing} />}
 
-        <ScreenHeader
-          title="HealthVault"
-          leftAction={{
-            icon: "menu-outline",
-            onPress: handleOpenDrawer,
-          }}
-          rightAction={{
-            icon: "notifications-sharp",
-            onPress: handleOpenNotifications,
-            badge: 3,
-          }}
-        />
+      <HeaderGradient
+        colors={headerColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <TopRow>
+          <IconButton onPress={handleOpenDrawer}>
+            <Ionicons name="menu-outline" size={28} color="#fff" />
+          </IconButton>
+          <NotificationWrapper
+            onPress={() => navigation.navigate("Notifications")}
+          >
+            <Ionicons name="notifications-outline" size={26} color="#fff" />
+            {notificationBadgeCount > 0 && (
+              <Badge>
+                <BadgeText>{notificationBadgeCount}</BadgeText>
+              </Badge>
+            )}
+          </NotificationWrapper>
+        </TopRow>
 
-        <WelcomeSection>
-          <WelcomeText>Your Health, Organized</WelcomeText>
-          <SubWelcomeText>
-            Access, manage & secure all your medical records in one place
-          </SubWelcomeText>
-        </WelcomeSection>
+        <UserRow>
+          <Avatar source={{ uri: data?.profileImageKey! }} />
+          <UserTextContent>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <GreetingText>Hi, {data?.firstName}! 👋</GreetingText>
+                <SubGreetingText>Welcome To Health Vault</SubGreetingText>
+              </>
+            )}
+          </UserTextContent>
+        </UserRow>
+      </HeaderGradient>
 
-        <CardsWrapper>
-          {homeCards.map((item) => (
-            <HomeCard
-              key={item.category}
-              title={item.title}
-              subtitle={item.subtitle}
-              accentColor={item.accentColor}
-              isOther={item.category === "other"}
-              onPress={() => handleCardPress(item.category)}
-            />
-          ))}
-        </CardsWrapper>
+      <ScrollContent showsVerticalScrollIndicator={false}>
+        <OverviewCard>
+          <OverviewTextSection>
+            <OverviewTitle>Health Overview</OverviewTitle>
+            <OverviewSub>Insights about your health</OverviewSub>
+          </OverviewTextSection>
+          <MaterialCommunityIcons name="pulse" size={40} color="#3b82f6" />
+        </OverviewCard>
 
-        <FABWrapper>
-          <FABButton onPress={() => refRBSheet.current?.present()}>
-            <MaterialCommunityIcons name="plus" size={30} color="white" />
-          </FABButton>
-        </FABWrapper>
+        <SectionHeader>
+          <SectionTitle>Quick Actions</SectionTitle>
+        </SectionHeader>
 
-        <BottomSheet ref={refRBSheet}>
-          <AddDocumentSheet
-            onGalleryPick={handleGalleryPickSheet}
-            onCameraOpen={handleCameraOpenSheet}
+        <ActionsRow>
+          <ActionItem
+            onPress={() =>
+              navigation.navigate("DocumentStack", {
+                screen: "DocumentList",
+                params: { category: "all" },
+              })
+            }
+            icon="file-tray-full"
+            label="My Documents"
+            color="#eff6ff"
+            iconColor="#3b82f6"
           />
-        </BottomSheet>
-      </Container>
-    </>
+
+          <ActionItem
+            onPress={() => navigation.navigate("Medication")}
+            icon="medkit-outline"
+            label="Medications"
+            color="#ecfdf5"
+            iconColor="#10b981"
+          />
+        </ActionsRow>
+
+        <BottomSpacing />
+      </ScrollContent>
+
+      <FloatingAddButton
+        activeOpacity={0.8}
+        onPress={() => refRBSheet.current?.present()}
+      >
+        <FabGradient
+          colors={headerColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Ionicons name="add" size={32} color="#fff" />
+        </FabGradient>
+      </FloatingAddButton>
+
+      <BottomSheet ref={refRBSheet}>
+        <AddDocumentSheet
+          onGalleryPick={() =>
+            handleGalleryPick(() => refRBSheet.current?.dismiss())
+          }
+          onCameraOpen={() =>
+            handleOpenCamera(() => refRBSheet.current?.dismiss())
+          }
+        />
+      </BottomSheet>
+    </Container>
   );
 };
 
 export default HomeScreen;
 
-const Container = styled.SafeAreaView`
+// --- Styled Components ---
+
+const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.background};
+  background-color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#0f172a" : "#f8fafc"};
 `;
 
-const WelcomeSection = styled.View`
-  padding: 20px 20px 10px;
+const HeaderGradient = styled(LinearGradient)`
+  padding: 50px 20px 40px;
+  border-bottom-left-radius: 30px;
+  border-bottom-right-radius: 30px;
 `;
 
-const WelcomeText = styled.Text`
-  font-size: 22px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-`;
-
-const SubWelcomeText = styled.Text`
-  width: 70%;
-  font-size: 14px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-  margin-top: 6px;
-  line-height: 20px;
-`;
-
-const CardsWrapper = styled.View`
+const TopRow = styled.View`
   flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  overflow: hidden;
 `;
 
-const FABWrapper = styled.View`
+const IconButton = styled.TouchableOpacity``;
+
+const NotificationWrapper = styled.TouchableOpacity`
+  position: relative;
+`;
+
+const Badge = styled.View`
   position: absolute;
-  top: 130px;
-  right: 25px;
-`;
-
-const FABButton = styled.TouchableOpacity`
-  width: 50px;
-  height: 50px;
-  border-radius: 25px;
-  background-color: ${({ theme }: any) => theme.colors.primary};
+  top: -2px;
+  right: -2px;
+  background-color: #ef4444;
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
   justify-content: center;
   align-items: center;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
+  border-width: 2px;
+  border-color: #6366f1;
+`;
+
+const BadgeText = styled.Text`
+  color: white;
+  font-size: 8px;
+  font-weight: bold;
+`;
+
+const UserRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-top: 25px;
+`;
+
+const Avatar = styled.Image`
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.3);
+`;
+
+const UserTextContent = styled.View`
+  margin-left: 15px;
+`;
+
+const GreetingText = styled.Text`
+  color: white;
+  font-size: 22px;
+  font-weight: 700;
+`;
+
+const SubGreetingText = styled.Text`
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+`;
+
+const ScrollContent = styled.ScrollView`
+  flex: 1;
+  margin-top: -30px;
+`;
+
+const OverviewCard = styled.View`
+  background-color: white;
+  margin: 0 20px;
+  padding: 20px;
+  border-radius: 20px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  elevation: 4;
+  shadow-color: #000;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.05;
+  shadow-radius: 10px;
+`;
+
+const OverviewTextSection = styled.View``;
+
+const OverviewTitle = styled.Text`
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+`;
+
+const OverviewSub = styled.Text`
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 4px;
+`;
+
+const SectionHeader = styled.View`
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 25px 20px 15px;
+  align-items: center;
+`;
+
+const SectionTitle = styled.Text`
+  font-size: 17px;
+  font-weight: 700;
+  color: #1e293b;
+`;
+
+const ActionsRow = styled.View`
+  flex-direction: row;
+  justify-content: flex-start;
+  padding: 0 20px;
+  gap: 25px;
+`;
+
+const ActionItemContainer = styled.TouchableOpacity`
+  align-items: center;
+  width: 22%;
+`;
+
+const ActionIcon = styled.View<{ color: string }>`
+  background-color: ${({ color }: { color: string }) => color};
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  justify-content: center;
+  align-items: center;
+`;
+
+const ActionLabel = styled.Text`
+  font-size: 11px;
+  text-align: center;
+  color: #475569;
+  margin-top: 8px;
+  font-weight: 700;
+`;
+
+const BottomSpacing = styled.View`
+  height: 100px;
+`;
+
+const FloatingAddButton = styled.TouchableOpacity`
+  position: absolute;
+  bottom: 100px;
+  right: 24px;
+  width: 58px;
+  height: 58px;
+  border-radius: 29px;
+  elevation: 10;
+  shadow-color: #6366f1;
   shadow-opacity: 0.4;
-  shadow-radius: 20px;
-  elevation: 12;
+  shadow-radius: 12px;
+  shadow-offset: 0px 6px;
+`;
+
+const FabGradient = styled(LinearGradient)`
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  border-radius: 29px;
 `;

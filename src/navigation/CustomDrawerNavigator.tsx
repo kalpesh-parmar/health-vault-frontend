@@ -21,7 +21,8 @@ const CustomDrawerNavigator = () => {
 
         drawerStyle: {
           backgroundColor: theme.colors.background,
-          width: 260,
+          width: 280,
+          paddingHorizontal: 0,
         },
 
         drawerActiveTintColor: theme.colors.primary,

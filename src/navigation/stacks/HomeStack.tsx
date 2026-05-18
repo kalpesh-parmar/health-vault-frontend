@@ -3,12 +3,14 @@ import HomeScreen from "../../screens/AppScreens/HomeScreen";
 import SummaryScreen from "../../screens/AppScreens/DocumentSummaryScreen";
 import EditScreen from "../../screens/AppScreens/EditDocumentScreen";
 import MedicationScreen from "../../screens/AppScreens/DocsCategoryScreens/Medication/MedicationScreen";
-import AddMedication from "../../screens/AppScreens/DocsCategoryScreens/Medication/AddMedication";
+import AddMedication from "../../screens/AppScreens/DocsCategoryScreens/Medication/MedicationOperation";
 import SaveDocumentScreen from "../../screens/AppScreens/SaveDocumentScreen";
 import { AppStackParamList } from "../types";
 import ImagePreview from "../../screens/AppScreens/ImagePreviewScreen";
 import DocumentStack from "./DocumentStack";
 import NotificationScreen from "../../screens/AppScreens/Notifications";
+import MedicationOperation from "../../screens/AppScreens/DocsCategoryScreens/Medication/MedicationOperation";
+import AIChatScreen from "../../screens/AppScreens/AIChatScreen";
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -21,12 +23,11 @@ const HomeStack = () => {
       <Stack.Screen name="Home" component={HomeScreen} />
       <Stack.Screen name="DocumentStack" component={DocumentStack} />
       <Stack.Screen name="Medication" component={MedicationScreen} />
-      <Stack.Screen name="DocumentSummary" component={SummaryScreen} />
-      <Stack.Screen name="AddMedication" component={AddMedication} />
-      <Stack.Screen name="EditDocument" component={EditScreen} />
+      <Stack.Screen name="MedicationOperation" component={MedicationOperation} />
       <Stack.Screen name="ImagePreview" component={ImagePreview} />
       <Stack.Screen name="SaveDocument" component={SaveDocumentScreen} />
       <Stack.Screen name="Notifications" component={NotificationScreen} />
+      <Stack.Screen name="AIChat" component={AIChatScreen} />
     </Stack.Navigator>
   );
 };

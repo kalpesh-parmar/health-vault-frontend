@@ -7,9 +7,10 @@ import { Ionicons } from "@expo/vector-icons";
 interface CameraModalProps {
   visible: boolean;
   onClose: () => void;
-  onCapture: (cameraRef: React.RefObject<any>) => Promise<void>;
+  onCapture: (cameraRef: React.RefObject<any>, fromRegisterScreen?: boolean) => Promise<void>;
   isCapturing: boolean;
   cameraRef: React.RefObject<any>;
+  fromRegisterScreen?: boolean;
 }
 
 const CameraModal = ({
@@ -18,6 +19,7 @@ const CameraModal = ({
   onCapture,
   isCapturing,
   cameraRef,
+  fromRegisterScreen,
 }: CameraModalProps) => {
   if (!visible) return null;
 
@@ -34,7 +36,11 @@ const CameraModal = ({
               <Ionicons name="close" size={28} color="white" />
             </CloseBtn>
 
-            <CaptureBtn onPress={async () => await onCapture(cameraRef)}>
+            <CaptureBtn
+              onPress={async () =>
+                await onCapture(cameraRef, fromRegisterScreen)
+              }
+            >
               <CaptureInner />
             </CaptureBtn>
           </CameraControls>

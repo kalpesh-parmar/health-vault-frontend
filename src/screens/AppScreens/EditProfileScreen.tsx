@@ -1,31 +1,51 @@
-import React, { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  TouchableOpacity,
-} from "react-native";
+import React, { useRef, useState } from "react";
+import { Image, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
 import { ProfileStackParamList } from "../../navigation/types";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { useMutation } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
-import { updateUser } from "../../services/userService";
+import { getUser, updateUser } from "../../services/userService";
 import { queryClient } from "../../config/queryClient";
 import Toast from "react-native-toast-message";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAppTheme } from "../../context/ThemeContext";
+import BottomSheet from "../../components/shared/BottomSheet";
+import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
+import { useDocumentMedia } from "../../hooks/useDocumentMedia";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import CameraModal from "../../components/shared/CameraModal";
 
 const getIconColors = (isDark: boolean) => ({
-  username: { bg: isDark ? "#1e3a8a" : "#eff6ff", icon: isDark ? "#60a5fa" : "#2563eb" },
-  fullname: { bg: isDark ? "#14532d" : "#f0fdf4", icon: isDark ? "#4ade80" : "#16a34a" },
-  email: { bg: isDark ? "#7c2d12" : "#fff7ed", icon: isDark ? "#fb923c" : "#ea580c" },
-  password: { bg: isDark ? "#581c87" : "#fdf4ff", icon: isDark ? "#c084fc" : "#9333ea" },
-  dob: { bg: isDark ? "#713f12" : "#fefce8", icon: isDark ? "#facc15" : "#ca8a04" },
-  phone: { bg: isDark ? "#134e4a" : "#f0fdfa", icon: isDark ? "#2dd4bf" : "#0d9488" },
-  gender: { bg: isDark ? "#831843" : "#fdf2f8", icon: isDark ? "#f472b6" : "#db2777" },
+  username: {
+    bg: isDark ? "#1e3a8a" : "#eff6ff",
+    icon: isDark ? "#60a5fa" : "#2563eb",
+  },
+  fullname: {
+    bg: isDark ? "#14532d" : "#f0fdf4",
+    icon: isDark ? "#4ade80" : "#16a34a",
+  },
+  email: {
+    bg: isDark ? "#7c2d12" : "#fff7ed",
+    icon: isDark ? "#fb923c" : "#ea580c",
+  },
+  password: {
+    bg: isDark ? "#581c87" : "#fdf4ff",
+    icon: isDark ? "#c084fc" : "#9333ea",
+  },
+  dob: {
+    bg: isDark ? "#713f12" : "#fefce8",
+    icon: isDark ? "#facc15" : "#ca8a04",
+  },
+  phone: {
+    bg: isDark ? "#134e4a" : "#f0fdfa",
+    icon: isDark ? "#2dd4bf" : "#0d9488",
+  },
+  gender: {
+    bg: isDark ? "#831843" : "#fdf2f8",
+    icon: isDark ? "#f472b6" : "#db2777",
+  },
 });
 
 const GENDER_OPTIONS = [
@@ -37,13 +57,18 @@ const GENDER_OPTIONS = [
 type EditProfileRouteProp = RouteProp<ProfileStackParamList, "EditProfile">;
 
 type ProfileFormState = {
+  profilePicture?: {
+    uri: string;
+    name: string;
+    type: string;
+  };
   username: string;
   firstName: string;
   lastName: string;
-  email?: string;
-  phone?: string;
-  dateOfBirth?: Date | null;
-  gender?: string;
+  email: string;
+  phone: string;
+  age: number;
+  gender: string;
 };
 
 type EditableFieldProps = {
@@ -73,63 +98,88 @@ const EditableField = ({
 }: EditableFieldProps) => {
   const { theme } = useAppTheme();
   return (
-  <FieldRow
-    style={isFocused ? { backgroundColor: theme.colors.surfaceLight, borderRadius: 16 } : {}}
-  >
-    <FieldIconBox
-      style={{ backgroundColor: isFocused ? colors.icon : colors.bg }}
+    <FieldRow
+      style={
+        isFocused
+          ? { backgroundColor: theme.colors.surfaceLight, borderRadius: 16 }
+          : {}
+      }
     >
-      <Ionicons
-        name={icon as any}
-        size={18}
-        color={isFocused ? theme.colors.surface : colors.icon}
-      />
-    </FieldIconBox>
-    <FieldContent>
-      <FieldLabel style={isFocused ? { color: colors.icon } : {}}>
-        {label}
-      </FieldLabel>
-      <ActiveInput
-        value={value}
-        onChangeText={onChangeText}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
-        placeholderTextColor={theme.colors.textMuted}
-        placeholder={`Enter ${label.toLowerCase()}`}
-        isFocused={isFocused}
-        accentColor={colors.icon}
-      />
-    </FieldContent>
-    {!isFocused && (
-      <EditChip>
-        <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
-      </EditChip>
-    )}
-    {isFocused && <ActiveDot style={{ backgroundColor: colors.icon }} />}
-  </FieldRow>
-)};
+      <FieldIconBox
+        style={{ backgroundColor: isFocused ? colors.icon : colors.bg }}
+      >
+        <Ionicons
+          name={icon as any}
+          size={18}
+          color={isFocused ? theme.colors.surface : colors.icon}
+        />
+      </FieldIconBox>
+      <FieldContent>
+        <FieldLabel style={isFocused ? { color: colors.icon } : {}}>
+          {label}
+        </FieldLabel>
+        <ActiveInput
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          placeholderTextColor={theme.colors.textMuted}
+          placeholder={`Enter ${label.toLowerCase()}`}
+          isFocused={isFocused}
+          accentColor={colors.icon}
+        />
+      </FieldContent>
+      {!isFocused && (
+        <EditChip>
+          <Ionicons
+            name="create-outline"
+            size={14}
+            color={theme.colors.primary}
+          />
+        </EditChip>
+      )}
+      {isFocused && <ActiveDot style={{ backgroundColor: colors.icon }} />}
+    </FieldRow>
+  );
+};
 
-export default function EditProfile({
+const EditProfile = ({
   route,
 }: {
   route: EditProfileRouteProp;
-}) {
+}) => {
   const { theme, isDark } = useAppTheme();
   const iconColors = getIconColors(isDark);
-  const { formData } = route.params;
+  const refRBSheet = useRef<BottomSheetModal>(null);
+  const cameraRef = useRef(null);
+  const {
+    isCameraVisible,
+    setIsCameraVisible,
+    isCapturing,
+    handleGalleryPick,
+    handleOpenCamera,
+    takePicture,
+    selectedImages
+  } = useDocumentMedia();
+  const { formData }: {formData: ProfileFormState} = route.params;
   const navigation =
     useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
 
   const [form, setForm] = useState<ProfileFormState>({
-    username: formData.username ?? "",
-    firstName: formData.firstName ?? "",
-    lastName: formData.lastName ?? "",
-    // email:       formData.email       ?? "",
-    // phone:       formData.phone       ?? "",
-    // dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : null,
-    // gender:      formData.gender      ?? "",
+    profilePicture: {
+      uri: formData?.profilePicture?.uri!,
+      name: formData?.profilePicture?.name!,
+      type: formData?.profilePicture?.type!,
+    },
+    username: formData.username,
+    firstName: formData.firstName,
+    lastName: formData.lastName,
+    email: formData.email,
+    phone: formData.phone,
+    age: formData.age,
+    gender: formData.gender,
   });
 
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -140,20 +190,22 @@ export default function EditProfile({
     value: ProfileFormState[K],
   ) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  const formatDate = (date: Date | null) =>
-    date
-      ? date.toLocaleDateString("en-US", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
-      : "";
-
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
-      const userId = await SecureStore.getItemAsync("userId");
+      const user = await getUser();
+      const userId = user?.data?.id;
       if (!userId) throw new Error("No user ID found.");
+      const fileType = selectedImages;
       return await updateUser(userId, {
+        ...(selectedImages
+          ? {
+              profilePicture: {
+                uri: selectedImages,
+                name: `profile.${fileType}`,
+                type: `image/${fileType}`,
+              },
+            }
+          : {}),
         userName: form.username,
         firstName: form.firstName,
         lastName: form.lastName,
@@ -164,7 +216,7 @@ export default function EditProfile({
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
       Toast.show({
         type: "success",
         text1: "Profile Updated",
@@ -203,10 +255,18 @@ export default function EditProfile({
             <AvatarWrapper>
               <AvatarRing>
                 <AvatarText>
-                  {form.username?.charAt(0).toUpperCase()}
+                  {form.profilePicture?.uri ? (
+                    <Image
+                      source={{ uri: form.profilePicture.uri }}
+                      style={{ borderRadius: 45, width: 90, height: 90 }}
+                    />
+                  ) : (
+                    form.firstName?.charAt(0).toUpperCase() +
+                    form.lastName?.charAt(0).toUpperCase()
+                  )}
                 </AvatarText>
               </AvatarRing>
-              <AvatarEditBadge>
+              <AvatarEditBadge onPress={() => refRBSheet.current?.present()}>
                 <Ionicons name="camera" size={16} color="#fff" />
               </AvatarEditBadge>
             </AvatarWrapper>
@@ -252,11 +312,11 @@ export default function EditProfile({
           </Card>
 
           {/* ── Contact Info ── */}
-          <SectionLabel>Contact Info</SectionLabel>
+          {/* <SectionLabel>Contact Info</SectionLabel>
           <Card>
             <EditableField
               label="Email Address"
-              value={form.email || ""}
+              value={form?.email!}
               icon="mail-outline"
               colors={iconColors.email}
               isFocused={focusedField === "email"}
@@ -295,34 +355,18 @@ export default function EditProfile({
                   />
                 </FieldIconBox>
                 <FieldContent>
-                  <FieldLabel>Date of Birth</FieldLabel>
-                  <DateDisplayRow>
-                    <DateDisplayText hasValue={!!form.dateOfBirth}>
-                      {form.dateOfBirth
-                        ? formatDate(form.dateOfBirth)
-                        : "Select your date of birth"}
-                    </DateDisplayText>
-                    <Ionicons name="chevron-down" size={14} color={theme.colors.textMuted} />
-                  </DateDisplayRow>
+                  <FieldLabel>Age</FieldLabel>
+                  <AgeInput hasValue={form.age}>{form.age}</AgeInput>
                 </FieldContent>
                 <EditChip>
-                  <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
+                  <Ionicons
+                    name="create-outline"
+                    size={14}
+                    color={theme.colors.primary}
+                  />
                 </EditChip>
               </FieldRow>
             </TouchableOpacity>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={form.dateOfBirth ?? new Date(2000, 0, 1)}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                maximumDate={new Date()}
-                onChange={(_, date) => {
-                  setShowDatePicker(Platform.OS === "ios");
-                  if (date) updateField("dateOfBirth", date);
-                }}
-              />
-            )}
 
             <FieldDivider />
 
@@ -330,9 +374,7 @@ export default function EditProfile({
               style={{ flexDirection: "column", alignItems: "flex-start" }}
             >
               <GenderLabelRow>
-                <FieldIconBox
-                  style={{ backgroundColor: iconColors.gender.bg }}
-                >
+                <FieldIconBox style={{ backgroundColor: iconColors.gender.bg }}>
                   <Ionicons
                     name="male-female-outline"
                     size={18}
@@ -343,7 +385,7 @@ export default function EditProfile({
               </GenderLabelRow>
               <GenderRow>
                 {GENDER_OPTIONS.map((opt) => {
-                  const selected = form.gender === opt.label;
+                  const selected = form.gender === opt.icon;
                   return (
                     <GenderChip
                       key={opt.label}
@@ -354,7 +396,11 @@ export default function EditProfile({
                       <Ionicons
                         name={opt.icon as any}
                         size={14}
-                        color={selected ? theme.colors.surface : theme.colors.textMuted}
+                        color={
+                          selected
+                            ? theme.colors.surface
+                            : theme.colors.textMuted
+                        }
                       />
                       <GenderChipText selected={selected}>
                         {opt.label}
@@ -364,12 +410,34 @@ export default function EditProfile({
                 })}
               </GenderRow>
             </FieldRow>
-          </Card>
+          </Card> */}
         </ScrollInner>
       </ScrollContent>
+
+      <BottomSheet ref={refRBSheet}>
+        <AddDocumentSheet
+          onGalleryPick={() => {
+            handleGalleryPick(() => refRBSheet.current?.dismiss(), "Profile");
+          }}
+          onCameraOpen={() => {
+            handleOpenCamera(() => refRBSheet.current?.dismiss());
+          }}
+        />
+      </BottomSheet>
+
+      {/* Camera View (Inline) */}
+      <CameraModal
+        visible={isCameraVisible}
+        onClose={() => setIsCameraVisible(false)}
+        onCapture={() => takePicture(cameraRef, "Profile")}
+        isCapturing={isCapturing}
+        cameraRef={cameraRef}
+      />
     </KeyboardAvoidingView>
   );
 }
+
+export default EditProfile;
 
 const ScrollContent = styled.ScrollView`
   flex: 1;
@@ -523,13 +591,7 @@ const ActiveDot = styled.View`
   margin-left: 10px;
 `;
 
-const DateDisplayRow = styled.View`
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-`;
-
-const DateDisplayText = styled.Text<{ hasValue: boolean }>`
+const AgeInput = styled.TextInput<{ hasValue: boolean }>`
   font-size: 15px;
   font-weight: 600;
   color: ${({ hasValue, theme }: any) =>

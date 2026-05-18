@@ -1,3 +1,15 @@
+// ─── Shared Types ──────────────────────────────────────────────
+export interface ApiResponse<T> {
+  data: T;
+  status: ApiStatus;
+}
+
+export type ApiStatus = {
+  statusCode: number;
+  success: boolean;
+  description: string;
+};
+
 // ─── Domain Types ──────────────────────────────────────────────
 
 export interface MedicalDocument {
@@ -12,16 +24,10 @@ export interface MedicalDocument {
   AISummary?: string;
   notes?: string;
   title?: string;
+  fileSize?: number;
 }
 
-export type DocumentCategory =
-  | "family"
-  | "medical_document"
-  | "insurance"
-  | "medication"
-  | "other";
-
-// ─── Auth Request/Response Types ───────────────────────────────
+// ─── Request/Response Types ───────────────────────────────
 
 export interface LoginRequest {
   email: string;
@@ -30,6 +36,11 @@ export interface LoginRequest {
 }
 
 export interface SignupRequest {
+  profilePicture?: {
+    uri: string;
+    name: string;
+    type: string;
+  };
   firstName: string;
   lastName: string;
   userName: string;
@@ -54,9 +65,36 @@ export interface ResetPasswordRequest {
   password: string;
 }
 
-// ─── User Types ────────────────────────────────────────────────
+// ─── Signup Response ────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName?: string;
+  userName: string;
+  email: string;
+  phone?: string;
+  age?: number;
+  gender?: string;
+  patientCode?: string;
+  profileImageKey?: string | null;
+  isVerified?: boolean;
+  status?: string;
+  softDelete?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
+// ─── Update User Request ────────────────────────────────────────────────
 
 export interface UpdateUserRequest {
+  profilePicture?: {
+    uri: string;
+    name: string;
+    type: string;
+  };
   userName?: string;
   firstName?: string;
   lastName?: string;
@@ -66,7 +104,7 @@ export interface UpdateUserRequest {
   gender?: string;
 }
 
-// ─── Document Types ────────────────────────────────────────────
+// ─── Document Request ────────────────────────────────────────────
 
 export interface PaginatedDocumentRequest {
   activeCategory: string;
@@ -74,13 +112,48 @@ export interface PaginatedDocumentRequest {
   pageLimit: number;
 }
 
-// ─── API Response Wrapper ──────────────────────────────────────
+export interface PaginatedDocumentResponse {
+  data: MedicalDocument[];
+  total: number;
+}
 
-export interface ApiResponse<T = unknown> {
-  data: T;
-  status?: {
-    code: number;
-    description: string;
-  };
-  message?: string;
+// ─── Medication ────────────────────────────────────────
+export interface AddOrEditMedication {
+  id?: string;
+  medicationName: string;
+  medicationType: string;
+  prescribedBy: string;
+  dosePerIntake: number;
+  frequency: string;
+  medicationTime: {
+    time: string;
+    period: string;
+  }[];
+  bestTaken: string[];
+  foodFrequency: string;
+  startDate: string;
+  ongoing: boolean;
+  totalQuantity: number;
+  doseReminders: boolean;
+  unit: string;
+  reminderBeforeMinutes?: number;
+  refillAlert: boolean;
+  notes: string;
+}
+
+// ─── Notification ────────────────────────────────────────
+
+export interface ListNotificationRequest {
+  filter: {
+    userId: string;
+    isRead: boolean;
+  },
+  page: {
+    pageNumber: number;
+    pageLimit: number;
+  },
+  sort: {
+    sortBy: string;
+    orderBy: "asc" | "desc";
+  }
 }

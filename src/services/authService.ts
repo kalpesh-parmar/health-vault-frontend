@@ -18,15 +18,29 @@ export const login = async ({ email, password, deviceToken }: LoginRequest) => {
 };
 
 export const registerUser = async (payload: SignupRequest) => {
-  const response = await apiClient.post(PATIENT_ENDPOINTS.SIGNUP, {
-    userName: payload.userName,
-    firstName: payload.firstName,
-    lastName: payload.lastName,
-    email: payload.email,
-    password: payload.password,
-    gender: payload.gender,
-    age: payload.age ? Number(payload.age) : null,
-    phone: payload.phone,
+  const formData = new FormData();
+
+  // Profile Picture
+  if (payload.profilePicture) {
+    formData.append("profilePicture", {
+      uri: payload.profilePicture.uri,
+      name: payload.profilePicture.name,
+      type: payload.profilePicture.type,
+    } as any);
+  }
+  formData.append("userName", payload.userName);
+  formData.append("firstName", payload.firstName);
+  formData.append("lastName", payload.lastName);
+  formData.append("email", payload.email);
+  formData.append("password", payload.password);
+  formData.append("gender", payload.gender);
+  formData.append("age", String(payload.age));
+  formData.append("phone", payload.phone);
+
+  const response = await apiClient.post(PATIENT_ENDPOINTS.SIGNUP, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
   });
   return response.data;
 };

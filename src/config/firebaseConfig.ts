@@ -2,18 +2,16 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import Constants from "expo-constants";
-
-const extra = Constants.expoConfig?.extra;
-
 const firebaseConfig = {
-  apiKey: extra?.FIREBASE_API_KEY,
-  authDomain: extra?.FIREBASE_AUTH_DOMAIN,
-  projectId: extra?.FIREBASE_PROJECT_ID,
-  storageBucket: extra?.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: extra?.FIREBASE_MESSAGING_SENDER_ID,
-  appId: extra?.FIREBASE_APP_ID,
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
+
+console.log("firebaseConfig: ", firebaseConfig);
 
 const app = getApps().length === 0
   ? initializeApp(firebaseConfig)
