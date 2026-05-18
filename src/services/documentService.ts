@@ -1,20 +1,26 @@
 import apiClient from "./apiClient";
 import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
-import type { MedicalDocument, PaginatedDocumentRequest } from "../types";
+import type { 
+  MedicalDocument, 
+  PaginatedDocumentRequest, 
+  ApiResponse, 
+  PaginatedDocumentResponse 
+} from "../types";
 
-export const documentUpload = async (formData: FormData) => {
+export const documentUpload = async (formData: FormData): Promise<ApiResponse<MedicalDocument>> => {
   const response = await apiClient.post(
     DOCUMENT_ENDPOINTS.ADD_DOCUMENT,
     formData,
     {
       headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
   return response.data;
 };
 
-export const listDocument = async () => {
+export const listDocument = async (): Promise<ApiResponse<MedicalDocument[]>> => {
   const response = await apiClient.get(DOCUMENT_ENDPOINTS.LIST_DOCUMENT);
   return response.data;
 };
@@ -23,12 +29,12 @@ export const documentListPaginated = async ({
   activeCategory,
   page,
   pageLimit,
-}: PaginatedDocumentRequest) => {
+}: PaginatedDocumentRequest): Promise<ApiResponse<MedicalDocument[]>> => {
   const response = await apiClient.post(
     DOCUMENT_ENDPOINTS.DOCUMENT_LIST_PAGINATED,
     {
       filter: {
-        search: activeCategory,
+        search: activeCategory === "All" ? "" : activeCategory,
       },
       page: {
         pageNumber: page,
@@ -43,19 +49,20 @@ export const documentListPaginated = async ({
   return response.data;
 };
 
-export const updateDocument = async (document: Partial<MedicalDocument>) => {
+export const updateDocument = async (document: Partial<MedicalDocument>): Promise<ApiResponse<void>> => {
   const endpoint = DOCUMENT_ENDPOINTS.UPDATE_DOCUMENT.replace(
     "{id}",
     document?.id || "",
   );
 
-  await apiClient.put(endpoint, {
+  const response = await apiClient.put(endpoint, {
     title: document.fileName,
     notes: document.notes,
   });
+  return response.data;
 };
 
-export const deleteDocument = async (documentId: string) => {
+export const deleteDocument = async (documentId: string): Promise<ApiResponse<void>> => {
   const endpoint = DOCUMENT_ENDPOINTS.DELETE_DOCUMENT.replace(
     "{id}",
     documentId,
@@ -65,7 +72,7 @@ export const deleteDocument = async (documentId: string) => {
   return response.data;
 };
 
-export const getDocument = async (documentId: string) => {
+export const getDocument = async (documentId: string): Promise<ApiResponse<MedicalDocument>> => {
   const endpoint = DOCUMENT_ENDPOINTS.GET_DOCUMENT.replace(
     "{id}",
     documentId,
@@ -75,7 +82,7 @@ export const getDocument = async (documentId: string) => {
   return response.data;
 };
 
-export const getSignedUrl = async (fileKey: string) => {
+export const getSignedUrl = async (fileKey: string): Promise<ApiResponse<{ downloadUrl: string }>> => {
   const response = await apiClient.get(DOCUMENT_ENDPOINTS.GET_SIGNED_URL, {
     params: {
       fileKey: fileKey,

@@ -55,13 +55,10 @@ const LoginScreen = () => {
     onSuccess: async (result) => {
       const refreshToken = result?.data?.refreshToken;
       const accessToken = result?.data?.accessToken;
-      const userId = result?.data?.patient?.id;
 
       await SecureStore.setItemAsync("authToken", String(refreshToken));
-
       await SecureStore.setItemAsync("accessToken", String(accessToken));
-
-      await SecureStore.setItemAsync("userId", String(userId));
+      console.log("Refresh Token :- ", refreshToken);
 
       await authLogin();
 

@@ -4,7 +4,7 @@ import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
 import { useMutation } from "@tanstack/react-query";
-import { listNotifications } from "../../services/notificationService";
+import { listNotifications, markAllAsRead, markAsRead } from "../../services/notificationService";
 
 type NotificationType = "alert" | "info" | "success" | "promo" | "reminder";
 
@@ -18,99 +18,36 @@ interface Notification {
   avatar?: string;
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: "1",
-    type: "alert",
-    title: "New Order Received",
-    message:
-      "You have a new order #ORD-2048 from Riya Shah. Tap to view details.",
-    time: "2 min ago",
-    isRead: false,
-  },
-  {
-    id: "2",
-    type: "success",
-    title: "Payment Confirmed",
-    message:
-      "Payment of ₹1,450 has been successfully received for order #ORD-2041.",
-    time: "15 min ago",
-    isRead: false,
-  },
-  {
-    id: "3",
-    type: "reminder",
-    title: "Reminder: Restock Needed",
-    message:
-      "Item 'Wireless Earbuds' is running low. Only 3 units left in inventory.",
-    time: "1 hr ago",
-    isRead: false,
-  },
-  {
-    id: "4",
-    type: "info",
-    title: "App Update Available",
-    message:
-      "Version 3.2.0 is ready. Update now to get the latest features and improvements.",
-    time: "3 hrs ago",
-    isRead: true,
-  },
-  {
-    id: "5",
-    type: "promo",
-    title: "Weekend Sale is Live 🎉",
-    message:
-      "Boost your sales! Share your store link and get 20% off on your next plan renewal.",
-    time: "Yesterday",
-    isRead: true,
-  },
-  {
-    id: "6",
-    type: "success",
-    title: "Order Delivered",
-    message: "Order #ORD-2035 has been successfully delivered to the customer.",
-    time: "Yesterday",
-    isRead: true,
-  },
-  {
-    id: "7",
-    type: "alert",
-    title: "Login from New Device",
-    message:
-      "A sign-in was detected from a new device in Mumbai. If this wasn't you, secure your account.",
-    time: "2 days ago",
-    isRead: true,
-  },
-  {
-    id: "8",
-    type: "reminder",
-    title: "Complete Your Profile",
-    message: "Add your store logo and bio to build trust with your customers.",
-    time: "3 min ago",
-    isRead: true,
-  },
-];
-
 const FILTERS = ["All"];
 
 export default function NotificationScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeFilter, setActiveFilter] = useState("All");
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  };
-
-  const markRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-    );
-  };
-
   const { mutateAsync: getNotificationsList } = useMutation({
     mutationFn: listNotifications,
     onSuccess: (data) => {
       setNotifications(data.data);
+    },
+    onError: (error) => {
+      // Error handling can be added here
+    },
+  });
+
+  const { mutateAsync: markNotificationAsRead } = useMutation({
+    mutationFn: markAsRead,
+    onSuccess: () => {
+      getNotificationsList();
+    },
+    onError: (error) => {
+      // Error handling can be added here
+    },
+  });
+
+  const {mutateAsync: markAllRead} = useMutation({
+    mutationFn: markAllAsRead,
+    onSuccess: () => {
+      getNotificationsList();
     },
     onError: (error) => {
       // Error handling can be added here
@@ -127,7 +64,7 @@ export default function NotificationScreen() {
         <CardWrapper
           isRead={item.isRead}
           onPress={() => {
-            if (!item.isRead) markRead(item.id);
+            markNotificationAsRead({ notificationId: item.id });
           }}
           activeOpacity={0.85}
         >

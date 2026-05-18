@@ -1,26 +1,29 @@
-import React, { useRef, useState, useCallback, memo } from "react";
+import React, { useRef, useState, useCallback, memo, useMemo } from "react";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { TouchableOpacity, Modal, Image } from "react-native";
+import { TouchableOpacity, Modal, GestureResponderEvent, View, Text } from "react-native";
 import { AppStackParamList } from "../../navigation/types";
 import ConfirmationModal from "../shared/ConfirmationModal";
 import type { MedicalDocument } from "../../types";
+import { useAppTheme } from "../../context/ThemeContext";
 
 interface Props {
   document: MedicalDocument;
 }
 
 const DocumentCard = memo(({ document }: Props) => {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { isDark } = useAppTheme();
 
   const [showModal, setShowModal] = useState<boolean>(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const moreButtonRef = useRef<any>(null);
-  const docSize = "2.4 MB";
+  const moreButtonRef = useRef<View>(null);
+  
+  // Mock size - in production this would come from document metadata
+  const docSize = useMemo(() => "2.4 MB", []);
 
   const handleDelete = useCallback(() => {
     setShowModal(true);
@@ -43,34 +46,34 @@ const DocumentCard = memo(({ document }: Props) => {
   }, [navigation, document]);
   
   const handleMorePress = useCallback(
-    (e: any) => {
+    (e: GestureResponderEvent) => {
       e.stopPropagation();
-      moreButtonRef.current.measure(
-        (
-          x: number,
-
-          y: number,
-
-          width: number,
-
-          height: number,
-
-          px: number,
-
-          py: number,
-        ) => {
-          setMenuPosition({
-            x: px - 125,
-
-            y: py + height + 4,
-          });
-
-          setMenuVisible(true);
-        },
-      );
+      if (moreButtonRef.current) {
+        moreButtonRef.current.measure(
+          (_x, _y, width, height, px, py) => {
+            setMenuPosition({
+              x: px - 125,
+              y: py + height + 4,
+            });
+            setMenuVisible(true);
+          },
+        );
+      }
     },
     [],
   );
+
+  const formattedDate = useMemo(() => {
+    try {
+      return new Date(document.createdAt).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch (e) {
+      return "Unknown Date";
+    }
+  }, [document.createdAt]);
 
   return (
     <>
@@ -81,13 +84,14 @@ const DocumentCard = memo(({ document }: Props) => {
         documentId={document?.id}
       />
 
-      <DocCard activeOpacity={0.8} onPress={handleNavigateToSummary}>
-        <IconContainer>
-            <DocImage
-              source={{
-                uri: document.imageUri || "https://via.placeholder.com/150",
-              }}
-            />
+      <DocCard
+        activeOpacity={0.8}
+        onPress={handleNavigateToSummary}
+        isDark={isDark}
+      >
+        <IconContainer isImage={!!document.imageUri}>
+          <MaterialCommunityIcons name="file" size={20} color="#ff4d4d" />
+          <Text style={{ fontSize: 10 }}>{document?.fileName.split(".")[1].toUpperCase()}</Text>
         </IconContainer>
 
         <DocInfo>
@@ -95,22 +99,23 @@ const DocumentCard = memo(({ document }: Props) => {
             {document?.fileName || "Medical Report"}
           </DocTitle>
           <DocMeta>
-            {new Date(document.createdAt).toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}
-            {`  •  ${docSize}`}
+            {formattedDate}
+            {`  •  ${
+              document?.fileSize! >= 1024 * 1024
+                ? (document?.fileSize! / (1024 * 1024)).toFixed(1) + " MB"
+                : (document?.fileSize! / 1024).toFixed(1) + " KB"
+            }`}
           </DocMeta>
         </DocInfo>
 
-        <TouchableOpacity
-          ref={moreButtonRef}
-          onPress={handleMorePress}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="ellipsis-vertical" size={20} color="#94a3b8" />
-        </TouchableOpacity>
+        <View ref={moreButtonRef} collapsable={false}>
+          <TouchableOpacity
+            onPress={handleMorePress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="ellipsis-vertical" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
       </DocCard>
 
       <Modal visible={menuVisible} transparent animationType="fade">
@@ -133,19 +138,17 @@ const DocumentCard = memo(({ document }: Props) => {
 
 export default DocumentCard;
 
-const DocCard = styled.TouchableOpacity`
-  background-color: ${({ isDark }: {isDark: boolean}) => isDark ? "#0e1011" : "#fff"};
+const DocCard = styled.TouchableOpacity<{ isDark: boolean }>`
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#0e1011" : "#fff")};
   border-radius: 20px;
   padding: 15px;
   flex-direction: row;
   align-items: center;
   margin-bottom: 15px;
   border-width: 1px;
-  border-color: #f1f5f9;
+  border-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#1e293b" : "#f1f5f9")};
 
-  /* Elevation for Android */
   elevation: 3;
-  /* Shadow for iOS */
   shadow-color: #000;
   shadow-offset: 0px 2px;
   shadow-opacity: 0.05;
@@ -156,8 +159,7 @@ const IconContainer = styled.View<{ isImage: boolean }>`
   width: 55px;
   height: 55px;
   border-radius: 12px;
-  background-color: ${({ isImage }: { isImage: boolean }) =>
-    isImage ? "#f1f5f9" : "#fff5f5"};
+  background-color: ${({ isImage }: {isImage: boolean}) => (isImage ? "#f1f5f9" : "#fff5f5")};
   justify-content: center;
   align-items: center;
   overflow: hidden;

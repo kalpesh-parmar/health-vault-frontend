@@ -19,7 +19,7 @@ const RootNavigator = () => {
         <CustomDrawerNavigator />
       ) : (
         <AuthStack />
-        )}  
+      )}
     </NavigationContainer>
   );
 };

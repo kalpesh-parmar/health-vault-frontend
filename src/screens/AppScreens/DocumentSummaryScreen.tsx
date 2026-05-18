@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, TouchableOpacity, ScrollView, Dimensions } from "react-native";
 import Animated, {
   useSharedValue,
@@ -8,17 +8,20 @@ import Animated, {
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as MailComposer from "expo-mail-composer";
 import { useAppTheme } from "../../context/ThemeContext";
 import { getSignedUrl } from "../../services/documentService";
-import ConfirmationModal from "../../components/shared/ConfirmationModal"; // Assuming path
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const CONTAINER_WIDTH = SCREEN_WIDTH * 0.9;
+const CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.7;
+const IMAGE_WIDTH = SCREEN_WIDTH * 0.7;
+const IMAGE_HEIGHT = SCREEN_WIDTH * 1.7;
 
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
@@ -27,7 +30,6 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const { isDark } = useAppTheme();
 
-  // Animation values for preview modal
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -38,13 +40,11 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const pinchGesture = Gesture.Pinch()
     .onUpdate((event) => {
       const nextScale = savedScale.value * event.scale;
-      // Clamp scale: min 1 (size of image), max 4
       scale.value = Math.min(Math.max(nextScale, 1), 4);
     })
     .onEnd(() => {
       savedScale.value = scale.value;
       if (scale.value <= 1) {
-        // Reset position if zoomed out to original size
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         offsetX.value = 0;
@@ -55,12 +55,23 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
       if (scale.value > 1) {
-        translateX.value = offsetX.value + event.translationX;
-        translateY.value = offsetY.value + event.translationY;
+        const maxTranslateX = (IMAGE_WIDTH * scale.value - CONTAINER_WIDTH) / 2;
+        const maxTranslateY = Math.max(
+          0,
+          (IMAGE_HEIGHT * scale.value - CONTAINER_HEIGHT) / 2,
+        );
+
+        translateX.value = Math.min(
+          Math.max(offsetX.value + event.translationX, -maxTranslateX),
+          maxTranslateX,
+        );
+        translateY.value = Math.min(
+          Math.max(offsetY.value + event.translationY, -maxTranslateY),
+          maxTranslateY,
+        );
       }
     })
     .onEnd(() => {
-      // Save current position to prevent jumping on next interaction
       offsetX.value = translateX.value;
       offsetY.value = translateY.value;
     });
@@ -122,27 +133,37 @@ const SummaryScreen = ({ route, navigation }: any) => {
           <MainInfoCard>
             <DocHeaderRow>
               <IconBox>
-                <MaterialCommunityIcons
-                  name="file-pdf-box"
-                  size={40}
-                  color="#ff4d4d"
-                />
-                <FormatLabel>PDF</FormatLabel>
+                <MaterialCommunityIcons name="file" size={40} color="#ff4d4d" />
+                <FormatLabel>
+                  {document?.fileName.split(".")[1].toUpperCase()}
+                </FormatLabel>
               </IconBox>
               <TitleCol>
-                <DocTitle>{document?.fileName || "Blood Test Report"}</DocTitle>
-                <DocSubInfo>2.4 MB • PDF</DocSubInfo>
+                <DocTitle>{document?.fileName}</DocTitle>
+                <DocSubInfo>
+                  {document?.fileSize >= 1024 * 1024
+                    ? (document?.fileSize / (1024 * 1024)).toFixed(1) + " MB"
+                    : (document?.fileSize / 1024).toFixed(1) + " KB"}
+                  •{" "}
+                  {document?.fileName.split(".")[1].toUpperCase()}
+                </DocSubInfo>
               </TitleCol>
             </DocHeaderRow>
             <Divider />
             <GridInfo>
               <GridItem>
                 <GridLabel>Date</GridLabel>
-                <GridValue>20 May 2024</GridValue>
+                <GridValue>
+                  {new Date(document?.createdAt).toLocaleDateString("en-US", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </GridValue>
               </GridItem>
               <GridItem>
                 <GridLabel>Category</GridLabel>
-                <GridValue>Pathology</GridValue>
+                <GridValue>{document?.documentType}</GridValue>
               </GridItem>
             </GridInfo>
           </MainInfoCard>
@@ -152,15 +173,13 @@ const SummaryScreen = ({ route, navigation }: any) => {
             <Ionicons name="sparkles" size={18} color="#8b5cf6" />
             <SectionTitle>AI Summary</SectionTitle>
           </SectionHeader>
-          <HighlightCard>
-            <HighlightGradient
-              colors={isDark ? ["#797383ff", "#38333dff"] : ["#f5f3ff", "#9684e6ff"]}
-            >
-              <DescriptionText>
+          <HighlightCard isDark={isDark}>
+            <SummaryContainer>
+              <DescriptionText isDark={isDark}>
                 {document?.AISummary ||
                   "AI is processing this document to generate a summary."}
               </DescriptionText>
-            </HighlightGradient>
+            </SummaryContainer>
           </HighlightCard>
 
           {/* NOTES (Conditional) */}
@@ -175,14 +194,9 @@ const SummaryScreen = ({ route, navigation }: any) => {
                 <SectionTitle>Notes</SectionTitle>
               </SectionHeader>
               <HighlightCard>
-                <HighlightGradient
-                  colors={
-                    isDark ? ["#064e3b", "#022c22"] : ["#f0fdf4", "#dcfce7"]
-                  }
-                >
-                  <AccentBar color="#10b981" />
+                <SummaryContainer>
                   <DescriptionText>{document.notes}</DescriptionText>
-                </HighlightGradient>
+                </SummaryContainer>
               </HighlightCard>
             </>
           )}
@@ -229,7 +243,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                 <Animated.Image
                   source={{ uri: imageUri }}
                   style={[
-                    { width: SCREEN_WIDTH * 0.9, height: SCREEN_WIDTH * 1.2 },
+                    { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1 },
                     animatedStyle,
                   ]}
                   resizeMode="contain"
@@ -348,26 +362,20 @@ const SectionTitle = styled.Text`
   color: #1e293b;
 `;
 
-const HighlightCard = styled.View`
+const HighlightCard = styled.View<{ isDark: boolean }>`
   border-radius: 16px;
   overflow: hidden;
-  margin-bottom: 5px;
 `;
-const HighlightGradient = styled(LinearGradient)`
+const SummaryContainer = styled.View<{ isDark: boolean }>`
   flex-direction: row;
-  padding: 16px;
+  padding: 7px;
   padding-left: 0px;
 `;
-const AccentBar = styled.View<{ color: string }>`
-  width: 5px;
-  height: 100%;
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 4px;
-`;
-const DescriptionText = styled.Text`
+
+const DescriptionText = styled.Text<{ isDark: boolean }>`
   font-size: 14px;
-  color: #000000ff;
-  font-weight: 600;
+  color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#cbd5e1" : "#334155")};
+  font-weight: 500;
   line-height: 22px;
   flex: 1;
   padding-horizontal: 15px;
@@ -375,7 +383,7 @@ const DescriptionText = styled.Text`
 
 // IMAGE PREVIEW STYLES
 const PreviewThumbnailContainer = styled.TouchableOpacity`
-  height: 180px;
+  height: 230px;
   width: 100%;
   border-radius: 16px;
   overflow: hidden;
@@ -418,35 +426,6 @@ const EmptyPreviewBox = styled.View`
 const EmptyText = styled.Text`
   color: #94a3b8;
   font-size: 12px;
-`;
-
-const ActionGrid = styled.View`
-  flex-direction: row;
-  justify-content: space-between;
-  margin-top: 30px;
-`;
-const ActionBox = styled.TouchableOpacity`
-  background-color: white;
-  border-radius: 16px;
-  align-items: center;
-  padding: 12px;
-  border-width: 1px;
-  border-color: #f1f5f9;
-  flex-direction: row;
-  gap: 10px;
-  justify-content: center;
-`;
-const ActionCircle = styled.View`
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
-  align-items: center;
-  justify-content: center;
-`;
-const ActionLabel = styled.Text`
-  font-size: 14px;
-  font-weight: 700;
-  color: #64748b;
 `;
 
 // MODAL STYLES

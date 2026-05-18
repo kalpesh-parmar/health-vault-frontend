@@ -1,62 +1,47 @@
 import apiClient from "./apiClient";
 import { MEDICATION_ENDPOINTS } from "../constants/endpoints";
-import { AddOrEditMedication } from "../types";
+import { AddOrEditMedication, ApiResponse } from "../types";
 
-export const addMedication = async (data: AddOrEditMedication) => {
-  try {
-    const response = await apiClient.post(
-      MEDICATION_ENDPOINTS.ADD_MEDICATION,
-      data,
-    );
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+export const addMedication = async (data: AddOrEditMedication): Promise<ApiResponse<AddOrEditMedication>> => {
+  const response = await apiClient.post(
+    MEDICATION_ENDPOINTS.ADD_MEDICATION,
+    data,
+  );
+  return response.data;
 };
 
-export const deleteMedication = async (id: string) => {
+export const deleteMedication = async (id: string): Promise<ApiResponse<void>> => {
   const endpoint = MEDICATION_ENDPOINTS.DELETE_MEDICATION.replace("{id}", id);
-  try {
-    const response = await apiClient.delete(endpoint);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await apiClient.delete(endpoint);
+  return response.data;
 };
 
-export const getAllMedications = async () => {
-  try {
-    const response = await apiClient.get(
-      MEDICATION_ENDPOINTS.LIST_ALL_MEDICATIONS,
-    );
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-export const getMedications = async (upperMedicationType: string) => {
-  try {
-    const response = await apiClient.post(
-      MEDICATION_ENDPOINTS.LIST_MEDICATION_PAGINATED,
-      {
-        filter: {
-          medicationType: upperMedicationType.toUpperCase(),
-        },
-        sort: {
-          sortBy: "medicationType",
-          orderBy: "desc",
-        },
-        page: {
-          pageNumber: 1,
-          pageLimit: 10,
-        },
+export const getMedicationsPaginated = async ({
+  MedicationType,
+  pageNumber = 1,
+  pageLimit = 10,
+}: {
+  MedicationType: string;
+  pageNumber?: number;
+  pageLimit?: number;
+}): Promise<ApiResponse<AddOrEditMedication[]>> => {
+  const response = await apiClient.post(
+    MEDICATION_ENDPOINTS.LIST_MEDICATION_PAGINATED,
+    {
+      filter: {
+        medicationType: MedicationType === "All" ? "" : MedicationType.toUpperCase(),
       },
-    );
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+      sort: {
+        sortBy: "medicationType",
+        orderBy: "desc",
+      },
+      page: {
+        pageNumber,
+        pageLimit,
+      },
+    },
+  );
+  return response.data;
 };
 
 export const updateMedication = async ({
@@ -65,15 +50,11 @@ export const updateMedication = async ({
 }: {
   medicationId: string;
   data: AddOrEditMedication;
-}) => {
+}): Promise<ApiResponse<AddOrEditMedication>> => {
   const endpoint = MEDICATION_ENDPOINTS.UPDATE_MEDICATION.replace(
     "{id}",
     medicationId,
   );
-  try {
-    const response = await apiClient.put(endpoint, data);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await apiClient.put(endpoint, data);
+  return response.data;
 };

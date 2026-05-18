@@ -1,7 +1,12 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
-import { ScrollView, ActivityIndicator, TouchableOpacity, View } from "react-native";
+import React, { useMemo, useRef, useState, useCallback } from "react";
+import {
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import styled, { DefaultTheme } from "styled-components/native";
+import styled from "styled-components/native";
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -18,14 +23,9 @@ import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import BottomSheet from "../../components/shared/BottomSheet";
 import DualButtons from "../../components/shared/Buttons/DualButtons";
 import { getUser } from "../../services/userService";
-import { getProfileImage } from "../../services/mediaServices";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useAppTheme } from "../../context/ThemeContext";
 import { ProfileStackParamList } from "../../navigation/types";
-
-interface ThemeProps {
-  theme: DefaultTheme;
-}
 
 type NavigationProp = NativeStackNavigationProp<ProfileStackParamList>;
 
@@ -38,33 +38,20 @@ interface MenuItemData {
   onPress: () => void;
 }
 
-const ProfileScreen: React.FC = () => {
+const ProfileScreen = () => {
   const refRBSheet = useRef<BottomSheetModal>(null);
-  const [username, setUsername] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
-  const [firstName, setFirstName] = useState<string | null>(null);
-  const [lastName, setLastName] = useState<string | null>(null);
-  const [contact, setContact] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<"Log Out" | "Delete Account">(
     "Log Out",
   );
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { isDark } = useAppTheme();
   const { handleGalleryPick } = useDocumentMedia();
 
-  const fetchProfileImage = async () => {
-    const image = await getProfileImage();
-    setProfileImage(image);
-  };
-
   useFocusEffect(
     useCallback(() => {
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-      fetchProfileImage();
     }, [queryClient]),
   );
 
@@ -76,21 +63,36 @@ const ProfileScreen: React.FC = () => {
     },
   });
 
-  useEffect(() => {
-    if (userData) {
-      setUsername(userData?.userName);
-      setEmail(userData?.email);
-      setFirstName(userData?.firstName);
-      setLastName(userData?.lastName);
-      setContact(userData?.phone);
-    }
-  }, [userData]);
+  console.log(userData);
 
-  const formData = {
-    username: username ?? "",
-    firstName: firstName ?? "",
-    lastName: lastName ?? "",
-  };
+  const username = userData?.userName ?? "";
+  const email = userData?.email ?? "";
+  const firstName = userData?.firstName ?? "";
+  const lastName = userData?.lastName ?? "";
+  const contact = userData?.phone ?? "";
+  const age = userData?.age ?? 0;
+  const gender = userData?.gender ?? "";
+  const profileImage = userData?.profileImageKey ?? null;
+
+  const formData = useMemo(
+    () => ({
+      profilePicture: profileImage
+        ? {
+            uri: profileImage,
+            name: "profile.jpg",
+            type: "image/jpeg",
+          }
+        : undefined,
+      username,
+      firstName,
+      lastName,
+      email,
+      phone: contact,
+      age,
+      gender,
+    }),
+    [age, contact, email, firstName, gender, lastName, profileImage, username],
+  );
 
   const menuItems: MenuItemData[] = [
     {
@@ -99,8 +101,7 @@ const ProfileScreen: React.FC = () => {
       label: "Edit Information",
       iconBg: "#EEF2FF",
       iconColor: "#6366F1",
-      onPress: () =>
-        navigation.navigate("EditProfile", { formData }),
+      onPress: () => navigation.navigate("EditProfile", { formData }),
     },
   ];
 
@@ -142,9 +143,6 @@ const ProfileScreen: React.FC = () => {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={28} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate("Settings")}>
-            <Ionicons name="settings-outline" size={26} color="white" />
-          </TouchableOpacity>
         </TopNavRow>
 
         {/* Profile Glass Card */}
@@ -152,10 +150,7 @@ const ProfileScreen: React.FC = () => {
           <AvatarSection>
             <AvatarWrapper>
               <AvatarCircle
-                source={
-                  profileImage
-                    ? { uri: profileImage } : ""
-                }
+                source={profileImage ? { uri: profileImage } : undefined}
                 imageStyle={{ borderRadius: 45 }}
               />
             </AvatarWrapper>
@@ -164,7 +159,7 @@ const ProfileScreen: React.FC = () => {
               {isLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <View>
+                <View style={{ width: "100%" }}>
                   <UserName>{username}</UserName>
                   <UserEmail>{email}</UserEmail>
                   <UserPhone>{contact}</UserPhone>
@@ -221,7 +216,10 @@ const ProfileScreen: React.FC = () => {
           <SheetButtonsContainer>
             <SheetActionButton
               onPress={() =>
-                handleGalleryPick(() => refRBSheet.current?.dismiss(), true)
+                handleGalleryPick(
+                  () => refRBSheet.current?.dismiss(),
+                  "Profile",
+                )
               }
             >
               <SheetIconBox
@@ -294,31 +292,22 @@ const AvatarCircle = styled.ImageBackground`
   overflow: hidden;
 `;
 
-const VerifiedBadge = styled.View`
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  background-color: white;
-  width: 24px;
-  height: 24px;
-  border-radius: 12px;
-  justify-content: center;
-  align-items: center;
-  elevation: 2;
-`;
-
 const InfoWrapper = styled.View`
   margin-left: 15px;
 `;
 
 const UserName = styled.Text`
-  font-size: 16px;
+  width: 90%;
+  font-size: 14px;
   font-weight: bold;
   color: white;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const UserEmail = styled.Text`
-  font-size: 10px; 
+  font-size: 10px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
   margin-top: 2px;

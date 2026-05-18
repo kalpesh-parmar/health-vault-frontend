@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   DrawerContentScrollView,
   DrawerItem,
@@ -13,43 +13,30 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAppTheme } from "../context/ThemeContext";
 import { AppStackParamList } from "./types";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getUser } from "../services/userService";
-
-type userDetails = {
-  userName: string;
-  email: string;
-}
 
 const CustomDrawerContent = (props: any) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const { isDark, theme } = useAppTheme();
-  const [userDetails, setUserDetails] = useState<userDetails>({
-    userName: "",
-    email: "",
-  });
+  const { isDark } = useAppTheme();
 
-  const { mutateAsync: getProfile } = useMutation({
-    mutationFn: getUser,
-    onSuccess: (result) => {
-      setUserDetails({
-        userName: result?.data?.userName,
-        email: result?.data?.email,
-      });
-    },
-    onError: (error) => {
-      // Handle error
+  const { data: userDetails } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const response = await getUser();
+      return response?.data || response;
     },
   });
 
-  useEffect(() => {
-    getProfile();
-  }, []);
+  // Exactly matching the HomeScreen header gradient configuration 🔑
+  const headerColors = isDark
+    ? ["#064e3b", "#0369a1", "#312e81"]
+    : ["#0f766e", "#0ea5e9", "#4f46e5"];
 
   return (
-    <Container>
+    <Container isDark={isDark}>
       <DrawerContentScrollView
         {...props}
         contentContainerStyle={{
@@ -63,23 +50,26 @@ const CustomDrawerContent = (props: any) => {
           onPress={() => navigation.navigate("Profile")}
         >
           <Header
-            colors={isDark ? ["#1e293b", "#334155"] : ["#8338ec", "#3a86ff"]}
+            colors={headerColors}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <ProfileImage source={{ uri: "https://i.pravatar.cc/150" }} />
+            <ProfileImage
+              source={{ uri: userDetails?.profileImageKey || "" }}
+            />
             <UserInfo>
-              <Username>{userDetails?.userName}</Username>
-              <UserEmail>{userDetails?.email}</UserEmail>
+              <Username>
+                {userDetails?.userName || "Health Vault User"}
+              </Username>
+              <UserEmail>
+                {userDetails?.email || "user@healthvault.com"}
+              </UserEmail>
             </UserInfo>
           </Header>
         </TouchableOpacity>
 
-        <MainContent>
+        <MainContent isDark={isDark}>
           <DrawerSection>
-            {/* If you use DrawerItemList, you can control its internal 
-                spacing via screenOptions in your Navigator file 
-            */}
             <DrawerItemList
               {...props}
               descriptor={{
@@ -98,16 +88,16 @@ const CustomDrawerContent = (props: any) => {
       </DrawerContentScrollView>
 
       <BottomSection>
-        <Separator />
+        <Separator isDark={isDark} />
         <DrawerItem
           label="Logout"
           onPress={() => setShowModal(true)}
           icon={({ size }) => (
-            <Ionicons name="power-outline" size={size} color="#ff4d4d" />
+            <Ionicons name="power-outline" size={size} color="#ef4444" />
           )}
           labelStyle={{
-            color: "#ff4d4d",
-            fontWeight: "bold",
+            color: "#ef4444",
+            fontWeight: "700",
             fontSize: 16,
             marginLeft: -10,
           }}
@@ -126,17 +116,17 @@ const CustomDrawerContent = (props: any) => {
 
 export default CustomDrawerContent;
 
-/** * Styled Components
+/**
+ * Styled Components 💅
  */
 
-const Container = styled.View`
+const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.background};
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#0f172a" : "#f8fafc")};
 `;
 
 const Header = styled(LinearGradient)`
   padding: 60px 20px 30px 20px;
-  /* Removed border radius to ensure it touches the side edges perfectly */
   flex-direction: row;
   align-items: center;
 `;
@@ -146,7 +136,7 @@ const ProfileImage = styled.Image`
   height: 65px;
   border-radius: 32.5px;
   border-width: 2px;
-  border-color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.4);
 `;
 
 const UserInfo = styled.View`
@@ -155,31 +145,29 @@ const UserInfo = styled.View`
 `;
 
 const Username = styled.Text`
-  font-size: 12px;
+  font-size: 18px;
   font-weight: 700;
   color: #ffffff;
 `;
 
 const UserEmail = styled.Text`
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 4px;
 `;
 
-const MainContent = styled.View`
+const MainContent = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.background};
+  background-color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#0f172a" : "#f8fafc"};
   border-top-left-radius: 25px;
   border-top-right-radius: 25px;
   margin-top: -20px;
-  /* Ensure no horizontal padding here */
   padding-horizontal: 0px;
   padding-top: 10px;
 `;
 
 const DrawerSection = styled.View`
-  /* Setting padding to 0 so the active background indicator 
-     of the DrawerItem touches the edges */
   padding-horizontal: 0px;
 `;
 
@@ -188,9 +176,9 @@ const BottomSection = styled.View`
   padding-horizontal: 0px;
 `;
 
-const Separator = styled.View`
+const Separator = styled.View<{ isDark: boolean }>`
   height: 1px;
-  background-color: ${({ theme }: any) => theme.colors.divider || "#eeeeee"};
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#334155" : "#e2e8f0")};
   margin-bottom: 10px;
-  opacity: 0.5;
+  opacity: 0.8;
 `;

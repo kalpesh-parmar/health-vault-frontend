@@ -1,5 +1,5 @@
 // src/hooks/useDocumentMedia.ts
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Toast from "react-native-toast-message";
 import { Linking } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -26,9 +26,9 @@ export const useDocumentMedia = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
-  const handleGalleryPick = async (
+  const handleGalleryPick = useCallback(async (
     onClose?: () => void,
-    fromProfile?: boolean,
+    from?: "Register" | "Profile" | "Document",
   ) => {
     const permission = await requestGalleryPermission();
 
@@ -54,14 +54,14 @@ export const useDocumentMedia = () => {
 
     setPreviewSource("gallery");
     setSelectedImages(images);
-    if (!fromProfile) {
+    if (from !== "Register" && from !== "Profile" && from !== "Document") {
       navigation.navigate("ImagePreview", {
         images: images,
       });
     }
-  };
+  }, [navigation]);
 
-  const handleOpenCamera = async (onClose?: () => void) => {
+  const handleOpenCamera = useCallback(async (onClose?: () => void) => {
     const permission = await requestCameraPermission();
 
     if (permission.granted) {
@@ -78,9 +78,10 @@ export const useDocumentMedia = () => {
         },
       });
     }
-  };
+  }, []);
 
-  const takePicture = async (cameraRef: any) => {
+  const takePicture = useCallback(async (cameraRef: React.RefObject<any>, from?: "Register" | "Profile" | "Document") => {
+    if (!cameraRef.current) return;
     setIsCapturing(true);
 
     try {
@@ -92,25 +93,28 @@ export const useDocumentMedia = () => {
       }
 
       setPreviewSource("camera");
-      navigation.navigate("ImagePreview", {
-        images: images,
-      });
+      if (from !== "Register" && from !== "Profile" && from !== "Document") {
+        navigation.navigate("ImagePreview", {
+          images: images,
+        });
+      }
+      setSelectedImages(images);
     } catch (error) {
       console.error("Capture error:", error);
     } finally {
       setIsCapturing(false);
       setIsCameraVisible(false);
     }
-  };
+  }, [navigation]);
 
-  const handleRetake = () => {
+  const handleRetake = useCallback(() => {
     setIsPreviewVisible(false);
     setSelectedImages("");
 
     if (previewSource === "camera") {
       setIsCameraVisible(true);
     }
-  };
+  }, [previewSource]);
 
   return {
     // state
@@ -120,7 +124,7 @@ export const useDocumentMedia = () => {
     previewSource,
     isCapturing,
 
-    // setters (only if needed)
+    // setters
     setIsCameraVisible,
     setIsPreviewVisible,
     setSelectedImages,

@@ -92,7 +92,7 @@ const MedicationForm = ({
   });
 
   const [foodTiming, setFoodTiming] = useState<FoodTiming>(() => {
-    const rawMeal = initialData?.withFood || "BEFORE_FOOD";
+    const rawMeal = initialData?.foodFrequency || "BEFORE_FOOD";
     const found = FOOD_TIMINGS.find((f) => f.value === rawMeal);
     return found || FOOD_TIMINGS[0];
   });
@@ -142,11 +142,17 @@ const MedicationForm = ({
   );
 
   const [totalPills, setTotalPills] = useState(
-    initialData?.totalPills?.toString() || "",
+    initialData?.totalQuantity?.toString() || "",
   );
   const [reminders, setReminders] = useState(
     initialData ? (initialData.doseReminders ?? true) : true,
   );
+  const [reminderBeforeMinutes, setReminderBeforeMinutes] = useState<string>(() => {
+    if (initialData && initialData.reminderBeforeMinutes !== undefined) {
+      return initialData.reminderBeforeMinutes.toString();
+    }
+    return "10";
+  });
   const [refillAlert, setRefillAlert] = useState(
     initialData ? (initialData.refillAlert ?? true) : true,
   );
@@ -172,14 +178,23 @@ const MedicationForm = ({
   }, [frequency, timesOfDay]);
 
   const getUnitString = (medType: MedType) => {
-    const units: Record<MedType["key"], string> = {
-      Tablet: "Tablets",
-      Capsule: "Capsules",
-      Syrup: "ml",
-      Drop: "Drops",
-      Injection: "Units",
-    };
-    return units[medType.key];
+    const units = [{
+      type: "TABLET",
+      value: "PILLS",
+    }, {
+      type: "CAPSULE",
+      value: "PILLS",
+    }, {
+      type: "SYRUP",
+      value: "ML",
+    }, {
+      type: "DROP",
+      value: "DROPS",
+    }, {
+      type: "INJECTION",
+      value: "UNITS",
+    }];
+    return units?.find((u) => u.type === medType.value)?.value!;
   };
 
   useEffect(() => {
@@ -196,19 +211,14 @@ const MedicationForm = ({
       return;
     }
 
-    const reminderTimings = preferredTimes.map((t) =>
-      format(t, "HH:mm").toString(),
-    );
-    const period = preferredTimes.map((t) => format(t, "a"));
-
-    onSubmit({
+    console.log({
       medicationName: name,
       medicationType: type.value,
       prescribedBy: doctor,
       dosePerIntake: Number(doseValue) || 0,
       frequency: frequency.value,
       bestTaken: timesOfDay.map((t) => t.value),
-      withFood: foodTiming.value,
+      foodFrequency: foodTiming.value,
       startDate: format(startDate, "yyyy-MM-dd"),
       ongoing: isOngoing,
       medicationTime: preferredTimes.map((t) => {
@@ -217,12 +227,40 @@ const MedicationForm = ({
           period: format(t, "a"),
         };
       }),
-      totalPills: Number(totalPills),
+      totalQuantity: Number(totalPills),
       doseReminders: reminders,
+      unit: getUnitString(type),
       refillAlert,
       notes,
+      reminderBefore: reminders ? (Number(reminderBeforeMinutes) || 0) : 0,
+    });
+
+    onSubmit({
+      medicationName: name,
+      medicationType: type.value,
+      prescribedBy: doctor,
+      dosePerIntake: Number(doseValue) || 0,
+      frequency: frequency.value,
+      bestTaken: timesOfDay.map((t) => t.value),
+      foodFrequency: foodTiming.value,
+      startDate: format(startDate, "yyyy-MM-dd"),
+      ongoing: isOngoing,
+      medicationTime: preferredTimes.map((t) => {
+        return {
+          time: format(t, "hh:mm"),
+          period: format(t, "a"),
+        };
+      }),
+      totalQuantity: Number(totalPills),
+      doseReminders: reminders,
+      unit: type.key,
+      refillAlert,
+      notes,
+      reminderBeforeMinutes: reminders ? (Number(reminderBeforeMinutes) || 0) : 0,
     });
   };
+
+
 
   const maxTimes = timesOfDay.some((t) => t.value === "SPECIFIC_TIME")
     ? 5
@@ -499,6 +537,45 @@ const MedicationForm = ({
             thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
           />
         </ToggleRow>
+        {reminders && (
+          <View style={{ marginTop: 15 }}>
+            <InputLabel>Reminder Before (Minutes)</InputLabel>
+            <ReminderInputRow>
+              <MaterialCommunityIcons
+                name="clock-alert-outline"
+                size={20}
+                color={ACCENT}
+                style={{ marginRight: 10 }}
+              />
+              <StyledReminderInput
+                placeholder="e.g. 10"
+                keyboardType="numeric"
+                value={reminderBeforeMinutes}
+                onChangeText={(val: string) => {
+                  const cleanVal = val.replace(/[^0-9]/g, "");
+                  setReminderBeforeMinutes(cleanVal);
+                }}
+              />
+              <ReminderUnitText>Min before</ReminderUnitText>
+            </ReminderInputRow>
+            <PresetContainer>
+              {[0, 5, 10, 15].map((mins) => (
+                <PresetPill
+                  key={mins}
+                  active={Number(reminderBeforeMinutes) === mins && reminderBeforeMinutes !== ""}
+                  onPress={() => {
+                    console.log(mins);
+                    setReminderBeforeMinutes(mins.toString())
+                  }}
+                >
+                  <PresetPillText active={Number(reminderBeforeMinutes) === mins && reminderBeforeMinutes !== ""}>
+                    {mins === 0 ? "At Time" : `${mins} Min`}
+                  </PresetPillText>
+                </PresetPill>
+              ))}
+            </PresetContainer>
+          </View>
+        )}
         <ToggleRow>
           <View style={{ flex: 1 }}>
             <ToggleTitle>Refill Alert</ToggleTitle>
@@ -762,4 +839,46 @@ export const RemoveTimeBtn = styled.TouchableOpacity`
   background-color: ${ACCENT_DARK};
   border-radius: 10px;
   padding: 2px;
+`;
+
+const ReminderInputRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  background-color: #f1f5f9;
+  border-radius: 14px;
+  padding-horizontal: 16px;
+  height: 48px;
+`;
+
+const StyledReminderInput = styled.TextInput`
+  flex: 1;
+  font-size: 14px;
+  color: #1e293b;
+  padding-vertical: 8px;
+`;
+
+const ReminderUnitText = styled.Text`
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+`;
+
+const PresetContainer = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+`;
+
+const PresetPill = styled.TouchableOpacity<{ active: boolean }>`
+  padding: 6px 12px;
+  border-radius: 10px;
+  background-color: ${({ active }: { active: boolean }) =>
+    active ? ACCENT : "#f1f5f9"};
+`;
+
+const PresetPillText = styled.Text<{ active: boolean }>`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ active }: { active: boolean }) => (active ? "white" : "#64748b")};
 `;

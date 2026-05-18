@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect, useState } from "react";
+import React, { useRef, useCallback, useMemo } from "react";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -7,34 +7,41 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import {
-  AppStackParamList,
-  DocumentsStackParamList,
-} from "../../navigation/types";
+import { AppStackParamList } from "../../navigation/types";
 import { useAppTheme } from "../../context/ThemeContext";
 import BottomSheet from "../../components/shared/BottomSheet";
 import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
 import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getNotificationCount } from "../../services/notificationService";
 import { getUser } from "../../services/userService";
-import { Text } from "react-native";
+import { ActivityIndicator } from "react-native";
 
-// Types for styling props
-interface ThemeProps {
-  theme: any;
-}
-
-interface ColorProps {
+interface ActionItemProps {
+  onPress: () => void;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
   color: string;
+  iconColor: string;
 }
+
+const memo = React.memo;
+
+const ActionItem = memo(
+  ({ onPress, icon, label, color, iconColor }: ActionItemProps) => (
+    <ActionItemContainer onPress={onPress}>
+      <ActionIcon color={color}>
+        <Ionicons name={icon} size={24} color={iconColor} />
+      </ActionIcon>
+      <ActionLabel>{label}</ActionLabel>
+    </ActionItemContainer>
+  ),
+);
 
 const HomeScreen = () => {
   const refRBSheet = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
-  const [firstName, setFirstName] = useState<string>("Guest User");
-  const [notificationBadgeCount, setNotificationBadgeCount] = useState<number>(0);
 
   const {
     isCameraVisible,
@@ -53,39 +60,37 @@ const HomeScreen = () => {
     navigation.dispatch(DrawerActions.openDrawer());
   }, [navigation]);
 
-  const { mutateAsync: getNotificationBadgeCount } = useMutation({
-    mutationFn: getNotificationCount,
-    onSuccess: (data) => {
-      setNotificationBadgeCount(data.count);
-    },
-    onError: (error) => {
-      // Handle error
+  const { data, isLoading } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const response = await getUser();
+      return response?.data || response;
     },
   });
 
-  const { mutateAsync: getProfile } = useMutation({
-    mutationFn: getUser,
-    onSuccess: (result) => {
-      setFirstName(result?.data?.firstName);
-    },
-    onError: (error) => {
-      // Handle error
-    }
+  const { data: notificationData } = useQuery({
+    queryKey: ["notificationCount"],
+    queryFn: getNotificationCount,
   });
 
-  useEffect(() => {
-    // getNotificationBadgeCount();
-    getProfile();
-  }, []);
+  const notificationBadgeCount = notificationData?.data?.count ?? 0;
+
+  const headerColors = useMemo(
+    () =>
+      isDark
+        ? ["#064e3b", "#0369a1", "#312e81"]
+        : ["#0f766e", "#0ea5e9", "#4f46e5"],
+    [isDark],
+  );
 
   return (
-    <Container>
+    <Container isDark={isDark}>
       <StatusBar style="light" />
 
       <CameraModal
         visible={isCameraVisible}
         onClose={() => setIsCameraVisible(false)}
-        onCapture={takePicture}
+        onCapture={() => takePicture(cameraRef)}
         isCapturing={isCapturing}
         cameraRef={cameraRef}
       />
@@ -93,11 +98,7 @@ const HomeScreen = () => {
       {isCapturing && <Loader visible={isCapturing} />}
 
       <HeaderGradient
-        colors={
-          isDark
-            ? ["#064e3b", "#0369a1", "#312e81"]
-            : ["#0f766e", "#0ea5e9", "#4f46e5"]
-        }
+        colors={headerColors}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
@@ -118,10 +119,16 @@ const HomeScreen = () => {
         </TopRow>
 
         <UserRow>
-          <Avatar source={{ uri: "https://i.pravatar.cc/150?img=32" }} />
+          <Avatar source={{ uri: data?.profileImageKey! }} />
           <UserTextContent>
-            <GreetingText>Hi, {firstName}! 👋</GreetingText>
-            <SubGreetingText>Good morning</SubGreetingText>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <GreetingText>Hi, {data?.firstName}! 👋</GreetingText>
+                <SubGreetingText>Welcome To Health Vault</SubGreetingText>
+              </>
+            )}
           </UserTextContent>
         </UserRow>
       </HeaderGradient>
@@ -132,11 +139,7 @@ const HomeScreen = () => {
             <OverviewTitle>Health Overview</OverviewTitle>
             <OverviewSub>Insights about your health</OverviewSub>
           </OverviewTextSection>
-          <MaterialCommunityIcons
-            name="pulse"
-            size={40}
-            color="blue"
-          />
+          <MaterialCommunityIcons name="pulse" size={40} color="#3b82f6" />
         </OverviewCard>
 
         <SectionHeader>
@@ -144,12 +147,6 @@ const HomeScreen = () => {
         </SectionHeader>
 
         <ActionsRow>
-          {/* <ActionItem onPress={() => refRBSheet.current?.present()}>
-            <ActionIcon color="#ecfdf5">
-              <Ionicons name="document-text" size={24} color="#10b981" />
-            </ActionIcon>
-            <ActionLabel>Upload Documents</ActionLabel>
-          </ActionItem> */}
           <ActionItem
             onPress={() =>
               navigation.navigate("DocumentStack", {
@@ -157,31 +154,30 @@ const HomeScreen = () => {
                 params: { category: "all" },
               })
             }
-          >
-            <ActionIcon color="#eff6ff">
-              <Ionicons name="file-tray-full" size={24} color="#3b82f6" />
-            </ActionIcon>
-            <ActionLabel>My Documents</ActionLabel>
-          </ActionItem>
+            icon="file-tray-full"
+            label="My Documents"
+            color="#eff6ff"
+            iconColor="#3b82f6"
+          />
 
-          <ActionItem onPress={() => {navigation.navigate("Medication")}}>
-            <ActionIcon color="#ecfdf5">
-              <Ionicons name="medkit-outline" size={24} color="#10b981" />
-            </ActionIcon>
-            <ActionLabel>Medications</ActionLabel>
-          </ActionItem>
+          <ActionItem
+            onPress={() => navigation.navigate("Medication")}
+            icon="medkit-outline"
+            label="Medications"
+            color="#ecfdf5"
+            iconColor="#10b981"
+          />
         </ActionsRow>
 
         <BottomSpacing />
       </ScrollContent>
 
-      <FloatingAddButton activeOpacity={0.8} onPress={() => refRBSheet.current?.present()}>
+      <FloatingAddButton
+        activeOpacity={0.8}
+        onPress={() => refRBSheet.current?.present()}
+      >
         <FabGradient
-          colors={
-            isDark
-              ? ["#064e3b", "#0369a1", "#312e81"]
-              : ["#0f766e", "#0ea5e9", "#4f46e5"]
-          }
+          colors={headerColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
@@ -205,9 +201,12 @@ const HomeScreen = () => {
 
 export default HomeScreen;
 
-const Container = styled.View<ThemeProps>`
+// --- Styled Components ---
+
+const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: #f8fafc;
+  background-color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#0f172a" : "#f8fafc"};
 `;
 
 const HeaderGradient = styled(LinearGradient)`
@@ -290,8 +289,11 @@ const OverviewCard = styled.View`
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
   elevation: 4;
+  shadow-color: #000;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.05;
+  shadow-radius: 10px;
 `;
 
 const OverviewTextSection = styled.View``;
@@ -328,7 +330,7 @@ const ActionsRow = styled.View`
   gap: 25px;
 `;
 
-const ActionItem = styled.TouchableOpacity`
+const ActionItemContainer = styled.TouchableOpacity`
   align-items: center;
   width: 22%;
 `;
@@ -362,7 +364,6 @@ const FloatingAddButton = styled.TouchableOpacity`
   height: 58px;
   border-radius: 29px;
   elevation: 10;
-  opacity: 0.9;
   shadow-color: #6366f1;
   shadow-opacity: 0.4;
   shadow-radius: 12px;

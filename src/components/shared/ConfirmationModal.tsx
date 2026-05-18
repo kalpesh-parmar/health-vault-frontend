@@ -9,7 +9,6 @@ import { logoutUser } from "../../services/authService";
 import { deleteDocument } from "../../services/documentService";
 import { deleteUserAccount } from "../../services/userService";
 import { useMutation } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
 import { queryClient } from "../../config/queryClient";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -56,7 +55,6 @@ const ConfirmationModal = ({
   const {mutateAsync: deleteUserMutation} = useMutation({
     mutationFn: deleteUserAccount,
     onSuccess: async () => {
-      await SecureStore.deleteItemAsync("userId");
       await logout();
       onClose();
       Toast.show({

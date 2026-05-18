@@ -27,9 +27,10 @@ export const DOCUMENT_ENDPOINTS = {
 } as const;
 
 export const NOTIFICATION_ENDPOINTS = {
-  LIST_NOTIFICATION: `${URL}/notifications/list`,
+  LIST_NOTIFICATION: `${URL}/notifications/list-paginated`,
   GET_NOTIFICATION_COUNT: `${URL}/notifications/badge-count`,
-  MARK_AS_READ: `${URL}/notifications/{id}/read`,
+  MARK_AS_READ: `${URL}/notifications/mark-read/{id}`,
+  MARK_ALL_READ: `${URL}/notifications/mark-all-read`
 } as const;
 
 export const MEDICATION_ENDPOINTS = {

@@ -1,11 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
-import {
-  FlatList,
-  ActivityIndicator,
-  ScrollView,
-  View,
-  TouchableOpacity,
-} from "react-native";
+import React, { useState, useMemo } from "react";
+import { FlatList, ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -14,16 +8,20 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../../../navigation/types";
 import { useAppTheme } from "../../../../context/ThemeContext";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getAllMedications,
-  getMedications,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  getMedicationsPaginated,
   updateMedication,
 } from "../../../../services/medicationservice";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
 import { TimeText } from "../../../../components/MedicationForm";
 import Toast from "react-native-toast-message";
+import FilterTabs from "../../../../components/shared/FilterTabs";
 
 const MED_CATEGORIES = [
   "All",
@@ -61,118 +59,50 @@ const SORT_OPTIONS = [
   },
 ];
 
-const MOCK_MEDICATIONS: AddOrEditMedication[] = [
-  {
-    id: "mock-1",
-    medicationName: "Paracetamol",
-    medicationType: "Tablet",
-    prescribedBy: "Dr.xyz",
-    dosePerIntake: 1,
-    frequency: "Once Daily",
-    bestTaken: ["Morning"],
-    medicationTime: [
-      {
-        time: "10:00",
-        period: "AM",
-      },
-    ],
-    withFood: "After Meal",
-    startDate: "2022-06-01",
-    ongoing: true,
-    totalPills: 28,
-    doseReminders: true,
-    refillAlert: true,
-    notes: "DAVA TIME EE PII LEVIII...",
-  },
-  {
-    id: "mock-14",
-    medicationName: "Paracetamol",
-    medicationType: "Tablet",
-    prescribedBy: "Dr.xyz",
-    dosePerIntake: 1,
-    frequency: "Once Daily",
-    bestTaken: ["Morning"],
-    medicationTime: [
-      {
-        time: "10:00",
-        period: "AM",
-      },
-    ],
-    withFood: "After Meal",
-    startDate: "2026-01-05",
-    ongoing: false,
-    totalPills: 28,
-    doseReminders: true,
-    refillAlert: true,
-    notes: "DAVA TIME EE PII LEVIII...",
-  },
-  {
-    id: "mock-2",
-    medicationName: "Paracetamol",
-    medicationType: "Capsule",
-    prescribedBy: "Dr.xyz",
-    dosePerIntake: 1,
-    frequency: "Once Daily",
-    bestTaken: ["Morning"],
-    medicationTime: [
-      {
-        time: "10:00",
-        period: "AM",
-      },
-    ],
-    withFood: "After Meal",
-    startDate: "2022-01-01",
-    ongoing: false,
-    totalPills: 28,
-    doseReminders: true,
-    refillAlert: true,
-    notes: "DAVA TIME EE PII LEVIII...",
-  },
-  {
-    id: "mock-3",
-    medicationName: "Paracetamol",
-    medicationType: "syrup",
-    prescribedBy: "Dr.xyz",
-    dosePerIntake: 1,
-    frequency: "Once Daily",
-    bestTaken: ["Morning"],
-    medicationTime: [
-      {
-        time: "10:00",
-        period: "AM",
-      },
-    ],
-    withFood: "After Meal",
-    startDate: "2026-05-12",
-    ongoing: true,
-    totalPills: 28,
-    doseReminders: true,
-    refillAlert: true,
-    notes: "DAVA TIME EE PII LEVIII...",
-  },
-  {
-    id: "mock-4",
-    medicationName: "Paracetamol",
-    medicationType: "Injection",
-    prescribedBy: "Dr.xyz",
-    dosePerIntake: 1,
-    frequency: "Once Daily",
-    bestTaken: ["Morning"],
-    medicationTime: [
-      {
-        time: "10:00",
-        period: "AM",
-      },
-    ],
-    withFood: "After Meal",
-    startDate: "2022-01-01",
-    ongoing: true,
-    totalPills: 28,
-    doseReminders: true,
-    refillAlert: true,
-    notes: "DAVA TIME EE PII LEVIII...",
-  },
-];
+// Give me 15 Mock medication according to this AddOrEditMedication mentioned below.
+// export interface AddOrEditMedication {
+//   id?: string;
+//   medicationName: string;
+//   medicationType: string;
+//   prescribedBy: string;
+//   dosePerIntake: number;
+//   frequency: string;
+//   medicationTime: {
+//     time: string;
+//     period: string;
+//   }[];
+//   bestTaken: string[];
+//   foodFrequency: string;
+//   startDate: string;
+//   ongoing: boolean;
+//   totalQuantity: number;
+//   doseReminders: boolean;
+//   unit: string;
+//   refillAlert: boolean;
+//   notes: string;
+//   reminderBefore?: number;
+// }
+const MOCK_MEDICATION = Array.from({ length: 15 }, (_, index) => ({
+  medicationName: `Medication ${index + 1}`,
+  medicationType: index % 2 === 0 ? "Tablet" : "Capsule",
+  prescribedBy: "Dr. Smith",
+  dosePerIntake: 1,
+  frequency: "Twice daily",
+  medicationTime: [
+    { time: "09:00", period: "AM" },
+    { time: "09:00", period: "PM" },
+  ],
+  bestTaken: ["With food"],
+  foodFrequency: "After meals",
+  startDate: "2022-01-01",
+  ongoing: true,
+  totalQuantity: 30,
+  doseReminders: true,
+  unit: "tablet",
+  refillAlert: true,
+  notes: "Take as directed",
+  reminderBeforeMinutes: 10,
+}));
 
 const MedicationScreen = () => {
   const [activeTab, setActiveTab] = useState("All");
@@ -218,52 +148,66 @@ const MedicationScreen = () => {
     });
   };
 
-  useEffect(() => {
-    const getAllMedicationsList = async () => {
-      const result = await getAllMedications();
-      console.log("result", result);
-    };
-    getAllMedicationsList();
-  }, []);
-
-  const { data: medicationList, isLoading } = useQuery({
+  const {
+    data: medicationList,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["medications", activeTab],
-    queryFn: () => getMedications(activeTab),
+    queryFn: ({ pageParam = 1 }) =>
+      getMedicationsPaginated({
+        MedicationType: activeTab,
+        pageNumber: pageParam as number,
+        pageLimit: 10,
+      }),
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.data.length === 10 ? allPages.length + 1 : undefined;
+    },
+    initialPageParam: 1,
   });
 
-  const medicationData: AddOrEditMedication[] = (
-    medicationList?.data || MOCK_MEDICATIONS
-  )
-    .filter((item: AddOrEditMedication) => {
-      if (
-        activeTab !== "All" &&
-        item.medicationType?.toUpperCase() !== activeTab.toUpperCase()
-      )
-        return false;
-      if (sortOption === "ongoing" && item.ongoing === false) return false;
-      if (sortOption === "stopped" && item.ongoing === true) return false;
-      return true;
-    })
-    .sort((a: AddOrEditMedication, b: AddOrEditMedication) => {
-      switch (sortOption) {
-        case "name_asc":
-          return (a.medicationName || "").localeCompare(b.medicationName || "");
-        case "name_desc":
-          return (b.medicationName || "").localeCompare(a.medicationName || "");
-        case "date_asc":
-          return (
-            new Date(a.startDate || 0).getTime() -
-            new Date(b.startDate || 0).getTime()
-          );
-        case "date_desc":
-          return (
-            new Date(b.startDate || 0).getTime() -
-            new Date(a.startDate || 0).getTime()
-          );
-        default:
-          return 0;
-      }
-    });
+  const medicationData = useMemo(() => {
+    const flattened =
+      medicationList?.pages.flatMap((page) => page.data) || MOCK_MEDICATION;
+
+    return flattened
+      .filter((item: AddOrEditMedication) => {
+        if (
+          activeTab !== "All" &&
+          item.medicationType?.toUpperCase() !== activeTab.toUpperCase()
+        )
+          return false;
+        if (sortOption === "ongoing" && item.ongoing === false) return false;
+        if (sortOption === "stopped" && item.ongoing === true) return false;
+        return true;
+      })
+      .sort((a: AddOrEditMedication, b: AddOrEditMedication) => {
+        switch (sortOption) {
+          case "name_asc":
+            return (a.medicationName || "").localeCompare(
+              b.medicationName || "",
+            );
+          case "name_desc":
+            return (b.medicationName || "").localeCompare(
+              a.medicationName || "",
+            );
+          case "date_asc":
+            return (
+              new Date(a.startDate || 0).getTime() -
+              new Date(b.startDate || 0).getTime()
+            );
+          case "date_desc":
+            return (
+              new Date(b.startDate || 0).getTime() -
+              new Date(a.startDate || 0).getTime()
+            );
+          default:
+            return 0;
+        }
+      });
+  }, [medicationList, activeTab, sortOption]);
 
   const renderMedicationCard = ({ item }: { item: AddOrEditMedication }) => (
     <Card>
@@ -303,8 +247,8 @@ const MedicationScreen = () => {
             </MedTypeLabel>
           </MedTime>
         </MedInfoMain>
-        <Tag context={item.withFood}>
-          <TagText context={item.withFood}>{item.withFood}</TagText>
+        <Tag context={item.foodFrequency}>
+          <TagText context={item.foodFrequency}>{item.foodFrequency}</TagText>
         </Tag>
       </CardTopRow>
 
@@ -454,23 +398,12 @@ const MedicationScreen = () => {
         </>
       )}
 
-      <FilterWrapper>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 15 }}
-        >
-          {MED_CATEGORIES.map((cat) => (
-            <TabItem
-              key={cat}
-              active={activeTab === cat}
-              onPress={() => setActiveTab(cat)}
-            >
-              <TabText active={activeTab === cat}>{cat}</TabText>
-            </TabItem>
-          ))}
-        </ScrollView>
-      </FilterWrapper>
+      <FilterTabs
+        data={MED_CATEGORIES}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        isDark={isDark}
+      />
 
       {isLoading ? (
         <LoadingContainer>
@@ -491,6 +424,21 @@ const MedicationScreen = () => {
             </EmptyText>
           }
           contentContainerStyle={{ paddingBottom: 40 }}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.2}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator
+                size="small"
+                color="#6366f1"
+                style={{ marginVertical: 20 }}
+              />
+            ) : null
+          }
         />
       )}
     </Container>
@@ -593,33 +541,6 @@ const HeaderTitle = styled.Text`
   font-weight: 700;
   flex-grow: 1;
   margin-left: 10px;
-`;
-
-const FilterWrapper = styled.View`
-  background-color: transparent;
-`;
-
-const TabItem = styled.TouchableOpacity<{ active: boolean }>`
-  padding-horizontal: 20px;
-  padding-vertical: 8px;
-  border-radius: 20px;
-  background-color: ${({ active }: { active: boolean }) =>
-    active ? "#2f80edff" : "white"};
-  margin-right: 10px;
-  border-width: 1px;
-  border-color: ${({ active }: { active: boolean }) =>
-    active ? "#2f80edff" : "#f1f5f9"};
-  elevation: 3;
-  shadow-color: #000;
-  shadow-offset: 0px 2px;
-  shadow-opacity: 0.1;
-  shadow-radius: 3.84px;
-`;
-
-const TabText = styled.Text<{ active: boolean }>`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ active }: { active: boolean }) => (active ? "white" : "#64748b")};
 `;
 
 const ContentList = styled(FlatList as new () => FlatList<AddOrEditMedication>)`

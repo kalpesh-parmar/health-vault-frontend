@@ -1,6 +1,12 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 
+let onServerErrorCallback: (() => void) | null = null;
+
+export const setServerErrorCallback = (callback: () => void) => {
+  onServerErrorCallback = callback;
+};
+
 const apiClient = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   timeout: 30000,
@@ -23,6 +29,13 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error.response?.status;
+    if (status && (status >= 500 || status === 401)) {
+      if (onServerErrorCallback) {
+        onServerErrorCallback();
+      }
+    }
+
     const data = error.response?.data;
 
     const message =

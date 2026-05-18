@@ -1,16 +1,50 @@
-import React, { forwardRef } from "react";
+import React, { forwardRef, useCallback, useEffect, useState } from "react";
 import styled from "styled-components/native";
-import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
+import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { BackHandler } from "react-native";
 
 const BottomSheet = forwardRef(({ children }: any, ref: any) => {
   const { theme } = useAppTheme();
+   const [sheetIndex, setSheetIndex] = useState(-1);
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (sheetIndex >= 0) {
+        ref.current?.close();
+        return true;
+      }
+      // Allow default back behavior
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress,
+    );
+
+    return () => subscription.remove();
+  }, [sheetIndex]);
 
   return (
     <BottomSheetModal
       ref={ref}
       enablePanDownToClose={true}
+      onChange={setSheetIndex}
+      backdropComponent={renderBackdrop}
       backgroundStyle={{
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
