@@ -17,6 +17,30 @@ import { useQuery } from "@tanstack/react-query";
 import { getNotificationCount } from "../../services/notificationService";
 import { getUser } from "../../services/userService";
 import { ActivityIndicator } from "react-native";
+import ReminderCard from "../../components/shared/ReminderCard";
+
+const UPCOMING_REMINDERS = [
+  {
+    id: "rec1",
+    title: "Morning Lisinopril Dose",
+    category: "Medication",
+    medicationName: "Lisinopril 10mg",
+    time: "08:00 AM",
+    date: "Tomorrow",
+    status: "upcoming",
+    notes: "Take with food after waking up.",
+  },
+  {
+    id: "rec2",
+    title: "Flu Shot Appointment",
+    category: "Vaccination",
+    medicationName: "Influenza Vaccine",
+    time: "02:30 PM",
+    date: "20 May 2026",
+    status: "upcoming",
+    notes: "Bring medical details to Central Pharmacy.",
+  },
+];
 
 interface ActionItemProps {
   onPress: () => void;
@@ -161,13 +185,36 @@ const HomeScreen = () => {
           />
 
           <ActionItem
-            onPress={() => navigation.navigate("Medication")}
+            onPress={() =>
+              navigation.navigate("MedicationStack", {
+                screen: "MedicationList",
+              })
+            }
             icon="medkit-outline"
             label="Medications"
             color="#ecfdf5"
             iconColor="#10b981"
           />
         </ActionsRow>
+
+        <SectionHeader>
+          <SectionTitle>Upcoming Reminders</SectionTitle>
+          <ViewAllButton onPress={() => navigation.navigate("Reminders")}>
+            <ViewAllText>View All</ViewAllText>
+          </ViewAllButton>
+        </SectionHeader>
+
+        <RemindersListContainer>
+          {UPCOMING_REMINDERS.map((reminder) => (
+            <ReminderCard
+              key={reminder.id}
+              item={reminder as any}
+              isDark={isDark}
+              onActionPress={() => {}}
+              onAlarmPress={() => {}}
+            />
+          ))}
+        </RemindersListContainer>
 
         <BottomSpacing />
       </ScrollContent>
@@ -315,6 +362,22 @@ const SectionHeader = styled.View`
   justify-content: space-between;
   padding: 25px 20px 15px;
   align-items: center;
+`;
+
+const ViewAllButton = styled.TouchableOpacity`
+  padding-vertical: 4px;
+  padding-horizontal: 8px;
+`;
+
+const ViewAllText = styled.Text`
+  font-size: 13px;
+  font-weight: 700;
+  color: #6366f1;
+`;
+
+const RemindersListContainer = styled.View`
+  padding-horizontal: 20px;
+  margin-top: 5px;
 `;
 
 const SectionTitle = styled.Text`

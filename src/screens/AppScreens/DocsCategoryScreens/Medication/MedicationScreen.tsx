@@ -22,6 +22,7 @@ import { AddOrEditMedication } from "../../../../types";
 import { TimeText } from "../../../../components/MedicationForm";
 import Toast from "react-native-toast-message";
 import FilterTabs from "../../../../components/shared/FilterTabs";
+import { MedicationStackParamList } from "../../../../types/navigation";
 
 const MED_CATEGORIES = [
   "All",
@@ -101,7 +102,6 @@ const MOCK_MEDICATION = Array.from({ length: 15 }, (_, index) => ({
   unit: "tablet",
   refillAlert: true,
   notes: "Take as directed",
-  reminderBeforeMinutes: 10,
 }));
 
 const MedicationScreen = () => {
@@ -110,9 +110,10 @@ const MedicationScreen = () => {
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const navigation =
-    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+    useNavigation<NativeStackNavigationProp<MedicationStackParamList>>();
   const { isDark } = useAppTheme();
   const queryClient = useQueryClient();
 
@@ -181,6 +182,13 @@ const MedicationScreen = () => {
           return false;
         if (sortOption === "ongoing" && item.ongoing === false) return false;
         if (sortOption === "stopped" && item.ongoing === true) return false;
+        if (searchQuery.trim().length > 0) {
+          const q = searchQuery.toLowerCase();
+          const matchName = item.medicationName?.toLowerCase().includes(q);
+          const matchNotes = item.notes?.toLowerCase().includes(q);
+          const matchType = item.medicationType?.toLowerCase().includes(q);
+          return !!(matchName || matchNotes || matchType);
+        }
         return true;
       })
       .sort((a: AddOrEditMedication, b: AddOrEditMedication) => {
@@ -286,7 +294,7 @@ const MedicationScreen = () => {
               navigation.navigate("MedicationOperation", {
                 operation: "edit",
                 medication: item,
-              } as never)
+              })
             }
           >
             <Ionicons name="create-outline" size={18} color="#64748b" />
@@ -345,6 +353,23 @@ const MedicationScreen = () => {
             </AddButton>
           </RightActions>
         </TopRow>
+
+        <SearchContainer>
+          <SearchIcon>
+            <Ionicons name="search-outline" size={18} color="#cbd5e1" />
+          </SearchIcon>
+          <SearchInput
+            placeholder="Search medications..."
+            placeholderTextColor="#94a3b8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <ClearButton onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+            </ClearButton>
+          )}
+        </SearchContainer>
       </HeaderGradient>
 
       {showDropdown && (
@@ -455,9 +480,38 @@ const Container = styled.View`
 `;
 
 const HeaderGradient = styled(LinearGradient)`
-  padding: 50px 20px 30px;
+  padding: 50px 20px 20px;
   border-bottom-left-radius: 30px;
   border-bottom-right-radius: 30px;
+`;
+
+const SearchContainer = styled.View`
+  flex-direction: row;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding-horizontal: 12px;
+  border-width: 1px;
+  border-color: rgba(255, 255, 255, 0.18);
+  height: 44px;
+  margin-top: 15px;
+`;
+
+const SearchIcon = styled.View`
+  margin-right: 4px;
+`;
+
+const SearchInput = styled.TextInput`
+  flex: 1;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  height: 100%;
+  padding-horizontal: 4px;
+`;
+
+const ClearButton = styled.TouchableOpacity`
+  padding: 4px;
 `;
 
 const TopRow = styled.View`

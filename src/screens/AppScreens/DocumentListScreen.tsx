@@ -72,6 +72,7 @@ const DocumentList = () => {
   const [activeTab, setActiveTab] = useState<Category>("All");
   const [sortOption, setSortOption] = useState("date_desc");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const {
     handleGalleryPick,
@@ -109,13 +110,22 @@ const DocumentList = () => {
 
     return flattened
       .filter((doc: MedicalDocument) => {
-        if (activeTab === "All") return true;
-
-        const activeValue = CATEGORIES.find(
-          (category) => category.key === activeTab,
-        )?.value;
-
-        return doc.documentType?.toUpperCase() === activeValue?.toUpperCase();
+        if (activeTab !== "All") {
+          const activeValue = CATEGORIES.find(
+            (category) => category.key === activeTab,
+          )?.value;
+          if (doc.documentType?.toUpperCase() !== activeValue?.toUpperCase()) {
+            return false;
+          }
+        }
+        if (searchQuery.trim().length > 0) {
+          const q = searchQuery.toLowerCase();
+          const matchName = (doc.title || doc.fileName || "").toLowerCase().includes(q);
+          const matchNotes = doc.notes?.toLowerCase().includes(q);
+          const matchType = doc.documentType?.toLowerCase().includes(q);
+          return !!(matchName || matchNotes || matchType);
+        }
+        return true;
       })
       .sort((a: MedicalDocument, b: MedicalDocument) => {
         const firstName = a.title || a.fileName || "";
@@ -175,7 +185,7 @@ const DocumentList = () => {
 
       <HeaderWrapper>
         <HeaderMain>
-          <BackButton onPress={() => navigation.navigate("Home")}>
+          <BackButton onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={28} color="white" />
           </BackButton>
           <HeaderTitle>My Documents</HeaderTitle>
@@ -188,6 +198,25 @@ const DocumentList = () => {
             </RightButton>
           </RightActions>
         </HeaderMain>
+
+        <SearchBarWrapper>
+          <SearchContainer>
+            <SearchIcon>
+              <Ionicons name="search-outline" size={18} color="#cbd5e1" />
+            </SearchIcon>
+            <SearchInput
+              placeholder="Search documents..."
+              placeholderTextColor="#cbd5e1"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <ClearButton onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+              </ClearButton>
+            )}
+          </SearchContainer>
+        </SearchBarWrapper>
       </HeaderWrapper>
 
       {showDropdown && (
@@ -310,7 +339,40 @@ const Container = styled(LinearGradient)`
 const HeaderWrapper = styled.SafeAreaView`
   background-color: transparent;
   padding-top: 40px;
-  padding-bottom: 20px;
+  padding-bottom: 12px;
+`;
+
+const SearchBarWrapper = styled.View`
+  padding-horizontal: 20px;
+  margin-top: 10px;
+`;
+
+const SearchContainer = styled.View`
+  flex-direction: row;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding-horizontal: 12px;
+  border-width: 1px;
+  border-color: rgba(255, 255, 255, 0.18);
+  height: 44px;
+`;
+
+const SearchIcon = styled.View`
+  margin-right: 4px;
+`;
+
+const SearchInput = styled.TextInput`
+  flex: 1;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  height: 100%;
+  padding-horizontal: 4px;
+`;
+
+const ClearButton = styled.TouchableOpacity`
+  padding: 4px;
 `;
 
 const HeaderMain = styled.View`

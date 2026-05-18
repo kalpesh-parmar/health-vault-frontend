@@ -41,3 +41,10 @@ export const MEDICATION_ENDPOINTS = {
   DELETE_MEDICATION: `${URL}/medications/{id}`,
   LIST_ALL_MEDICATIONS: `${URL}/medications/list`,
 } as const;
+
+export const REMINDER_ENDPOINTS = {
+  ADD_REMINDER: `${URL}/reminders/create`,
+  LIST_REMINDERS_PAGINATED: `${URL}/reminders/list-paginated`,
+  UPDATE_REMINDER: `${URL}/reminders/{id}`,
+  DELETE_REMINDER: `${URL}/reminders/{id}`,
+} as const;

@@ -35,6 +35,13 @@ export type DocumentsStackParamList = {
   EditDocument: { document: MedicalDocument };
 };
 
+// ─── Medication Stack ──────────────────────────────────────────
+
+export type MedicationStackParamList = {
+  MedicationList: undefined;
+  MedicationOperation: {operation?: string, medication?: AddOrEditMedication};
+};
+
 // ─── App Stack (Home Stack) ────────────────────────────────────
 
 export type AppStackParamList = {
@@ -42,13 +49,13 @@ export type AppStackParamList = {
   Profile: undefined;
   Settings: undefined;
   "About Us": undefined;
-  Medication: undefined;
-  MedicationOperation: {operation: string, medication?: AddOrEditMedication};
+  MedicationStack: NavigatorScreenParams<MedicationStackParamList>;
   ImagePreview: ImagePreviewParams;
   SaveDocument: SaveDocumentParams;
   DocumentStack: NavigatorScreenParams<DocumentsStackParamList>;
   Notifications: undefined;
   AIChat: undefined;
+  Reminders: { filter?: "All" | "Overdue" | "Upcoming" | "Completed" } | undefined;
 };
 
 // ─── Profile Stack ─────────────────────────────────────────────

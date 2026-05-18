@@ -4,7 +4,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { TouchableOpacity, Modal, GestureResponderEvent, View, Text } from "react-native";
-import { AppStackParamList } from "../../navigation/types";
+import { AppStackParamList, DocumentsStackParamList } from "../../navigation/types";
 import ConfirmationModal from "../shared/ConfirmationModal";
 import type { MedicalDocument } from "../../types";
 import { useAppTheme } from "../../context/ThemeContext";
@@ -14,7 +14,7 @@ interface Props {
 }
 
 const DocumentCard = memo(({ document }: Props) => {
-  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<DocumentsStackParamList>>();
   const { isDark } = useAppTheme();
 
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -31,18 +31,12 @@ const DocumentCard = memo(({ document }: Props) => {
   }, []);
 
   const handleNavigateToSummary = useCallback(() => {
-    navigation.navigate("DocumentStack", {
-      screen: "DocumentSummary",
-      params: { document },
-    });
+    navigation.navigate("DocumentSummary", { document } );
   }, [navigation, document]);
 
   const handleNavigateToEdit = useCallback(() => {
     setMenuVisible(false);
-    navigation.navigate("DocumentStack", {
-      screen: "EditDocument",
-      params: { document },
-    });
+    navigation.navigate("EditDocument", { document });
   }, [navigation, document]);
   
   const handleMorePress = useCallback(

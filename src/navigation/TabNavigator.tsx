@@ -1,9 +1,6 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 import React from "react";
-
-import SettingsScreen from "../screens/AppScreens/SettingsScreen";
-
 import TabBar from "./TabBar";
 
 import HomeStack from "./stacks/HomeStack";
