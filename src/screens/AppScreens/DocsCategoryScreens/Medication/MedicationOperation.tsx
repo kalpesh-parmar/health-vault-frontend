@@ -8,8 +8,6 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Toast from "react-native-toast-message";
 import { useMutation } from "@tanstack/react-query";
-
-import { AppStackParamList } from "../../../../navigation/types";
 import { useAppTheme } from "../../../../context/ThemeContext";
 import {
   addMedication,
@@ -18,9 +16,10 @@ import {
 import MedicationForm from "../../../../components/MedicationForm";
 import { AddOrEditMedication } from "../../../../types";
 import { queryClient } from "../../../../config/queryClient";
+import { MedicationStackParamList } from "../../../../types/navigation";
 
 type AddMedicationScreenRouteProp = RouteProp<
-  AppStackParamList,
+  MedicationStackParamList,
   "MedicationOperation"
 >;
 
@@ -30,7 +29,7 @@ const MedicationOperation = ({
   route: AddMedicationScreenRouteProp;
 }) => {
   const navigation =
-    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+    useNavigation<NativeStackNavigationProp<MedicationStackParamList>>();
   const { isDark } = useAppTheme();
   const { operation, medication } = route.params;
   const medicationId = medication?.id;

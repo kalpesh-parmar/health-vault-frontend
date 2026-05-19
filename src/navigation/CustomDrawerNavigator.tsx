@@ -3,10 +3,12 @@ import { createDrawerNavigator } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import TabNavigator from "../navigation/TabNavigator";
 import AboutScreen from "../screens/AppScreens/AboutScreen";
-import ProfileScreen from "../screens/AppScreens/ProfileScreen";
 import CustomDrawerContent from "./CustomDrawerContent";
 import ProfileStack from "./stacks/ProfileStack";
 import { useAppTheme } from "../context/ThemeContext";
+import DocumentStack from "./stacks/DocumentStack";
+import MedicationStack from "./stacks/MedicationStack";
+import ReminderScreen from "../screens/AppScreens/Reminders/ReminderScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -25,21 +27,20 @@ const CustomDrawerNavigator = () => {
           paddingHorizontal: 0,
         },
 
-        drawerActiveTintColor: theme.colors.primary,
+        drawerActiveTintColor: theme.colors.accent,
         drawerInactiveTintColor: theme.colors.textMuted,
 
         drawerLabelStyle: {
           fontSize: 16,
-          marginLeft: -10,
         },
       }}
     >
       <Drawer.Screen
-        name="HomeTab"
+        name="HOME"
         options={{
-          drawerLabel: "Home",
-          drawerIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          drawerLabel: "HOME",
+          drawerIcon: ({ size }) => (
+            <Ionicons name="home" size={size} color={"rgba(0,0,0,0.8)"} />
           ),
         }}
       >
@@ -47,14 +48,58 @@ const CustomDrawerNavigator = () => {
       </Drawer.Screen>
 
       <Drawer.Screen
-        name="About Us"
+        name="ABOUT"
         component={AboutScreen}
         options={{
-          drawerIcon: ({ color, size }) => (
+          drawerIcon: ({ size }) => (
             <Ionicons
-              name="information-circle-outline"
+              name="information-circle"
               size={size}
-              color={color}
+              color={"rgba(0,0,0,0.8)"}
+            />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="PROFILE"
+        component={ProfileStack}
+        options={{
+          drawerIcon: ({ size }) => (
+            <Ionicons name="person" size={size} color={"rgba(0,0,0,0.8)"} />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="DOCUMENTS"
+        component={DocumentStack}
+        options={{
+          drawerIcon: ({ size }) => (
+            <Ionicons name="documents" size={size} color={"rgba(0,0,0,0.8)"} />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="MEDICATION"
+        component={MedicationStack}
+        options={{
+          drawerIcon: ({ size }) => (
+            <Ionicons name="medkit" size={size} color={"rgba(0,0,0,0.8)"} />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="REMINDERS"
+        component={ReminderScreen}
+        options={{
+          drawerIcon: ({ size }) => (
+            <Ionicons
+              name="alert-circle"
+              size={size}
+              color={"rgba(0,0,0,0.8)"}
             />
           ),
         }}

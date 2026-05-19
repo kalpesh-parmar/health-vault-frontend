@@ -77,7 +77,6 @@ const CustomDrawerContent = (props: any) => {
                 options: {
                   ...props.options,
                   drawerItemStyle: {
-                    marginHorizontal: 0,
                     width: "100%",
                   },
                 },
@@ -99,7 +98,7 @@ const CustomDrawerContent = (props: any) => {
             color: "#ef4444",
             fontWeight: "700",
             fontSize: 16,
-            marginLeft: -10,
+            paddingLeft: 20,
           }}
         />
       </BottomSection>

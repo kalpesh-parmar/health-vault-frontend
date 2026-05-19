@@ -16,6 +16,7 @@ import EmptyContent from "../../components/shared/EmptyContent";
 import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
 import FilterTabs from "../../components/shared/FilterTabs";
+import SearchBar from "../../components/shared/SearchBar";
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -72,6 +73,7 @@ const DocumentList = () => {
   const [activeTab, setActiveTab] = useState<Category>("All");
   const [sortOption, setSortOption] = useState("date_desc");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const {
     handleGalleryPick,
@@ -109,13 +111,22 @@ const DocumentList = () => {
 
     return flattened
       .filter((doc: MedicalDocument) => {
-        if (activeTab === "All") return true;
-
-        const activeValue = CATEGORIES.find(
-          (category) => category.key === activeTab,
-        )?.value;
-
-        return doc.documentType?.toUpperCase() === activeValue?.toUpperCase();
+        if (activeTab !== "All") {
+          const activeValue = CATEGORIES.find(
+            (category) => category.key === activeTab,
+          )?.value;
+          if (doc.documentType?.toUpperCase() !== activeValue?.toUpperCase()) {
+            return false;
+          }
+        }
+        if (searchQuery.trim().length > 0) {
+          const q = searchQuery.toLowerCase();
+          const matchName = (doc.title || doc.fileName || "").toLowerCase().includes(q);
+          const matchNotes = doc.notes?.toLowerCase().includes(q);
+          const matchType = doc.documentType?.toLowerCase().includes(q);
+          return !!(matchName || matchNotes || matchType);
+        }
+        return true;
       })
       .sort((a: MedicalDocument, b: MedicalDocument) => {
         const firstName = a.title || a.fileName || "";
@@ -175,7 +186,7 @@ const DocumentList = () => {
 
       <HeaderWrapper>
         <HeaderMain>
-          <BackButton onPress={() => navigation.navigate("Home")}>
+          <BackButton onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={28} color="white" />
           </BackButton>
           <HeaderTitle>My Documents</HeaderTitle>
@@ -188,6 +199,14 @@ const DocumentList = () => {
             </RightButton>
           </RightActions>
         </HeaderMain>
+
+        <SearchBarWrapper>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search documents..."
+          />
+        </SearchBarWrapper>
       </HeaderWrapper>
 
       {showDropdown && (
@@ -295,6 +314,7 @@ const DocumentList = () => {
           onCameraOpen={() =>
             handleOpenCamera(() => refRBSheet.current?.dismiss())
           }
+          onDocumentPick={() => {}}
         />
       </BottomSheet>
     </Container>
@@ -310,7 +330,12 @@ const Container = styled(LinearGradient)`
 const HeaderWrapper = styled.SafeAreaView`
   background-color: transparent;
   padding-top: 40px;
-  padding-bottom: 20px;
+  padding-bottom: 12px;
+`;
+
+const SearchBarWrapper = styled.View`
+  padding-horizontal: 20px;
+  margin-top: 10px;
 `;
 
 const HeaderMain = styled.View`
@@ -420,6 +445,6 @@ const DropdownText = styled.Text<{ active: boolean; isDark: boolean }>`
 const ContentContainer = styled.View`
   flex: 1;
   background-color: white;
-  border-top-left-radius: 30px;
-  border-top-right-radius: 30px;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
 `;

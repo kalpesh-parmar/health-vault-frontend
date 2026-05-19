@@ -1,10 +1,8 @@
 // src/components/Signup/SignupForm.tsx
 import React, { useState, useRef, useEffect } from "react";
 import {
-  View,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
 } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
@@ -19,14 +17,11 @@ import * as SecureStore from "expo-secure-store";
 // Components & Hooks
 import PasswordInfoModal from "../PasswordInfo";
 import { registerUser } from "../../services/authService";
-import { useAppTheme } from "../../context/ThemeContext";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import CameraModal from "../shared/CameraModal";
 import GenderBottomSheet from "./GenderBottomSheet";
 import ImageBottomSheet from "./ImageBottomSheet";
 import TermsBottomSheet from "./TermsBottomSheet";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ─── Layout Constants ─────────────────────────────────────────────────────────
 const CURVE_HEIGHT = 40; // depth of the inverted arch
@@ -53,8 +48,6 @@ const SignupForm = () => {
   const [confirmSecureText, setConfirmSecureText] = useState(true);
   const [formattedValue, setFormattedValue] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
-
-  const { isDark } = useAppTheme();
 
   // Profile picture
   const [profileImage, setProfileImage] = useState("");

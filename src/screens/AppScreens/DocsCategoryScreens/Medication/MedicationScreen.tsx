@@ -22,6 +22,8 @@ import { AddOrEditMedication } from "../../../../types";
 import { TimeText } from "../../../../components/MedicationForm";
 import Toast from "react-native-toast-message";
 import FilterTabs from "../../../../components/shared/FilterTabs";
+import { MedicationStackParamList } from "../../../../types/navigation";
+import SearchBar from "../../../../components/shared/SearchBar";
 
 const MED_CATEGORIES = [
   "All",
@@ -101,7 +103,6 @@ const MOCK_MEDICATION = Array.from({ length: 15 }, (_, index) => ({
   unit: "tablet",
   refillAlert: true,
   notes: "Take as directed",
-  reminderBeforeMinutes: 10,
 }));
 
 const MedicationScreen = () => {
@@ -110,9 +111,10 @@ const MedicationScreen = () => {
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const navigation =
-    useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+    useNavigation<NativeStackNavigationProp<MedicationStackParamList>>();
   const { isDark } = useAppTheme();
   const queryClient = useQueryClient();
 
@@ -181,6 +183,13 @@ const MedicationScreen = () => {
           return false;
         if (sortOption === "ongoing" && item.ongoing === false) return false;
         if (sortOption === "stopped" && item.ongoing === true) return false;
+        if (searchQuery.trim().length > 0) {
+          const q = searchQuery.toLowerCase();
+          const matchName = item.medicationName?.toLowerCase().includes(q);
+          const matchNotes = item.notes?.toLowerCase().includes(q);
+          const matchType = item.medicationType?.toLowerCase().includes(q);
+          return !!(matchName || matchNotes || matchType);
+        }
         return true;
       })
       .sort((a: AddOrEditMedication, b: AddOrEditMedication) => {
@@ -286,7 +295,7 @@ const MedicationScreen = () => {
               navigation.navigate("MedicationOperation", {
                 operation: "edit",
                 medication: item,
-              } as never)
+              })
             }
           >
             <Ionicons name="create-outline" size={18} color="#64748b" />
@@ -345,6 +354,14 @@ const MedicationScreen = () => {
             </AddButton>
           </RightActions>
         </TopRow>
+
+        <SearchBarWrapper>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search medications..."
+          />
+        </SearchBarWrapper>
       </HeaderGradient>
 
       {showDropdown && (
@@ -447,7 +464,7 @@ const MedicationScreen = () => {
 
 export default MedicationScreen;
 
-/** * Styled Components */
+// ─── Styled Components ──────────────────────────────────────────────
 
 const Container = styled.View`
   flex: 1;
@@ -455,9 +472,13 @@ const Container = styled.View`
 `;
 
 const HeaderGradient = styled(LinearGradient)`
-  padding: 50px 20px 30px;
+  padding: 50px 20px 20px;
   border-bottom-left-radius: 30px;
   border-bottom-right-radius: 30px;
+`;
+
+const SearchBarWrapper = styled.View`
+  margin-top: 15px;
 `;
 
 const TopRow = styled.View`

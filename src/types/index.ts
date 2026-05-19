@@ -157,3 +157,16 @@ export interface ListNotificationRequest {
     orderBy: "asc" | "desc";
   }
 }
+
+// ─── Health Reminders ────────────────────────────────────────
+
+export interface Reminder {
+  id: string;
+  title: string;
+  time: string;           // e.g. "09:00 AM"
+  date: string;           // e.g. "2026-05-18"
+  status: "overdue" | "upcoming" | "completed";
+  category: "Medication" | "Vaccination" | "Appointment" | "Other";
+  notes?: string;
+  medicationName?: string;
+}

@@ -6,6 +6,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 interface AddDocumentSheetProps {
   onGalleryPick: () => void;
   onCameraOpen: () => void;
+  onDocumentPick: () => void;
 }
 
 const AddDocumentSheet = ({
@@ -49,6 +50,22 @@ const AddDocumentSheet = ({
           <TextContent>
             <OptionTitle>Gallery</OptionTitle>
             <OptionDesc>Choose from gallery</OptionDesc>
+          </TextContent>
+          <Feather name="chevron-right" size={20} color="#94a3b8" />
+        </OptionRow>
+
+        {/* PDF Option */}
+        <OptionRow onPress={onCameraOpen} isFirst>
+          <IconContainer bgColor="#f5f3ff">
+            <MaterialCommunityIcons
+              name="file-outline"
+              size={26}
+              color="#7c3aed"
+            />
+          </IconContainer>
+          <TextContent>
+            <OptionTitle>PDF</OptionTitle>
+            <OptionDesc>Choose PDF</OptionDesc>
           </TextContent>
           <Feather name="chevron-right" size={20} color="#94a3b8" />
         </OptionRow>
