@@ -422,6 +422,7 @@ const EditProfile = ({
           onCameraOpen={() => {
             handleOpenCamera(() => refRBSheet.current?.dismiss());
           }}
+          onDocumentPick={() => {}}
         />
       </BottomSheet>
 

@@ -23,6 +23,7 @@ import { TimeText } from "../../../../components/MedicationForm";
 import Toast from "react-native-toast-message";
 import FilterTabs from "../../../../components/shared/FilterTabs";
 import { MedicationStackParamList } from "../../../../types/navigation";
+import SearchBar from "../../../../components/shared/SearchBar";
 
 const MED_CATEGORIES = [
   "All",
@@ -354,22 +355,13 @@ const MedicationScreen = () => {
           </RightActions>
         </TopRow>
 
-        <SearchContainer>
-          <SearchIcon>
-            <Ionicons name="search-outline" size={18} color="#cbd5e1" />
-          </SearchIcon>
-          <SearchInput
-            placeholder="Search medications..."
-            placeholderTextColor="#94a3b8"
+        <SearchBarWrapper>
+          <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
+            placeholder="Search medications..."
           />
-          {searchQuery.length > 0 && (
-            <ClearButton onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={18} color="#cbd5e1" />
-            </ClearButton>
-          )}
-        </SearchContainer>
+        </SearchBarWrapper>
       </HeaderGradient>
 
       {showDropdown && (
@@ -472,7 +464,7 @@ const MedicationScreen = () => {
 
 export default MedicationScreen;
 
-/** * Styled Components */
+// ─── Styled Components ──────────────────────────────────────────────
 
 const Container = styled.View`
   flex: 1;
@@ -485,33 +477,8 @@ const HeaderGradient = styled(LinearGradient)`
   border-bottom-right-radius: 30px;
 `;
 
-const SearchContainer = styled.View`
-  flex-direction: row;
-  align-items: center;
-  background-color: rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  padding-horizontal: 12px;
-  border-width: 1px;
-  border-color: rgba(255, 255, 255, 0.18);
-  height: 44px;
+const SearchBarWrapper = styled.View`
   margin-top: 15px;
-`;
-
-const SearchIcon = styled.View`
-  margin-right: 4px;
-`;
-
-const SearchInput = styled.TextInput`
-  flex: 1;
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  height: 100%;
-  padding-horizontal: 4px;
-`;
-
-const ClearButton = styled.TouchableOpacity`
-  padding: 4px;
 `;
 
 const TopRow = styled.View`

@@ -16,6 +16,7 @@ import EmptyContent from "../../components/shared/EmptyContent";
 import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
 import FilterTabs from "../../components/shared/FilterTabs";
+import SearchBar from "../../components/shared/SearchBar";
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -200,22 +201,11 @@ const DocumentList = () => {
         </HeaderMain>
 
         <SearchBarWrapper>
-          <SearchContainer>
-            <SearchIcon>
-              <Ionicons name="search-outline" size={18} color="#cbd5e1" />
-            </SearchIcon>
-            <SearchInput
-              placeholder="Search documents..."
-              placeholderTextColor="#cbd5e1"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <ClearButton onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={18} color="#cbd5e1" />
-              </ClearButton>
-            )}
-          </SearchContainer>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search documents..."
+          />
         </SearchBarWrapper>
       </HeaderWrapper>
 
@@ -324,6 +314,7 @@ const DocumentList = () => {
           onCameraOpen={() =>
             handleOpenCamera(() => refRBSheet.current?.dismiss())
           }
+          onDocumentPick={() => {}}
         />
       </BottomSheet>
     </Container>
@@ -345,34 +336,6 @@ const HeaderWrapper = styled.SafeAreaView`
 const SearchBarWrapper = styled.View`
   padding-horizontal: 20px;
   margin-top: 10px;
-`;
-
-const SearchContainer = styled.View`
-  flex-direction: row;
-  align-items: center;
-  background-color: rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  padding-horizontal: 12px;
-  border-width: 1px;
-  border-color: rgba(255, 255, 255, 0.18);
-  height: 44px;
-`;
-
-const SearchIcon = styled.View`
-  margin-right: 4px;
-`;
-
-const SearchInput = styled.TextInput`
-  flex: 1;
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  height: 100%;
-  padding-horizontal: 4px;
-`;
-
-const ClearButton = styled.TouchableOpacity`
-  padding: 4px;
 `;
 
 const HeaderMain = styled.View`
@@ -482,6 +445,6 @@ const DropdownText = styled.Text<{ active: boolean; isDark: boolean }>`
 const ContentContainer = styled.View`
   flex: 1;
   background-color: white;
-  border-top-left-radius: 30px;
-  border-top-right-radius: 30px;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
 `;

@@ -1,4 +1,3 @@
-// src/components/Signup/ImageBottomSheet.tsx
 import React, { forwardRef } from "react";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import BottomSheet from "../shared/BottomSheet";
@@ -16,6 +15,7 @@ const ImageBottomSheet = forwardRef<BottomSheetModal, ImageBottomSheetProps>(
         <AddDocumentSheet
           onGalleryPick={onGalleryPick}
           onCameraOpen={onCameraOpen}
+          onDocumentPick={() => {}}
         />
       </BottomSheet>
     );

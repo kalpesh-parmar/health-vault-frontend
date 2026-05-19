@@ -68,19 +68,15 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
       <CardBody>
         <StatusIndicator status={item.status} />
 
-        <IconWrapper style={{ backgroundColor: categoryBg }}>
-          {item.category === "Medication" || item.category === "Vaccination" ? (
-            <MaterialCommunityIcons name={categoryIcon} size={22} color={categoryColor} />
-          ) : (
-            <Ionicons name={categoryIcon as any} size={22} color={categoryColor} />
-          )}
-        </IconWrapper>
-
         <TextContent>
           <HeaderRow>
-            <CardTitle isDark={isDark} numberOfLines={1}>{item.title}</CardTitle>
-            <CategoryBadge style={{ backgroundColor: categoryBg }}>
-              <CategoryText style={{ color: categoryColor }}>{item.category}</CategoryText>
+            <CardTitle isDark={isDark} numberOfLines={1}>
+              {item.title}
+            </CardTitle>
+            <CategoryBadge style={{ backgroundColor: "#fffbeb" }}>
+              <CategoryText style={{ color: "#f59e0b" }}>
+                {item.category}
+              </CategoryText>
             </CategoryBadge>
           </HeaderRow>
 
@@ -90,23 +86,24 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
 
           <ScheduleRow>
             <ScheduleItem>
-              <Ionicons name="time-outline" size={13} color={isDark ? "#94a3b8" : "#64748b"} />
+              <Ionicons
+                name="time-outline"
+                size={13}
+                color={isDark ? "#94a3b8" : "#64748b"}
+              />
               <ScheduleText isDark={isDark}>{item.time}</ScheduleText>
             </ScheduleItem>
             <ScheduleItem style={{ marginLeft: 12 }}>
-              <Ionicons name="calendar-outline" size={13} color={isDark ? "#94a3b8" : "#64748b"} />
+              <Ionicons
+                name="calendar-outline"
+                size={13}
+                color={isDark ? "#94a3b8" : "#64748b"}
+              />
               <ScheduleText isDark={isDark}>{item.date}</ScheduleText>
             </ScheduleItem>
           </ScheduleRow>
         </TextContent>
       </CardBody>
-
-      {isExpanded && item.notes && (
-        <NotesSection isDark={isDark}>
-          <NotesTitle isDark={isDark}>Instructions & Notes</NotesTitle>
-          <NotesBody isDark={isDark}>{item.notes}</NotesBody>
-        </NotesSection>
-      )}
 
       <CardFooter isDark={isDark}>
         <StatusRow>
@@ -117,19 +114,6 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
         </StatusRow>
 
         <ActionsContainer>
-          {item.status !== "completed" && onAlarmPress && (
-            <ActionButton
-              onPress={onAlarmPress}
-              isDark={isDark}
-              style={{ marginRight: 8 }}
-            >
-              <Ionicons name="notifications-outline" size={15} color={isDark ? "#818cf8" : "#2563eb"} />
-              <ActionButtonLabel style={{ color: isDark ? "#818cf8" : "#2563eb" }}>
-                Alarm
-              </ActionButtonLabel>
-            </ActionButton>
-          )}
-
           {onActionPress && (
             <ActionButton
               onPress={onActionPress}
@@ -138,8 +122,14 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
             >
               {item.status === "completed" ? (
                 <>
-                  <Ionicons name="refresh-outline" size={15} color={isDark ? "#94a3b8" : "#64748b"} />
-                  <ActionButtonLabel style={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+                  <Ionicons
+                    name="refresh-outline"
+                    size={15}
+                    color={isDark ? "#94a3b8" : "#64748b"}
+                  />
+                  <ActionButtonLabel
+                    style={{ color: isDark ? "#94a3b8" : "#64748b" }}
+                  >
                     Undo
                   </ActionButtonLabel>
                 </>

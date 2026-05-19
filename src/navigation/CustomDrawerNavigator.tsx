@@ -3,13 +3,10 @@ import { createDrawerNavigator } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import TabNavigator from "../navigation/TabNavigator";
 import AboutScreen from "../screens/AppScreens/AboutScreen";
-import ProfileScreen from "../screens/AppScreens/ProfileScreen";
 import CustomDrawerContent from "./CustomDrawerContent";
 import ProfileStack from "./stacks/ProfileStack";
 import { useAppTheme } from "../context/ThemeContext";
 import DocumentStack from "./stacks/DocumentStack";
-import MedicationScreen from "../screens/AppScreens/DocsCategoryScreens/Medication/MedicationScreen";
-import NotificationScreen from "../screens/AppScreens/Notifications";
 import MedicationStack from "./stacks/MedicationStack";
 import ReminderScreen from "../screens/AppScreens/Reminders/ReminderScreen";
 
@@ -30,12 +27,11 @@ const CustomDrawerNavigator = () => {
           paddingHorizontal: 0,
         },
 
-        drawerActiveTintColor: theme.colors.primary,
+        drawerActiveTintColor: theme.colors.accent,
         drawerInactiveTintColor: theme.colors.textMuted,
 
         drawerLabelStyle: {
           fontSize: 16,
-          marginLeft: -10,
         },
       }}
     >
@@ -43,8 +39,8 @@ const CustomDrawerNavigator = () => {
         name="HOME"
         options={{
           drawerLabel: "HOME",
-          drawerIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          drawerIcon: ({ size }) => (
+            <Ionicons name="home" size={size} color={"rgba(0,0,0,0.8)"} />
           ),
         }}
       >
@@ -55,11 +51,11 @@ const CustomDrawerNavigator = () => {
         name="ABOUT"
         component={AboutScreen}
         options={{
-          drawerIcon: ({ color, size }) => (
+          drawerIcon: ({ size }) => (
             <Ionicons
-              name="information-circle-outline"
+              name="information-circle"
               size={size}
-              color={color}
+              color={"rgba(0,0,0,0.8)"}
             />
           ),
         }}
@@ -69,12 +65,8 @@ const CustomDrawerNavigator = () => {
         name="PROFILE"
         component={ProfileStack}
         options={{
-          drawerIcon: ({ color, size }) => (
-            <Ionicons
-              name="person-outline"
-              size={size}
-              color={color}
-            />
+          drawerIcon: ({ size }) => (
+            <Ionicons name="person" size={size} color={"rgba(0,0,0,0.8)"} />
           ),
         }}
       />
@@ -83,12 +75,8 @@ const CustomDrawerNavigator = () => {
         name="DOCUMENTS"
         component={DocumentStack}
         options={{
-          drawerIcon: ({ color, size }) => (
-            <Ionicons
-              name="documents-outline"
-              size={size}
-              color={color}
-            />
+          drawerIcon: ({ size }) => (
+            <Ionicons name="documents" size={size} color={"rgba(0,0,0,0.8)"} />
           ),
         }}
       />
@@ -97,26 +85,8 @@ const CustomDrawerNavigator = () => {
         name="MEDICATION"
         component={MedicationStack}
         options={{
-          drawerIcon: ({ color, size }) => (
-            <Ionicons
-              name="medkit-outline"
-              size={size}
-              color={color}
-            />
-          ),
-        }}
-      />
-
-      <Drawer.Screen
-        name="NOTIFICATIONS"
-        component={NotificationScreen}
-        options={{
-          drawerIcon: ({ color, size }) => (
-            <Ionicons
-              name="notifications-outline"
-              size={size}
-              color={color}
-            />
+          drawerIcon: ({ size }) => (
+            <Ionicons name="medkit" size={size} color={"rgba(0,0,0,0.8)"} />
           ),
         }}
       />
@@ -125,11 +95,11 @@ const CustomDrawerNavigator = () => {
         name="REMINDERS"
         component={ReminderScreen}
         options={{
-          drawerIcon: ({ color, size }) => (
+          drawerIcon: ({ size }) => (
             <Ionicons
-              name="alert-circle-outline"
+              name="alert-circle"
               size={size}
-              color={color}
+              color={"rgba(0,0,0,0.8)"}
             />
           ),
         }}
