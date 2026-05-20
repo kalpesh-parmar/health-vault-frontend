@@ -50,7 +50,7 @@ export const logoutUser = async () => {
   return response.data;
 };
 
-export const sendForgotPasswordOTP = async ({ email }: ForgotPasswordRequest) => {
+export const sendOTP = async ({ email }: ForgotPasswordRequest) => {
   const response = await apiClient.post(AUTH_ENDPOINTS.FORGOT_PASSWORD, {
     email,
   });

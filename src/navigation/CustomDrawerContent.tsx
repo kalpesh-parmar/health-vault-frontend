@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import {
   DrawerContentScrollView,
-  DrawerItem,
   DrawerItemList,
+  DrawerItem,
 } from "@react-navigation/drawer";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ConfirmationModal from "../components/shared/ConfirmationModal";
 import { LinearGradient } from "expo-linear-gradient";
-import { TouchableOpacity } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAppTheme } from "../context/ThemeContext";
@@ -30,21 +30,17 @@ const CustomDrawerContent = (props: any) => {
     },
   });
 
-  // Exactly matching the HomeScreen header gradient configuration 🔑
-  const headerColors = isDark
-    ? ["#064e3b", "#0369a1", "#312e81"]
-    : ["#0f766e", "#0ea5e9", "#4f46e5"];
+  // Gradient matched with the bright purple/pinkish aesthetic in the UI mockup
+  const headerColors = isDark ? ["#3b0764", "#1e1b4b"] : ["#a855f7", "#6366f1"]; // Vibrant purple to Indigo gradient
 
   return (
     <Container isDark={isDark}>
       <DrawerContentScrollView
         {...props}
-        contentContainerStyle={{
-          paddingTop: 0,
-          paddingHorizontal: 0,
-        }}
+        contentContainerStyle={{ paddingTop: 0 }}
         bounces={false}
       >
+        {/* Header Profile Section */}
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => navigation.navigate("Profile")}
@@ -55,51 +51,43 @@ const CustomDrawerContent = (props: any) => {
             end={{ x: 1, y: 1 }}
           >
             <ProfileImage
-              source={{ uri: userDetails?.profileImageKey || "" }}
+              source={{
+                uri:
+                  userDetails?.profileImageKey ||
+                  "https://via.placeholder.com/150",
+              }}
             />
             <UserInfo>
-              <Username>
-                {userDetails?.userName || "Health Vault User"}
-              </Username>
+              <Username>{userDetails?.userName || "Priya Sharma"}</Username>
               <UserEmail>
-                {userDetails?.email || "user@healthvault.com"}
+                {userDetails?.email || "priya.sharma@email.com"}
               </UserEmail>
             </UserInfo>
           </Header>
         </TouchableOpacity>
 
+        {/* Core Main Items Content Body */}
         <MainContent isDark={isDark}>
-          <DrawerSection>
-            <DrawerItemList
-              {...props}
-              descriptor={{
-                ...props.descriptor,
-                options: {
-                  ...props.options,
-                  drawerItemStyle: {
-                    width: "100%",
-                  },
-                },
-              }}
-            />
-          </DrawerSection>
+          <DrawerItemList {...props} />
         </MainContent>
       </DrawerContentScrollView>
 
+      {/* Persistent Bottom Section */}
       <BottomSection>
         <Separator isDark={isDark} />
         <DrawerItem
           label="Logout"
           onPress={() => setShowModal(true)}
           icon={({ size }) => (
-            <Ionicons name="power-outline" size={size} color="#ef4444" />
+            <Ionicons name="power-outline" size={size + 2} color="#ef4444" />
           )}
           labelStyle={{
-            color: "#ef4444",
+            color: "#ff0000",
             fontWeight: "700",
             fontSize: 16,
-            paddingLeft: 20,
+            marginLeft: -8, // Shifts text closer to icon mimicking image structure
           }}
+          style={{ marginHorizontal: 16, borderRadius: 8 }}
         />
       </BottomSection>
 
@@ -118,28 +106,27 @@ export default CustomDrawerContent;
 /**
  * Styled Components 💅
  */
-
 const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#0f172a" : "#f8fafc")};
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#0f172a" : "#ffffff")};
 `;
 
 const Header = styled(LinearGradient)`
-  padding: 60px 20px 30px 20px;
+  padding: 50px 24px 45px 24px;
   flex-direction: row;
   align-items: center;
 `;
 
 const ProfileImage = styled.Image`
-  width: 65px;
-  height: 65px;
-  border-radius: 32.5px;
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
   border-width: 2px;
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.6);
 `;
 
 const UserInfo = styled.View`
-  margin-left: 15px;
+  margin-left: 16px;
   flex: 1;
 `;
 
@@ -151,33 +138,26 @@ const Username = styled.Text`
 
 const UserEmail = styled.Text`
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
-  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 2px;
 `;
 
 const MainContent = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#0f172a" : "#f8fafc"};
-  border-top-left-radius: 25px;
-  border-top-right-radius: 25px;
-  margin-top: -20px;
-  padding-horizontal: 0px;
-  padding-top: 10px;
-`;
-
-const DrawerSection = styled.View`
-  padding-horizontal: 0px;
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#0f172a" : "#ffffff")};
+  border-top-left-radius: 30px;
+  border-top-right-radius: 30px;
+  margin-top: -24px; /* Pulls the card over the gradient container */
+  padding-top: 24px;
 `;
 
 const BottomSection = styled.View`
-  padding-bottom: 20px;
-  padding-horizontal: 0px;
+  padding-bottom: 24px;
 `;
 
 const Separator = styled.View<{ isDark: boolean }>`
   height: 1px;
-  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#334155" : "#e2e8f0")};
-  margin-bottom: 10px;
-  opacity: 0.8;
+  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#334155" : "#f1f5f9")};
+  margin-horizontal: 24px;
+  margin-bottom: 12px;
 `;

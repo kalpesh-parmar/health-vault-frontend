@@ -1,4 +1,4 @@
-import { NavigatorScreenParams, RouteProp, useRoute } from "@react-navigation/native";
+import { NavigatorScreenParams } from "@react-navigation/native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { AddOrEditMedication, MedicalDocument } from "./index";
@@ -9,8 +9,9 @@ export type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
   ForgotPassword: undefined;
-  VerifyOTP: { email: string };
+  VerifyOTP: { email: string, password?: string, fromLogin: boolean };
   ResetPassword: { email: string };
+  Home: NavigatorScreenParams<AppStackParamList>; 
 };
 
 // ─── Image Preview Params ──────────────────────────────────────
@@ -61,20 +62,7 @@ export type AppStackParamList = {
 // ─── Profile Stack ─────────────────────────────────────────────
 
 export type ProfileStackParamList = {
-  Profile: undefined;
-  EditProfile: {
-    formData: {
-      username: string;
-      firstName: string;
-      lastName: string;
-      email: string;
-      phone: string;
-      age: number;
-      gender: string;
-    };
-  };
-  ProfileDocuments: undefined;
-  Settings: undefined;
+  EditProfile: undefined
 };
 
 // ─── Tab Navigator ─────────────────────────────────────────────

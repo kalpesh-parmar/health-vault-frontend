@@ -17,6 +17,7 @@ import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
 import FilterTabs from "../../components/shared/FilterTabs";
 import SearchBar from "../../components/shared/SearchBar";
+import FilterBottomSheet from "../../components/shared/FilterBottomSheet";
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -68,11 +69,11 @@ const DocumentList = () => {
   const navigation = useAppNavigation();
   const { isDark } = useAppTheme();
   const refRBSheet = useRef<BottomSheetModal>(null);
+  const filterSheetRef = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
   const { userId } = useAuth();
   const [activeTab, setActiveTab] = useState<Category>("All");
   const [sortOption, setSortOption] = useState("date_desc");
-  const [showDropdown, setShowDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const {
@@ -191,7 +192,7 @@ const DocumentList = () => {
           </BackButton>
           <HeaderTitle>My Documents</HeaderTitle>
           <RightActions>
-            <IconButton onPress={() => setShowDropdown(!showDropdown)}>
+            <IconButton onPress={() => filterSheetRef.current?.present()}>
               <MaterialCommunityIcons name="filter" size={20} color="white" />
             </IconButton>
             <RightButton onPress={() => refRBSheet.current?.present()}>
@@ -208,57 +209,6 @@ const DocumentList = () => {
           />
         </SearchBarWrapper>
       </HeaderWrapper>
-
-      {showDropdown && (
-        <>
-          <DropdownOverlay
-            activeOpacity={1}
-            onPress={() => setShowDropdown(false)}
-          />
-          <DropdownContainer isDark={isDark}>
-            {SORT_OPTIONS.map((option) => {
-              const isActive = sortOption === option.value;
-              return (
-                <DropdownItem
-                  key={option.value}
-                  active={isActive}
-                  isDark={isDark}
-                  onPress={() => {
-                    setSortOption(option.value);
-                    setShowDropdown(false);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons
-                    name={option.icon as any}
-                    size={18}
-                    color={
-                      isActive
-                        ? isDark
-                          ? "#818cf8"
-                          : "#2563eb"
-                        : isDark
-                          ? "#94a3b8"
-                          : "#64748b"
-                    }
-                  />
-                  <DropdownText active={isActive} isDark={isDark}>
-                    {option.label}
-                  </DropdownText>
-                  {isActive && (
-                    <Ionicons
-                      name="checkmark"
-                      size={18}
-                      color={isDark ? "#818cf8" : "#2563eb"}
-                      style={{ marginLeft: "auto" }}
-                    />
-                  )}
-                </DropdownItem>
-              );
-            })}
-          </DropdownContainer>
-        </>
-      )}
 
       <ContentContainer>
         <FilterTabs
@@ -317,6 +267,13 @@ const DocumentList = () => {
           onDocumentPick={() => {}}
         />
       </BottomSheet>
+
+      <FilterBottomSheet
+        ref={filterSheetRef}
+        selectedSort={sortOption}
+        onSelectSort={setSortOption}
+        onApply={() => filterSheetRef.current?.dismiss()}
+      />
     </Container>
   );
 };
@@ -387,59 +344,6 @@ const IconButton = styled.TouchableOpacity`
   margin-right: 8px;
   align-items: center;
   justify-content: center;
-`;
-
-const DropdownOverlay = styled.TouchableOpacity`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 90;
-`;
-
-const DropdownContainer = styled.View<{ isDark: boolean }>`
-  position: absolute;
-  top: 110px;
-  right: 20px;
-  background-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#1e293b" : "white"};
-  border-radius: 12px;
-  padding: 8px;
-  z-index: 100;
-  elevation: 10;
-  shadow-color: #000;
-  shadow-offset: 0px 4px;
-  shadow-opacity: 0.15;
-  shadow-radius: 8px;
-  width: 230px;
-`;
-
-const DropdownItem = styled.TouchableOpacity<{
-  active: boolean;
-  isDark: boolean;
-}>`
-  flex-direction: row;
-  align-items: center;
-  padding: 12px;
-  border-radius: 8px;
-  background-color: ${({
-    active,
-    isDark,
-  }: {
-    active: boolean;
-    isDark: boolean;
-  }) =>
-    active ? (isDark ? "rgba(79, 70, 229, 0.2)" : "#eff6ff") : "transparent"};
-  margin-bottom: 2px;
-`;
-
-const DropdownText = styled.Text<{ active: boolean; isDark: boolean }>`
-  font-size: 14px;
-  font-weight: ${({ active }: { active: boolean }) => (active ? "700" : "500")};
-  color: ${({ active, isDark }: { active: boolean; isDark: boolean }) =>
-    active ? (isDark ? "#818cf8" : "#2563eb") : isDark ? "#cbd5e1" : "#475569"};
-  margin-left: 10px;
 `;
 
 const ContentContainer = styled.View`

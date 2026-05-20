@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { FlatList, ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -24,6 +24,8 @@ import Toast from "react-native-toast-message";
 import FilterTabs from "../../../../components/shared/FilterTabs";
 import { MedicationStackParamList } from "../../../../types/navigation";
 import SearchBar from "../../../../components/shared/SearchBar";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import FilterBottomSheet from "../../../../components/shared/FilterBottomSheet";
 
 const MED_CATEGORIES = [
   "All",
@@ -110,8 +112,8 @@ const MedicationScreen = () => {
   const [sortOption, setSortOption] = useState("date_desc");
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const filterSheetRef = useRef<BottomSheetModal>(null);
 
   const navigation =
     useNavigation<NativeStackNavigationProp<MedicationStackParamList>>();
@@ -340,7 +342,7 @@ const MedicationScreen = () => {
           </BackButton>
           <HeaderTitle>Medications</HeaderTitle>
           <RightActions>
-            <HeaderIconButton onPress={() => setShowDropdown(!showDropdown)}>
+            <HeaderIconButton onPress={() => filterSheetRef.current?.present()}>
               <MaterialCommunityIcons name="filter" size={20} color="#fff" />
             </HeaderIconButton>
             <AddButton
@@ -363,57 +365,6 @@ const MedicationScreen = () => {
           />
         </SearchBarWrapper>
       </HeaderGradient>
-
-      {showDropdown && (
-        <>
-          <DropdownOverlay
-            activeOpacity={1}
-            onPress={() => setShowDropdown(false)}
-          />
-          <DropdownContainer isDark={isDark}>
-            {SORT_OPTIONS.map((option) => {
-              const isActive = sortOption === option.value;
-              return (
-                <DropdownItem
-                  key={option.value}
-                  active={isActive}
-                  isDark={isDark}
-                  onPress={() => {
-                    setSortOption(option.value);
-                    setShowDropdown(false);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name={option.icon as any}
-                    size={18}
-                    color={
-                      isActive
-                        ? isDark
-                          ? "#818cf8"
-                          : "#2563eb"
-                        : isDark
-                          ? "#94a3b8"
-                          : "#64748b"
-                    }
-                  />
-                  <DropdownText active={isActive} isDark={isDark}>
-                    {option.label}
-                  </DropdownText>
-                  {isActive && (
-                    <Ionicons
-                      name="checkmark"
-                      size={18}
-                      color={isDark ? "#818cf8" : "#2563eb"}
-                      style={{ marginLeft: "auto" }}
-                    />
-                  )}
-                </DropdownItem>
-              );
-            })}
-          </DropdownContainer>
-        </>
-      )}
 
       <FilterTabs
         data={MED_CATEGORIES}
@@ -458,6 +409,13 @@ const MedicationScreen = () => {
           }
         />
       )}
+
+      <FilterBottomSheet
+        ref={filterSheetRef}
+        selectedSort={sortOption}
+        onSelectSort={setSortOption}
+        onApply={() => filterSheetRef.current?.dismiss()}
+      />
     </Container>
   );
 };
@@ -501,59 +459,6 @@ const AddButton = styled.TouchableOpacity`
 const RightActions = styled.View`
   flex-direction: row;
   align-items: center;
-`;
-
-const DropdownOverlay = styled.TouchableOpacity`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 90;
-`;
-
-const DropdownContainer = styled.View<{ isDark: boolean }>`
-  position: absolute;
-  top: 110px;
-  right: 20px;
-  background-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#1e293b" : "white"};
-  border-radius: 12px;
-  padding: 8px;
-  z-index: 100;
-  elevation: 10;
-  shadow-color: #000;
-  shadow-offset: 0px 4px;
-  shadow-opacity: 0.15;
-  shadow-radius: 8px;
-  width: 230px;
-`;
-
-const DropdownItem = styled.TouchableOpacity<{
-  active: boolean;
-  isDark: boolean;
-}>`
-  flex-direction: row;
-  align-items: center;
-  padding: 12px;
-  border-radius: 8px;
-  background-color: ${({
-    active,
-    isDark,
-  }: {
-    active: boolean;
-    isDark: boolean;
-  }) =>
-    active ? (isDark ? "rgba(79, 70, 229, 0.2)" : "#eff6ff") : "transparent"};
-  margin-bottom: 2px;
-`;
-
-const DropdownText = styled.Text<{ active: boolean; isDark: boolean }>`
-  font-size: 14px;
-  font-weight: ${({ active }: { active: boolean }) => (active ? "700" : "500")};
-  color: ${({ active, isDark }: { active: boolean; isDark: boolean }) =>
-    active ? (isDark ? "#818cf8" : "#2563eb") : isDark ? "#cbd5e1" : "#475569"};
-  margin-left: 10px;
 `;
 
 const HeaderTitle = styled.Text`

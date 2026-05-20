@@ -101,7 +101,7 @@ const ProfileScreen = () => {
       label: "Edit Information",
       iconBg: "#EEF2FF",
       iconColor: "#6366F1",
-      onPress: () => navigation.navigate("EditProfile", { formData }),
+      onPress: () => (navigation as any).navigate("EditProfile", { formData }),
     },
   ];
 

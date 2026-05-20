@@ -16,10 +16,12 @@ import { useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { login } from "../../services/authService";
+import { login, sendOTP } from "../../services/authService";
 import * as SecureStore from "expo-secure-store";
 import { useAuth } from "../../context/ContextAPI";
 import { useAppTheme } from "../../context/ThemeContext";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { AuthStackParamList } from "../../types/navigation";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
@@ -28,7 +30,8 @@ const LoginScreen = () => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
 
   const { login: authLogin } = useAuth();
   const { isDark } = useAppTheme();
@@ -49,44 +52,30 @@ const LoginScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const { mutateAsync: loginMutation, isPending: isLoading } = useMutation({
-    mutationFn: login,
-
-    onSuccess: async (result) => {
-      const refreshToken = result?.data?.refreshToken;
-      const accessToken = result?.data?.accessToken;
-
-      await SecureStore.setItemAsync("authToken", String(refreshToken));
-      await SecureStore.setItemAsync("accessToken", String(accessToken));
-      console.log("Refresh Token :- ", refreshToken);
-
-      await authLogin();
-
+  const { mutateAsync: sendLoginOTP, isPending } = useMutation({
+    mutationFn: sendOTP,
+    onSuccess: () => {
       Toast.show({
         type: "success",
-        text1: "Hurrahhh!!! 🥳",
-        text2: `LoggedIn Successfully.`,
+        text1: "OTP Sent Successfully.",
+        text2: "Check your email for OTP.",
       });
+
+      navigation.navigate("VerifyOTP", { email:email.trim(), password: password, fromLogin: true });
     },
 
     onError: (error: any) => {
       Toast.show({
         type: "error",
-        text1: "Login Failed.",
+        text1: "Failed to Send OTP.",
         text2: `${error.message}`,
       });
+
+      setEmailError("Invalid Email ID");
     },
   });
 
   const handleLogin = async () => {
-    const deviceToken = await SecureStore.getItemAsync("deviceToken");
-
-    const formData = {
-      email: email,
-      password: password,
-      deviceToken: deviceToken,
-    };
-
     if (!validateForm()) {
       Toast.show({
         type: "error",
@@ -98,7 +87,7 @@ const LoginScreen = () => {
     }
 
     try {
-      await loginMutation(formData);
+      await sendLoginOTP({email: email.trim()});
     } catch (error) {
     } finally {
     }
@@ -232,14 +221,14 @@ const LoginScreen = () => {
                 <LoginButton
                   activeOpacity={0.9}
                   onPress={handleLogin}
-                  disabled={isLoading}
+                  disabled={isPending}
                 >
                   <LoginGradient
                     colors={["#FF4DA6", "#5B6CFF"]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
-                    {isLoading ? (
+                    {isPending ? (
                       <>
                         <ActivityIndicator color="#FFFFFF" />
 
