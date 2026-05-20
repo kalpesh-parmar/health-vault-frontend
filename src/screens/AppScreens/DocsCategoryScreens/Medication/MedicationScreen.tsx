@@ -132,7 +132,7 @@ const MedicationScreen = () => {
 
         return filterMedications({
           filter: {
-            search: activeTab === "All" ? "" : activeTab,
+            search: searchQuery.trim().length > 0 ? searchQuery : (activeTab === "All" ? "" : activeTab),
           },
           sort: {
             sortBy,
@@ -140,7 +140,7 @@ const MedicationScreen = () => {
           },
         });
       },
-      enabled: isFilterApplied,
+      enabled: isFilterApplied || searchQuery.trim().length > 0,
     });
 
   // Fetch all medications when "All" is active (standard useQuery)
@@ -172,7 +172,7 @@ const MedicationScreen = () => {
     enabled: activeTab !== "All" && !isFilterApplied,
   });
 
-  const isLoading = isFilterApplied
+  const isLoading = (isFilterApplied || searchQuery.trim().length > 0)
     ? isLoadingFiltered
     : activeTab === "All"
       ? isLoadingAll
@@ -201,7 +201,7 @@ const MedicationScreen = () => {
     };
 
     // 1. Prioritize Filter API response
-    if (isFilterApplied) {
+    if (isFilterApplied || searchQuery.trim().length > 0) {
       return extractRows(filteredMedicationData, true);
     }
 
@@ -220,6 +220,7 @@ const MedicationScreen = () => {
     medicationList,
     activeTab,
     isFilterApplied,
+    searchQuery,
   ]);
 
   const renderMedicationCard = ({ item }: { item: AddOrEditMedication }) => (

@@ -87,6 +87,12 @@ const MedicationOperation = ({
           text1: `Medication ${operation === "add" ? "added" : "updated"} successfully`,
         });
         queryClient.invalidateQueries({ queryKey: ["medications"] });
+        queryClient.invalidateQueries({
+          queryKey: ["allMedications"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["filteredMedications"],
+        });
         navigation.goBack();
       },
       onError: (error: any) => {
@@ -106,6 +112,12 @@ const MedicationOperation = ({
           text1: `Medication edited successfully`,
         });
         queryClient.invalidateQueries({ queryKey: ["medications"] });
+        queryClient.invalidateQueries({
+          queryKey: ["allMedications"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["filteredMedications"],
+        });
         navigation.goBack();
       },
       onError: (error: any) => {

@@ -49,7 +49,7 @@ export const documentListPaginated = async ({
       pageLimit: pageLimit,
     },
     sort: {
-      sortBy: "documentType",
+      sortBy: "createdAt",
       orderBy: "desc",
     },
   }
