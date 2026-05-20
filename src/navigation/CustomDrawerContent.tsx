@@ -58,9 +58,9 @@ const CustomDrawerContent = (props: any) => {
               }}
             />
             <UserInfo>
-              <Username>{userDetails?.userName || "Priya Sharma"}</Username>
+              <Username>{userDetails?.userName || ""}</Username>
               <UserEmail>
-                {userDetails?.email || "priya.sharma@email.com"}
+                {userDetails?.email || ""}
               </UserEmail>
             </UserInfo>
           </Header>

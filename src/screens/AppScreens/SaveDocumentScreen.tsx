@@ -85,10 +85,6 @@ interface ColProps {
 
 const SaveDocumentScreen = ({ route }: Props) => {
   const imageUri = route?.params?.images;
-  const aiSummary =
-    route?.params?.aiSummary ||
-    "Patient presented with acute respiratory symptoms over a 3-day period. BP: 128/82 mmHg. Prescribed Amoxicillin 500mg twice daily for 7 days. Follow-up recommended in 2 weeks. No known allergies noted.";
-
   const { isDark } = useAppTheme();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [docName, setDocName] = useState("");
@@ -103,21 +99,15 @@ const SaveDocumentScreen = ({ route }: Props) => {
   const selected = CATEGORIES.find((c) => c.value === category);
 
    const { handleSave: saveDocument, isSaving } = useSaveDocument(() => {
-    const isPdf = docName.toLowerCase().endsWith(".pdf");
-    const fileType = isPdf ? "pdf" : "jpg";
-    const displayName = isPdf ? docName : `${docName}.jpg`;
 
     navigation.navigate("UploadSuccess", {
-      documentName: displayName,
+      documentName: docName,
       fileSize: "1.84 MB",
-      fileType: fileType,
+      fileType: "PDF",
       uploadedAt: new Date().toLocaleString("en-US", {
         day: "numeric",
         month: "short",
         year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
       }),
       category: selected?.label || category,
     });

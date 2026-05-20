@@ -1,18 +1,19 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import styled from "styled-components/native";
-import {
-  Ionicons,
-  FontAwesome5,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import {
+  useNavigation,
+  useRoute,
+  RouteProp,
+} from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { AppStackParamList } from "../../navigation/types";
-import { useAppTheme } from "../../context/ThemeContext";
+import { Animated, Easing } from "react-native";
+import LottieView from "lottie-react-native";
 
-// Define strict typing parameters for incoming navigation data models
+import { AppStackParamList } from "../../navigation/types";
+
 type UploadSuccessRouteProp = RouteProp<
   {
     UploadSuccess: {
@@ -29,10 +30,9 @@ type UploadSuccessRouteProp = RouteProp<
 const UploadSuccessScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const route = useRoute<UploadSuccessRouteProp>();
-  const { isDark } = useAppTheme();
 
-  // Fallback structural mock data values in case params are not actively provided
+  const route = useRoute<UploadSuccessRouteProp>();
+
   const {
     documentName = "Blood Test Report.pdf",
     fileSize = "2.45 MB",
@@ -41,106 +41,175 @@ const UploadSuccessScreen = () => {
     category = "Lab Report",
   } = route.params || {};
 
-  // Custom function to return dynamic icons based on the document's file extension type
+  const scaleAnim = useRef(new Animated.Value(0.7)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 5,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const renderFileTypeIcon = (type: string) => {
     const formattedType = type.toLowerCase();
+
     if (formattedType === "pdf") {
-      return <FontAwesome5 name="file-pdf" size={32} color="#ef4444" />;
-    } else if (["jpg", "jpeg", "png"].includes(formattedType)) {
-      return <FontAwesome5 name="file-image" size={32} color="#3b82f6" />;
-    } else {
-      return <FontAwesome5 name="file-alt" size={32} color="#64748b" />;
+      return (
+        <FontAwesome5
+          name="file-pdf"
+          size={32}
+          color="#ef4444"
+        />
+      );
     }
+
+    if (["jpg", "jpeg", "png"].includes(formattedType)) {
+      return (
+        <FontAwesome5
+          name="file-image"
+          size={32}
+          color="#3b82f6"
+        />
+      );
+    }
+
+    return (
+      <FontAwesome5
+        name="file-alt"
+        size={32}
+        color="#64748b"
+      />
+    );
   };
 
-  // Aesthetic color profile configuration for matching dark/light themes cleanly
-  const gradientColors = isDark
-    ? ["#3b0764", "#1e1b4b"]
-    : ["#a855f7", "#6366f1"];
-
   return (
-    <Container isDark={isDark}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+    <Container>
+      <StatusBar style="dark" />
 
       <ContentBody
-        contentContainerStyle={{ alignItems: "center" }}
+        contentContainerStyle={{
+          alignItems: "center",
+          paddingBottom: 30,
+        }}
         bounces={false}
+        showsVerticalScrollIndicator={false}
       >
-        {/* --- CELEBRATORY VISUAL SECTION --- */}
         <AnimationContainer>
-          {/* Replace this static image source string with your customized local confetti or celebration GIF asset path */}
-          <SuccessGif
-            source={{
-              uri: "https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z0cm03bW00M3E0dG1idXNyeGNpbnZpZGs1MTRwZHpxbms0bTRmYiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/C21GGDOpKT6Z4VuXyn/giphy.gif",
-            }}
-            resizeMode="contain"
+          <ConfettiAnimation
+            source={"../../../assets/success.json"}
+            autoPlay
+            loop={false}
           />
+
+          <AnimatedCircle
+            style={{
+              transform: [{ scale: scaleAnim }],
+              opacity: opacityAnim,
+            }}
+          >
+            <GlowCircle />
+
+            <Ionicons
+              name="checkmark"
+              size={72}
+              color="#ffffff"
+            />
+          </AnimatedCircle>
         </AnimationContainer>
 
-        <StatusHeading>Upload Successful!</StatusHeading>
+        <StatusHeading>
+          Upload Successful!
+        </StatusHeading>
+
         <StatusSubheading>
-          Your document has been uploaded successfully.
+          Your document has been uploaded successfully and securely stored.
         </StatusSubheading>
 
-        {/* --- METADATA METRIC CARD CONTAINER --- */}
         <DocumentCard
-          isDark={isDark}
           style={{
             shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.05,
-            shadowRadius: 12,
-            elevation: 3,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.08,
+            shadowRadius: 14,
+            elevation: 5,
           }}
         >
-          {/* Document File Core Details Row Header Layout */}
           <FileDetailsHeaderRow>
             <IconBadgeWrapper type={fileType}>
               {renderFileTypeIcon(fileType)}
             </IconBadgeWrapper>
+
             <FileTextMetaDataColumn>
-              <DocumentTitle numberOfLines={1} isDark={isDark}>
+              <DocumentTitle numberOfLines={1}>
                 {documentName}
               </DocumentTitle>
-              <DocumentSizeText>{fileSize}</DocumentSizeText>
+
+              <DocumentSizeText>
+                {fileSize}
+              </DocumentSizeText>
             </FileTextMetaDataColumn>
           </FileDetailsHeaderRow>
 
-          <CardDivider isDark={isDark} />
+          <CardDivider />
 
-          {/* Row Field Component Item: Upload Date Info */}
           <MetaFieldItemRow>
-            <Ionicons name="calendar-outline" size={20} color="#94a3b8" />
-            <MetaFieldLabel numberOfLines={1}>
+            <Ionicons
+              name="calendar-outline"
+              size={20}
+              color="#94a3b8"
+            />
+
+            <MetaFieldLabel>
               Uploaded on {uploadedAt}
             </MetaFieldLabel>
           </MetaFieldItemRow>
 
-          {/* Row Field Component Item: Classification Category Info */}
           <MetaFieldItemRow style={{ marginTop: 14 }}>
-            <Ionicons name="folder-outline" size={20} color="#94a3b8" />
-            <MetaFieldLabel numberOfLines={1}>{category}</MetaFieldLabel>
+            <Ionicons
+              name="folder-outline"
+              size={20}
+              color="#94a3b8"
+            />
+
+            <MetaFieldLabel>
+              {category}
+            </MetaFieldLabel>
           </MetaFieldItemRow>
         </DocumentCard>
       </ContentBody>
 
-      {/* --- FLOATING DISMISS BUTTON WORKFLOW --- */}
       <BottomActionArea>
         <TouchableOpacityAction
+          activeOpacity={0.9}
           onPress={() => {
             navigation.navigate("DocumentStack", {
               screen: "DocumentList",
-              params: { category: category },
+              params: {
+                category,
+              },
             });
           }}
-          activeOpacity={0.85}
         >
           <ButtonGradient
-            colors={gradientColors}
+            colors={["#22c55e", "#16a34a"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <ButtonLabelText>View My Documents</ButtonLabelText>
+            <ButtonLabelText>
+              View My Documents
+            </ButtonLabelText>
           </ButtonGradient>
         </TouchableOpacityAction>
       </BottomActionArea>
@@ -150,12 +219,9 @@ const UploadSuccessScreen = () => {
 
 export default UploadSuccessScreen;
 
-// --- Styled Components Structural Setup ---
-
-const Container = styled.View<{ isDark: boolean }>`
+const Container = styled.View`
   flex: 1;
-  background-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#0f172a" : "#ffffff"};
+  background-color: #ffffff;
 `;
 
 const ContentBody = styled.ScrollView`
@@ -165,21 +231,44 @@ const ContentBody = styled.ScrollView`
 
 const AnimationContainer = styled.View`
   width: 100%;
-  height: 200px;
-  margin-top: 60px;
+  height: 300px;
+  margin-top: 30px;
   justify-content: center;
   align-items: center;
 `;
 
-const SuccessGif = styled.Image`
-  width: 180px;
-  height: 180px;
+const ConfettiAnimation = styled(LottieView)`
+  position: absolute;
+  width: 340px;
+  height: 340px;
+`;
+
+const AnimatedCircle = styled(Animated.View)`
+  width: 170px;
+  height: 170px;
+  border-radius: 85px;
+  background-color: #22c55e;
+  justify-content: center;
+  align-items: center;
+  shadow-color: #22c55e;
+  shadow-offset: 0px 12px;
+  shadow-opacity: 0.45;
+  shadow-radius: 20px;
+  elevation: 12;
+`;
+
+const GlowCircle = styled.View`
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 110px;
+  background-color: rgba(34, 197, 94, 0.15);
 `;
 
 const StatusHeading = styled.Text`
-  font-size: 24px;
-  font-weight: 700;
-  color: #1e293b;
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
   text-align: center;
   margin-top: 10px;
 `;
@@ -188,21 +277,19 @@ const StatusSubheading = styled.Text`
   font-size: 15px;
   color: #64748b;
   text-align: center;
-  margin-top: 8px;
-  line-height: 22px;
+  margin-top: 10px;
+  line-height: 24px;
   padding-horizontal: 20px;
 `;
 
-const DocumentCard = styled.View<{ isDark: boolean }>`
+const DocumentCard = styled.View`
   width: 100%;
-  background-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#1e293b" : "#ffffff"};
-  border-radius: 20px;
+  background-color: #ffffff;
+  border-radius: 24px;
   border-width: 1px;
-  border-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#334155" : "#e2e8f0"};
-  padding: 20px;
-  margin-top: 35px;
+  border-color: #e2e8f0;
+  padding: 22px;
+  margin-top: 40px;
 `;
 
 const FileDetailsHeaderRow = styled.View`
@@ -211,11 +298,13 @@ const FileDetailsHeaderRow = styled.View`
 `;
 
 const IconBadgeWrapper = styled.View<{ type: string }>`
-  width: 54px;
-  height: 54px;
-  border-radius: 14px;
-  background-color: ${({ type }: { type: string }) =>
-    type.toLowerCase() === "pdf" ? "#fef2f2" : "#eff6ff"};
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background-color: ${({ type }: {type: string}) =>
+    type.toLowerCase() === "pdf"
+      ? "#fef2f2"
+      : "#eff6ff"};
   justify-content: center;
   align-items: center;
 `;
@@ -225,25 +314,23 @@ const FileTextMetaDataColumn = styled.View`
   margin-left: 16px;
 `;
 
-const DocumentTitle = styled.Text<{ isDark: boolean }>`
+const DocumentTitle = styled.Text`
   font-size: 16px;
   font-weight: 700;
-  color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#f1f5f9" : "#0f172a"};
+  color: #0f172a;
 `;
 
 const DocumentSizeText = styled.Text`
   font-size: 13px;
   color: #94a3b8;
-  margin-top: 4px;
+  margin-top: 5px;
   font-weight: 500;
 `;
 
-const CardDivider = styled.View<{ isDark: boolean }>`
+const CardDivider = styled.View`
   height: 1px;
-  background-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "#334155" : "#f1f5f9"};
-  margin-vertical: 18px;
+  background-color: #f1f5f9;
+  margin-vertical: 20px;
 `;
 
 const MetaFieldItemRow = styled.View`
@@ -261,13 +348,12 @@ const MetaFieldLabel = styled.Text`
 
 const BottomActionArea = styled.View`
   padding: 24px;
-  background-color: transparent;
 `;
 
 const TouchableOpacityAction = styled.TouchableOpacity`
   width: 100%;
-  height: 54px;
-  border-radius: 16px;
+  height: 56px;
+  border-radius: 18px;
   overflow: hidden;
 `;
 
