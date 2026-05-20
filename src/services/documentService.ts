@@ -20,7 +20,10 @@ export const documentUpload = async (formData: FormData): Promise<ApiResponse<Me
   return response.data;
 };
 
+// Payload :- {"filter": {"search": "family"}, "sort": {"orderBy": "asc", "sortBy": "createdAt"}}
+
 export const filterDocuments = async (payload: FilterDocumentsRequest) => {
+  console.log("Filtration payload :- ", payload);
   const response = await apiClient.post(DOCUMENT_ENDPOINTS.FILTER_AND_SORT, payload);
   console.log("Filtered Documents :- ", response.data);
   return response.data;
@@ -50,7 +53,7 @@ export const documentListPaginated = async ({
       orderBy: "desc",
     },
   }
-  console.log(payload);
+  console.log("Type Filtration Payload :- ", payload);
   const response = await apiClient.post(
     DOCUMENT_ENDPOINTS.DOCUMENT_LIST_PAGINATED, payload);
   return response.data;

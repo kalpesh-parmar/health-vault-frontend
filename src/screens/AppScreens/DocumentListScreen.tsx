@@ -103,6 +103,8 @@ const DocumentList = () => {
     enabled: isFilterApplied && !!userId,
   });
 
+  console.log("filteredDocuments", filteredDocuments?.data[0]);
+
   // Fetch all documents when "All" is active.
   const { data: allDocsData, isLoading: isLoadingAll } = useQuery({
     queryKey: ["allDocuments", userId],
@@ -111,7 +113,6 @@ const DocumentList = () => {
   });
 
   // Fetch paginated documents when a specific tab is active (useInfiniteQuery)
-
   const {
     data: documentListData,
     isLoading: isLoadingInfinite,
@@ -148,7 +149,7 @@ const DocumentList = () => {
     let flattened: MedicalDocument[] = [];
 
     if (isFilterApplied) {
-      flattened = getSafeArray(filteredDocuments);
+      flattened = getSafeArray(filteredDocuments?.data || []);
     } else if (activeTab === "All") {
       flattened = getSafeArray(allDocsData);
     } else {
@@ -179,8 +180,8 @@ const DocumentList = () => {
         }
       })
       .sort((a: MedicalDocument, b: MedicalDocument) => {
-        const firstName = a.title || a.fileName || "";
-        const secondName = b.title || b.fileName || "";
+        const firstName = a.fileName || a.fileName || "";
+        const secondName = b.fileName || b.fileName || "";
 
         switch (sortOption) {
           case "name_asc":

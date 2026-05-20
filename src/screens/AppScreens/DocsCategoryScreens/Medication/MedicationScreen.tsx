@@ -64,14 +64,14 @@ const MedicationScreen = () => {
 
   const { mutateAsync: toggleMedicationStatus } = useMutation({
     mutationFn: updateMedication,
-    onSuccess: (variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["medications"] });
+      queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
       Toast.show({
         type: "success",
         text1: "Status Updated",
-        text2: variables.data.ongoing
-          ? "Medication marked as ongoing."
-          : "Medication marked as completed.",
+        text2: "Medication marked as completed.",
       });
     },
     onError: () => {
@@ -84,7 +84,6 @@ const MedicationScreen = () => {
   });
 
   const handleToggleStatus = async (item: AddOrEditMedication) => {
-    console.log("Toggle Medication Status: ", item?.ongoing);
     if (!item.id) return;
     await toggleMedicationStatus({
       medicationId: item.id,
@@ -143,8 +142,6 @@ const MedicationScreen = () => {
       },
       enabled: isFilterApplied,
     });
-
-  console.log("filteredMedicationData", filteredMedicationData?.data.rows);
 
   // Fetch all medications when "All" is active (standard useQuery)
   const { data: allMedsData, isLoading: isLoadingAll } = useQuery({
@@ -280,6 +277,7 @@ const MedicationScreen = () => {
           <IconButton
             style={{ marginRight: 10 }}
             onPress={() => handleToggleStatus(item)}
+            disabled={!item.ongoing}
           >
             {item.ongoing ? (
               <Ionicons

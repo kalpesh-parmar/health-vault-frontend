@@ -3,7 +3,6 @@ import { MEDICATION_ENDPOINTS } from "../constants/endpoints";
 import { AddOrEditMedication, ApiResponse, FilterMedicationsRequest } from "../types";
 
 export const addMedication = async (data: AddOrEditMedication): Promise<ApiResponse<AddOrEditMedication>> => {
-   console.log("Medication Data: ", data);
   const response = await apiClient.post(
     MEDICATION_ENDPOINTS.ADD_MEDICATION,
     data,
@@ -23,9 +22,7 @@ export const listMedications = async (): Promise<ApiResponse<AddOrEditMedication
 };
 
 export const filterMedications = async (payload: FilterMedicationsRequest) => {
-  console.log(payload);
   const response = await apiClient.post(MEDICATION_ENDPOINTS.FILTER_AND_SORT, payload);
-  console.log("Filtered Medications :- ", response.data);
   return response.data;
 }
 
@@ -46,7 +43,7 @@ export const getMedicationsPaginated = async ({
       },
       sort: {
         sortBy: "medicationType",
-        orderBy: "desc",
+        sortOrder: "desc",
       },
       page: {
         pageNumber,
@@ -64,7 +61,6 @@ export const updateMedication = async ({
   medicationId: string;
   data: AddOrEditMedication;
  }): Promise<ApiResponse<AddOrEditMedication>> => {
-  console.log(data);
   const endpoint = MEDICATION_ENDPOINTS.UPDATE_MEDICATION.replace(
     "{id}",
     medicationId,
