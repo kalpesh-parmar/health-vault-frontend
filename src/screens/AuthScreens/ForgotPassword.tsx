@@ -13,7 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import { AuthStackParamList } from "../../navigation/types";
-import { sendForgotPasswordOTP } from "../../services/authService";
+import { sendOTP } from "../../services/authService";
 import { useMutation } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import ModernLoader from "../../components/shared/Loader";
@@ -28,8 +28,6 @@ const ForgotPasswordScreen = () => {
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
-
-  const { isDark, theme } = useAppTheme();
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -62,7 +60,7 @@ const ForgotPasswordScreen = () => {
 
   const { mutateAsync: forgotPasswordMutation, isPending: isLoading } =
     useMutation({
-      mutationFn: sendForgotPasswordOTP,
+      mutationFn: sendOTP,
       onSuccess: () => {
         Toast.show({
           type: "success",
@@ -70,7 +68,7 @@ const ForgotPasswordScreen = () => {
           text2: "Check your email for OTP.",
         });
 
-        navigation.navigate("VerifyOTP", { email });
+        navigation.navigate("VerifyOTP", { email, fromLogin: false });
       },
 
       onError: (error: any) => {

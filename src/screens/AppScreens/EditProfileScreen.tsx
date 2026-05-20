@@ -1,11 +1,11 @@
-import React, { useRef, useState } from "react";
-import { Image, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Image, Keyboard, Platform, TouchableOpacity, View } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
 import { ProfileStackParamList } from "../../navigation/types";
-import { RouteProp, useNavigation } from "@react-navigation/native";
-import { useMutation } from "@tanstack/react-query";
+import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { getUser, updateUser } from "../../services/userService";
 import { queryClient } from "../../config/queryClient";
 import Toast from "react-native-toast-message";
@@ -56,7 +56,7 @@ const GENDER_OPTIONS = [
 
 type EditProfileRouteProp = RouteProp<ProfileStackParamList, "EditProfile">;
 
-type ProfileFormState = {
+interface ProfileFormState {
   profilePicture?: {
     uri: string;
     name: string;
@@ -82,6 +82,9 @@ type EditableFieldProps = {
   onChangeText: (text: string) => void;
   keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  editable?: boolean;
+  inputRef?: React.RefObject<any>;
+  isEditing?: boolean;
 };
 
 const EditableField = ({
@@ -95,6 +98,9 @@ const EditableField = ({
   onChangeText,
   keyboardType = "default",
   autoCapitalize = "words",
+  editable = true,
+  inputRef,
+  isEditing = true,
 }: EditableFieldProps) => {
   const { theme } = useAppTheme();
   return (
@@ -119,6 +125,7 @@ const EditableField = ({
           {label}
         </FieldLabel>
         <ActiveInput
+          ref={inputRef}
           value={value}
           onChangeText={onChangeText}
           onFocus={onFocus}
@@ -129,9 +136,10 @@ const EditableField = ({
           placeholder={`Enter ${label.toLowerCase()}`}
           isFocused={isFocused}
           accentColor={colors.icon}
+          editable={editable}
         />
       </FieldContent>
-      {!isFocused && (
+      {isEditing && !isFocused && (
         <EditChip>
           <Ionicons
             name="create-outline"
@@ -145,14 +153,11 @@ const EditableField = ({
   );
 };
 
-const EditProfile = ({
-  route,
-}: {
-  route: EditProfileRouteProp;
-}) => {
+const EditProfile = () => {
   const { theme, isDark } = useAppTheme();
   const iconColors = getIconColors(isDark);
   const refRBSheet = useRef<BottomSheetModal>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const cameraRef = useRef(null);
   const {
     isCameraVisible,
@@ -163,26 +168,110 @@ const EditProfile = ({
     takePicture,
     selectedImages
   } = useDocumentMedia();
-  const { formData }: {formData: ProfileFormState} = route.params;
   const navigation =
     useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollViewRef = useRef<any>(null);
+  const usernameInputRef = useRef<any>(null);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const onKeyboardShow = (e: any) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    };
+
+    const onKeyboardHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const subShow = Keyboard.addListener(showEvent, onKeyboardShow);
+    const subHide = Keyboard.addListener(hideEvent, onKeyboardHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+    }, [queryClient]),
+  );
+
+  const { data: userData } = useQuery({
+    queryKey: ["userProfile"],
+    queryFn: async () => {
+      const response = await getUser();
+      return response?.data || response;
+    },
+  });
 
   const [form, setForm] = useState<ProfileFormState>({
     profilePicture: {
-      uri: formData?.profilePicture?.uri!,
-      name: formData?.profilePicture?.name!,
-      type: formData?.profilePicture?.type!,
+      uri: "",
+      name: "",
+      type: "",
     },
-    username: formData.username,
-    firstName: formData.firstName,
-    lastName: formData.lastName,
-    email: formData.email,
-    phone: formData.phone,
-    age: formData.age,
-    gender: formData.gender,
+    username: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    age: 0,
+    gender: "",
   });
 
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  useEffect(() => {
+    if (userData) {
+      setForm({
+        profilePicture: {
+          uri: userData.profileImageKey || "",
+          name: userData.profileImageKey || "",
+          type: userData.profileImageKey || "",
+        },
+        username: userData.userName || "",
+        firstName: userData.firstName || "",
+        lastName: userData.lastName || "",
+        email: userData.email || "",
+        phone: userData.phone || "",
+        age: userData.age || 0,
+        gender: userData.gender || "",
+      });
+    }
+  }, [userData]);
+
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    setTimeout(() => {
+      usernameInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    if (userData) {
+      setForm({
+        profilePicture: {
+          uri: userData.profileImageKey || "",
+          name: userData.profileImageKey || "",
+          type: userData.profileImageKey || "",
+        },
+        username: userData.userName || "",
+        firstName: userData.firstName || "",
+        lastName: userData.lastName || "",
+        email: userData.email || "",
+        phone: userData.phone || "",
+        age: userData.age || 0,
+        gender: userData.gender || "",
+      });
+    }
+  };
+
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const updateField = <K extends keyof ProfileFormState>(
@@ -209,20 +298,17 @@ const EditProfile = ({
         userName: form.username,
         firstName: form.firstName,
         lastName: form.lastName,
-        // email: form.email,
-        // phone: form.phone,
-        // dateOfBirth: form.dateOfBirth?.toISOString(),
-        // gender: form.gender,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
       Toast.show({
         type: "success",
         text1: "Profile Updated",
         text2: "Your profile has been updated successfully.",
       });
-      navigation.goBack();
+      setIsEditing(false);
     },
     onError: (error: any) => {
       Toast.show({
@@ -234,21 +320,24 @@ const EditProfile = ({
   });
 
   return (
-    <KeyboardAvoidingView
+    <View
       style={{ flex: 1, backgroundColor: theme.colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScreenHeader
-        title="Edit Profile"
+        title={isEditing ? "Edit Profile" : "Profile"}
         showBack
         rightAction={{
-          icon: "checkmark-circle",
-          Label: "Save",
-          onPress: () => updateProfileMutation.mutate(),
+          icon: isEditing ? "close-circle-outline" : "create-outline",
+          Label: isEditing ? "Cancel" : "Edit",
+          onPress: isEditing ? handleCancelEdit : handleStartEdit,
         }}
       />
 
-      <ScrollContent keyboardShouldPersistTaps="handled">
+      <ScrollContent
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: keyboardHeight + 24 }}
+        ref={scrollViewRef}
+      >
         <ScrollInner>
           {/* ── Avatar ── */}
           <AvatarSection>
@@ -261,16 +350,18 @@ const EditProfile = ({
                       style={{ borderRadius: 45, width: 90, height: 90 }}
                     />
                   ) : (
-                    form.firstName?.charAt(0).toUpperCase() +
-                    form.lastName?.charAt(0).toUpperCase()
+                    (form.firstName?.charAt(0).toUpperCase() || "") +
+                    (form.lastName?.charAt(0).toUpperCase() || "")
                   )}
                 </AvatarText>
               </AvatarRing>
-              <AvatarEditBadge onPress={() => refRBSheet.current?.present()}>
-                <Ionicons name="camera" size={16} color="#fff" />
-              </AvatarEditBadge>
+              {isEditing && (
+                <AvatarEditBadge onPress={() => refRBSheet.current?.present()}>
+                  <Ionicons name="camera" size={16} color="#fff" />
+                </AvatarEditBadge>
+              )}
             </AvatarWrapper>
-            <AvatarHint>Tap the camera to change photo</AvatarHint>
+            {isEditing && <AvatarHint>Tap the camera to change photo</AvatarHint>}
           </AvatarSection>
 
           {/* ── Personal Info ── */}
@@ -286,6 +377,9 @@ const EditProfile = ({
               onBlur={() => setFocusedField(null)}
               onChangeText={(t) => updateField("username", t)}
               autoCapitalize="none"
+              editable={isEditing}
+              inputRef={usernameInputRef}
+              isEditing={isEditing}
             />
             <FieldDivider />
             <EditableField
@@ -297,6 +391,8 @@ const EditProfile = ({
               onFocus={() => setFocusedField("firstName")}
               onBlur={() => setFocusedField(null)}
               onChangeText={(t) => updateField("firstName", t)}
+              editable={isEditing}
+              isEditing={isEditing}
             />
             <FieldDivider />
             <EditableField
@@ -308,11 +404,13 @@ const EditProfile = ({
               onFocus={() => setFocusedField("lastName")}
               onBlur={() => setFocusedField(null)}
               onChangeText={(t) => updateField("lastName", t)}
+              editable={isEditing}
+              isEditing={isEditing}
             />
           </Card>
 
           {/* ── Contact Info ── */}
-          {/* <SectionLabel>Contact Info</SectionLabel>
+          <SectionLabel>Contact Info</SectionLabel>
           <Card>
             <EditableField
               label="Email Address"
@@ -325,6 +423,8 @@ const EditProfile = ({
               onChangeText={(t) => updateField("email", t)}
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={isEditing}
+              isEditing={isEditing}
             />
             <FieldDivider />
             <EditableField
@@ -337,14 +437,16 @@ const EditProfile = ({
               onBlur={() => setFocusedField(null)}
               onChangeText={(t) => updateField("phone", t)}
               keyboardType="phone-pad"
+              editable={isEditing}
+              isEditing={isEditing}
             />
           </Card>
 
           <SectionLabel>More Details</SectionLabel>
           <Card>
             <TouchableOpacity
-              onPress={() => setShowDatePicker(true)}
-              activeOpacity={0.7}
+              onPress={() => isEditing && setShowDatePicker(true)}
+              activeOpacity={isEditing ? 0.7 : 1}
             >
               <FieldRow>
                 <FieldIconBox style={{ backgroundColor: iconColors.dob.bg }}>
@@ -356,15 +458,17 @@ const EditProfile = ({
                 </FieldIconBox>
                 <FieldContent>
                   <FieldLabel>Age</FieldLabel>
-                  <AgeInput hasValue={form.age}>{form.age}</AgeInput>
+                  <AgeInput hasValue={!!form.age}>{form.age || "Not specified"}</AgeInput>
                 </FieldContent>
-                <EditChip>
-                  <Ionicons
-                    name="create-outline"
-                    size={14}
-                    color={theme.colors.primary}
-                  />
-                </EditChip>
+                {isEditing && (
+                  <EditChip>
+                    <Ionicons
+                      name="create-outline"
+                      size={14}
+                      color={theme.colors.primary}
+                    />
+                  </EditChip>
+                )}
               </FieldRow>
             </TouchableOpacity>
 
@@ -385,13 +489,13 @@ const EditProfile = ({
               </GenderLabelRow>
               <GenderRow>
                 {GENDER_OPTIONS.map((opt) => {
-                  const selected = form.gender === opt.icon;
+                  const selected = form.gender?.toLowerCase() === opt.label.toLowerCase() || form.gender?.toLowerCase() === opt.icon.toLowerCase();
                   return (
                     <GenderChip
                       key={opt.label}
                       selected={selected}
-                      onPress={() => updateField("gender", opt.label)}
-                      activeOpacity={0.8}
+                      onPress={() => isEditing && updateField("gender", opt.label)}
+                      activeOpacity={isEditing ? 0.8 : 1}
                     >
                       <Ionicons
                         name={opt.icon as any}
@@ -410,9 +514,21 @@ const EditProfile = ({
                 })}
               </GenderRow>
             </FieldRow>
-          </Card> */}
+          </Card>
         </ScrollInner>
       </ScrollContent>
+
+      {isEditing && (
+        <SaveButton
+          onPress={() => updateProfileMutation.mutate()}
+          disabled={updateProfileMutation.isPending}
+          activeOpacity={0.8}
+        >
+          <SaveButtonText>
+            {updateProfileMutation.isPending ? "Saving Profile..." : "Save Profile"}
+          </SaveButtonText>
+        </SaveButton>
+      )}
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
@@ -434,7 +550,7 @@ const EditProfile = ({
         isCapturing={isCapturing}
         cameraRef={cameraRef}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -637,4 +753,24 @@ const GenderChipText = styled.Text<{ selected: boolean }>`
   font-weight: 700;
   color: ${({ selected, theme }: any) =>
     selected ? theme.colors.surface : theme.colors.textMuted};
+`;
+
+const SaveButton = styled.TouchableOpacity`
+  background-color: ${({ theme }: any) => theme.colors.primary};
+  padding: 16px;
+  border-radius: 16px;
+  align-items: center;
+  justify-content: center;
+  margin-horizontal: 20px;
+  margin-bottom: 24px;
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
+  shadow-opacity: 0.3;
+  shadow-radius: 10px;
+  elevation: 5;
+`;
+
+const SaveButtonText = styled.Text`
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
 `;

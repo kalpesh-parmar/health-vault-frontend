@@ -18,12 +18,13 @@ export const PATIENT_ENDPOINTS = {
 
 export const DOCUMENT_ENDPOINTS = {
   ADD_DOCUMENT: `${URL}/documents/add`,
-  LIST_DOCUMENT: `${URL}/documents/list`,
+  LIST_DOCUMENT: `${URL}/documents/list`, // Normal GetAllDocument API.
   DOCUMENT_LIST_PAGINATED: `${URL}/documents/list-paginated`,
   GET_DOCUMENT: `${URL}/documents/{id}`,
   GET_SIGNED_URL: `${URL}/documents/download-url`,
   DELETE_DOCUMENT: `${URL}/documents/{id}`,
   UPDATE_DOCUMENT: `${URL}/documents/{id}`,
+  FILTER_AND_SORT: `${URL}/documents/list`, // Filter and sort API.
 } as const;
 
 export const NOTIFICATION_ENDPOINTS = {
@@ -35,11 +36,12 @@ export const NOTIFICATION_ENDPOINTS = {
 
 export const MEDICATION_ENDPOINTS = {
   ADD_MEDICATION: `${URL}/medications/create`,
-  LIST_MEDICATION_PAGINATED: `${URL}/medications/list-paginated`,
-  GET_MEDICATION: `${URL}/medications/list`,
+  LIST_MEDICATION_PAGINATED: `${URL}/medications/list-paginated`, // Pagination API.
+  GET_MEDICATION: `${URL}/medications/list`, // Normal API.
   UPDATE_MEDICATION: `${URL}/medications/{id}`,
   DELETE_MEDICATION: `${URL}/medications/{id}`,
   LIST_ALL_MEDICATIONS: `${URL}/medications/list`,
+  FILTER_AND_SORT: `${URL}/medications/list`, // Filter and sort API.
 } as const;
 
 export const REMINDER_ENDPOINTS = {

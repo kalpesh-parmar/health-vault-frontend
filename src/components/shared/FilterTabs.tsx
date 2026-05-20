@@ -29,7 +29,10 @@ const FilterTabs = ({
             <TabItem
               key={item}
               active={isActive}
-              onPress={() => onSelectTab(item)}
+              onPress={() => {
+                console.log('item', item)
+                onSelectTab(item)
+              }}
               activeOpacity={0.8}
               isDark={isDark}
             >
@@ -67,21 +70,21 @@ const TabItem = styled.TouchableOpacity<{ active: boolean; isDark?: boolean }>`
   border-radius: 25px;
   overflow: hidden;
   background-color: ${({
-    active,
-    isDark,
-  }: {
-    active: boolean;
-    isDark?: boolean;
-  }) => (active ? "transparent" : isDark ? "#1e293b" : "white")};
+  active,
+  isDark,
+}: {
+  active: boolean;
+  isDark?: boolean;
+}) => (active ? "transparent" : isDark ? "#1e293b" : "white")};
   margin-right: 12px;
   border-width: 1px;
   border-color: ${({
-    active,
-    isDark,
-  }: {
-    active: boolean;
-    isDark?: boolean;
-  }) => (active ? "#3b83caff" : isDark ? "#334155" : "#428fdcff")};
+  active,
+  isDark,
+}: {
+  active: boolean;
+  isDark?: boolean;
+}) => (active ? "#3b83caff" : isDark ? "#334155" : "#428fdcff")};
   elevation: 3;
   shadow-color: #000;
   shadow-offset: 0px 2px;

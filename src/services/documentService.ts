@@ -1,10 +1,10 @@
 import apiClient from "./apiClient";
 import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
-import type { 
-  MedicalDocument, 
-  PaginatedDocumentRequest, 
-  ApiResponse, 
-  PaginatedDocumentResponse 
+import type {
+  MedicalDocument,
+  PaginatedDocumentRequest,
+  ApiResponse,
+  FilterDocumentsRequest,
 } from "../types";
 
 export const documentUpload = async (formData: FormData): Promise<ApiResponse<MedicalDocument>> => {
@@ -20,6 +20,15 @@ export const documentUpload = async (formData: FormData): Promise<ApiResponse<Me
   return response.data;
 };
 
+// Payload :- {"filter": {"search": "family"}, "sort": {"orderBy": "asc", "sortBy": "createdAt"}}
+
+export const filterDocuments = async (payload: FilterDocumentsRequest) => {
+  console.log("Filtration payload :- ", payload);
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.FILTER_AND_SORT, payload);
+  console.log("Filtered Documents :- ", response.data);
+  return response.data;
+}
+
 export const listDocument = async (): Promise<ApiResponse<MedicalDocument[]>> => {
   const response = await apiClient.get(DOCUMENT_ENDPOINTS.LIST_DOCUMENT);
   return response.data;
@@ -29,23 +38,24 @@ export const documentListPaginated = async ({
   activeCategory,
   page,
   pageLimit,
-}: PaginatedDocumentRequest): Promise<ApiResponse<MedicalDocument[]>> => {
-  const response = await apiClient.post(
-    DOCUMENT_ENDPOINTS.DOCUMENT_LIST_PAGINATED,
-    {
-      filter: {
-        search: activeCategory === "All" ? "" : activeCategory,
-      },
-      page: {
-        pageNumber: page,
-        pageLimit: pageLimit,
-      },
-      sort: {
-        sortBy: "documentType",
-        orderBy: "desc",
-      },
+}: PaginatedDocumentRequest) => {
+  console.log('activeCategory', activeCategory)
+  const payload = {
+    filter: {
+      search: activeCategory === "All" ? "" : activeCategory,
     },
-  );
+    page: {
+      pageNumber: page,
+      pageLimit: pageLimit,
+    },
+    sort: {
+      sortBy: "documentType",
+      orderBy: "desc",
+    },
+  }
+  console.log("Type Filtration Payload :- ", payload);
+  const response = await apiClient.post(
+    DOCUMENT_ENDPOINTS.DOCUMENT_LIST_PAGINATED, payload);
   return response.data;
 };
 

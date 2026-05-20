@@ -13,9 +13,11 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { AuthStackParamList } from "../../navigation/types";
 import { useMutation } from "@tanstack/react-query";
-import { resendOTP, verifyOTP } from "../../services/authService";
+import { login, resendOTP, verifyOTP } from "../../services/authService";
 import Toast from "react-native-toast-message";
 import { useAppTheme } from "../../context/ThemeContext";
+import * as SecureStore from "expo-secure-store";
+import { useAuth } from "../../context/ContextAPI";
 
 const OTP_LENGTH = 6;
 
@@ -26,12 +28,14 @@ type VerifyOTPProps = {
 };
 
 const VerifyOTP = ({ route }: VerifyOTPProps) => {
-  const { email } = route?.params;
+  const { email, password, fromLogin } = route?.params;
 
+  const [deviceToken, setDeviceToken] = useState('');
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [otpError, setOtpError] = useState("");
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const {login: authLogin} = useAuth();
 
   const inputRefs = useRef<Array<TextInput | null>>(
     Array(OTP_LENGTH).fill(null),
@@ -43,6 +47,11 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
   const { isDark, theme } = useAppTheme();
 
   useEffect(() => {
+    const fetchDeviceToken = async () => {
+      const token = await SecureStore.getItemAsync("deviceToken");
+      setDeviceToken(token!);
+    }
+    fetchDeviceToken();
     startTimer();
     return () => {};
   }, []);
@@ -96,17 +105,52 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
     }
   };
 
+  const { mutateAsync: loginMutation, isPending } = useMutation({
+      mutationFn: login,
+  
+      onSuccess: async (result) => {
+        const refreshToken = result?.data?.refreshToken;
+        const accessToken = result?.data?.accessToken;
+  
+        await SecureStore.setItemAsync("authToken", String(refreshToken));
+        await SecureStore.setItemAsync("accessToken", String(accessToken));
+        console.log("Refresh Token :- ", refreshToken);
+  
+        await authLogin();
+      },
+  
+      onError: (error: any) => {
+        Toast.show({
+          type: "error",
+          text1: "Login Failed.",
+          text2: `${error.message}`,
+        });
+      },
+    });
+
   const { mutateAsync: verifyOTPMutation, isPending: isLoading } = useMutation({
     mutationFn: verifyOTP,
 
     onSuccess: () => {
-      Toast.show({
-        type: "success",
-        text1: "OTP Verified Successfully.",
-        text2: "Now you can reset your password.",
-      });
+      if (fromLogin) {
+        Toast.show({
+          type: "success",
+           text1: "Hurrahhh!!! 🥳",
+           text2: `LoggedIn Successfully.`,
+        });
+      } else {
+        Toast.show({
+          type: "success",
+          text1: "OTP Verified Successfully.",
+          text2: "Now you can reset your password.",
+        });
+      }
 
-      navigation.navigate("ResetPassword", { email });
+      if (fromLogin) {
+        loginMutation({ email: email.trim(), password: password!, deviceToken: deviceToken! })
+      } else {
+        navigation.navigate("ResetPassword", { email });
+      }
     },
 
     onError: (error: any) => {
@@ -229,7 +273,7 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
                 We’ve sent a secure 6-digit verification code to
               </InfoText>
 
-              {/* <EmailText numberOfLines={1}>{email}</EmailText> */}
+              {email && <EmailText>{email}</EmailText>}
 
               <OTPContainer>
                 {otp.map((digit, index) => (
@@ -432,6 +476,15 @@ const InfoText = styled.Text`
   color: ${({ theme }: any) => theme.colors.textMuted};
   text-align: center;
   line-height: 22px;
+`;
+
+const EmailText = styled.Text`
+  font-size: 16px;
+  font-weight: 600;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+  text-align: center;
+  margin-top: 10px;
+  margin-bottom: 10px;
 `;
 
 const OTPContainer = styled.View`

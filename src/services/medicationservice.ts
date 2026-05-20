@@ -1,6 +1,6 @@
 import apiClient from "./apiClient";
 import { MEDICATION_ENDPOINTS } from "../constants/endpoints";
-import { AddOrEditMedication, ApiResponse } from "../types";
+import { AddOrEditMedication, ApiResponse, FilterMedicationsRequest } from "../types";
 
 export const addMedication = async (data: AddOrEditMedication): Promise<ApiResponse<AddOrEditMedication>> => {
   const response = await apiClient.post(
@@ -15,6 +15,16 @@ export const deleteMedication = async (id: string): Promise<ApiResponse<void>> =
   const response = await apiClient.delete(endpoint);
   return response.data;
 };
+
+export const listMedications = async (): Promise<ApiResponse<AddOrEditMedication[]>> => {
+  const response = await apiClient.get(MEDICATION_ENDPOINTS.GET_MEDICATION);
+  return response.data;
+};
+
+export const filterMedications = async (payload: FilterMedicationsRequest) => {
+  const response = await apiClient.post(MEDICATION_ENDPOINTS.FILTER_AND_SORT, payload);
+  return response.data;
+}
 
 export const getMedicationsPaginated = async ({
   MedicationType,
@@ -33,7 +43,7 @@ export const getMedicationsPaginated = async ({
       },
       sort: {
         sortBy: "medicationType",
-        orderBy: "desc",
+        sortOrder: "desc",
       },
       page: {
         pageNumber,
@@ -50,7 +60,7 @@ export const updateMedication = async ({
 }: {
   medicationId: string;
   data: AddOrEditMedication;
-}): Promise<ApiResponse<AddOrEditMedication>> => {
+ }): Promise<ApiResponse<AddOrEditMedication>> => {
   const endpoint = MEDICATION_ENDPOINTS.UPDATE_MEDICATION.replace(
     "{id}",
     medicationId,

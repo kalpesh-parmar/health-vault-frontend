@@ -1,47 +1,108 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {
   FlatList,
   LayoutAnimation,
 } from "react-native";
 import styled from "styled-components/native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+
 import { AppStackParamList } from "../../../navigation/types";
 import { useAppTheme } from "../../../context/ThemeContext";
 import FilterTabs from "../../../components/shared/FilterTabs";
 import { Reminder } from "../../../types";
 import ReminderCard from "../../../components/shared/ReminderCard";
 import SearchBar from "../../../components/shared/SearchBar";
+import FilterBottomSheet from "../../../components/shared/FilterBottomSheet";
 
 const CATEGORY_TABS = ["All", "Overdue", "Upcoming", "Completed"];
+
+const MOCK_REMINDERS: Reminder[] = [
+  {
+    id: "rem-1",
+    title: "Morning Lisinopril Dose",
+    category: "Medication",
+    medicationName: "Lisinopril 10mg",
+    time: "08:00 AM",
+    date: "2026-05-20",
+    status: "upcoming",
+    notes: "Take with food after waking up.",
+  },
+];
 
 const ReminderScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const route = useRoute<RouteProp<AppStackParamList, "Reminders">>();
-  const { isDark, theme } = useAppTheme();
+  const { isDark } = useAppTheme();
 
   // Pick up optional initial filter from navigation parameters
   const initialFilter = route.params?.filter || "All";
   const [activeTab, setActiveTab] = useState<string>(initialFilter);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [expandedReminderId, setExpandedReminderId] = useState<string | null>(
-    null,
-  );
+  const [sortOption, setSortOption] = useState<string>("date_desc");
+  const [reminders, setReminders] = useState<Reminder[]>(MOCK_REMINDERS);
 
-  const toggleExpandNotes = (id: string) => {
+  const filterSheetRef = useRef<BottomSheetModal>(null);
+
+  const filteredReminders = useMemo(() => {
+    return reminders
+      .filter((rem) => {
+        // Tab Filter: All, Overdue, Upcoming, Completed
+        if (activeTab !== "All") {
+          if (rem.status.toLowerCase() !== activeTab.toLowerCase()) {
+            return false;
+          }
+        }
+
+        // Search Query Filter
+        if (searchQuery.trim().length > 0) {
+          const q = searchQuery.toLowerCase();
+          const matchTitle = rem.title.toLowerCase().includes(q);
+          const matchNotes = rem.notes?.toLowerCase().includes(q);
+          const matchMedName = rem.medicationName?.toLowerCase().includes(q);
+          const matchCategory = rem.category.toLowerCase().includes(q);
+          return !!(matchTitle || matchNotes || matchMedName || matchCategory);
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        switch (sortOption) {
+          case "name_asc":
+            return a.title.localeCompare(b.title);
+          case "name_desc":
+            return b.title.localeCompare(a.title);
+          case "date_asc":
+            return new Date(a.date).getTime() - new Date(b.date).getTime();
+          case "date_desc":
+          default:
+            return new Date(b.date).getTime() - new Date(a.date).getTime();
+        }
+      });
+  }, [reminders, activeTab, searchQuery, sortOption]);
+
+  const handleToggleStatus = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedReminderId(expandedReminderId === id ? null : id);
+    setReminders((prev) =>
+      prev.map((rem) => {
+        if (rem.id === id) {
+          const newStatus = rem.status === "completed" ? "upcoming" : "completed";
+          return { ...rem, status: newStatus as any };
+        }
+        return rem;
+      })
+    );
   };
 
   const renderReminderCard = ({ item }: { item: Reminder }) => (
     <ReminderCard
       item={item}
       isDark={isDark}
-      onActionPress={() => {}}
+      onActionPress={() => handleToggleStatus(item.id)}
       onAlarmPress={() => {}}
     />
   );
@@ -60,15 +121,20 @@ const ReminderScreen = () => {
         end={{ x: 1, y: 1 }}
       >
         <HeaderTop>
-          <BackButton onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back-outline" size={30} color="#fff" />
-          </BackButton>
-          <Header>
-            <HeaderTitle>Reminders</HeaderTitle>
-            <HeaderSubtitle>
-              Your healthcare schedule assistant
-            </HeaderSubtitle>
-          </Header>
+          <HeaderLeft>
+            <BackButton onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back-outline" size={30} color="#fff" />
+            </BackButton>
+            <Header>
+              <HeaderTitle>Reminders</HeaderTitle>
+              <HeaderSubtitle>
+                Your healthcare schedule assistant
+              </HeaderSubtitle>
+            </Header>
+          </HeaderLeft>
+          <FilterButton onPress={() => filterSheetRef.current?.present()}>
+            <MaterialCommunityIcons name="filter" size={20} color="#fff" />
+          </FilterButton>
         </HeaderTop>
 
         <SearchBar
@@ -85,30 +151,37 @@ const ReminderScreen = () => {
         isDark={isDark}
       />
 
-        <FlatList
-          data={[]}
-          keyExtractor={(item) => item.id}
-          renderItem={renderReminderCard}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
-          ListEmptyComponent={
-            <EmptyContainer>
-              <EmptyImageWrapper>
-                <Ionicons
-                  name="calendar-clear-outline"
-                  size={60}
-                  color={isDark ? "#334155" : "#e2e8f0"}
-                />
-              </EmptyImageWrapper>
-              <EmptyTitle isDark={isDark}>No Reminders Found</EmptyTitle>
-              <EmptyDesc isDark={isDark}>
-                {searchQuery
-                  ? `We couldn't find anything matching "${searchQuery}".`
-                  : `Hooray! No pending ${activeTab.toLowerCase()} reminders at the moment.`}
-              </EmptyDesc>
-            </EmptyContainer>
-          }
-        />
+      <FlatList
+        data={filteredReminders}
+        keyExtractor={(item) => item.id}
+        renderItem={renderReminderCard}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+        ListEmptyComponent={
+          <EmptyContainer>
+            <EmptyImageWrapper>
+              <Ionicons
+                name="calendar-clear-outline"
+                size={60}
+                color={isDark ? "#334155" : "#e2e8f0"}
+              />
+            </EmptyImageWrapper>
+            <EmptyTitle isDark={isDark}>No Reminders Found</EmptyTitle>
+            <EmptyDesc isDark={isDark}>
+              {searchQuery
+                ? `We couldn't find anything matching "${searchQuery}".`
+                : `Hooray! No pending ${activeTab.toLowerCase()} reminders at the moment.`}
+            </EmptyDesc>
+          </EmptyContainer>
+        }
+      />
+
+      <FilterBottomSheet
+        ref={filterSheetRef}
+        selectedSort={sortOption}
+        onSelectSort={setSortOption}
+        onApply={() => filterSheetRef.current?.dismiss()}
+      />
     </Container>
   );
 };
@@ -132,8 +205,15 @@ const HeaderGradient = styled(LinearGradient)`
 const HeaderTop = styled.View`
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
   margin-bottom: 20px;
+`;
+
+const HeaderLeft = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
 `;
 
 const BackButton = styled.TouchableOpacity`
@@ -160,6 +240,15 @@ const HeaderSubtitle = styled.Text`
   font-size: 13px;
   font-weight: 500;
   margin-top: 2px;
+`;
+
+const FilterButton = styled.TouchableOpacity`
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.2);
+  justify-content: center;
+  align-items: center;
 `;
 
 const EmptyContainer = styled.View`
