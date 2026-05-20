@@ -39,7 +39,7 @@ const SORT_OPTIONS = [
 
 export const FilterBottomSheet = forwardRef<any, FilterBottomSheetProps>(
   ({ selectedSort, onSelectSort, onApply }, ref) => {
-    const { theme, isDark } = useAppTheme();
+    const { isDark } = useAppTheme();
 
     return (
       <BottomSheet ref={ref}>

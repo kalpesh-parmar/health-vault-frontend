@@ -1,14 +1,14 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { FlatList, ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { AppStackParamList } from "../../../../navigation/types";
 import { useAppTheme } from "../../../../context/ThemeContext";
 import {
+  useQuery,
   useInfiniteQuery,
   useMutation,
   useQueryClient,
@@ -16,6 +16,8 @@ import {
 import {
   getMedicationsPaginated,
   updateMedication,
+  listMedications,
+  filterMedications,
 } from "../../../../services/medicationservice";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
@@ -36,84 +38,24 @@ const MED_CATEGORIES = [
   "Injection",
 ];
 
-const SORT_OPTIONS = [
-  {
-    label: "Newest First",
-    description: "Recently added medications",
-    value: "date_desc",
-    icon: "calendar",
-  },
-  {
-    label: "Oldest First",
-    description: "Earliest added medications",
-    value: "date_asc",
-    icon: "calendar-outline",
-  },
-  {
-    label: "Ongoing",
-    description: "Only ongoing medications",
-    value: "ongoing",
-    icon: "checkmark",
-  },
-  {
-    label: "Completed",
-    description: "Only completed medications",
-    value: "stopped",
-    icon: "checkbox",
-  },
-];
-
-// Give me 15 Mock medication according to this AddOrEditMedication mentioned below.
-// export interface AddOrEditMedication {
-//   id?: string;
-//   medicationName: string;
-//   medicationType: string;
-//   prescribedBy: string;
-//   dosePerIntake: number;
-//   frequency: string;
-//   medicationTime: {
-//     time: string;
-//     period: string;
-//   }[];
-//   bestTaken: string[];
-//   foodFrequency: string;
-//   startDate: string;
-//   ongoing: boolean;
-//   totalQuantity: number;
-//   doseReminders: boolean;
-//   unit: string;
-//   refillAlert: boolean;
-//   notes: string;
-//   reminderBefore?: number;
-// }
-const MOCK_MEDICATION = Array.from({ length: 15 }, (_, index) => ({
-  medicationName: `Medication ${index + 1}`,
-  medicationType: index % 2 === 0 ? "Tablet" : "Capsule",
-  prescribedBy: "Dr. Smith",
-  dosePerIntake: 1,
-  frequency: "Twice daily",
-  medicationTime: [
-    { time: "09:00", period: "AM" },
-    { time: "09:00", period: "PM" },
-  ],
-  bestTaken: ["With food"],
-  foodFrequency: "After meals",
-  startDate: "2022-01-01",
-  ongoing: true,
-  totalQuantity: 30,
-  doseReminders: true,
-  unit: "tablet",
-  refillAlert: true,
-  notes: "Take as directed",
-}));
-
 const MedicationScreen = () => {
   const [activeTab, setActiveTab] = useState("All");
   const [sortOption, setSortOption] = useState("date_desc");
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isFilterApplied, setIsFilterApplied] = useState(false);
   const filterSheetRef = useRef<BottomSheetModal>(null);
+
+  // Reset filteration states when navigating back to this screen
+  useFocusEffect(
+    useCallback(() => {
+      setActiveTab("All");
+      setSortOption("date_desc");
+      setSearchQuery("");
+      setIsFilterApplied(false);
+    }, []),
+  );
 
   const navigation =
     useNavigation<NativeStackNavigationProp<MedicationStackParamList>>();
@@ -142,19 +84,79 @@ const MedicationScreen = () => {
   });
 
   const handleToggleStatus = async (item: AddOrEditMedication) => {
+    console.log("Toggle Medication Status: ", item?.ongoing);
     if (!item.id) return;
     await toggleMedicationStatus({
       medicationId: item.id,
       data: {
-        ...item,
-        ongoing: !item.ongoing,
+        medicationName: item?.medicationName,
+        medicationType: item?.medicationType,
+        prescribedBy: item?.prescribedBy,
+        dosePerIntake: item?.dosePerIntake,
+        frequency: item?.frequency,
+        medicationTime: item?.medicationTime,
+        bestTaken: item?.bestTaken,
+        foodFrequency: item?.foodFrequency,
+        startDate: item?.startDate,
+        ongoing: !item?.ongoing,
+        totalQuantity: item?.totalQuantity,
+        doseReminders: item?.doseReminders,
+        unit: item?.unit,
+        reminderBeforeMinutes: item?.reminderBeforeMinutes,
+        refillAlert: item?.refillAlert,
+        notes: item?.notes,
       },
     });
   };
 
+  // Fetch filtered medications when a filter/sort option is applied from FilterBottomSheet
+  const { data: filteredMedicationData, isLoading: isLoadingFiltered } =
+    useQuery({
+      queryKey: ["filteredMedications", activeTab, sortOption, searchQuery],
+      queryFn: () => {
+        let sortBy = "startDate";
+        let sortOrder: "asc" | "desc" = "desc";
+
+        if (sortOption === "date_desc") {
+          sortBy = "startDate";
+          sortOrder = "desc";
+        } else if (sortOption === "date_asc") {
+          sortBy = "startDate";
+          sortOrder = "asc";
+        } else if (sortOption === "name_asc") {
+          sortBy = "medicationName";
+          sortOrder = "asc";
+        } else if (sortOption === "name_desc") {
+          sortBy = "medicationName";
+          sortOrder = "desc";
+        }
+
+        return filterMedications({
+          filter: {
+            search: activeTab === "All" ? "" : activeTab,
+          },
+          sort: {
+            sortBy,
+            sortOrder,
+          },
+        });
+      },
+      enabled: isFilterApplied,
+    });
+
+  console.log("filteredMedicationData", filteredMedicationData?.data.rows);
+
+  // Fetch all medications when "All" is active (standard useQuery)
+  const { data: allMedsData, isLoading: isLoadingAll } = useQuery({
+    queryKey: ["allMedications", "medications"],
+    queryFn: listMedications,
+    enabled: activeTab === "All" && !isFilterApplied,
+  });
+
+  // Fetch paginated medications when a specific tab is active (useInfiniteQuery)
   const {
     data: medicationList,
-    isLoading,
+    isLoading: isLoadingInfinite,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -170,55 +172,58 @@ const MedicationScreen = () => {
       return lastPage.data.length === 10 ? allPages.length + 1 : undefined;
     },
     initialPageParam: 1,
+    enabled: activeTab !== "All" && !isFilterApplied,
   });
 
-  const medicationData = useMemo(() => {
-    const flattened =
-      medicationList?.pages.flatMap((page) => page.data) || MOCK_MEDICATION;
+  const isLoading = isFilterApplied
+    ? isLoadingFiltered
+    : activeTab === "All"
+      ? isLoadingAll
+      : isLoadingInfinite;
 
-    return flattened
-      .filter((item: AddOrEditMedication) => {
-        if (
-          activeTab !== "All" &&
-          item.medicationType?.toUpperCase() !== activeTab.toUpperCase()
-        )
-          return false;
-        if (sortOption === "ongoing" && item.ongoing === false) return false;
-        if (sortOption === "stopped" && item.ongoing === true) return false;
-        if (searchQuery.trim().length > 0) {
-          const q = searchQuery.toLowerCase();
-          const matchName = item.medicationName?.toLowerCase().includes(q);
-          const matchNotes = item.notes?.toLowerCase().includes(q);
-          const matchType = item.medicationType?.toLowerCase().includes(q);
-          return !!(matchName || matchNotes || matchType);
-        }
-        return true;
-      })
-      .sort((a: AddOrEditMedication, b: AddOrEditMedication) => {
-        switch (sortOption) {
-          case "name_asc":
-            return (a.medicationName || "").localeCompare(
-              b.medicationName || "",
-            );
-          case "name_desc":
-            return (b.medicationName || "").localeCompare(
-              a.medicationName || "",
-            );
-          case "date_asc":
-            return (
-              new Date(a.startDate || 0).getTime() -
-              new Date(b.startDate || 0).getTime()
-            );
-          case "date_desc":
-            return (
-              new Date(b.startDate || 0).getTime() -
-              new Date(a.startDate || 0).getTime()
-            );
-          default:
-            return 0;
-        }
-      });
-  }, [medicationList, activeTab, sortOption]);
+
+  const medicationData = useMemo(() => {
+    // Helper function to handle different response structures safely
+    const extractRows = (
+      response: any,
+      isFiltered: boolean,
+    ): AddOrEditMedication[] => {
+      if (!response) return [];
+
+      // Structure for Filter API: response.data.rows
+      if (isFiltered && response.data && Array.isArray(response.data.rows)) {
+        return response.data.rows;
+      }
+
+      // Structure for Normal/Infinite API: response.data (Array)
+      if (!isFiltered && Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      return [];
+    };
+
+    // 1. Prioritize Filter API response
+    if (isFilterApplied) {
+      return extractRows(filteredMedicationData, true);
+    }
+
+    // 2. Standard "All" Tab normal API
+    if (activeTab === "All") {
+      return extractRows(allMedsData, false);
+    }
+
+    // 3. Paginated Specific Tab API (Flatten pages)
+    return (
+      medicationList?.pages?.flatMap((page) => extractRows(page, false)) || []
+    );
+  }, [
+    filteredMedicationData,
+    allMedsData,
+    medicationList,
+    activeTab,
+    isFilterApplied,
+  ]);
 
   const renderMedicationCard = ({ item }: { item: AddOrEditMedication }) => (
     <Card>
@@ -369,7 +374,10 @@ const MedicationScreen = () => {
       <FilterTabs
         data={MED_CATEGORIES}
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          setIsFilterApplied(false);
+        }}
         isDark={isDark}
       />
 
@@ -393,7 +401,12 @@ const MedicationScreen = () => {
           }
           contentContainerStyle={{ paddingBottom: 40 }}
           onEndReached={() => {
-            if (hasNextPage && !isFetchingNextPage) {
+            if (
+              !isFilterApplied &&
+              activeTab !== "All" &&
+              hasNextPage &&
+              !isFetchingNextPage
+            ) {
               fetchNextPage();
             }
           }}
@@ -413,8 +426,13 @@ const MedicationScreen = () => {
       <FilterBottomSheet
         ref={filterSheetRef}
         selectedSort={sortOption}
-        onSelectSort={setSortOption}
-        onApply={() => filterSheetRef.current?.dismiss()}
+        onSelectSort={(option) => {
+          setSortOption(option);
+        }}
+        onApply={() => {
+          setIsFilterApplied(true);
+          filterSheetRef.current?.dismiss();
+        }}
       />
     </Container>
   );

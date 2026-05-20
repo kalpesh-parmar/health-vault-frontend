@@ -57,6 +57,13 @@ export type AppStackParamList = {
   Notifications: undefined;
   AIChat: undefined;
   Reminders: { filter?: "All" | "Overdue" | "Upcoming" | "Completed" } | undefined;
+  UploadSuccess: {
+    documentName: string;
+    fileSize: string;
+    fileType: string;
+    uploadedAt: string;
+    category: string;
+  };
 };
 
 // ─── Profile Stack ─────────────────────────────────────────────

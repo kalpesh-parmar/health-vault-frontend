@@ -117,6 +117,16 @@ export interface PaginatedDocumentResponse {
   total: number;
 }
 
+export interface FilterDocumentsRequest {
+  filter: {
+    search: string;
+  },
+  sort: {
+    sortBy: string,
+    orderBy: "asc" | "desc"
+  }
+}
+
 // ─── Medication ────────────────────────────────────────
 export interface AddOrEditMedication {
   id?: string;
@@ -139,6 +149,16 @@ export interface AddOrEditMedication {
   reminderBeforeMinutes?: number;
   refillAlert: boolean;
   notes: string;
+}
+
+export interface FilterMedicationsRequest {
+  filter: {
+    search: string;
+  },
+  sort: {
+    sortBy: string,
+    sortOrder: "asc" | "desc"
+  }
 }
 
 // ─── Notification ────────────────────────────────────────

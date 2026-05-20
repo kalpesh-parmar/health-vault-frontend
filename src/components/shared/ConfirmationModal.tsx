@@ -32,7 +32,7 @@ const ConfirmationModal = ({
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
-  const {mutateAsync: logoutMutation} = useMutation({
+  const { mutateAsync: logoutMutation } = useMutation({
     mutationFn: logoutUser,
     onSuccess: async () => {
       await logout();
@@ -52,7 +52,7 @@ const ConfirmationModal = ({
     },
   });
 
-  const {mutateAsync: deleteUserMutation} = useMutation({
+  const { mutateAsync: deleteUserMutation } = useMutation({
     mutationFn: deleteUserAccount,
     onSuccess: async () => {
       await logout();
@@ -72,7 +72,7 @@ const ConfirmationModal = ({
     },
   });
 
-  const {mutateAsync: deleteDocumentMutation} = useMutation({
+  const { mutateAsync: deleteDocumentMutation } = useMutation({
     mutationFn: deleteDocument,
     onSuccess: async (result) => {
       queryClient.invalidateQueries({
@@ -95,19 +95,25 @@ const ConfirmationModal = ({
     },
   });
 
-  const {mutateAsync: deleteMedicationMutation} = useMutation({
+  const { mutateAsync: deleteMedicationMutation } = useMutation({
     mutationFn: deleteMedication,
     onSuccess: async (result) => {
       queryClient.invalidateQueries({
         queryKey: ["medications"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["allMedications"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["filteredMedications"],
+      });
       onClose();
       Toast.show({
         type: "success",
-        text1: "Medication Deleted Successfully !!!",
+        text1: "Deleted Successfully !!!",
         text2: "Medication Deleted Successfully.",
       });
-      navigation.navigate("Medication" as never);
+      navigation.navigate("MedicationStack" as never);
     },
     onError: (error: any) => {
       Toast.show({

@@ -63,8 +63,6 @@ const ProfileScreen = () => {
     },
   });
 
-  console.log(userData);
-
   const username = userData?.userName ?? "";
   const email = userData?.email ?? "";
   const firstName = userData?.firstName ?? "";

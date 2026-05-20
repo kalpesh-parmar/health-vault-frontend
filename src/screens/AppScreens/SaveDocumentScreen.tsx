@@ -102,17 +102,31 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
   const selected = CATEGORIES.find((c) => c.value === category);
 
-  const { handleSave: saveDocument, isSaving } = useSaveDocument(() =>
-    navigation.navigate("DocumentStack", {
-      screen: "DocumentList",
-      params: { category: category },
-    }),
-  );
+   const { handleSave: saveDocument, isSaving } = useSaveDocument(() => {
+    const isPdf = docName.toLowerCase().endsWith(".pdf");
+    const fileType = isPdf ? "pdf" : "jpg";
+    const displayName = isPdf ? docName : `${docName}.jpg`;
+
+    navigation.navigate("UploadSuccess", {
+      documentName: displayName,
+      fileSize: "1.84 MB",
+      fileType: fileType,
+      uploadedAt: new Date().toLocaleString("en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
+      category: selected?.label || category,
+    });
+  });
 
   const sanitizeFileName = (name: string) => {
     return name
       .trim()
-      .replace(/\s+/g, "_")
+      .replace(/\s/g, "_")
       .replace(/[^\w.-]/g, "");
   };
 
@@ -202,21 +216,6 @@ const SaveDocumentScreen = ({ route }: Props) => {
                 </CatBtn>
                 {errors.category && <ErrText>{errors.category}</ErrText>}
               </Section>
-
-              <InnerDivider />
-
-              <AIHeader>
-                <AIBadge>
-                  <AISpark>✦</AISpark>
-                  <AIBadgeTxt>AI</AIBadgeTxt>
-                </AIBadge>
-                <AIHTitle>Smart Summary</AIHTitle>
-                <AIStarRight>✦</AIStarRight>
-              </AIHeader>
-
-              <AIBody>
-                <AIText>{aiSummary}</AIText>
-              </AIBody>
 
               <InnerDivider />
 
@@ -437,54 +436,6 @@ const CatPlaceholder = styled.Text`
   flex: 1;
   font-size: 14px;
   color: ${({ theme }: any) => theme.colors.textMuted};
-`;
-
-const AIHeader = styled.View<{
-  isDark: boolean;
-}>`
-  background-color: ${({ theme, isDark }: any) =>
-    isDark ? theme.colors.white : theme.colors.textPrimary};
-  padding: 14px 20px;
-  flex-direction: row;
-  align-items: center;
-`;
-
-const AIBadge = styled.View`
-  background-color: rgba(255, 255, 255, 0.16);
-  border-radius: 20px;
-  padding: 3px 9px;
-  flex-direction: row;
-  align-items: center;
-  margin-right: 9px;
-`;
-const AIBadgeTxt = styled.Text`
-  font-size: 10px;
-  font-weight: 800;
-  color: #ffffff;
-  letter-spacing: 0.8px;
-`;
-const AISpark = styled.Text`
-  font-size: 11px;
-  margin-right: 3px;
-`;
-const AIHTitle = styled.Text`
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffffff;
-  flex: 1;
-`;
-const AIStarRight = styled.Text`
-  font-size: 13px;
-  color: #93c5fd;
-`;
-const AIBody = styled.View`
-  padding: 16px 20px;
-`;
-const AIText = styled.Text`
-  font-size: 13px;
-  line-height: 21px;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  font-weight: 400;
 `;
 
 const PreviewSectionHeader = styled.View`

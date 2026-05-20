@@ -253,7 +253,7 @@ const MedicationForm = ({
       }),
       totalQuantity: Number(totalPills),
       doseReminders: reminders,
-      unit: type.key,
+      unit: displayDose,
       refillAlert,
       notes,
       reminderBeforeMinutes: reminders ? (Number(reminderBeforeMinutes) || 0) : 0,
@@ -612,6 +612,7 @@ const MedicationForm = ({
         mode={picker.type === "time" ? "time" : "date"}
         date={picker.type === "start" ? startDate : new Date()}
         onConfirm={(date) => {
+           setPicker((prev) => ({ ...prev, visible: false }));
           if (picker.type === "start") setStartDate(date);
           else {
             if (preferredTimes.some((t) => isEqual(t, date))) {
@@ -624,7 +625,6 @@ const MedicationForm = ({
             }
             setPreferredTimes((prev) => [...prev, date]);
           }
-          setPicker({ ...picker, visible: false });
         }}
         onCancel={() => setPicker({ ...picker, visible: false })}
       />

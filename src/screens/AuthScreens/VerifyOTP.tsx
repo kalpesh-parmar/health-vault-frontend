@@ -29,7 +29,6 @@ type VerifyOTPProps = {
 
 const VerifyOTP = ({ route }: VerifyOTPProps) => {
   const { email, password, fromLogin } = route?.params;
-  console.log(email, "Email is Hereeee");
 
   const [deviceToken, setDeviceToken] = useState('');
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
@@ -136,14 +135,14 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
       if (fromLogin) {
         Toast.show({
           type: "success",
-          text1: "OTP Verified Successfully.",
-          text2: "Now you can reset your password.",
+           text1: "Hurrahhh!!! 🥳",
+           text2: `LoggedIn Successfully.`,
         });
       } else {
         Toast.show({
           type: "success",
-          text1: "Hurrahhh!!! 🥳",
-          text2: `LoggedIn Successfully.`,
+          text1: "OTP Verified Successfully.",
+          text2: "Now you can reset your password.",
         });
       }
 

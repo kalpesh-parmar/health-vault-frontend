@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useMemo } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   FlatList,
@@ -20,8 +21,8 @@ import SearchBar from "../../components/shared/SearchBar";
 import FilterBottomSheet from "../../components/shared/FilterBottomSheet";
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { documentListPaginated } from "../../services/documentService";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { documentListPaginated, filterDocuments, listDocument } from "../../services/documentService";
 import { useAuth } from "../../context/ContextAPI";
 import DocumentCard from "../../components/Documents/DocumentCard";
 import { useAppNavigation } from "../../types/navigation";
@@ -36,35 +37,6 @@ const CATEGORIES = [
   { key: "Other", value: "other" },
 ];
 
-const SORT_OPTIONS = [
-  {
-    label: "Newest First",
-    description: "Recently added documents",
-    value: "date_desc",
-    icon: "calendar",
-  },
-  {
-    label: "Oldest First",
-    description: "Earliest added documents",
-    value: "date_asc",
-    icon: "calendar-outline",
-  },
-  {
-    label: "A-Z",
-    description: "Alphabetical ascending",
-    value: "name_asc",
-    icon: "alpha-a-box",
-  },
-  {
-    label: "Z-A",
-    description: "Alphabetical descending",
-    value: "name_desc",
-    icon: "alpha-z-box",
-  },
-];
-
-type Category = (typeof CATEGORIES)[number]["key"];
-
 const DocumentList = () => {
   const navigation = useAppNavigation();
   const { isDark } = useAppTheme();
@@ -72,9 +44,21 @@ const DocumentList = () => {
   const filterSheetRef = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
   const { userId } = useAuth();
-  const [activeTab, setActiveTab] = useState<Category>("All");
-  const [sortOption, setSortOption] = useState("date_desc");
+  const [activeTab, setActiveTab] = useState<string>("All");
+  const [sortOption, setSortOption] = useState<string>("date_desc");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isFilterApplied, setIsFilterApplied] = useState(false);
+
+  // Focus hook to reset filters when screen gains focus (so it does not persist across navigations)
+  useFocusEffect(
+    useCallback(() => {
+      setActiveTab("All");
+      setSortOption("date_desc");
+      setSearchQuery("");
+      setIsFilterApplied(false);
+    }, [])
+  );
+
 
   const {
     handleGalleryPick,
@@ -85,9 +69,52 @@ const DocumentList = () => {
     takePicture,
   } = useDocumentMedia();
 
+  // Fetch filtered documents when a filter/sort option is applied from FilterBottomSheet
+  const { data: filteredDocuments, isLoading: isLoadingFiltered } = useQuery({
+    queryKey: ["filteredDocuments", userId, activeTab, sortOption, searchQuery],
+    queryFn: () => {
+      let sortBy = "createdAt";
+      let orderBy: "asc" | "desc" = "desc";
+
+      if (sortOption === "date_desc") {
+        sortBy = "createdAt";
+        orderBy = "desc";
+      } else if (sortOption === "date_asc") {
+        sortBy = "createdAt";
+        orderBy = "asc";
+      } else if (sortOption === "name_asc") {
+        sortBy = "fileName";
+        orderBy = "asc";
+      } else if (sortOption === "name_desc") {
+        sortBy = "fileName";
+        orderBy = "desc";
+      }
+
+      return filterDocuments({
+        filter: {
+          search: activeTab === "All" ? "" : activeTab,
+        },
+        sort: {
+          sortBy,
+          orderBy,
+        },
+      });
+    },
+    enabled: isFilterApplied && !!userId,
+  });
+
+  // Fetch all documents when "All" is active.
+  const { data: allDocsData, isLoading: isLoadingAll } = useQuery({
+    queryKey: ["allDocuments", userId],
+    queryFn: listDocument,
+    enabled: activeTab === "All" && !isFilterApplied && !!userId,
+  });
+
+  // Fetch paginated documents when a specific tab is active (useInfiniteQuery)
+
   const {
     data: documentListData,
-    isLoading,
+    isLoading: isLoadingInfinite,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -103,31 +130,53 @@ const DocumentList = () => {
       return lastPage.data.length === 10 ? allPages.length + 1 : undefined;
     },
     initialPageParam: 1,
-    enabled: !!userId,
+    enabled: activeTab !== "All" && !isFilterApplied && !!userId,
   });
 
+  const isLoading = isFilterApplied
+    ? isLoadingFiltered
+    : (activeTab === "All" ? isLoadingAll : isLoadingInfinite);
+
   const documents = useMemo(() => {
-    const flattened =
-      documentListData?.pages.flatMap((page) => page.data) || [];
+    const getSafeArray = (response: any) => {
+      if (!response) return [];
+      if (Array.isArray(response)) return response;
+      if (response.data && Array.isArray(response.data)) return response.data;
+      return [];
+    };
+
+    let flattened: MedicalDocument[] = [];
+
+    if (isFilterApplied) {
+      flattened = getSafeArray(filteredDocuments);
+    } else if (activeTab === "All") {
+      flattened = getSafeArray(allDocsData);
+    } else {
+      flattened = documentListData?.pages.flatMap((page) => getSafeArray(page)) || [];
+    }
 
     return flattened
       .filter((doc: MedicalDocument) => {
-        if (activeTab !== "All") {
-          const activeValue = CATEGORIES.find(
-            (category) => category.key === activeTab,
-          )?.value;
-          if (doc.documentType?.toUpperCase() !== activeValue?.toUpperCase()) {
-            return false;
+        if (!isFilterApplied && activeTab !== "All") {
+          if (doc.documentType?.toUpperCase() !== activeTab.toUpperCase()) {
+            {
+              return false;
+            }
           }
+          if (searchQuery.trim().length > 0) {
+            const q = searchQuery.toLowerCase();
+            const matchName = (doc.title || doc.fileName || "")
+              .toLowerCase()
+              .includes(q);
+
+            const matchNotes = doc.notes?.toLowerCase()
+              .includes(q);
+            const matchType = doc.documentType?.toLowerCase()
+              .includes(q);
+            return !!(matchName || matchNotes || matchType);
+          }
+          return true;
         }
-        if (searchQuery.trim().length > 0) {
-          const q = searchQuery.toLowerCase();
-          const matchName = (doc.title || doc.fileName || "").toLowerCase().includes(q);
-          const matchNotes = doc.notes?.toLowerCase().includes(q);
-          const matchType = doc.documentType?.toLowerCase().includes(q);
-          return !!(matchName || matchNotes || matchType);
-        }
-        return true;
       })
       .sort((a: MedicalDocument, b: MedicalDocument) => {
         const firstName = a.title || a.fileName || "";
@@ -149,10 +198,13 @@ const DocumentList = () => {
               new Date(a.createdAt || 0).getTime()
             );
           default:
-            return 0;
+            return (
+              new Date(b.createdAt || 0).getTime() -
+              new Date(a.createdAt || 0).getTime()
+            );
         }
       });
-  }, [documentListData, activeTab, sortOption]);
+  }, [allDocsData, documentListData, filteredDocuments, activeTab, sortOption, searchQuery, isFilterApplied]);
 
   const renderItem: ListRenderItem<MedicalDocument> = useCallback(
     ({ item }) => <DocumentCard document={item} />,
@@ -212,9 +264,12 @@ const DocumentList = () => {
 
       <ContentContainer>
         <FilterTabs
-          data={CATEGORIES.map((category) => category.key)}
+          data={CATEGORIES.map((category) => category.value)}
           activeTab={activeTab}
-          onSelectTab={setActiveTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            setIsFilterApplied(false); // Reset sort/filter on tab change
+          }}
           isDark={isDark}
         />
 
@@ -239,13 +294,13 @@ const DocumentList = () => {
           maxToRenderPerBatch={10}
           windowSize={5}
           onEndReached={() => {
-            if (hasNextPage && !isFetchingNextPage) {
+            if (activeTab !== "All" && hasNextPage && !isFetchingNextPage) {
               fetchNextPage();
             }
           }}
           onEndReachedThreshold={0.2}
           ListFooterComponent={
-            isFetchingNextPage ? (
+            activeTab !== "All" && isFetchingNextPage ? (
               <ActivityIndicator
                 size="small"
                 color="#8b5cf6"
@@ -264,15 +319,20 @@ const DocumentList = () => {
           onCameraOpen={() =>
             handleOpenCamera(() => refRBSheet.current?.dismiss())
           }
-          onDocumentPick={() => {}}
+          onDocumentPick={() => { }}
         />
       </BottomSheet>
 
       <FilterBottomSheet
         ref={filterSheetRef}
         selectedSort={sortOption}
-        onSelectSort={setSortOption}
-        onApply={() => filterSheetRef.current?.dismiss()}
+        onSelectSort={(option) => {
+          setSortOption(option);
+        }}
+        onApply={() => {
+          setIsFilterApplied(true);
+          filterSheetRef.current?.dismiss();
+        }}
       />
     </Container>
   );

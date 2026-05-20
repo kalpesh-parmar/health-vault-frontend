@@ -4,7 +4,6 @@ import type { UpdateUserRequest, User, ApiResponse } from "../types";
 
 export const getUser = async (): Promise<ApiResponse<User>> => {
   const response = await apiClient.get(PATIENT_ENDPOINTS.GET_USER);
-  console.log("User Data:", response.data);
   return response.data;
 };
 
