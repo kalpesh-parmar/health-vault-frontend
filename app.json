@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "owner": "dharmik-bapodara",
     "splash": {
-      "image": "./assets/AppIcon.png",
+      "image": "./assets/Splash.png",
       "resizeMode": "cover",
       "backgroundColor": "#000000"
     },

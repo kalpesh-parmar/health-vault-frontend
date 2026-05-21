@@ -51,6 +51,7 @@ export default function App() {
           projectId: Constants.expoConfig?.extra?.eas.projectId,
         });
         const deviceToken = tokenData.data;
+        console.log(deviceToken);
         await SecureStore.setItemAsync("deviceToken", String(deviceToken));
 
         if (Platform.OS === "android") {
