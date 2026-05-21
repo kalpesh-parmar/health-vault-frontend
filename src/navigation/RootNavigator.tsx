@@ -6,16 +6,17 @@ import AuthStack from "./stacks/AuthStack";
 import ModernLoader from "../components/shared/Loader";
 
 const RootNavigator = () => {
-  const { isLoggedIn, isLoading } = useAuth();
+  const authContext = useAuth();
+  
   return (
     <NavigationContainer>
-      {isLoading ? (
+      {authContext.isLoading ? (
         <ModernLoader
           visible={true}
           title="Initializing System..."
           subtitle="Loading your secure vault"
         />
-      ) : isLoggedIn ? (
+      ) : authContext.isAuthenticated ? (
         <CustomDrawerNavigator />
       ) : (
         <AuthStack />

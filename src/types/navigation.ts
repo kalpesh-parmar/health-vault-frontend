@@ -9,7 +9,7 @@ export type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
   ForgotPassword: undefined;
-  VerifyOTP: { email: string, password?: string, fromLogin: boolean };
+  VerifyOTP: { email: string, fromLogin: boolean };
   ResetPassword: { email: string };
   Home: NavigatorScreenParams<AppStackParamList>; 
 };

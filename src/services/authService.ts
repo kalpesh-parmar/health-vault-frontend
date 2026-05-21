@@ -8,12 +8,12 @@ import type {
   ResetPasswordRequest,
 } from "../types";
 
-export const login = async ({ email, password, deviceToken }: LoginRequest) => {
+export const login = async ({ email, deviceToken }: LoginRequest) => {
   const response = await apiClient.post(AUTH_ENDPOINTS.LOGIN, {
     email,
-    password,
     deviceToken,
   });
+  console.log("Login API Response :- ", response.data);
   return response.data;
 };
 
@@ -50,7 +50,7 @@ export const logoutUser = async () => {
   return response.data;
 };
 
-export const sendOTP = async ({ email }: ForgotPasswordRequest) => {
+export const forgotPassword = async ({ email }: ForgotPasswordRequest) => {
   const response = await apiClient.post(AUTH_ENDPOINTS.FORGOT_PASSWORD, {
     email,
   });
@@ -62,13 +62,15 @@ export const verifyOTP = async ({ email, otp }: VerifyOTPRequest) => {
     email,
     otp,
   });
+  console.log("Verify OTP API Response :- ", response.data);
   return response.data;
 };
 
-export const resendOTP = async ({ email }: ForgotPasswordRequest) => {
+export const requestOTP = async ({ email }: ForgotPasswordRequest) => {
   const response = await apiClient.post(AUTH_ENDPOINTS.REQUEST_OTP, {
     email,
   });
+  console.log("Request OTP API Response :- ", response.data);
   return response.data;
 };
 
@@ -79,3 +81,11 @@ export const resetPassword = async ({ email, password }: ResetPasswordRequest) =
   });
   return response.data;
 };
+
+export const refreshToken = async ({refreshToken} : {refreshToken: string}) => {
+  const response = await apiClient.post(AUTH_ENDPOINTS.REFRESH_TOKEN, {
+    refreshToken
+  });
+  console.log("Refresh Token API Response :- ", response.data);
+  return response.data;
+}

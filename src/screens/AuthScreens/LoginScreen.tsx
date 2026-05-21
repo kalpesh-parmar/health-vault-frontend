@@ -11,13 +11,12 @@ import {
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
-import { Ionicons, AntDesign } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { login, sendOTP } from "../../services/authService";
-import * as SecureStore from "expo-secure-store";
+import { requestOTP } from "../../services/authService";
 import { useAuth } from "../../context/ContextAPI";
 import { useAppTheme } from "../../context/ThemeContext";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -25,10 +24,7 @@ import { AuthStackParamList } from "../../types/navigation";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
@@ -43,17 +39,13 @@ const LoginScreen = () => {
     if (!email) newErrors.email = "Email is required";
     else if (!emailReg.test(email)) newErrors.email = "Invalid email";
 
-    if (!password) newErrors.password = "Password required";
-    else if (password.length < 6) newErrors.password = "Min 6 characters";
-
     setEmailError(newErrors.email || null);
-    setPasswordError(newErrors.password || null);
 
     return Object.keys(newErrors).length === 0;
   };
 
   const { mutateAsync: sendLoginOTP, isPending } = useMutation({
-    mutationFn: sendOTP,
+    mutationFn: requestOTP,
     onSuccess: () => {
       Toast.show({
         type: "success",
@@ -61,7 +53,7 @@ const LoginScreen = () => {
         text2: "Check your email for OTP.",
       });
 
-      navigation.navigate("VerifyOTP", { email:email.trim(), password: password, fromLogin: true });
+      navigation.navigate("VerifyOTP", { email:email.trim(), fromLogin: true });
     },
 
     onError: (error: any) => {
@@ -71,7 +63,7 @@ const LoginScreen = () => {
         text2: `${error.message}`,
       });
 
-      setEmailError("Invalid Email ID");
+      setEmailError(`${error.message}`);
     },
   });
 
@@ -79,15 +71,15 @@ const LoginScreen = () => {
     if (!validateForm()) {
       Toast.show({
         type: "error",
-        text1: "Invalid input",
-        text2: "Enter Valid Inputs to Login!",
+        text1: "Please Enter Valid Email ID.",
+        text2: "Email ID is required!",
       });
 
       return;
     }
 
     try {
-      await sendLoginOTP({email: email.trim()});
+      await sendLoginOTP({email: email?.trim()});
     } catch (error) {
     } finally {
     }
@@ -154,7 +146,7 @@ const LoginScreen = () => {
               </TopSection>
 
               <BottomCard>
-                <WelcomeText>Welcome Back 👋</WelcomeText>
+                <WelcomeText>Welcome Back </WelcomeText>
 
                 <DescriptionText>Sign in to continue</DescriptionText>
 
@@ -175,40 +167,6 @@ const LoginScreen = () => {
                   </InputWrapper>
 
                   {emailError && <ErrorText>{emailError}</ErrorText>}
-                </InputGroup>
-
-                <InputGroup>
-                  <InputWrapper>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={18}
-                      color="#9CA3AF"
-                    />
-
-                    <StyledInput
-                      placeholder="Password"
-                      placeholderTextColor="#9CA3AF"
-                      value={password}
-                      secureTextEntry={!showPassword}
-                      onChangeText={(text: string) => {
-                        setPassword(text);
-                        setPasswordError("");
-                      }}
-                    />
-
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
-                      <Ionicons
-                        name={showPassword ? "eye-outline" : "eye-off-outline"}
-                        size={20}
-                        color="#9CA3AF"
-                      />
-                    </TouchableOpacity>
-                  </InputWrapper>
-
-                  {passwordError && <ErrorText>{passwordError}</ErrorText>}
                 </InputGroup>
 
                 <ForgotBtn
@@ -282,7 +240,7 @@ const InnerContainer = styled.View`
 
 const TopSection = styled.View`
   align-items: center;
-  padding-top: 85px;
+  padding-top: 140px;
   padding-bottom: 36px;
 `;
 
@@ -326,11 +284,12 @@ const Subtitle = styled.Text`
 
 const BottomCard = styled.View`
   flex: 1;
+  justify-content: center;
   background-color: #ffffff;
   border-top-left-radius: 42px;
   border-top-right-radius: 42px;
   padding-horizontal: 24px;
-  padding-top: 34px;
+  padding-vertical: 24px;
 `;
 
 const WelcomeText = styled.Text`

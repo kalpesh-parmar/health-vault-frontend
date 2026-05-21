@@ -31,7 +31,6 @@ export interface MedicalDocument {
 
 export interface LoginRequest {
   email: string;
-  password: string;
   deviceToken: string | null;
 }
 

@@ -13,7 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import { AuthStackParamList } from "../../navigation/types";
-import { sendOTP } from "../../services/authService";
+import { forgotPassword, requestOTP } from "../../services/authService";
 import { useMutation } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import ModernLoader from "../../components/shared/Loader";
@@ -60,7 +60,7 @@ const ForgotPasswordScreen = () => {
 
   const { mutateAsync: forgotPasswordMutation, isPending: isLoading } =
     useMutation({
-      mutationFn: sendOTP,
+      mutationFn: forgotPassword,
       onSuccess: () => {
         Toast.show({
           type: "success",

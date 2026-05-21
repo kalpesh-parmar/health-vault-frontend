@@ -13,7 +13,7 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { AuthStackParamList } from "../../navigation/types";
 import { useMutation } from "@tanstack/react-query";
-import { login, resendOTP, verifyOTP } from "../../services/authService";
+import { login, requestOTP, verifyOTP } from "../../services/authService";
 import Toast from "react-native-toast-message";
 import { useAppTheme } from "../../context/ThemeContext";
 import * as SecureStore from "expo-secure-store";
@@ -28,7 +28,7 @@ type VerifyOTPProps = {
 };
 
 const VerifyOTP = ({ route }: VerifyOTPProps) => {
-  const { email, password, fromLogin } = route?.params;
+  const { email, fromLogin } = route?.params;
 
   const [deviceToken, setDeviceToken] = useState('');
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
@@ -105,21 +105,27 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
     }
   };
 
-  const { mutateAsync: loginMutation, isPending } = useMutation({
+  const { mutateAsync: loginMutation } = useMutation({
       mutationFn: login,
   
       onSuccess: async (result) => {
         const refreshToken = result?.data?.refreshToken;
         const accessToken = result?.data?.accessToken;
         const userId = result?.data?.patient?.id;
-        console.log(userId);
   
-        await SecureStore.setItemAsync("authToken", String(refreshToken));
-        await SecureStore.setItemAsync("accessToken", String(accessToken));
-        await SecureStore.setItemAsync("userId", String(userId));
         console.log("Refresh Token :- ", refreshToken);
         
-        await authLogin();
+        await authLogin({
+          accessToken: String(accessToken),
+          refreshToken: String(refreshToken),
+          userId: String(userId),
+        });
+
+        Toast.show({
+          type: "success",
+           text1: "Hurrahhh!!! 🥳",
+           text2: `LoggedIn Successfully.`,
+        });
       },
   
       onError: (error: any) => {
@@ -136,12 +142,7 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
 
     onSuccess: () => {
       if (fromLogin) {
-        Toast.show({
-          type: "success",
-           text1: "Hurrahhh!!! 🥳",
-           text2: `LoggedIn Successfully.`,
-        });
-        loginMutation({ email: email.trim(), password: password!, deviceToken: deviceToken! })
+        loginMutation({ email: email.trim(), deviceToken: deviceToken! })
       } else {
         Toast.show({
           type: "success",
@@ -183,7 +184,7 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
 
   const { mutateAsync: resendOTPMutation, isPending: resendLoading } =
     useMutation({
-      mutationFn: resendOTP,
+      mutationFn: requestOTP,
 
       onSuccess: () => {
         Toast.show({
