@@ -92,7 +92,7 @@ const DocumentList = () => {
 
       return filterDocuments({
         filter: {
-          search: activeTab === "All" ? "" : activeTab,
+          search: searchQuery.trim().length > 0 ? searchQuery : (activeTab === "All" ? "" : activeTab),
         },
         sort: {
           sortBy,
@@ -100,7 +100,7 @@ const DocumentList = () => {
         },
       });
     },
-    enabled: isFilterApplied && !!userId,
+    enabled: (isFilterApplied || searchQuery.trim().length > 0) && !!userId,
   });
 
   console.log("filteredDocuments", filteredDocuments?.data[0]);
@@ -134,7 +134,7 @@ const DocumentList = () => {
     enabled: activeTab !== "All" && !isFilterApplied && !!userId,
   });
 
-  const isLoading = isFilterApplied
+  const isLoading = (isFilterApplied || searchQuery.trim().length > 0)
     ? isLoadingFiltered
     : (activeTab === "All" ? isLoadingAll : isLoadingInfinite);
 
@@ -146,66 +146,14 @@ const DocumentList = () => {
       return [];
     };
 
-    let flattened: MedicalDocument[] = [];
-
-    if (isFilterApplied) {
-      flattened = getSafeArray(filteredDocuments?.data || []);
+    if (isFilterApplied || searchQuery.trim().length > 0) {
+      return getSafeArray(filteredDocuments?.data || filteredDocuments);
     } else if (activeTab === "All") {
-      flattened = getSafeArray(allDocsData);
+      return getSafeArray(allDocsData);
     } else {
-      flattened = documentListData?.pages.flatMap((page) => getSafeArray(page)) || [];
+      return documentListData?.pages.flatMap((page) => getSafeArray(page)) || [];
     }
-
-    return flattened
-      .filter((doc: MedicalDocument) => {
-        if (!isFilterApplied && activeTab !== "All") {
-          if (doc.documentType?.toUpperCase() !== activeTab.toUpperCase()) {
-            {
-              return false;
-            }
-          }
-          if (searchQuery.trim().length > 0) {
-            const q = searchQuery.toLowerCase();
-            const matchName = (doc.title || doc.fileName || "")
-              .toLowerCase()
-              .includes(q);
-
-            const matchNotes = doc.notes?.toLowerCase()
-              .includes(q);
-            const matchType = doc.documentType?.toLowerCase()
-              .includes(q);
-            return !!(matchName || matchNotes || matchType);
-          }
-          return true;
-        }
-      })
-      .sort((a: MedicalDocument, b: MedicalDocument) => {
-        const firstName = a.fileName || a.fileName || "";
-        const secondName = b.fileName || b.fileName || "";
-
-        switch (sortOption) {
-          case "name_asc":
-            return firstName.localeCompare(secondName);
-          case "name_desc":
-            return secondName.localeCompare(firstName);
-          case "date_asc":
-            return (
-              new Date(a.createdAt || 0).getTime() -
-              new Date(b.createdAt || 0).getTime()
-            );
-          case "date_desc":
-            return (
-              new Date(b.createdAt || 0).getTime() -
-              new Date(a.createdAt || 0).getTime()
-            );
-          default:
-            return (
-              new Date(b.createdAt || 0).getTime() -
-              new Date(a.createdAt || 0).getTime()
-            );
-        }
-      });
-  }, [allDocsData, documentListData, filteredDocuments, activeTab, sortOption, searchQuery, isFilterApplied]);
+  }, [allDocsData, documentListData, filteredDocuments, activeTab, isFilterApplied, searchQuery]);
 
   const renderItem: ListRenderItem<MedicalDocument> = useCallback(
     ({ item }) => <DocumentCard document={item} />,

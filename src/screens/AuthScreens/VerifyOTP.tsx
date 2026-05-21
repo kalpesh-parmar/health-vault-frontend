@@ -111,11 +111,14 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
       onSuccess: async (result) => {
         const refreshToken = result?.data?.refreshToken;
         const accessToken = result?.data?.accessToken;
+        const userId = result?.data?.patient?.id;
+        console.log(userId);
   
         await SecureStore.setItemAsync("authToken", String(refreshToken));
         await SecureStore.setItemAsync("accessToken", String(accessToken));
+        await SecureStore.setItemAsync("userId", String(userId));
         console.log("Refresh Token :- ", refreshToken);
-  
+        
         await authLogin();
       },
   
@@ -138,17 +141,13 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
            text1: "Hurrahhh!!! 🥳",
            text2: `LoggedIn Successfully.`,
         });
+        loginMutation({ email: email.trim(), password: password!, deviceToken: deviceToken! })
       } else {
         Toast.show({
           type: "success",
           text1: "OTP Verified Successfully.",
           text2: "Now you can reset your password.",
         });
-      }
-
-      if (fromLogin) {
-        loginMutation({ email: email.trim(), password: password!, deviceToken: deviceToken! })
-      } else {
         navigation.navigate("ResetPassword", { email });
       }
     },
