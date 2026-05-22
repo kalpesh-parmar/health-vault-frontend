@@ -54,8 +54,6 @@ const GENDER_OPTIONS = [
   { label: "Other", icon: "male-female-outline" },
 ] as const;
 
-type EditProfileRouteProp = RouteProp<ProfileStackParamList, "EditProfile">;
-
 interface ProfileFormState {
   profilePicture?: {
     uri: string;
@@ -168,9 +166,9 @@ const EditProfile = () => {
     takePicture,
     selectedImages
   } = useDocumentMedia();
-  const navigation =
-    useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
-  
+
+  console.log("selectedImages :- ", selectedImages);
+
   const [isEditing, setIsEditing] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<any>(null);
@@ -288,12 +286,12 @@ const EditProfile = () => {
       return await updateUser(userId, {
         ...(selectedImages
           ? {
-              profilePicture: {
-                uri: selectedImages,
-                name: `profile.${fileType}`,
-                type: `image/${fileType}`,
-              },
-            }
+            profilePicture: {
+              uri: selectedImages,
+              name: `profile.${fileType}`,
+              type: `image/${fileType}`,
+            },
+          }
           : {}),
         userName: form.username,
         firstName: form.firstName,
@@ -341,26 +339,24 @@ const EditProfile = () => {
         <ScrollInner>
           {/* ── Avatar ── */}
           <AvatarSection>
-            <AvatarWrapper>
-              <AvatarRing>
-                <AvatarText>
-                  {form.profilePicture?.uri ? (
-                    <Image
-                      source={{ uri: form.profilePicture.uri }}
-                      style={{ borderRadius: 45, width: 90, height: 90 }}
-                    />
-                  ) : (
-                    (form.firstName?.charAt(0).toUpperCase() || "") +
-                    (form.lastName?.charAt(0).toUpperCase() || "")
-                  )}
-                </AvatarText>
-              </AvatarRing>
-              {isEditing && (
-                <AvatarEditBadge onPress={() => refRBSheet.current?.present()}>
-                  <Ionicons name="camera" size={16} color="#fff" />
-                </AvatarEditBadge>
-              )}
-            </AvatarWrapper>
+            <AvatarRing>
+              <AvatarText>
+                {form?.profilePicture|| selectedImages ? (
+                  <Image
+                    source={{ uri: form?.profilePicture?.uri || selectedImages }}
+                    style={{ borderRadius: 45, width: 90, height: 90 }}
+                  />
+                ) : (
+                  (form.firstName?.charAt(0).toUpperCase() || "") +
+                  (form.lastName?.charAt(0).toUpperCase() || "")
+                )}
+              </AvatarText>
+            </AvatarRing>
+            {isEditing && (
+              <AvatarEditBadge onPress={() => refRBSheet.current?.present()}>
+                <Ionicons name="camera" size={16} color="#fff" />
+              </AvatarEditBadge>
+            )}
             {isEditing && <AvatarHint>Tap the camera to change photo</AvatarHint>}
           </AvatarSection>
 
@@ -538,7 +534,7 @@ const EditProfile = () => {
           onCameraOpen={() => {
             handleOpenCamera(() => refRBSheet.current?.dismiss());
           }}
-          onDocumentPick={() => {}}
+          onDocumentPick={() => { }}
         />
       </BottomSheet>
 
@@ -569,14 +565,10 @@ const AvatarSection = styled.View`
   margin-bottom: 28px;
 `;
 
-const AvatarWrapper = styled.View`
-  position: relative;
-`;
-
 const AvatarRing = styled.View`
-  width: 110px;
-  height: 110px;
-  border-radius: 38px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50px;
   background-color: ${({ theme }: any) => theme.colors.iconBox};
   justify-content: center;
   align-items: center;
@@ -597,8 +589,8 @@ const AvatarText = styled.Text`
 
 const AvatarEditBadge = styled.TouchableOpacity`
   position: absolute;
-  bottom: -4px;
-  right: -4px;
+  bottom: 30px;
+  right: 105px;
   width: 34px;
   height: 34px;
   border-radius: 12px;

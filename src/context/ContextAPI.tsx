@@ -7,14 +7,17 @@ import React, {
 } from "react";
 import * as SecureStore from "expo-secure-store";
 import { queryClient } from "../config/queryClient";
+import { refreshToken as refreshApiToken } from "../services/authService";
 
 interface AuthContextType {
   userId: string | null;
   setUserId: (user: string | null) => void;
-  isLoggedIn: boolean;
-  setIsLoggedIn: (isLoggedIn: boolean) => void;
+  accessToken: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
+  setIsAuthenticated: (isAuthenticated: boolean) => void;
   isLoading: boolean;
-  login: () => Promise<void>;
+  login: (data: { accessToken: string; refreshToken: string; userId: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -22,18 +25,41 @@ const Context = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userId, setUserId] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = await SecureStore.getItemAsync("authToken");
+        const storedRefreshToken = await SecureStore.getItemAsync("authToken");
         const storedUserId = await SecureStore.getItemAsync("userId");
 
-        if (token) {
-          setIsLoggedIn(true);
+        if (storedRefreshToken) {
+          try {
+            // Attempt to refresh the token on app load
+            const refreshResult = await refreshApiToken({ refreshToken: storedRefreshToken });
+            
+            const newAccessToken = refreshResult.data?.accessToken || refreshResult.accessToken;
+            const newRefreshToken = refreshResult.data?.refreshToken || refreshResult.refreshToken;
+
+            if (newAccessToken && newRefreshToken) {
+              await SecureStore.setItemAsync("accessToken", String(newAccessToken));
+              await SecureStore.setItemAsync("authToken", String(newRefreshToken));
+              
+              setAccessToken(newAccessToken);
+              setRefreshToken(newRefreshToken);
+              setIsAuthenticated(true);
+            }
+          } catch (refreshError) {
+            console.error("Token refresh failed on app load:", refreshError);
+            // Optionally, we could clear the tokens here if they are invalid
+            await SecureStore.deleteItemAsync("authToken");
+            await SecureStore.deleteItemAsync("accessToken");
+          }
         }
+
         if (storedUserId) {
           setUserId(storedUserId);
         }
@@ -46,13 +72,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     checkAuth();
   }, []);
 
-  const login = async () => {
+  const login = async (data: { accessToken: string; refreshToken: string; userId: string }) => {
     try {
-      const userId = await SecureStore.getItemAsync("userId");
-      if (userId) {
-        setUserId(userId);
-        setIsLoggedIn(true);
-      }
+      setUserId(data.userId);
+      setAccessToken(data.accessToken);
+      setRefreshToken(data.refreshToken);
+      setIsAuthenticated(true);
+
+      await SecureStore.setItemAsync("userId", String(data.userId));
+      await SecureStore.setItemAsync("accessToken", String(data.accessToken));
+      await SecureStore.setItemAsync("authToken", String(data.refreshToken));
     } catch (error) {
       console.error("Error during login:", error);
     }
@@ -63,8 +92,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await SecureStore.deleteItemAsync("authToken");
       await SecureStore.deleteItemAsync("accessToken");
       await SecureStore.deleteItemAsync("userId");
-      setIsLoggedIn(false);
+      
+      setIsAuthenticated(false);
+      setAccessToken(null);
+      setRefreshToken(null);
       setUserId(null);
+      
       queryClient.clear();
     } catch (error) {
       console.error("Error during logout:", error);
@@ -76,8 +109,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         userId,
         setUserId,
-        isLoggedIn,
-        setIsLoggedIn,
+        accessToken,
+        refreshToken,
+        isAuthenticated,
+        setIsAuthenticated,
         isLoading,
         login,
         logout,

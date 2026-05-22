@@ -7,6 +7,7 @@ export const AUTH_ENDPOINTS = {
   REQUEST_OTP: `${URL}/auth/request-otp`,
   FORGOT_PASSWORD: `${URL}/auth/forgot-password`,
   RESET_PASSWORD: `${URL}/auth/reset-password`,
+  REFRESH_TOKEN: `${URL}/auth/refresh-token`,
 } as const;
 
 export const PATIENT_ENDPOINTS = {

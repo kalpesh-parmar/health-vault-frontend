@@ -11,13 +11,13 @@ import {
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
-import { Ionicons, AntDesign } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Path } from "react-native-svg";
-
-import { login, sendOTP } from "../../services/authService";
 import * as SecureStore from "expo-secure-store";
+
+import { login } from "../../services/authService";
 import { useAuth } from "../../context/ContextAPI";
 import { useAppTheme } from "../../context/ThemeContext";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -37,59 +37,67 @@ const LoginScreen = () => {
   const { isDark } = useAppTheme();
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
+    let isValid = true;
     const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w\w+)+$/;
 
-    if (!email) newErrors.email = "Email is required";
-    else if (!emailReg.test(email)) newErrors.email = "Invalid email";
+    if (!email) {
+      setEmailError("Email is required");
+      isValid = false;
+    } else if (!emailReg.test(email)) {
+      setEmailError("Invalid email");
+      isValid = false;
+    } else {
+      setEmailError(null);
+    }
 
-    if (!password) newErrors.password = "Password required";
-    else if (password.length < 6) newErrors.password = "Min 6 characters";
+    if (!password) {
+      setPasswordError("Password is required");
+      isValid = false;
+    } else {
+      setPasswordError(null);
+    }
 
-    setEmailError(newErrors.email || null);
-    setPasswordError(newErrors.password || null);
-
-    return Object.keys(newErrors).length === 0;
+    return isValid;
   };
 
-  const { mutateAsync: sendLoginOTP, isPending } = useMutation({
-    mutationFn: sendOTP,
-    onSuccess: () => {
-      Toast.show({
-        type: "success",
-        text1: "OTP Sent Successfully.",
-        text2: "Check your email for OTP.",
+  const { mutateAsync: loginMutation, isPending } = useMutation({
+    mutationFn: login,
+    onSuccess: async (result) => {
+      const refreshToken = result?.data?.refreshToken;
+      const accessToken = result?.data?.accessToken;
+      const userId = result?.data?.patient?.id;
+
+      await authLogin({
+        accessToken: String(accessToken),
+        refreshToken: String(refreshToken),
+        userId: String(userId),
       });
 
-      navigation.navigate("VerifyOTP", { email:email.trim(), password: password, fromLogin: true });
+      Toast.show({
+        type: "success",
+        text1: "Welcome Back! 🥳",
+        text2: "Logged in successfully.",
+      });
     },
 
     onError: (error: any) => {
       Toast.show({
         type: "error",
-        text1: "Failed to Send OTP.",
+        text1: "Login Failed.",
         text2: `${error.message}`,
       });
-
-      setEmailError("Invalid Email ID");
     },
   });
 
   const handleLogin = async () => {
     if (!validateForm()) {
-      Toast.show({
-        type: "error",
-        text1: "Invalid input",
-        text2: "Enter Valid Inputs to Login!",
-      });
-
       return;
     }
 
     try {
-      await sendLoginOTP({email: email.trim()});
+      const deviceToken = await SecureStore.getItemAsync("deviceToken");
+      await loginMutation({ email: email.trim(), password, deviceToken });
     } catch (error) {
-    } finally {
     }
   };
 
@@ -154,7 +162,7 @@ const LoginScreen = () => {
               </TopSection>
 
               <BottomCard>
-                <WelcomeText>Welcome Back 👋</WelcomeText>
+                <WelcomeText>Welcome Back </WelcomeText>
 
                 <DescriptionText>Sign in to continue</DescriptionText>
 
@@ -163,14 +171,15 @@ const LoginScreen = () => {
                     <Ionicons name="mail-outline" size={18} color="#9CA3AF" />
 
                     <StyledInput
-                      placeholder="Email or Phone"
+                      placeholder="Email"
                       placeholderTextColor="#9CA3AF"
                       value={email}
                       onChangeText={(text: string) => {
                         setEmail(text);
-                        setEmailError("");
+                        setEmailError(null);
                       }}
                       autoCapitalize="none"
+                      keyboardType="email-address"
                     />
                   </InputWrapper>
 
@@ -179,30 +188,23 @@ const LoginScreen = () => {
 
                 <InputGroup>
                   <InputWrapper>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={18}
-                      color="#9CA3AF"
-                    />
+                    <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" />
 
                     <StyledInput
                       placeholder="Password"
                       placeholderTextColor="#9CA3AF"
                       value={password}
-                      secureTextEntry={!showPassword}
                       onChangeText={(text: string) => {
                         setPassword(text);
-                        setPasswordError("");
+                        setPasswordError(null);
                       }}
+                      secureTextEntry={!showPassword}
                     />
 
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                       <Ionicons
-                        name={showPassword ? "eye-outline" : "eye-off-outline"}
-                        size={20}
+                        name={showPassword ? "eye-off-outline" : "eye-outline"}
+                        size={18}
                         color="#9CA3AF"
                       />
                     </TouchableOpacity>
@@ -282,7 +284,7 @@ const InnerContainer = styled.View`
 
 const TopSection = styled.View`
   align-items: center;
-  padding-top: 85px;
+  padding-top: 140px;
   padding-bottom: 36px;
 `;
 
@@ -326,11 +328,12 @@ const Subtitle = styled.Text`
 
 const BottomCard = styled.View`
   flex: 1;
+  justify-content: center;
   background-color: #ffffff;
   border-top-left-radius: 42px;
   border-top-right-radius: 42px;
   padding-horizontal: 24px;
-  padding-top: 34px;
+  padding-vertical: 24px;
 `;
 
 const WelcomeText = styled.Text`
@@ -430,18 +433,11 @@ const SocialButton = styled.TouchableOpacity`
   background-color: #ffffff;
 `;
 
-const SocialText = styled.Text`
-  margin-left: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-`;
-
 const Footer = styled.View`
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  margin-top: 34px;
+  margin-top: 14px;
 `;
 
 const FooterText = styled.Text`

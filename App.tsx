@@ -55,8 +55,8 @@ export default function App() {
         await SecureStore.setItemAsync("deviceToken", String(deviceToken));
 
         if (Platform.OS === "android") {
-          await Notifications.setNotificationChannelAsync("default", {
-            name: "default",
+          await Notifications.setNotificationChannelAsync("HealthVault", {
+            name: "HealthVault",
             importance: Notifications.AndroidImportance.MAX,
           });
         }
