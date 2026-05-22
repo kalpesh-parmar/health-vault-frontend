@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "msjsdiag.vscode-react-native",
+    "esbenp.prettier-vscode",
+    "dsznajder.es7-react-js-snippets",
+    "burkeholland.simple-react-snippets",
+    "equimper.react-native-react-redux",
+    "bradlc.vscode-tailwindcss",
+    "pkief.material-icon-theme",
+    "teabyii.ayu",
+    "ritwickdey.liveserver",
+    "feiskyer.chatgpt-copilot",
+    "github.copilot-chat"
+  ]
+}
