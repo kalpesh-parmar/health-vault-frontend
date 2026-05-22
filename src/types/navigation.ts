@@ -7,9 +7,9 @@ import type { AddOrEditMedication, MedicalDocument } from "./index";
 
 export type AuthStackParamList = {
   Login: undefined;
-  Signup: undefined;
+  Signup: {email: string, verified: boolean};
   ForgotPassword: undefined;
-  VerifyOTP: { email: string, fromLogin: boolean };
+  VerifyOTP: { email: string, fromSignup?: boolean };
   ResetPassword: { email: string };
   Home: NavigatorScreenParams<AppStackParamList>; 
 };

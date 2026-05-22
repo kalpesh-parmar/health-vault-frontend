@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   TouchableOpacity,
   ActivityIndicator,
+  Keyboard,
 } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
@@ -40,7 +41,7 @@ const SignupForm = () => {
   const [mobileNum, setMobileNum] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [gender, setGender] = useState<string | null>(null);
+  const [gender, setGender] = useState<string>("");
   const [age, setAge] = useState("");
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showPasswordInfo, setShowPasswordInfo] = useState(false);
@@ -128,12 +129,12 @@ const SignupForm = () => {
   const handleSignup = async () => {
     if (isSubmitting.current) return;
     if (!validate()) {
-      Toast.show({ type: "error", text1: "Please fix the errors below" });
+      Toast.show({ type: "error", text1: "Please Fix The Errors Shown Below." });
       return;
     }
     isSubmitting.current = true;
     const payload = {
-      profileImage,
+      // profileImageKey: profileImage,
       userName,
       firstName: firstname,
       lastName: lastname,
@@ -144,7 +145,7 @@ const SignupForm = () => {
       phone: mobileNum,
     };
     try {
-      await registerMutation(payload as any);
+      await registerMutation(payload);
     } finally {
       isSubmitting.current = false;
     }
@@ -224,9 +225,11 @@ const SignupForm = () => {
                 placeholder="Last Name"
                 placeholderTextColor="#C4B5FD"
                 onBlur={() => {
+                  const cleanFirst = firstname.toLowerCase().trim();
+                  const cleanLast = lastname.toLowerCase().trim();
                   setUserName(
-                    `${firstname}${lastname}`.toLowerCase() +
-                      Math.floor(100 + Math.random() * 900),
+                    `${cleanFirst}_${cleanLast}_` +
+                    Math.floor(100 + Math.random() * 900),
                   );
                 }}
               />
@@ -255,6 +258,8 @@ const SignupForm = () => {
               placeholderTextColor="#C4B5FD"
               autoCapitalize="none"
               keyboardType="email-address"
+            // editable={false}
+            // style={{ color: "#6B7280" }} // Dim color for read-only
             />
           </FieldBox>
           {errors.email ? <ErrLabel>{errors.email}</ErrLabel> : null}
@@ -269,6 +274,7 @@ const SignupForm = () => {
               withDarkTheme={false}
               placeholder="Phone Number"
               withShadow={false}
+
               onChangeText={(text) => {
                 setMobileNum(text);
                 setErrors((p) => ({ ...p, mobileNum: "" }));
@@ -309,7 +315,10 @@ const SignupForm = () => {
           <HalfField>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => genderSheetRef?.current?.present()}
+              onPress={() => {
+                Keyboard.dismiss();
+                genderSheetRef?.current?.present();
+              }}
             >
               <FieldBox hasError={!!errors.gender}>
                 <Ionicons
@@ -445,6 +454,7 @@ const SignupForm = () => {
             <AgreeLinkText>Terms & Conditions</AgreeLinkText>
           </AgreeLink>
         </AgreeRow>
+        {errors.agreeTerms ? <ErrLabel>{errors.agreeTerms}</ErrLabel> : null}
 
         {/* ── Submit button ── */}
         <SubmitBtn

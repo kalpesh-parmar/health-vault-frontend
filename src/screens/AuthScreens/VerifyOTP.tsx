@@ -7,18 +7,27 @@ import {
   Platform,
 } from "react-native";
 import styled from "styled-components/native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { AuthStackParamList } from "../../navigation/types";
+import { AuthStackParamList } from "../../types/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { login, requestOTP, verifyOTP } from "../../services/authService";
+import { requestOTP, verifyOTP } from "../../services/authService";
 import Toast from "react-native-toast-message";
 import { useAppTheme } from "../../context/ThemeContext";
 import * as SecureStore from "expo-secure-store";
-import { useAuth } from "../../context/ContextAPI";
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+} from "react-native-reanimated";
+import {
+  SignupStickyBar,
+  SignupCollapsibleHeader,
+  STICKY_BAR_HEIGHT,
+} from "../../components/Signup/SignupHeader";
+import SignupForm from "../../components/Signup/SignupForm";
 
+const AnimatedScrollView = Animated.ScrollView;
 const OTP_LENGTH = 6;
 
 type VerifyOTPRouteProp = RouteProp<AuthStackParamList, "VerifyOTP">;
@@ -28,14 +37,23 @@ type VerifyOTPProps = {
 };
 
 const VerifyOTP = ({ route }: VerifyOTPProps) => {
-  const { email, fromLogin } = route?.params;
+  const { email, fromSignup } = route?.params;
 
   const [deviceToken, setDeviceToken] = useState('');
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [otpError, setOtpError] = useState("");
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-  const {login: authLogin} = useAuth();
+  const [isVerified, setIsVerified] = useState(false);
+
+  const scrollY = useSharedValue(0);
+  const scrollRef = useRef<any>(null);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+    },
+  });
 
   const inputRefs = useRef<Array<TextInput | null>>(
     Array(OTP_LENGTH).fill(null),
@@ -105,44 +123,18 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
     }
   };
 
-  const { mutateAsync: loginMutation } = useMutation({
-      mutationFn: login,
-  
-      onSuccess: async (result) => {
-        const refreshToken = result?.data?.refreshToken;
-        const accessToken = result?.data?.accessToken;
-        const userId = result?.data?.patient?.id;
-  
-        console.log("Refresh Token :- ", refreshToken);
-        
-        await authLogin({
-          accessToken: String(accessToken),
-          refreshToken: String(refreshToken),
-          userId: String(userId),
-        });
-
-        Toast.show({
-          type: "success",
-           text1: "Hurrahhh!!! 🥳",
-           text2: `LoggedIn Successfully.`,
-        });
-      },
-  
-      onError: (error: any) => {
-        Toast.show({
-          type: "error",
-          text1: "Login Failed.",
-          text2: `${error.message}`,
-        });
-      },
-    });
-
   const { mutateAsync: verifyOTPMutation, isPending: isLoading } = useMutation({
     mutationFn: verifyOTP,
 
     onSuccess: () => {
-      if (fromLogin) {
-        loginMutation({ email: email.trim(), deviceToken: deviceToken! })
+      if (fromSignup) {
+        Toast.show({
+          type: "success",
+          text1: "OTP Verified Successfully.",
+          text2: "You can now complete your signup.",
+        });
+        setIsVerified(true);
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
       } else {
         Toast.show({
           type: "success",
@@ -224,134 +216,125 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
 
   return (
     <>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style="light" />
 
       <Container>
-        <TopGradient
-          colors={
-            isDark
-              ? ["#312e81", "#7c3aed", "#ec4899"]
-              : ["#7c3aed", "#ec4899", "#6366f1"]
-          }
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <PatternCircleOne />
-          <PatternCircleTwo />
-          <PatternDots />
-
-          <TopHeader>
-            <BackButton onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={22} color="#ffffff" />
-            </BackButton>
-          </TopHeader>
-
-          <IconWrapper>
-            <IconCircle>
-              <MaterialCommunityIcons
-                name="shield-check-outline"
-                size={38}
-                color="#ffffff"
-              />
-            </IconCircle>
-
-            <HeaderTitle>Verify OTP</HeaderTitle>
-
-            <HeaderSubtitle>
-              Enter the verification code sent to your email
-            </HeaderSubtitle>
-          </IconWrapper>
-        </TopGradient>
-
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <CardContainer>
-            <Card>
-              <InfoText>
-                We’ve sent a secure 6-digit verification code to
-              </InfoText>
+          <SignupStickyBar 
+            scrollY={scrollY} 
+            heading={isVerified ? "Create Account" : "Verify OTP"} 
+          />
 
-              {email && <EmailText>{email}</EmailText>}
+          <AnimatedScrollView
+            ref={scrollRef}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+            scrollIndicatorInsets={{ top: STICKY_BAR_HEIGHT }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <SignupCollapsibleHeader 
+              scrollY={scrollY} 
+              heading={isVerified ? "Create Account" : "Verify OTP"}
+              subHeading={isVerified ? "Join us — it only takes a minute" : "Enter the code sent to your email"}
+            />
 
-              <OTPContainer>
-                {otp.map((digit, index) => (
-                  <OTPInput
-                    key={index}
-                    ref={(ref: TextInput | null) =>
-                      (inputRefs.current[index] = ref)
-                    }
-                    value={digit}
-                    onChangeText={(val: string) => handleChange(val, index)}
-                    onKeyPress={({ nativeEvent }: any) =>
-                      handleKeyPress(nativeEvent.key, index)
-                    }
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    isFilled={!!digit}
-                    hasError={!!otpError}
-                    selectionColor={theme.colors.primary}
-                  />
-                ))}
-              </OTPContainer>
+            
+              {/* <SignupForm initialEmail={email} /> */}
+              {isVerified ? 
+              (
+                <SignupForm  />
+              ) : (<CardContainer>
+                <Card>
+                  <InfoText>
+                    We’ve sent a secure 6-digit verification code to
+                  </InfoText>
 
-              {!!otpError && <ErrorText>{otpError}</ErrorText>}
+                  {email && <EmailText>{email}</EmailText>}
 
-              <ResendWrapper>
-                <ResendInfoText>Didn’t receive the code?</ResendInfoText>
-
-                {canResend ? (
-                  <ResendButton onPress={handleResend} disabled={resendLoading}>
-                    {resendLoading ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={theme.colors.primary}
+                  <OTPContainer>
+                    {otp.map((digit, index) => (
+                      <OTPInput
+                        key={index}
+                        ref={(ref: TextInput | null) =>
+                          (inputRefs.current[index] = ref)
+                        }
+                        value={digit}
+                        onChangeText={(val: string) => handleChange(val, index)}
+                        onKeyPress={({ nativeEvent }: any) =>
+                          handleKeyPress(nativeEvent.key, index)
+                        }
+                        keyboardType="number-pad"
+                        maxLength={1}
+                        isFilled={!!digit}
+                        hasError={!!otpError}
+                        selectionColor="#8b5cf6"
                       />
+                    ))}
+                  </OTPContainer>
+
+                  {!!otpError && <ErrorText>{otpError}</ErrorText>}
+
+                  <ResendWrapper>
+                    <ResendInfoText>Didn’t receive the code?</ResendInfoText>
+
+                    {canResend ? (
+                      <ResendButton onPress={handleResend} disabled={resendLoading}>
+                        {resendLoading ? (
+                          <ActivityIndicator
+                            size="small"
+                            color="#8b5cf6"
+                          />
+                        ) : (
+                          <ResendButtonText>Resend OTP</ResendButtonText>
+                        )}
+                      </ResendButton>
                     ) : (
-                      <ResendButtonText>Resend OTP</ResendButtonText>
+                      <TimerText>Resend in {timer}s</TimerText>
                     )}
-                  </ResendButton>
-                ) : (
-                  <TimerText>Resend in {timer}s</TimerText>
-                )}
-              </ResendWrapper>
+                  </ResendWrapper>
 
-              <VerifyButton
-                activeOpacity={0.9}
-                onPress={handleVerify}
-                disabled={isLoading || resendLoading}
-              >
-                <LinearGradient
-                  colors={["#ec4899", "#8b5cf6", "#6366f1"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{
-                    width: "100%",
-                    paddingVertical: 16,
-                    borderRadius: 18,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexDirection: "row",
-                    gap: 10,
-                  }}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color="#ffffff" />
-                  ) : (
-                    <VerifyButtonText>Verify OTP</VerifyButtonText>
-                  )}
-                </LinearGradient>
-              </VerifyButton>
+                  <VerifyButton
+                    activeOpacity={0.9}
+                    onPress={handleVerify}
+                    disabled={isLoading || resendLoading}
+                  >
+                    <LinearGradient
+                      colors={["#ec4899", "#8b5cf6", "#6366f1"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        width: "100%",
+                        paddingVertical: 16,
+                        borderRadius: 18,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row",
+                        gap: 10,
+                      }}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#ffffff" />
+                      ) : (
+                        <VerifyButtonText>Verify OTP</VerifyButtonText>
+                      )}
+                    </LinearGradient>
+                  </VerifyButton>
 
-              <ChangeEmailButton
-                activeOpacity={0.8}
-                onPress={() => navigation.goBack()}
-              >
-                <ChangeEmailText>Change Email Address</ChangeEmailText>
-              </ChangeEmailButton>
-            </Card>
-          </CardContainer>
+                  <ChangeEmailButton
+                    activeOpacity={0.8}
+                    onPress={() => navigation.goBack()}
+                  >
+                    <ChangeEmailText>Change Email Address</ChangeEmailText>
+                  </ChangeEmailButton>
+                </Card>
+              </CardContainer>
+              )}
+          </AnimatedScrollView>
         </KeyboardAvoidingView>
       </Container>
     </>
@@ -362,95 +345,10 @@ export default VerifyOTP;
 
 const Container = styled.SafeAreaView`
   flex: 1;
-  background-color: ${({ theme }: any) => theme.colors.background};
+  background-color: #F4F1FE;
 `;
 
-const TopGradient = styled(LinearGradient)`
-  height: 330px;
-  border-bottom-left-radius: 34px;
-  border-bottom-right-radius: 34px;
-  overflow: hidden;
-`;
 
-const PatternCircleOne = styled.View`
-  position: absolute;
-  width: 220px;
-  height: 220px;
-  border-radius: 110px;
-  background-color: rgba(255, 255, 255, 0.08);
-  top: -40px;
-  right: -60px;
-`;
-
-const PatternCircleTwo = styled.View`
-  position: absolute;
-  width: 160px;
-  height: 160px;
-  border-radius: 80px;
-  background-color: rgba(255, 255, 255, 0.07);
-  bottom: -50px;
-  left: -40px;
-`;
-
-const PatternDots = styled.View`
-  position: absolute;
-  width: 90px;
-  height: 90px;
-  top: 70px;
-  left: 24px;
-  opacity: 0.2;
-  border-width: 2px;
-  border-style: dotted;
-  border-color: #ffffff;
-  border-radius: 20px;
-`;
-
-const TopHeader = styled.View`
-  padding: 60px 24px 0px;
-`;
-
-const BackButton = styled.TouchableOpacity`
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background-color: rgba(255, 255, 255, 0.18);
-  justify-content: center;
-  align-items: center;
-`;
-
-const IconWrapper = styled.View`
-  align-items: center;
-  justify-content: center;
-  margin-top: 24px;
-  padding-horizontal: 24px;
-`;
-
-const IconCircle = styled.View`
-  width: 92px;
-  height: 92px;
-  border-radius: 30px;
-  background-color: rgba(255, 255, 255, 0.16);
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 20px;
-  border-width: 1px;
-  border-color: rgba(255, 255, 255, 0.2);
-`;
-
-const HeaderTitle = styled.Text`
-  font-size: 32px;
-  font-weight: 800;
-  color: #ffffff;
-  margin-bottom: 10px;
-`;
-
-const HeaderSubtitle = styled.Text`
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.85);
-  text-align: center;
-  line-height: 22px;
-  padding-horizontal: 16px;
-`;
 
 const CardContainer = styled.View`
   flex: 1;

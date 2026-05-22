@@ -31,15 +31,12 @@ export interface MedicalDocument {
 
 export interface LoginRequest {
   email: string;
+  password?: string;
   deviceToken: string | null;
 }
 
 export interface SignupRequest {
-  profilePicture?: {
-    uri: string;
-    name: string;
-    type: string;
-  };
+  // profileImageKey?: string;
   firstName: string;
   lastName: string;
   userName: string;

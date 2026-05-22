@@ -15,8 +15,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Path } from "react-native-svg";
+import * as SecureStore from "expo-secure-store";
 
-import { requestOTP } from "../../services/authService";
+import { login } from "../../services/authService";
 import { useAuth } from "../../context/ContextAPI";
 import { useAppTheme } from "../../context/ThemeContext";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -24,7 +25,10 @@ import { AuthStackParamList } from "../../types/navigation";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
@@ -33,55 +37,67 @@ const LoginScreen = () => {
   const { isDark } = useAppTheme();
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
+    let isValid = true;
     const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w\w+)+$/;
 
-    if (!email) newErrors.email = "Email is required";
-    else if (!emailReg.test(email)) newErrors.email = "Invalid email";
+    if (!email) {
+      setEmailError("Email is required");
+      isValid = false;
+    } else if (!emailReg.test(email)) {
+      setEmailError("Invalid email");
+      isValid = false;
+    } else {
+      setEmailError(null);
+    }
 
-    setEmailError(newErrors.email || null);
+    if (!password) {
+      setPasswordError("Password is required");
+      isValid = false;
+    } else {
+      setPasswordError(null);
+    }
 
-    return Object.keys(newErrors).length === 0;
+    return isValid;
   };
 
-  const { mutateAsync: sendLoginOTP, isPending } = useMutation({
-    mutationFn: requestOTP,
-    onSuccess: () => {
-      Toast.show({
-        type: "success",
-        text1: "OTP Sent Successfully.",
-        text2: "Check your email for OTP.",
+  const { mutateAsync: loginMutation, isPending } = useMutation({
+    mutationFn: login,
+    onSuccess: async (result) => {
+      const refreshToken = result?.data?.refreshToken;
+      const accessToken = result?.data?.accessToken;
+      const userId = result?.data?.patient?.id;
+
+      await authLogin({
+        accessToken: String(accessToken),
+        refreshToken: String(refreshToken),
+        userId: String(userId),
       });
 
-      navigation.navigate("VerifyOTP", { email:email.trim(), fromLogin: true });
+      Toast.show({
+        type: "success",
+        text1: "Welcome Back! 🥳",
+        text2: "Logged in successfully.",
+      });
     },
 
     onError: (error: any) => {
       Toast.show({
         type: "error",
-        text1: "Failed to Send OTP.",
+        text1: "Login Failed.",
         text2: `${error.message}`,
       });
-
-      setEmailError(`${error.message}`);
     },
   });
 
   const handleLogin = async () => {
     if (!validateForm()) {
-      Toast.show({
-        type: "error",
-        text1: "Please Enter Valid Email ID.",
-        text2: "Email ID is required!",
-      });
-
       return;
     }
 
     try {
-      await sendLoginOTP({email: email?.trim()});
+      const deviceToken = await SecureStore.getItemAsync("deviceToken");
+      await loginMutation({ email: email.trim(), password, deviceToken });
     } catch (error) {
-    } finally {
     }
   };
 
@@ -155,18 +171,46 @@ const LoginScreen = () => {
                     <Ionicons name="mail-outline" size={18} color="#9CA3AF" />
 
                     <StyledInput
-                      placeholder="Email or Phone"
+                      placeholder="Email"
                       placeholderTextColor="#9CA3AF"
                       value={email}
                       onChangeText={(text: string) => {
                         setEmail(text);
-                        setEmailError("");
+                        setEmailError(null);
                       }}
                       autoCapitalize="none"
+                      keyboardType="email-address"
                     />
                   </InputWrapper>
 
                   {emailError && <ErrorText>{emailError}</ErrorText>}
+                </InputGroup>
+
+                <InputGroup>
+                  <InputWrapper>
+                    <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" />
+
+                    <StyledInput
+                      placeholder="Password"
+                      placeholderTextColor="#9CA3AF"
+                      value={password}
+                      onChangeText={(text: string) => {
+                        setPassword(text);
+                        setPasswordError(null);
+                      }}
+                      secureTextEntry={!showPassword}
+                    />
+
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                      <Ionicons
+                        name={showPassword ? "eye-off-outline" : "eye-outline"}
+                        size={18}
+                        color="#9CA3AF"
+                      />
+                    </TouchableOpacity>
+                  </InputWrapper>
+
+                  {passwordError && <ErrorText>{passwordError}</ErrorText>}
                 </InputGroup>
 
                 <ForgotBtn
@@ -389,18 +433,11 @@ const SocialButton = styled.TouchableOpacity`
   background-color: #ffffff;
 `;
 
-const SocialText = styled.Text`
-  margin-left: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-`;
-
 const Footer = styled.View`
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  margin-top: 34px;
+  margin-top: 14px;
 `;
 
 const FooterText = styled.Text`

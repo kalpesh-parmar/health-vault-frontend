@@ -24,10 +24,12 @@ export const STICKY_BAR_HEIGHT = 106;
 
 interface SignupHeaderProps {
   scrollY: SharedValue<number>;
+  heading: string;
+  subHeading?: string;
 }
 
 // ─── Sticky Bar Component (Rendered outside ScrollView) ───────────────────────
-export const SignupStickyBar: React.FC<SignupHeaderProps> = ({ scrollY }) => {
+export const SignupStickyBar: React.FC<SignupHeaderProps> = ({ scrollY, heading }) => {
   const navigation = useNavigation();
 
   const stickyBarAnimStyle = useAnimatedStyle(() => ({
@@ -76,7 +78,7 @@ export const SignupStickyBar: React.FC<SignupHeaderProps> = ({ scrollY }) => {
         end={{ x: 1, y: 1 }}
       >
         <Animated.Text style={[stickyTitleText, stickyTitleAnimStyle]}>
-          Create Account
+          {heading}
         </Animated.Text>
         <BackButton
           activeOpacity={0.75}
@@ -90,7 +92,7 @@ export const SignupStickyBar: React.FC<SignupHeaderProps> = ({ scrollY }) => {
 };
 
 // ─── Collapsible Header Component (Rendered inside ScrollView) ─────────────────
-export const SignupCollapsibleHeader: React.FC<SignupHeaderProps> = ({ scrollY }) => {
+export const SignupCollapsibleHeader: React.FC<SignupHeaderProps> = ({ scrollY, heading, subHeading }) => {
   const headerAnimatedStyle = useAnimatedStyle(() => ({
     height: interpolate(
       scrollY.value,
@@ -177,8 +179,8 @@ export const SignupCollapsibleHeader: React.FC<SignupHeaderProps> = ({ scrollY }
         {/* Large title — fades out on scroll up */}
         <HeaderTitleArea>
           <Animated.View style={largeTitleAnimStyle}>
-            <HeroTitle>Create Account</HeroTitle>
-            <HeroSubtitle>Join us — it only takes a minute</HeroSubtitle>
+            <HeroTitle>{heading}</HeroTitle>
+            {subHeading ? <HeroSubtitle>{subHeading}</HeroSubtitle> : null}
           </Animated.View>
         </HeaderTitleArea>
       </GradientBg>

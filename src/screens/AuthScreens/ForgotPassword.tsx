@@ -68,7 +68,7 @@ const ForgotPasswordScreen = () => {
           text2: "Check your email for OTP.",
         });
 
-        navigation.navigate("VerifyOTP", { email, fromLogin: false });
+        navigation.navigate("VerifyOTP", { email, fromSignup: false });
       },
 
       onError: (error: any) => {
