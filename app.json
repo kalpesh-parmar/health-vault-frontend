@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "Health Vault",
+    "slug": "health-vault",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/AppIcon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "owner": "dharmik-bapodara",
+    "splash": {
+      "image": "./assets/Splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b062fe9d-eb5f-437f-adf2-d5d6f4038b83"
+      }
+    },
+    "android": {
+      "package": "com.anonymous.DocumentsVaultApp",
+      "googleServicesFile": "./android/app/google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/AppIcon.png",
+        "backgroundColor": "#000000"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true
+    },
+    "web": {
+      "favicon": ""
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "googleServicesFile": "./android/app/google-services.json"
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow HealthVault to access your camera to scan medical documents."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow HealthVault to access your photos so you can upload medical records from your gallery."
+        }
+      ],
+      "expo-secure-store",
+      "expo-font",
+      "@react-native-community/datetimepicker",
+      "expo-mail-composer",
+      "expo-notifications"
+    ]
+  }
+}

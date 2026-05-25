@@ -1,0 +1,147 @@
+import React from "react";
+import styled from "styled-components/native";
+import { GestureResponderEvent } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useAppTheme } from "../../context/ThemeContext";
+
+interface HomeCardProps {
+  title: string;
+  subtitle: string;
+  onPress?: (event: GestureResponderEvent) => void;
+  accentColor?: string;
+  isOther?: boolean;
+}
+
+const getDefaultIcon = (title: string) => {
+  const t = title.toLowerCase();
+
+  if (t.includes("family")) return "people-outline";
+  if (t.includes("medical")) return "document-text-outline";
+  if (t.includes("insurance")) return "shield-checkmark-outline";
+  if (t.includes("medication")) return "medkit-outline";
+
+  return "folder-outline";
+};
+
+const HomeCard = ({
+  title,
+  subtitle,
+  onPress,
+  accentColor = "#2563eb",
+  isOther,
+}: HomeCardProps) => {
+  const icon = getDefaultIcon(title);
+  const { theme } = useAppTheme();
+
+  return (
+    <CardTouchable activeOpacity={0.9} onPress={onPress}>
+      <BorderRing accentColor={accentColor}>
+        <CardContainer isOther={isOther}>
+          <ShimmerLine accentColor={accentColor} />
+
+          <IconWrapper accentColor={accentColor} isOther={isOther}>
+            <Ionicons name={icon} size={20} color={accentColor} />
+          </IconWrapper>
+
+          <TextGroup isOther={isOther}>
+            <Title numberOfLines={1}>{title}</Title>
+            <Subtitle numberOfLines={2}>{subtitle}</Subtitle>
+          </TextGroup>
+          <AccentDot accentColor={accentColor} />
+        </CardContainer>
+      </BorderRing>
+    </CardTouchable>
+  );
+};
+
+export default HomeCard;
+
+const CardTouchable = styled.TouchableOpacity`
+  flex-grow: 1;
+  width: 48%;
+  margin-bottom: 10px;
+`;
+
+const BorderRing = styled.View<{ accentColor: string }>`
+  border-radius: 24px;
+  padding: 1.5px;
+  background-color: ${({ accentColor }: any) => accentColor}20;
+`;
+
+const CardContainer = styled.View<{ isOther?: boolean }>`
+  width: 100%;
+  height: ${({ isOther }: any) => (isOther ? "70px" : "140px")};
+  border-radius: 22px;
+  background-color: ${({ theme }: any) => theme.colors.surface};
+  flex-direction: ${({ isOther }: any) => (isOther ? "row" : "column")};
+  justify-content: ${({ isOther }: any) =>
+    isOther ? "flex-start" : "flex-end"};
+  align-items: ${({ isOther }: any) => (isOther ? "center" : "flex-start")};
+  padding: ${({ isOther }: any) =>
+    isOther ? "0px 16px" : "14px 16px 16px 16px"};
+  shadow-color: ${({ theme }: any) => theme.colors.primary};
+  shadow-opacity: 0.1;
+  shadow-radius: 14px;
+  elevation: 5;
+  overflow: hidden;
+`;
+
+const ShimmerLine = styled.View<{ accentColor: string }>`
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background-color: ${({ accentColor }: any) => accentColor}30;
+  border-radius: 1px;
+`;
+
+const IconWrapper = styled.View<{ accentColor: string; isOther?: boolean }>`
+  ${({ isOther }: any) =>
+    !isOther &&
+    `
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  `}
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background-color: ${({ accentColor }: any) => accentColor}14;
+  justify-content: center;
+  align-items: center;
+  ${({ isOther }: any) =>
+    isOther &&
+    `
+  margin-right: 12px;
+  `}
+`;
+
+const TextGroup = styled.View<{ isOther?: boolean }>`
+  margin-top: ${({ isOther }: any) => (isOther ? "0px" : "6px")};
+  flex: ${({ isOther }: any) => (isOther ? "1" : "none")};
+`;
+
+const Title = styled.Text<{ isOther?: boolean }>`
+  font-size: 15px;
+  font-weight: 800;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+`;
+
+const Subtitle = styled.Text`
+  font-size: 11.5px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  margin-top: 4px;
+  line-height: 15px;
+`;
+
+const AccentDot = styled.View<{ accentColor: string }>`
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: ${({ accentColor }: any) => accentColor};
+  opacity: 0.8;
+`;
