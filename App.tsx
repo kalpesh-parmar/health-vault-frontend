@@ -11,8 +11,8 @@ import * as Device from "expo-device";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { AppThemeProvider } from "./src/context/ThemeContext";
-import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
+import messaging from "@react-native-firebase/messaging";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -32,6 +32,12 @@ export default function App() {
           return;
         }
 
+        // FCM Token Generation for Push Notifications using Firebase Cloud Messaging.
+        const fcmToken = await messaging().getToken();
+        console.log("FCM Token:", fcmToken);
+        
+        await SecureStore.setItemAsync("deviceToken", String(fcmToken));
+
         const { status: existingStatus } =
           await Notifications.getPermissionsAsync();
 
@@ -47,13 +53,6 @@ export default function App() {
           return;
         }
 
-        const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: Constants.expoConfig?.extra?.eas.projectId,
-        });
-        const deviceToken = tokenData.data;
-        console.log(deviceToken);
-        await SecureStore.setItemAsync("deviceToken", String(deviceToken));
-
         if (Platform.OS === "android") {
           await Notifications.setNotificationChannelAsync("HealthVault", {
             name: "HealthVault",
@@ -67,12 +66,15 @@ export default function App() {
 
     registerForPushNotifications();
 
-    const subscription = Notifications.addPushTokenListener((token) => {
-      SecureStore.setItemAsync("deviceToken", String(token.data));
+    // --- FCM Token Refresh Listener ---
+    const unsubscribeFCM = messaging().onTokenRefresh((newToken: string) => {
+      console.log("FCM Token Refreshed:", newToken);
+      SecureStore.setItemAsync("deviceToken", String(newToken));
     });
 
     return () => {
-      subscription.remove();
+      // subscription.remove();
+      unsubscribeFCM();
     };
   }, []);
 

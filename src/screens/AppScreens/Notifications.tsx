@@ -1,10 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { View, FlatList } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, FlatList, ActivityIndicator } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { listNotifications, markAllAsRead, markAsRead } from "../../services/notificationService";
+import { useAuth } from "../../context/ContextAPI";
+import FilterTabs from "../../components/shared/FilterTabs";
+import { useAppTheme } from "../../context/ThemeContext";
 
 type NotificationType = "alert" | "info" | "success" | "promo" | "reminder";
 
@@ -12,53 +16,89 @@ interface Notification {
   id: string;
   type: NotificationType;
   title: string;
-  message: string;
+  body: string;
   time: string;
   isRead: boolean;
   avatar?: string;
 }
 
-const FILTERS = ["All"];
+const FILTERS = ["All", "Unread"];
 
 export default function NotificationScreen() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { userId } = useAuth();
+  const { isDark } = useAppTheme();
+  const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = useState("All");
 
-  const { mutateAsync: getNotificationsList } = useMutation({
-    mutationFn: listNotifications,
-    onSuccess: (data) => {
-      setNotifications(data.data);
+  const {
+    data,
+    isLoading: isPending,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ["notifications", userId, activeFilter],
+    queryFn: () => {
+      const filterParams: any = { userId };
+      if (activeFilter === "Unread") {
+        filterParams.isRead = false;
+      }
+      return listNotifications({
+        filter: filterParams,
+        sort: {
+          sortBy: "createdAt",
+          orderBy: "desc",
+        },
+      });
     },
-    onError: (error) => {
-      // Error handling can be added here
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage?.data?.length === 10 ? allPages.length + 1 : undefined;
     },
+    initialPageParam: 0,
+    enabled: !!userId,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (userId) {
+        refetch();
+      }
+    }, [userId, refetch])
+  );
+
+  const notifications = data?.pages.flatMap((page) => page.data || []) || [];
 
   const { mutateAsync: markNotificationAsRead } = useMutation({
     mutationFn: markAsRead,
     onSuccess: () => {
-      getNotificationsList();
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
     },
     onError: (error) => {
       // Error handling can be added here
     },
   });
 
-  const {mutateAsync: markAllRead} = useMutation({
+  const { mutateAsync: markAllRead } = useMutation({
     mutationFn: markAllAsRead,
     onSuccess: () => {
-      getNotificationsList();
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
     },
     onError: (error) => {
       // Error handling can be added here
     },
   });
 
-  useEffect(() => {
-    getNotificationsList();
-  }, []);
+  const loadMore = () => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  };
 
   const renderCard = ({ item }: { item: Notification }) => {
+    console.log("Notification Id :- ", item.id);
     return (
       <View>
         <CardWrapper
@@ -86,7 +126,7 @@ export default function NotificationScreen() {
             </View>
 
             <CardMessage numberOfLines={2}>
-              {item.message}
+              {item.body}
             </CardMessage>
 
             <CardMeta>
@@ -110,17 +150,14 @@ export default function NotificationScreen() {
         }}
       />
 
-      <FilterRow>
-        {FILTERS.map((f) => (
-          <FilterChip
-            key={f}
-            active={activeFilter === f}
-            onPress={() => setActiveFilter(f)}
-          >
-            <FilterChipText active={activeFilter === f}>{f}</FilterChipText>
-          </FilterChip>
-        ))}
-      </FilterRow>
+      <View style={{ paddingVertical: 10 }}>
+        <FilterTabs
+          data={FILTERS}
+          activeTab={activeFilter}
+          onSelectTab={setActiveFilter}
+          isDark={isDark}
+        />
+      </View>
 
       {notifications.length === 0 ? (
         <EmptyWrapper>
@@ -144,6 +181,15 @@ export default function NotificationScreen() {
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 30 }}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={{ padding: 20 }}>
+                <ActivityIndicator size="small" color="#000" />
+              </View>
+            ) : null
+          }
         />
       )}
     </Container>
@@ -179,29 +225,7 @@ const MarkAllText = styled.Text`
   font-family: "Montserrat_700Bold";
 `;
 
-const FilterRow = styled.View`
-  flex-direction: row;
-  padding: 16px 20px 8px;
-  gap: 10px;
-`;
 
-const FilterChip = styled.TouchableOpacity<{ active: boolean }>`
-  padding: 7px 18px;
-  border-radius: 20px;
-  background-color: ${({ active, theme }: any) =>
-    active ? theme.colors.primary : theme.colors.surface};
-  elevation: ${({ active }: any) => (active ? 4 : 1)};
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-opacity: ${({ active }: any) => (active ? 0.25 : 0)};
-`;
-
-const FilterChipText = styled.Text<{ active: boolean }>`
-  font-size: 13px;
-  font-weight: 700;
-  font-family: "Montserrat_700Bold";
-  color: ${({ active, theme }: any) =>
-    active ? "#fff" : theme.colors.textMuted};
-`;
 
 const CardWrapper = styled.TouchableOpacity<{ isRead: boolean }>`
   flex-direction: row;

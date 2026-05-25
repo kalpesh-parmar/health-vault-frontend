@@ -162,9 +162,10 @@ export interface FilterMedicationsRequest {
 export interface ListNotificationRequest {
   filter: {
     userId: string;
-    isRead: boolean;
+    isRead?: boolean;
+    search?: string;
   },
-  page: {
+  page?: {
     pageNumber: number;
     pageLimit: number;
   },

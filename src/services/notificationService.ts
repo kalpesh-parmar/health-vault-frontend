@@ -1,9 +1,10 @@
 import apiClient from "./apiClient";
 import { NOTIFICATION_ENDPOINTS } from "../constants/endpoints";
 import { getUser } from "./userService";
+import { ListNotificationRequest } from "../types";
 
-export const listNotifications = async () => {
-  const response = await apiClient.post(NOTIFICATION_ENDPOINTS.LIST_NOTIFICATION, {});
+export const listNotifications = async (payload: ListNotificationRequest) => {
+  const response = await apiClient.post(NOTIFICATION_ENDPOINTS.LIST_NOTIFICATION, payload);
   return response.data;
 };
 
@@ -33,7 +34,11 @@ export const markAsRead = async ({
 };
 
 export const markAllAsRead = async () => {
+  const user = await getUser();
+  const userId = user?.data?.id;
   const endpoint = NOTIFICATION_ENDPOINTS.MARK_ALL_READ;
-  const response = await apiClient.put(endpoint);
+  const response = await apiClient.put(endpoint, {
+    userId,
+  });
   return response.data;
 };
