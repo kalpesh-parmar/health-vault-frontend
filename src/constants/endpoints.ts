@@ -1,4 +1,4 @@
-const URL = process.env.EXPO_PUBLIC_API_URL;
+const URL = process.env.EXPO_PUBLIC_LIVE_API_URL;
 
 export const AUTH_ENDPOINTS = {
   LOGIN: `${URL}/auth/login`,
@@ -29,7 +29,7 @@ export const DOCUMENT_ENDPOINTS = {
 } as const;
 
 export const NOTIFICATION_ENDPOINTS = {
-  LIST_NOTIFICATION: `${URL}/notifications/list-paginated`,
+  LIST_NOTIFICATION: `${URL}/notifications/list`, // Normal Listing.
   GET_NOTIFICATION_COUNT: `${URL}/notifications/badge-count`,
   MARK_AS_READ: `${URL}/notifications/mark-read/{id}`,
   MARK_ALL_READ: `${URL}/notifications/mark-all-read`

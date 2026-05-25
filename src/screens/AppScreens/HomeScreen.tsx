@@ -96,6 +96,7 @@ const HomeScreen = () => {
     queryKey: ["notificationCount"],
     queryFn: getNotificationCount,
   });
+  console.log(data?.id);
 
   const notificationBadgeCount = notificationData?.data?.count ?? 0;
 
@@ -234,9 +235,6 @@ const HomeScreen = () => {
         {/* --- SECTION: QUICK ACTIONS --- */}
         <SectionHeader style={{ marginTop: 15 }}>
           <SectionTitle>Quick Actions</SectionTitle>
-          <ViewAllButton onPress={() => {}}>
-            <ViewAllText>View All</ViewAllText>
-          </ViewAllButton>
         </SectionHeader>
 
         <ActionsRow>

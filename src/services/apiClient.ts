@@ -2,7 +2,7 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 
 const apiClient = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL,
+  baseURL: process.env.EXPO_PUBLIC_LIVE_API_URL,
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
@@ -15,6 +15,14 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    console.log("\n========== API REQUEST ==========");
+    console.log("ENDPOINT :", `${config.url}`);
+    console.log("METHOD   :", config.method?.toUpperCase());
+    console.log("TOKEN    :", token);
+    console.log("BODY     :", config.data);
+    console.log("=================================\n");
+
     return config;
   },
   (error) => Promise.reject(error),
@@ -36,4 +44,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-
