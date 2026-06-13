@@ -252,12 +252,12 @@ export default function AnimatedSplashScreen({
       <AnimatedView style={[StyleSheet.absoluteFill, raysStyle]} pointerEvents="none">
         <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
           <Defs>
-            <LinearGradient id="rayGrad" x1="1" y1="0" x2="0" y2="1">
+            <SvgGradient id="rayGrad" x1="1" y1="0" x2="0" y2="1">
               <Stop offset="0%" stopColor="#00f2fe" stopOpacity="0.35" />
               <Stop offset="30%" stopColor="#00f2fe" stopOpacity="0.12" />
               <Stop offset="70%" stopColor="#09415c" stopOpacity="0.02" />
               <Stop offset="100%" stopColor="#030a16" stopOpacity="0" />
-            </LinearGradient>
+            </SvgGradient>
           </Defs>
           {/* Main Ray Polygon */}
           <Path d={`M${width},0 L${width - 60},0 L-100,${height - 180} L-100,${height} L0,${height} L${width},250 Z`} fill="url(#rayGrad)" />
@@ -274,10 +274,10 @@ export default function AnimatedSplashScreen({
         <AnimatedView style={[styles.networkContainer, networkStyle]} pointerEvents="none">
           <Svg width={360} height={360} viewBox="0 0 360 360">
             <Defs>
-              <LinearGradient id="netGrad" x1="0" y1="0" x2="1" y2="1">
+              <SvgGradient id="netGrad" x1="0" y1="0" x2="1" y2="1">
                 <Stop offset="0%" stopColor="#00f2fe" stopOpacity="0.25" />
                 <Stop offset="100%" stopColor="#00f2fe" stopOpacity="0.03" />
-              </LinearGradient>
+              </SvgGradient>
             </Defs>
             {/* Network connection lines */}
             <Path
@@ -319,24 +319,24 @@ export default function AnimatedSplashScreen({
           <Svg width={250} height={250} viewBox="0 0 250 250">
             <Defs>
               {/* Metallic Gradient */}
-              <LinearGradient id="metalGrad" x1="0" y1="0" x2="1" y2="1">
+              <SvgGradient id="metalGrad" x1="0" y1="0" x2="1" y2="1">
                 <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
                 <Stop offset="30%" stopColor="#d1d8e0" stopOpacity="0.95" />
                 <Stop offset="70%" stopColor="#778ca3" stopOpacity="0.95" />
                 <Stop offset="100%" stopColor="#4b6584" stopOpacity="0.9" />
-              </LinearGradient>
+              </SvgGradient>
 
               {/* Glassmorphism gradient for safe body */}
-              <LinearGradient id="glassBodyGrad" x1="0.1" y1="0.1" x2="0.9" y2="0.9">
+              <SvgGradient id="glassBodyGrad" x1="0.1" y1="0.1" x2="0.9" y2="0.9">
                 <Stop offset="0%" stopColor="rgba(255, 255, 255, 0.12)" />
                 <Stop offset="100%" stopColor="rgba(0, 242, 254, 0.04)" />
-              </LinearGradient>
+              </SvgGradient>
 
               {/* Cyan Neon Edges */}
-              <LinearGradient id="cyanNeon" x1="0" y1="0" x2="1" y2="0">
+              <SvgGradient id="cyanNeon" x1="0" y1="0" x2="1" y2="0">
                 <Stop offset="0%" stopColor="#00f2fe" stopOpacity="0.8" />
                 <Stop offset="100%" stopColor="#4facfe" stopOpacity="0.8" />
-              </LinearGradient>
+              </SvgGradient>
 
               {/* Lock dial metallic gradient */}
               <RadialGradient id="lockDialGrad" cx="50%" cy="50%" rx="50%" ry="50%">
@@ -502,11 +502,11 @@ export default function AnimatedSplashScreen({
         <AnimatedView style={[styles.energyRingWrapper, energyRingStyle]} pointerEvents="none">
           <Svg width={310} height={310} viewBox="0 0 310 310">
             <Defs>
-              <LinearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+              <SvgGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
                 <Stop offset="0%" stopColor="#00f2fe" stopOpacity="0.8" />
                 <Stop offset="50%" stopColor="#00f2fe" stopOpacity="0.2" />
                 <Stop offset="100%" stopColor="transparent" stopOpacity="0" />
-              </LinearGradient>
+              </SvgGradient>
             </Defs>
             {/* Glowing orbital path ellipse */}
             <Circle
