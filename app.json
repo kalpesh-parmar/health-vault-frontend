@@ -23,27 +23,17 @@
     },
     "android": {
       "package": "com.anonymous.DocumentsVaultApp",
-      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/AppIcon.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": true
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": ""
     },
     "plugins": [
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "googleServicesFile": "./android/app/google-services.json"
-          }
-        }
-      ],
       [
         "expo-camera",
         {
@@ -60,7 +50,19 @@
       "expo-font",
       "@react-native-community/datetimepicker",
       "expo-mail-composer",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "minSdkVersion": 24,
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ]
   }
 }
