@@ -357,7 +357,7 @@ export default function AnimatedSplashScreen({
               fill="url(#glassBodyGrad)"
               stroke="url(#cyanNeon)"
               strokeWidth="2.5"
-              style={{ shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10 }}
+              {...({ style: { shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10 } } as any)}
             />
 
             {/* B. Silver Metallic Frame Bezel (Brushed frame) */}
@@ -387,13 +387,13 @@ export default function AnimatedSplashScreen({
                 fill="rgba(0, 242, 254, 0.12)"
                 stroke="#00f2fe"
                 strokeWidth="2.2"
-                style={{ shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 12 }}
+                {...({ style: { shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 12 } } as any)}
               />
               {/* Bright Medical Cross inside */}
               <Path
                 d="M60,25 L70,25 L70,35 L80,35 L80,45 L70,45 L70,55 L60,55 L60,45 L50,45 L50,35 L60,35 Z"
                 fill="#00f2fe"
-                style={{ shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 8 }}
+                {...({ style: { shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 8 } } as any)}
               />
               {/* Inner glowing core ring */}
               <Circle cx="65" cy="40" r="22" fill="none" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="1" strokeDasharray="4 2" />
@@ -517,10 +517,10 @@ export default function AnimatedSplashScreen({
               stroke="url(#ringGrad)"
               strokeWidth="2.5"
               strokeDasharray="400 150"
-              style={{ shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10 }}
+              {...({ style: { shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10 } } as any)}
             />
             {/* Bright trailing head dot */}
-            <Circle cx="290" cy="155" r="4.5" fill="#00f2fe" style={{ shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1.0, shadowRadius: 6 }} />
+            <Circle cx="290" cy="155" r="4.5" fill="#00f2fe" {...({ style: { shadowColor: "#00f2fe", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1.0, shadowRadius: 6 } } as any)} />
           </Svg>
         </AnimatedView>
 

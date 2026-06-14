@@ -24,9 +24,47 @@ const SENSITIVE_KEYS = new Set([
   "secret",
 ]);
 
+function shouldMask(): boolean {
+  const isDev = (typeof __DEV__ !== "undefined" && __DEV__) || process.env.NODE_ENV === "development";
+  return !isDev;
+}
+
 function maskSensitiveData(data: any): any {
   if (!data) return data;
 
+  // If in local development, clone structure but do not mask values
+  if (!shouldMask()) {
+    if (typeof data === "string") {
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed && typeof parsed === "object") {
+          return JSON.stringify(maskSensitiveData(parsed));
+        }
+      } catch {
+        // not JSON
+      }
+      return data;
+    }
+
+    if (Array.isArray(data)) {
+      return data.map(maskSensitiveData);
+    }
+
+    if (typeof data === "object") {
+      if (data.constructor && data.constructor.name === "FormData") {
+        return data;
+      }
+      const clone: any = {};
+      for (const key of Object.keys(data)) {
+        clone[key] = maskSensitiveData(data[key]);
+      }
+      return clone;
+    }
+
+    return data;
+  }
+
+  // Production masking flow
   if (typeof data === "string") {
     if (data.toLowerCase().startsWith("bearer ")) {
       return "Bearer ***";
@@ -47,11 +85,19 @@ function maskSensitiveData(data: any): any {
   }
 
   if (typeof data === "object") {
+    if (data.constructor && data.constructor.name === "FormData") {
+      return data;
+    }
     const masked: any = {};
     for (const key of Object.keys(data)) {
       const lowerKey = key.toLowerCase();
       if (SENSITIVE_KEYS.has(lowerKey)) {
-        masked[key] = "***";
+        const val = data[key];
+        if (typeof val === "string" && val.toLowerCase().startsWith("bearer ")) {
+          masked[key] = "Bearer ***";
+        } else {
+          masked[key] = "***";
+        }
       } else {
         masked[key] = maskSensitiveData(data[key]);
       }
