@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/Splash.png",
       "resizeMode": "cover",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#030a16"
     },
     "ios": {
       "supportsTablet": true
@@ -24,14 +24,14 @@
     "android": {
       "package": "com.anonymous.DocumentsVaultApp",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/AppIcon.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/AppIconForeground.png",
+        "backgroundColor": "#030a16"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": ""
+      "favicon": "./assets/AppIconForeground.png"
     },
     "plugins": [
       [

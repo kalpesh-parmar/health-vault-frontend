@@ -3,6 +3,7 @@ import { Animated, Easing, Dimensions, Platform, Modal } from "react-native";
 import styled from "styled-components/native";
 import { BlurView } from "expo-blur";
 import { useAppTheme } from "../../context/ThemeContext";
+import HealthVaultLogo from "./HealthVaultLogo";
 
 const { width, height } = Dimensions.get("screen");
 
@@ -229,14 +230,9 @@ const ModernLoader = ({ visible, title, subtitle }: Props) => {
               color={t.accentRing}
               style={{ transform: [{ scale: ringScale }] }}
             />
-            <LogoCircle
-              bg={t.iconBg}
-              border={t.iconBorder}
-              style={{ transform: [{ scale: logoScale }] }}
-            >
-              <CrossV color={t.crossColor} />
-              <CrossH color={t.crossColor} />
-            </LogoCircle>
+            <Animated.View style={{ transform: [{ scale: logoScale }], width: 80, height: 80, justifyContent: "center", alignItems: "center" }}>
+              <HealthVaultLogo size={80} />
+            </Animated.View>
           </LogoArea>
 
           <TextBlock>

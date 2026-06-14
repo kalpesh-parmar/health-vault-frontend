@@ -22,6 +22,7 @@ import { useAuth } from "../../context/ContextAPI";
 import { useAppTheme } from "../../context/ThemeContext";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AuthStackParamList } from "../../types/navigation";
+import HealthVaultLogo from "../../components/shared/HealthVaultLogo";
 
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
@@ -147,13 +148,7 @@ const LoginScreen = () => {
             <InnerContainer>
               <TopSection>
                 <LogoContainer>
-                  <LogoCircle>
-                    <Ionicons name="heart" size={34} color="#EC4899" />
-
-                    <PlusBadge>
-                      <Ionicons name="add" size={14} color="#FFFFFF" />
-                    </PlusBadge>
-                  </LogoCircle>
+                  <HealthVaultLogo size={80} />
                 </LogoContainer>
 
                 <Title>HealthCare</Title>

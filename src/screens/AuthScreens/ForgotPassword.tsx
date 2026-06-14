@@ -18,6 +18,7 @@ import { useMutation } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import ModernLoader from "../../components/shared/Loader";
 import { useAppTheme } from "../../context/ThemeContext";
+import HealthVaultLogo from "../../components/shared/HealthVaultLogo";
 
 const ForgotPasswordScreen = () => {
   const [email, setEmail] = useState<string>("");
@@ -135,13 +136,7 @@ const ForgotPasswordScreen = () => {
           >
               <TopSection>
                 <LogoContainer>
-                  <LogoCircle>
-                    <MaterialCommunityIcons
-                      name="shield-lock-outline"
-                      size={42}
-                      color="#ff4f9a"
-                    />
-                  </LogoCircle>
+                  <HealthVaultLogo size={80} />
                 </LogoContainer>
 
                 <AppTitle>HealthVault</AppTitle>

@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useNavigation, DrawerActions } from "@react-navigation/native";
 import ScreenHeader from "../../components/shared/Header";
 import { useAppTheme } from "../../context/ThemeContext";
+import HealthVaultLogo from "../../components/shared/HealthVaultLogo";
 
 const AboutScreen = () => {
   const navigation = useNavigation();
@@ -19,11 +20,7 @@ const AboutScreen = () => {
       <StyledScrollView showsVerticalScrollIndicator={false}>
         <BrandSection>
           <LogoContainer>
-            <MaterialCommunityIcons
-              name="shield-check"
-              size={50}
-              color="white"
-            />
+            <HealthVaultLogo size={90} />
           </LogoContainer>
           <VersionBadge>Version 2.0.4</VersionBadge>
           <MissionText>
@@ -137,16 +134,10 @@ const BrandSection = styled.View`
 `;
 
 const LogoContainer = styled.View`
-  width: 70px;
-  height: 70px;
-  border-radius: 15px;
-  background-color: ${({ theme }: any) => theme.colors.primary};
+  width: 90px;
+  height: 90px;
   justify-content: center;
   align-items: center;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-opacity: 0.5;
-  shadow-radius: 20px;
-  elevation: 10;
 `;
 
 const VersionBadge = styled.Text`
