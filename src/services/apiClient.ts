@@ -1,9 +1,10 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
+import { BASE_URL, API_TIMEOUT, ENABLE_API_LOGS } from "../config/api";
 
 const apiClient = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL,
-  timeout: 30000,
+  baseURL: BASE_URL,
+  timeout: API_TIMEOUT,
   headers: {
     "Content-Type": "application/json",
   },
@@ -35,7 +36,7 @@ function maskSensitiveData(data: any): any {
       if (parsed && typeof parsed === "object") {
         return JSON.stringify(maskSensitiveData(parsed));
       }
-    } catch (e) {
+    } catch {
       // not JSON
     }
     return data;
@@ -77,9 +78,25 @@ function truncatePayload(payload: any, maxLength = 1000): any {
       return str.slice(0, maxLength) + `... [TRUNCATED - Total length: ${str.length}]`;
     }
     return payload;
-  } catch (e) {
+  } catch {
     return "[Unserializable Payload]";
   }
+}
+
+/**
+ * Resolves a full URL safely without double prepending the base URL or introducing duplicate slashes.
+ */
+function resolveFullUrl(baseURL?: string, url?: string): string {
+  const actualUrl = url || "";
+  if (actualUrl.startsWith("http://") || actualUrl.startsWith("https://")) {
+    return actualUrl;
+  }
+  const base = baseURL || "";
+  const separator = base.endsWith("/") || actualUrl.startsWith("/") ? "" : "/";
+  if (base.endsWith("/") && actualUrl.startsWith("/")) {
+    return `${base}${actualUrl.slice(1)}`;
+  }
+  return `${base}${separator}${actualUrl}`;
 }
 
 apiClient.interceptors.request.use(
@@ -90,11 +107,11 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    const enabled = process.env.EXPO_PUBLIC_ENABLE_API_LOGS === "true";
+    const enabled = ENABLE_API_LOGS;
     if (enabled) {
       (config as any).metadata = { startTime: Date.now() };
 
-      const fullUrl = config.baseURL ? `${config.baseURL}${config.url}` : config.url;
+      const fullUrl = resolveFullUrl(config.baseURL, config.url);
 
       const reqLog: any = {
         type: "OUTGOING_REQUEST",
@@ -119,7 +136,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
-    const enabled = process.env.EXPO_PUBLIC_ENABLE_API_LOGS === "true";
+    const enabled = ENABLE_API_LOGS;
     if (enabled) {
       const errLog = {
         type: "OUTGOING_REQUEST_ERROR",
@@ -134,11 +151,11 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => {
-    const enabled = process.env.EXPO_PUBLIC_ENABLE_API_LOGS === "true";
+    const enabled = ENABLE_API_LOGS;
     const config = response.config as any;
     if (enabled && config && config.metadata) {
       const duration = Date.now() - config.metadata.startTime;
-      const fullUrl = config.baseURL ? `${config.baseURL}${config.url}` : config.url;
+      const fullUrl = resolveFullUrl(config.baseURL, config.url);
 
       const resLog = {
         type: "OUTGOING_RESPONSE",
@@ -156,7 +173,7 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    const enabled = process.env.EXPO_PUBLIC_ENABLE_API_LOGS === "true";
+    const enabled = ENABLE_API_LOGS;
     const config = error.config as any;
     const data = error.response?.data;
     const message =
@@ -168,7 +185,7 @@ apiClient.interceptors.response.use(
 
     if (enabled && config && config.metadata) {
       const duration = Date.now() - config.metadata.startTime;
-      const fullUrl = config.baseURL ? `${config.baseURL}${config.url}` : config.url;
+      const fullUrl = resolveFullUrl(config.baseURL, config.url);
 
       const errorLog = {
         type: "OUTGOING_RESPONSE_ERROR",
@@ -188,6 +205,4 @@ apiClient.interceptors.response.use(
   }
 );
 
-
 export default apiClient;
-
