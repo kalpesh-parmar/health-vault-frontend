@@ -7,6 +7,7 @@ import {
   Platform,
 } from "react-native";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -343,7 +344,7 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
 
 export default VerifyOTP;
 
-const Container = styled.SafeAreaView`
+const Container = styled(SafeAreaView)`
   flex: 1;
   background-color: #F4F1FE;
 `;

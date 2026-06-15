@@ -24,6 +24,8 @@ export const DOCUMENT_ENDPOINTS = {
   DELETE_DOCUMENT: "/documents/{id}",
   UPDATE_DOCUMENT: "/documents/{id}",
   FILTER_AND_SORT: "/documents/list", // Filter and sort API.
+  RUN_OCR: "/documents/run-ocr",
+  RUN_OCR_STATUS: "/documents/run-ocr-status/{fileKey}",
 } as const;
 
 export const NOTIFICATION_ENDPOINTS = {
@@ -48,4 +50,14 @@ export const REMINDER_ENDPOINTS = {
   LIST_REMINDERS_PAGINATED: "/reminders/list-paginated",
   UPDATE_REMINDER: "/reminders/{id}",
   DELETE_REMINDER: "/reminders/{id}",
+} as const;
+
+export const FILE_ENDPOINTS = {
+  UPLOAD: "/file/upload",
+  GET_URL: "/file/getUrl",
+  DELETE: "/file/hard-delete",
+} as const;
+
+export const CHAT_ENDPOINTS = {
+  SEND_MESSAGE: "/chat/message",
 } as const;

@@ -1,12 +1,9 @@
 import React, { useState } from "react";
-import { LayoutAnimation, Platform, UIManager } from "react-native";
+import { LayoutAnimation, Platform } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Reminder } from "../../types";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface ReminderCardProps {
   item: Reminder;
@@ -109,7 +106,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
         <StatusRow>
           <Ionicons name={statusIcon as any} size={15} color={statusColor} />
           <StatusLabel style={{ color: statusColor }}>
-            {item.status.toUpperCase()}
+            {item.status?.toUpperCase() || ""}
           </StatusLabel>
         </StatusRow>
 

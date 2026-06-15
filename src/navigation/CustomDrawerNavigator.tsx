@@ -1,6 +1,7 @@
 import React from "react";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useWindowDimensions } from "react-native";
 import TabNavigator from "../navigation/TabNavigator";
 import AboutScreen from "../screens/AppScreens/AboutScreen";
 import CustomDrawerContent from "./CustomDrawerContent";
@@ -14,11 +15,8 @@ import { useAppTheme } from "../context/ThemeContext";
 const Drawer = createDrawerNavigator();
 
 const CustomDrawerNavigator = () => {
-  const { theme, isDark } = useAppTheme();
-
-  // Color profiles mirroring the reference mock visual aesthetic
-  const activeBgColor = isDark ? "#1e293b" : "#f1f5f9";
-  const itemTextColor = isDark ? "#cbd5e1" : "#334155";
+  const { theme } = useAppTheme();
+  const dimensions = useWindowDimensions();
 
   return (
     <Drawer.Navigator
@@ -26,23 +24,20 @@ const CustomDrawerNavigator = () => {
       screenOptions={{
         headerShown: false,
         drawerStyle: {
-          backgroundColor: isDark ? "#0f172a" : "#ffffff",
-          width: 290,
+          backgroundColor: theme.colors.background,
+          width: dimensions.width * 0.82,
         },
-        // Container block styling for every menu line row item
         drawerItemStyle: {
-          marginHorizontal: 12,
+          marginHorizontal: 16,
           paddingVertical: 4,
-          borderRadius: 8,
-          width: "90%",
+          borderRadius: 14,
         },
-        drawerActiveBackgroundColor: activeBgColor,
-        drawerActiveTintColor: theme.colors.accent || "#4f46e5",
-        drawerInactiveTintColor: itemTextColor,
+        drawerActiveBackgroundColor: theme.colors.primary + "15",
+        drawerActiveTintColor: theme.colors.primary,
+        drawerInactiveTintColor: theme.colors.textSecondary,
         drawerLabelStyle: {
-          fontSize: 15,
+          fontSize: 16,
           fontWeight: "600",
-          marginLeft: 5, // Pulls text closer to icons matching reference mockup close spacing
         },
       }}
     >

@@ -223,8 +223,10 @@ apiClient.interceptors.response.use(
     const config = error.config as any;
     const data = error.response?.data;
     const message =
+      data?.error?.message ||
       data?.status?.description?.message ||
       data?.status?.description ||
+      data?.reason ||
       data?.message ||
       error.message ||
       "An unexpected error occurred";

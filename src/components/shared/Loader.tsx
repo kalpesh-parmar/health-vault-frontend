@@ -11,6 +11,9 @@ interface Props {
   visible: boolean;
   title?: string;
   subtitle?: string;
+  currentStage?: string;
+  percentage?: number;
+  message?: string;
 }
 
 interface Stage {
@@ -59,44 +62,81 @@ const tokens = {
   },
 };
 
-const ModernLoader = ({ visible, title, subtitle }: Props) => {
+const getBoxesCount = (stage: string) => {
+  switch (stage) {
+    case "UPLOADING_FILE":
+      return 0;
+    case "VALIDATING":
+      return 1;
+    case "EXTRACTING":
+      return 2;
+    case "ANALYZING":
+      return 3;
+    case "SUMMARIZING":
+      return 4;
+    case "COMPLETED":
+      return 5;
+    default:
+      return 0;
+  }
+};
+
+const getStageTitle = (stage: string) => {
+  switch (stage) {
+    case "UPLOADING_FILE":
+      return "Uploading File";
+    case "VALIDATING":
+      return "Medical Document Validation";
+    case "EXTRACTING":
+      return "Extracting Text";
+    case "ANALYZING":
+      return "Analyzing Report";
+    case "SUMMARIZING":
+      return "Generating Summary";
+    case "COMPLETED":
+      return "Ready";
+    default:
+      return "Processing Document";
+  }
+};
+
+const getStageDescription = (stage: string, message?: string) => {
+  if (message) return message;
+  switch (stage) {
+    case "UPLOADING_FILE":
+      return "Uploading report to secure storage.";
+    case "VALIDATING":
+      return "Checking whether the document is medical.";
+    case "EXTRACTING":
+      return "Reading report contents.";
+    case "ANALYZING":
+      return "Finding tests and medical values.";
+    case "SUMMARIZING":
+      return "Preparing easy explanation.";
+    case "COMPLETED":
+      return "You can now ask questions.";
+    default:
+      return "Please wait...";
+  }
+};
+
+const ModernLoader = ({ visible, title, subtitle, currentStage, percentage, message }: Props) => {
   const { isDark } = useAppTheme();
   const t = isDark ? tokens.dark : tokens.light;
 
-  const [stageIndex, setStageIndex] = useState(0);
-
-  // ✅ Dynamic stages
-  const stages: Stage[] = [
-    {
-      title: title || "Processing",
-      subtitle: subtitle || "Please wait...",
-    },
-    {
-      title: "Almost Done",
-      subtitle: "Thank you for your patience.",
-    },
-  ];
+  const stage = currentStage || "UPLOADING_FILE";
+  const displayTitle = currentStage ? getStageTitle(stage) : (title || "Processing");
+  const displayDescription = currentStage ? getStageDescription(stage, message) : (subtitle || "Please wait...");
+  const filledCount = getBoxesCount(stage);
 
   const masterFade = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(0.94)).current;
   const cardFade = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(1)).current;
   const ringScale = useRef(new Animated.Value(1)).current;
-  const pulse1 = useRef(new Animated.Value(1)).current;
-  const pulse2 = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const titleFade = useRef(new Animated.Value(1)).current;
-  const titleY = useRef(new Animated.Value(0)).current;
-  const subFade = useRef(new Animated.Value(1)).current;
-  const orbAnim = useRef(new Animated.Value(0)).current;
-
-  const stageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (visible) {
-      setStageIndex(0);
-      progressAnim.setValue(0);
-
       Animated.parallel([
         Animated.timing(masterFade, {
           toValue: 1,
@@ -114,7 +154,6 @@ const ModernLoader = ({ visible, title, subtitle }: Props) => {
         }),
       ]).start();
 
-      // loops
       Animated.loop(
         Animated.sequence([
           Animated.timing(logoScale, {
@@ -144,72 +183,8 @@ const ModernLoader = ({ visible, title, subtitle }: Props) => {
           }),
         ]),
       ).start();
-
-      Animated.timing(progressAnim, {
-        toValue: 0.6,
-        duration: 2800,
-        useNativeDriver: false,
-      }).start();
-
-      // ✅ Stage switch after 3 sec
-      stageTimer.current = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(titleFade, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(titleY, {
-            toValue: -10,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(subFade, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          setStageIndex(1);
-          titleY.setValue(10);
-
-          Animated.parallel([
-            Animated.timing(titleFade, {
-              toValue: 1,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(titleY, {
-              toValue: 0,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(subFade, {
-              toValue: 1,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-          ]).start();
-
-          Animated.timing(progressAnim, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: false,
-          }).start();
-        });
-      }, 3000);
-    } else {
-      if (stageTimer.current) clearTimeout(stageTimer.current);
-      setStageIndex(0);
     }
   }, [visible]);
-
-  const currentStage = stages[stageIndex];
-
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0%", "100%"],
-  });
 
   return (
     <Modal transparent visible={visible}>
@@ -236,26 +211,21 @@ const ModernLoader = ({ visible, title, subtitle }: Props) => {
           </LogoArea>
 
           <TextBlock>
-            <TitleText
-              style={{
-                opacity: titleFade,
-                transform: [{ translateY: titleY }],
-              }}
-              color={t.title}
-            >
-              {currentStage.title}
+            <TitleText color={t.title}>
+              {displayTitle}
             </TitleText>
-            <SubtitleText style={{ opacity: subFade }} color={t.subtitle}>
-              {currentStage.subtitle}
+            
+            <BoxesRow>
+              {[1, 2, 3, 4, 5].map((idx) => {
+                const filled = idx <= filledCount;
+                return <BoxKey key={idx} filled={filled} />;
+              })}
+            </BoxesRow>
+
+            <SubtitleText color={t.subtitle}>
+              {displayDescription}
             </SubtitleText>
           </TextBlock>
-
-          <ProgressTrack bg={t.progressBg}>
-            <ProgressFill
-              fill={t.progressFill}
-              style={{ width: progressWidth }}
-            />
-          </ProgressTrack>
 
           <BrandLabel color={t.brand}>HealthVault</BrandLabel>
         </ContentWrapper>
@@ -369,3 +339,22 @@ const BrandLabel = styled.Text<{ color: string }>`
   letter-spacing: 2px;
   color: ${({ color }: {color: string}) => color};
 `;
+
+const BoxesRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-top: 15px;
+  margin-bottom: 25px;
+`;
+
+const BoxKey = styled.View<{ filled: boolean }>`
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background-color: ${({ filled }: { filled: boolean }) => (filled ? "#22c55e" : "#e2e8f0")};
+  border-width: 1.5px;
+  border-color: ${({ filled }: { filled: boolean }) => (filled ? "#22c55e" : "#cbd5e1")};
+  margin-horizontal: 4px;
+`;
+

@@ -98,7 +98,13 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
   const selected = CATEGORIES.find((c) => c.value === category);
 
-   const { handleSave: saveDocument, isSaving } = useSaveDocument(() => {
+   const {
+     handleSave: saveDocument,
+     isSaving,
+     progressStage,
+     progressPercentage,
+     progressMessage,
+   } = useSaveDocument(() => {
 
     navigation.navigate("UploadSuccess", {
       documentName: docName,
@@ -138,8 +144,9 @@ const SaveDocumentScreen = ({ route }: Props) => {
       {isSaving && (
         <ModernLoader
           visible={isSaving}
-          title="Saving Document..."
-          subtitle="Please wait while we save your document."
+          currentStage={progressStage}
+          percentage={progressPercentage}
+          message={progressMessage}
         />
       )}
       <Screen>

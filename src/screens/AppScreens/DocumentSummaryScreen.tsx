@@ -11,6 +11,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAppTheme } from "../../context/ThemeContext";
 import { getSignedUrl } from "../../services/documentService";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
+import { getFileExtension } from "../../utils/fileUtils";
+import ErrorBoundary from "../../components/shared/ErrorBoundary";
 import {
   Gesture,
   GestureDetector,
@@ -135,7 +137,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
               <IconBox>
                 <MaterialCommunityIcons name="file" size={40} color="#ff4d4d" />
                 <FormatLabel>
-                  {document?.fileName.split(".")[1].toUpperCase()}
+                  {getFileExtension(document?.fileName)}
                 </FormatLabel>
               </IconBox>
               <TitleCol>
@@ -145,7 +147,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                     ? (document?.fileSize / (1024 * 1024)).toFixed(1) + " MB"
                     : (document?.fileSize / 1024).toFixed(1) + " KB"}
                   •{" "}
-                  {document?.fileName.split(".")[1].toUpperCase()}
+                  {getFileExtension(document?.fileName)}
                 </DocSubInfo>
               </TitleCol>
             </DocHeaderRow>
@@ -257,7 +259,19 @@ const SummaryScreen = ({ route, navigation }: any) => {
   );
 };
 
-export default SummaryScreen;
+const SummaryScreenWithErrorBoundary = (props: any) => (
+  <ErrorBoundary
+    componentName="DocumentSummary"
+    receivedProps={props}
+    navigationParams={props.route?.params}
+    fallbackTitle="Unable to load report summary"
+    fallbackSubtitle="There was an error displaying the report details."
+  >
+    <SummaryScreen {...props} />
+  </ErrorBoundary>
+);
+
+export default SummaryScreenWithErrorBoundary;
 
 /** STYLED COMPONENTS **/
 

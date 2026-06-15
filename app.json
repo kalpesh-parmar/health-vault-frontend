@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "com.anonymous.DocumentsVaultApp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/AppIconForeground.png",
         "backgroundColor": "#030a16"

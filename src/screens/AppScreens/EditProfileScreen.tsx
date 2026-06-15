@@ -16,6 +16,7 @@ import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import CameraModal from "../../components/shared/CameraModal";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const getIconColors = (isDark: boolean) => ({
   username: {
@@ -153,6 +154,7 @@ const EditableField = ({
 
 const EditProfile = () => {
   const { theme, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const iconColors = getIconColors(isDark);
   const refRBSheet = useRef<BottomSheetModal>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -333,24 +335,26 @@ const EditProfile = () => {
 
       <ScrollContent
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: keyboardHeight + 24 }}
+        contentContainerStyle={{
+          paddingBottom: keyboardHeight > 0 ? keyboardHeight + 24 : 110 + insets.bottom,
+        }}
         ref={scrollViewRef}
       >
         <ScrollInner>
           {/* ── Avatar ── */}
           <AvatarSection>
             <AvatarRing>
-              <AvatarText>
-                {form?.profilePicture|| selectedImages ? (
-                  <Image
-                    source={{ uri: form?.profilePicture?.uri || selectedImages }}
-                    style={{ borderRadius: 45, width: 90, height: 90 }}
-                  />
-                ) : (
-                  (form.firstName?.charAt(0).toUpperCase() || "") +
-                  (form.lastName?.charAt(0).toUpperCase() || "")
-                )}
-              </AvatarText>
+              {(form?.profilePicture?.uri && !form.profilePicture.uri.includes("placeholder")) || selectedImages ? (
+                <Image
+                  source={{ uri: form?.profilePicture?.uri || selectedImages }}
+                  style={{ borderRadius: 45, width: 90, height: 90 }}
+                />
+              ) : (
+                <AvatarText allowFontScaling={true}>
+                  {((form.firstName?.charAt(0).toUpperCase() || "") +
+                    (form.lastName?.charAt(0).toUpperCase() || "")) || "?"}
+                </AvatarText>
+              )}
             </AvatarRing>
             {isEditing && (
               <AvatarEditBadge onPress={() => refRBSheet.current?.present()}>

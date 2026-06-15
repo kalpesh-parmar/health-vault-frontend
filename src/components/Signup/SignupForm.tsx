@@ -18,6 +18,7 @@ import * as SecureStore from "expo-secure-store";
 // Components & Hooks
 import PasswordInfoModal from "../PasswordInfo";
 import { registerUser } from "../../services/authService";
+import { documentUpload } from "../../services/documentService";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import CameraModal from "../shared/CameraModal";
 import GenderBottomSheet from "./GenderBottomSheet";
@@ -133,8 +134,38 @@ const SignupForm = () => {
       return;
     }
     isSubmitting.current = true;
+
+    let profileImageKey: string | null = null;
+    if (profileImage) {
+      const formData = new FormData();
+      const uriParts = profileImage.split(".");
+      const fileExtension = uriParts[uriParts.length - 1] || "jpg";
+      const name = `profile_${Date.now()}.${fileExtension}`;
+      const type = `image/${fileExtension === "png" ? "png" : "jpeg"}`;
+
+      formData.append("file", {
+        uri: profileImage,
+        name: name,
+        type: type,
+      } as any);
+      formData.append("uploadType", "PATIENT_PROFILE");
+
+      try {
+        const uploadRes = await documentUpload(formData);
+        profileImageKey = uploadRes.data.fileKey;
+      } catch (err: any) {
+        Toast.show({
+          type: "error",
+          text1: "Profile Image Upload Failed",
+          text2: err.message,
+        });
+        isSubmitting.current = false;
+        return;
+      }
+    }
+
     const payload = {
-      // profileImageKey: profileImage,
+      profileImageKey,
       userName,
       firstName: firstname,
       lastName: lastname,

@@ -1,5 +1,5 @@
 import apiClient from "./apiClient";
-import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
+import { DOCUMENT_ENDPOINTS, FILE_ENDPOINTS, CHAT_ENDPOINTS } from "../constants/endpoints";
 import type {
   MedicalDocument,
   PaginatedDocumentRequest,
@@ -7,9 +7,68 @@ import type {
   FilterDocumentsRequest,
 } from "../types";
 
-export const documentUpload = async (formData: FormData): Promise<ApiResponse<MedicalDocument>> => {
+export interface UploadResponse {
+  fileKey: string;
+  originalFileName: string;
+  mimeType: string;
+  fileSize: number;
+  fileUrl: string;
+}
+
+export interface ChatMessageRequest {
+  documentKey?: string;
+  question: string;
+}
+
+export interface ChatMessageResponse {
+  success: boolean;
+  data: {
+    reply: string;
+    citations: any[];
+    ai: any;
+    user: any;
+    mode?: string;
+    emergency?: boolean;
+  };
+}
+
+export interface RunOcrRequest {
+  fileKey: string;
+  documentType?: string;
+  mimeType?: string;
+}
+
+export interface RunOcrResponse {
+  fileKey: string;
+  jobId: string;
+  stage: string;
+  status: string;
+}
+
+export interface OcrStatusResponse {
+  id: string;
+  fileKey: string;
+  status: string;
+  stage?: string;
+  rawOcrData: any;
+  extractedStructuredData: any;
+  graphs: any[];
+  error?: string;
+}
+
+export interface AddDocumentRequest {
+  fileKey: string;
+  documentType?: string;
+  fileName?: string;
+  rawOcrData: any;
+  extractedStructuredData: any;
+  graphs?: any[];
+}
+
+
+export const documentUpload = async (formData: FormData): Promise<ApiResponse<UploadResponse>> => {
   const response = await apiClient.post(
-    DOCUMENT_ENDPOINTS.ADD_DOCUMENT,
+    FILE_ENDPOINTS.UPLOAD,
     formData,
     {
       headers: {
@@ -17,6 +76,32 @@ export const documentUpload = async (formData: FormData): Promise<ApiResponse<Me
       },
     }
   );
+  return response.data;
+};
+
+export const sendChatMessage = async (
+  payload: ChatMessageRequest
+): Promise<ChatMessageResponse> => {
+  const response = await apiClient.post(
+    CHAT_ENDPOINTS.SEND_MESSAGE,
+    payload
+  );
+  return response.data;
+};
+
+export const runOcr = async (payload: RunOcrRequest): Promise<ApiResponse<RunOcrResponse>> => {
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.RUN_OCR, payload);
+  return response.data;
+};
+
+export const getOcrStatus = async (fileKey: string): Promise<ApiResponse<OcrStatusResponse>> => {
+  const endpoint = DOCUMENT_ENDPOINTS.RUN_OCR_STATUS.replace("{fileKey}", encodeURIComponent(fileKey));
+  const response = await apiClient.get(endpoint);
+  return response.data;
+};
+
+export const addDocument = async (payload: AddDocumentRequest): Promise<ApiResponse<any>> => {
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.ADD_DOCUMENT, payload);
   return response.data;
 };
 

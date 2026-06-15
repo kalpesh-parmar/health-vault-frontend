@@ -2,6 +2,7 @@ import React from "react";
 import { ScrollView, View } from "react-native";
 import styled from "styled-components/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { safeArray } from "../../utils/arrayUtils";
 
 interface FilterTabsProps {
   data: readonly string[] | string[];
@@ -23,7 +24,7 @@ const FilterTabs = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 15 }}
       >
-        {data.map((item) => {
+        {safeArray(data).map((item) => {
           const isActive = activeTab === item;
           return (
             <TabItem

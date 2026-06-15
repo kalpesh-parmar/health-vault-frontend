@@ -1,6 +1,7 @@
 import React from "react";
 import { ScrollView, Linking, TouchableOpacity } from "react-native";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation, DrawerActions } from "@react-navigation/native";
@@ -117,7 +118,7 @@ const AboutScreen = () => {
 
 export default AboutScreen;
 
-const Container = styled.SafeAreaView`
+const Container = styled(SafeAreaView)`
   flex: 1;
   background-color: ${({ theme }: any) => theme.colors.background};
 `;

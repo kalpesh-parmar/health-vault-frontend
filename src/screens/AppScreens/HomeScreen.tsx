@@ -1,4 +1,5 @@
-import React, { useRef, useCallback, useMemo } from "react";
+import React, { useRef, useCallback, useMemo, useState, useEffect } from "react";
+import { getInitials } from "../../utils/avatarUtils";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -92,6 +93,23 @@ const HomeScreen = () => {
     },
   });
 
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [data?.profileImageKey]);
+
+  const initials = useMemo(() => {
+    const res = getInitials(data?.firstName, data?.lastName);
+    console.log("[Avatar Audit] firstName:", data?.firstName);
+    console.log("[Avatar Audit] lastName:", data?.lastName);
+    console.log("[Avatar Audit] profileImage:", data?.profileImageKey);
+    console.log("[Avatar Audit] generated initials:", res);
+    return res;
+  }, [data?.firstName, data?.lastName, data?.profileImageKey]);
+
+  const showInitials = imageError || !data?.profileImageKey || data.profileImageKey.trim() === "" || data.profileImageKey.includes("placeholder");
+
   const { data: notificationData } = useQuery({
     queryKey: ["notificationCount"],
     queryFn: getNotificationCount,
@@ -142,11 +160,22 @@ const HomeScreen = () => {
         </TopRow>
 
         <UserRow>
-          <Avatar
-            source={{
-              uri: data?.profileImageKey || "https://via.placeholder.com/150",
-            }}
-          />
+          {showInitials ? (
+            <InitialsAvatar>
+              {initials ? (
+                <InitialsText allowFontScaling={true}>{initials}</InitialsText>
+              ) : (
+                <Ionicons name="person" size={24} color="#fff" />
+              )}
+            </InitialsAvatar>
+          ) : (
+            <Avatar
+              source={{
+                uri: data?.profileImageKey,
+              }}
+              onError={() => setImageError(true)}
+            />
+          )}
           <UserTextContent>
             {isLoading ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -376,6 +405,23 @@ const Avatar = styled.Image`
   border-radius: 27px;
   border-width: 2px;
   border-color: rgba(255, 255, 255, 0.4);
+`;
+
+const InitialsAvatar = styled.View`
+  width: 54px;
+  height: 54px;
+  border-radius: 27px;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.22);
+  justify-content: center;
+  align-items: center;
+`;
+
+const InitialsText = styled.Text`
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
 `;
 
 const UserTextContent = styled.View`

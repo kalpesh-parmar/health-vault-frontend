@@ -63,7 +63,7 @@ const UploadSuccessScreen = () => {
   }, []);
 
   const renderFileTypeIcon = (type: string) => {
-    const formattedType = type.toLowerCase();
+    const formattedType = (type || "").toLowerCase();
 
     if (formattedType === "pdf") {
       return (
@@ -302,7 +302,7 @@ const IconBadgeWrapper = styled.View<{ type: string }>`
   height: 58px;
   border-radius: 16px;
   background-color: ${({ type }: {type: string}) =>
-    type.toLowerCase() === "pdf"
+    (type || "").toLowerCase() === "pdf"
       ? "#fef2f2"
       : "#eff6ff"};
   justify-content: center;

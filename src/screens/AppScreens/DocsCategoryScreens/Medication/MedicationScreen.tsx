@@ -19,6 +19,7 @@ import {
   listMedications,
   filterMedications,
 } from "../../../../services/medicationservice";
+import { safeArray } from "../../../../utils/arrayUtils";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
 import { TimeText } from "../../../../components/MedicationForm";
@@ -165,8 +166,15 @@ const MedicationScreen = () => {
         pageNumber: pageParam as number,
         pageLimit: 10,
       }),
-    getNextPageParam: (lastPage, allPages) => {
-      return lastPage.data.length === 10 ? allPages.length + 1 : undefined;
+    getNextPageParam: (lastPage: any, allPages) => {
+      const data = lastPage?.data
+        ? (Array.isArray(lastPage.data)
+            ? lastPage.data
+            : (Array.isArray(lastPage.data.items)
+                ? lastPage.data.items
+                : (Array.isArray(lastPage.data.rows) ? lastPage.data.rows : [])))
+        : [];
+      return data.length === 10 ? allPages.length + 1 : undefined;
     },
     initialPageParam: 1,
     enabled: activeTab !== "All" && !isFilterApplied,
@@ -192,9 +200,12 @@ const MedicationScreen = () => {
         return response.data.rows;
       }
 
-      // Structure for Normal/Infinite API: response.data (Array)
-      if (!isFiltered && Array.isArray(response.data)) {
-        return response.data;
+      // Structure for Normal/Infinite API: response.data (Array or paginated object)
+      if (!isFiltered) {
+        if (Array.isArray(response.data)) return response.data;
+        if (response.data && Array.isArray(response.data.data)) return response.data.data;
+        if (response.data && Array.isArray(response.data.items)) return response.data.items;
+        if (Array.isArray(response)) return response;
       }
 
       return [];
@@ -211,9 +222,8 @@ const MedicationScreen = () => {
     }
 
     // 3. Paginated Specific Tab API (Flatten pages)
-    return (
-      medicationList?.pages?.flatMap((page) => extractRows(page, false)) || []
-    );
+    const pages = Array.isArray(medicationList?.pages) ? medicationList.pages : [];
+    return pages.flatMap((page) => extractRows(page, false));
   }, [
     filteredMedicationData,
     allMedsData,
@@ -248,7 +258,7 @@ const MedicationScreen = () => {
         <MedInfoMain>
           <MedName>{item.medicationName}</MedName>
           <MedTime>
-            {item.medicationTime?.map(
+            {safeArray(item.medicationTime).map(
               (t: { time: string; period: string }, index: number) => (
                 <TimeText key={index}>
                   {t.time} {t.period}{" "}

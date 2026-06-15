@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { View, FlatList } from "react-native";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
 import { useMutation } from "@tanstack/react-query";
 import { listNotifications, markAllAsRead, markAsRead } from "../../services/notificationService";
+import { safeArray } from "../../utils/arrayUtils";
 
 type NotificationType = "alert" | "info" | "success" | "promo" | "reminder";
 
@@ -27,7 +29,7 @@ export default function NotificationScreen() {
   const { mutateAsync: getNotificationsList } = useMutation({
     mutationFn: listNotifications,
     onSuccess: (data) => {
-      setNotifications(data.data);
+      setNotifications(safeArray(data?.data?.items || data?.data));
     },
     onError: (error) => {
       // Error handling can be added here
@@ -150,7 +152,7 @@ export default function NotificationScreen() {
   );
 }
 
-const Container = styled.SafeAreaView`
+const Container = styled(SafeAreaView)`
   flex: 1;
   background-color: ${({ theme }: any) => theme.colors.background};
 `;

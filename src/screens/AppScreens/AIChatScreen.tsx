@@ -1,158 +1,300 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Platform,
-  ScrollView,
-  TouchableOpacity,
   View,
-  Keyboard,
+  KeyboardAvoidingView,
+  FlatList,
+  StyleSheet,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useQuery } from "@tanstack/react-query";
+import Toast from "react-native-toast-message";
+
+import { listDocument, sendChatMessage } from "../../services/documentService";
+import BottomSheet from "../../components/shared/BottomSheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import type { MedicalDocument } from "../../types";
+import { safeFilter, safeMap } from "../../utils/arrayUtils";
+import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveStates";
+
+// Reusable Redesigned Components
+import { ChatHeader } from "../../components/chat/ChatHeader";
+import { MessageBubble } from "../../components/chat/MessageBubble";
+import { ChatInput } from "../../components/chat/ChatInput";
+import { SuggestedQuestionChip } from "../../components/chat/SuggestedQuestionChip";
+import { EmptyChatState } from "../../components/chat/EmptyChatState";
+
+enum ChatMode {
+  GENERAL_HEALTH = "GENERAL_HEALTH",
+  DOCUMENT_RAG = "DOCUMENT_RAG",
+}
 
 type ChatMessage = {
   id: string;
   role: "ai" | "user";
   text: string;
+  mode?: ChatMode;
+  emergency?: boolean;
 };
 
 const AIChatScreen = () => {
   const navigation = useNavigation();
   const { isDark, theme } = useAppTheme();
   const [input, setInput] = useState("");
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "ai",
-      text: "Hi, I am Health Vault AI. Ask me about your saved health documents, medications, or reminders.",
-    },
-  ]);
+  const [selectedDocument, setSelectedDocument] = useState<MedicalDocument | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  const gradientColors = useMemo(
-    () =>
-      isDark
-        ? (["#082f49", "#0f766e", "#312e81"] as const)
-        : (["#0f766e", "#0ea5e9", "#4f46e5"] as const),
-    [isDark],
-  );
+  const documentSheetRef = useRef<BottomSheetModal>(null);
 
+  // Fetch all documents
+  const { data: allDocsData, isLoading: isLoadingDocs, error: docsError, refetch: refetchDocs } = useQuery({
+    queryKey: ["documents"],
+    queryFn: listDocument,
+  });
+
+  const documents = useMemo(() => {
+    const rawData = allDocsData as any;
+    const items = Array.isArray(rawData?.data?.items) ? rawData.data.items : [];
+    return items as MedicalDocument[];
+  }, [allDocsData]);
+
+  // Filter documents to ensure they have an S3 key
+  const documentsList = useMemo(() => {
+    return safeFilter(documents, (doc: MedicalDocument) => !!doc?.s3Key);
+  }, [documents]);
+
+  const activeMode = selectedDocument ? ChatMode.DOCUMENT_RAG : ChatMode.GENERAL_HEALTH;
+
+  // Clear messages when mode changes
   useEffect(() => {
-    const showSubscription = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => setKeyboardHeight(e.endCoordinates.height),
-    );
-    const hideSubscription = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardHeight(0),
-    );
+    setMessages([]);
+  }, [selectedDocument]);
 
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-
-  const handleSend = () => {
-    const trimmedInput = input.trim();
-    if (!trimmedInput) return;
+  const handleSend = async (customText?: string) => {
+    const textToSubmit = (customText || input).trim();
+    if (!textToSubmit) return;
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
-      text: trimmedInput,
-    };
-    const aiMessage: ChatMessage = {
-      id: `ai-${Date.now()}`,
-      role: "ai",
-      text: "I can help organize your health vault, explain document details, and prepare medication questions. AI responses will appear here once connected.",
+      text: textToSubmit,
     };
 
-    setMessages((prev) => [...prev, userMessage, aiMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setIsSending(true);
+
+    try {
+      const response = await sendChatMessage({
+        documentKey: selectedDocument?.s3Key || undefined,
+        question: textToSubmit,
+      });
+
+      const aiMessage: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        role: "ai",
+        text: response.data?.reply || "No reply from AI",
+        mode: response.data?.mode as ChatMode,
+        emergency: !!response.data?.emergency,
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (err: any) {
+      Toast.show({
+        type: "error",
+        text1: "Query Failed",
+        text2: err.message || "An error occurred while calling the chatbot.",
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setSelectedDocument(null);
+  };
+
+  const hasEmergency = useMemo(() => {
+    return messages.some((msg) => msg.emergency === true);
+  }, [messages]);
+
+  const generalSuggestedQuestions = [
+    "What are symptoms of diabetes?",
+    "Reduce cholesterol levels",
+    "Healthy blood pressure diet",
+    "General heart health advice",
+  ];
+
+  const documentSuggestedQuestions = [
+    "Are there any abnormal values?",
+    "What medications are prescribed?",
+    "Explain the test results simply.",
+    "Summarize this medical report.",
+  ];
+
+  const suggestedQuestions = activeMode === ChatMode.DOCUMENT_RAG
+    ? documentSuggestedQuestions
+    : generalSuggestedQuestions;
+
+  // Reverse messages list for inverted rendering
+  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  if (isLoadingDocs) {
+    return <LoadingScreen />;
+  }
+
+  if (docsError) {
+    return (
+      <ErrorScreen
+        message={docsError instanceof Error ? docsError.message : String(docsError)}
+        onRetry={() => {
+          (refetchDocs as any)();
+        }}
+      />
+    );
+  }
 
   return (
     <Container>
-      <Header
-        colors={gradientColors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      {/* Sticky Premium AI Header */}
+      <ChatHeader
+        onBack={() => navigation.goBack()}
+        onNewChat={handleNewChat}
+        isDark={isDark}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardContainer}
       >
-        <TopRow>
-          <BackButton onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={26} color="#fff" />
-          </BackButton>
-          <HeaderCenter>
-            <HeaderTitle>Health Vault AI</HeaderTitle>
-            <HeaderSub>Private health assistant</HeaderSub>
-          </HeaderCenter>
-          <HeaderIcon>
-            <Ionicons name="sparkles" size={20} color="#fff" />
-          </HeaderIcon>
-        </TopRow>
-      </Header>
+        {/* Document Selector bar */}
+        <DocumentSelector onPress={() => documentSheetRef.current?.present()}>
+          <Ionicons name="swap-horizontal-outline" size={18} color="#0f766e" />
+          <SelectorText numberOfLines={1}>
+            {selectedDocument ? `Document: ${selectedDocument.fileName}` : "General Health Chat (No Document)"}
+          </SelectorText>
+          <Ionicons name="chevron-down" size={18} color="#94a3b8" />
+        </DocumentSelector>
 
-      <View style={{ flex: 1, paddingBottom: keyboardHeight }}>
-        <MessagesScroll
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{paddingHorizontal: 15, paddingBottom: 18, paddingVertical: 10}}
-        >
-          <OutputPanel>
-            <PanelHeader>
-              <PanelIcon>
-                <Ionicons
-                  name="chatbubble-ellipses"
-                  size={18}
-                  color="#0f766e"
-                />
-              </PanelIcon>
-              <PanelTitle>AI Output</PanelTitle>
-            </PanelHeader>
+        {/* Emergency Card Display */}
+        {hasEmergency && (
+          <EmergencyCard>
+            <EmergencyTitleRow>
+              <Ionicons name="warning" size={20} color="#dc2626" />
+              <EmergencyTitle>Seek immediate medical attention</EmergencyTitle>
+            </EmergencyTitleRow>
+            <EmergencyText>
+              This may require urgent medical attention. Please contact emergency services or visit the nearest emergency department immediately.
+            </EmergencyText>
+          </EmergencyCard>
+        )}
 
-            {messages.map((message) => (
-              <MessageBubble key={message.id} role={message.role}>
-                <MessageText role={message.role}>{message.text}</MessageText>
-              </MessageBubble>
-            ))}
-          </OutputPanel>
-        </MessagesScroll>
-
-        <InputBar>
-          <InputWrap>
-            <Ionicons
-              name="sparkles-outline"
-              size={18}
-              color={theme.colors.textMuted}
+        {/* Messages List / Welcome Empty State */}
+        <View style={styles.contentWrapper}>
+          {messages.length === 0 ? (
+            <EmptyChatState
+              isDark={isDark}
+              suggestedQuestions={suggestedQuestions}
+              onPressQuestion={handleSend}
             />
-            <ChatInput
-              placeholder="Ask Health Vault AI..."
-              placeholderTextColor={theme.colors.textMuted}
-              value={input}
-              onChangeText={setInput}
-              multiline
+          ) : (
+            <FlatList
+              data={reversedMessages}
+              inverted
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => <MessageBubble message={item} isDark={isDark} />}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
             />
-          </InputWrap>
-          <SendButton onPress={handleSend}>
-            <LinearGradient
-              colors={gradientColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                alignItems: "center",
-                justifyContent: "center",
+          )}
+        </View>
+
+        {/* Suggested Chips above input */}
+        <SuggestedQuestionChip
+          questions={suggestedQuestions}
+          onPressQuestion={handleSend}
+          isDark={isDark}
+        />
+
+        {/* Floating Input Capsule */}
+        <ChatInput
+          value={input}
+          onChangeText={setInput}
+          onSend={() => handleSend()}
+          isSending={isSending}
+          isDark={isDark}
+        />
+      </KeyboardAvoidingView>
+
+      {/* Document Selector Bottom Sheet */}
+      <BottomSheet ref={documentSheetRef} enablePanDownToClose={true}>
+        <SheetContentWrapper>
+          <BSTitle>Select Mode or Report</BSTitle>
+          <BSSub>Choose general health mode or discuss a specific medical report</BSSub>
+          <BSScrollView showsVerticalScrollIndicator={false}>
+            <BSItem
+              selected={selectedDocument === null}
+              onPress={() => {
+                setSelectedDocument(null);
+                documentSheetRef.current?.dismiss();
               }}
+              activeOpacity={0.7}
             >
-              <Ionicons name="send" size={20} color="#fff" />
-            </LinearGradient>
-          </SendButton>
-        </InputBar>
-      </View>
+              <BSIconBadge bgColor={selectedDocument === null ? "#ccfbf1" : "#f1f5f9"}>
+                <Ionicons
+                  name="sparkles"
+                  size={20}
+                  color={selectedDocument === null ? "#0f766e" : "#64748b"}
+                />
+              </BSIconBadge>
+              <BSLbl selected={selectedDocument === null}>General Health Chat (No Document)</BSLbl>
+              {selectedDocument === null && <BSCheck>✓</BSCheck>}
+            </BSItem>
+
+            {documentsList.length === 0 ? (
+              <EmptyDocumentsWrapper>
+                <EmptyTitle>You haven't uploaded any medical reports yet.</EmptyTitle>
+                <UploadButton
+                  onPress={() => {
+                    documentSheetRef.current?.dismiss();
+                    (navigation as any).navigate("Home");
+                  }}
+                >
+                  <UploadButtonText>Upload Medical Report</UploadButtonText>
+                </UploadButton>
+              </EmptyDocumentsWrapper>
+            ) : (
+              safeMap(documentsList, (doc: MedicalDocument) => (
+                <BSItem
+                  key={doc.id}
+                  selected={selectedDocument?.id === doc.id}
+                  onPress={() => {
+                    setSelectedDocument(doc);
+                    documentSheetRef.current?.dismiss();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <BSIconBadge bgColor={selectedDocument?.id === doc.id ? "#ccfbf1" : "#f1f5f9"}>
+                    <Ionicons
+                      name="document-text-outline"
+                      size={20}
+                      color={selectedDocument?.id === doc.id ? "#0f766e" : "#64748b"}
+                    />
+                  </BSIconBadge>
+                  <BSLbl selected={selectedDocument?.id === doc.id}>{doc.fileName}</BSLbl>
+                  {selectedDocument?.id === doc.id && <BSCheck>✓</BSCheck>}
+                </BSItem>
+              ))
+            )}
+          </BSScrollView>
+        </SheetContentWrapper>
+      </BottomSheet>
     </Container>
   );
 };
@@ -164,133 +306,143 @@ const Container = styled.View`
   background-color: ${({ theme }: any) => theme.colors.background};
 `;
 
-const Header = styled(LinearGradient)`
-  padding: 52px 20px 30px;
-  border-bottom-left-radius: 30px;
-  border-bottom-right-radius: 30px;
-`;
-
-const TopRow = styled.View`
+const DocumentSelector = styled.TouchableOpacity`
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-`;
-
-const BackButton = styled.TouchableOpacity`
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(255, 255, 255, 0.16);
-`;
-
-const HeaderCenter = styled.View`
-  flex: 1;
-  align-items: center;
-`;
-
-const HeaderTitle = styled.Text`
-  color: #ffffff;
-  font-size: 23px;
-  font-weight: 900;
-`;
-
-const HeaderSub = styled.Text`
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 13px;
-  font-weight: 600;
-  margin-top: 4px;
-`;
-
-const HeaderIcon = styled.View`
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(255, 255, 255, 0.16);
-`;
-
-const MessagesScroll = styled(ScrollView)`
-  flex: 1;
-`;
-
-const OutputPanel = styled.View`
-  width: 100%;
-`;
-
-const PanelHeader = styled.View`
-  flex-direction: row;
-  align-items: center;
-  margin-bottom: 16px;
-`;
-
-const PanelIcon = styled.View`
-  width: 34px;
-  height: 34px;
-  border-radius: 17px;
-  align-items: center;
-  justify-content: center;
-  background-color: #ccfbf1;
-  margin-right: 10px;
-`;
-
-const PanelTitle = styled.Text`
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  font-size: 17px;
-  font-weight: 900;
-`;
-
-const MessageBubble = styled.View<{ role: ChatMessage["role"] }>`
-  align-self: ${({ role }: { role: ChatMessage["role"] }) =>
-    role === "user" ? "flex-end" : "flex-start"};
-  max-width: 88%;
-  padding: 13px 15px;
-  border-radius: 18px;
-  margin-bottom: 12px;
-  background-color: ${({ role, theme }: any) =>
-    role === "user" ? "#0f766e" : theme.colors.surfaceLight};
-`;
-
-const MessageText = styled.Text<{ role: ChatMessage["role"] }>`
-  color: ${({ role, theme }: any) =>
-    role === "user" ? "#ffffff" : theme.colors.textSecondary};
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
-`;
-
-const InputBar = styled.View`
-  flex-direction: row;
-  align-items: flex-end;
-  padding: 12px 16px 22px;
-  background-color: ${({ theme }: any) => theme.colors.background};
-  border-top-width: 1px;
-  border-top-color: ${({ theme }: any) => theme.colors.border};
-`;
-
-const InputWrap = styled.View`
-  flex: 1;
-  min-height: 48px;
-  max-height: 110px;
-  border-radius: 24px;
-  padding: 0 14px;
-  flex-direction: row;
-  align-items: center;
-  background-color: ${({ theme }: any) => theme.colors.card};
+  margin: 12px 16px 8px;
+  padding: 10px 14px;
+  background-color: ${({ theme }: any) => theme.colors.surface};
+  border-radius: 16px;
   border-width: 1px;
   border-color: ${({ theme }: any) => theme.colors.border};
 `;
 
-const ChatInput = styled.TextInput`
+const SelectorText = styled.Text`
   flex: 1;
-  padding: 12px 8px;
+  font-size: 13.5px;
+  font-weight: 700;
   color: ${({ theme }: any) => theme.colors.textPrimary};
+  margin-left: 10px;
+  margin-right: 10px;
+`;
+
+const EmergencyCard = styled.View`
+  background-color: #fef2f2;
+  border-width: 1.5px;
+  border-color: #fca5a5;
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin: 4px 16px 8px;
+`;
+
+const EmergencyTitleRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 4px;
+`;
+
+const EmergencyTitle = styled.Text`
+  color: #991b1b;
   font-size: 14px;
+  font-weight: 800;
+  margin-left: 8px;
+`;
+
+const EmergencyText = styled.Text`
+  color: #7f1d1d;
+  font-size: 12.5px;
+  line-height: 17px;
   font-weight: 600;
 `;
 
-const SendButton = styled(TouchableOpacity)`
-  margin-left: 10px;
+const SheetContentWrapper = styled.View`
+  padding: 20px;
+  padding-bottom: 40px;
+  width: 100%;
 `;
+
+const BSTitle = styled.Text`
+  font-size: 18px;
+  font-weight: 800;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+  margin-bottom: 4px;
+`;
+
+const BSSub = styled.Text`
+  font-size: 13px;
+  color: ${({ theme }: any) => theme.colors.textMuted};
+  margin-bottom: 15px;
+`;
+
+const BSScrollView = styled(ScrollView)`
+  width: 100%;
+  max-height: 350px;
+`;
+
+const BSItem = styled.TouchableOpacity<{ selected: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  padding: 14px 0px;
+  border-bottom-width: 1px;
+  border-bottom-color: ${({ theme }: any) => theme.colors.border};
+`;
+
+const BSIconBadge = styled.View<{ bgColor: string }>`
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background-color: ${({ bgColor }: { bgColor: string }) => bgColor};
+  align-items: center;
+  justify-content: center;
+  margin-right: 13px;
+`;
+
+const BSLbl = styled.Text<{ selected: boolean }>`
+  flex: 1;
+  font-size: 14px;
+  font-weight: ${({ selected }: { selected: boolean }) => (selected ? "700" : "600")};
+  color: ${({ selected, theme }: { selected: boolean; theme: any }) =>
+    selected ? "#0f766e" : theme.colors.textPrimary};
+`;
+
+const BSCheck = styled.Text`
+  font-size: 15px;
+  color: #0f766e;
+  font-weight: 700;
+`;
+
+const EmptyDocumentsWrapper = styled.View`
+  padding: 15px 5px;
+`;
+
+const EmptyTitle = styled.Text`
+  font-size: 14px;
+  font-weight: 800;
+  color: ${({ theme }: any) => theme.colors.textPrimary};
+  margin-bottom: 16px;
+`;
+
+const UploadButton = styled.TouchableOpacity`
+  background-color: #0f766e;
+  padding: 12px;
+  border-radius: 12px;
+  align-items: center;
+`;
+
+const UploadButtonText = styled.Text`
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+`;
+
+const styles = StyleSheet.create({
+  keyboardContainer: {
+    flex: 1,
+  },
+  contentWrapper: {
+    flex: 1,
+  },
+  listContent: {
+    paddingVertical: 10,
+  },
+});

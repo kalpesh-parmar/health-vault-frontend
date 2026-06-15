@@ -54,7 +54,7 @@ const ReminderScreen = () => {
       .filter((rem) => {
         // Tab Filter: All, Overdue, Upcoming, Completed
         if (activeTab !== "All") {
-          if (rem.status.toLowerCase() !== activeTab.toLowerCase()) {
+          if ((rem.status || "").toLowerCase() !== activeTab.toLowerCase()) {
             return false;
           }
         }
@@ -62,10 +62,10 @@ const ReminderScreen = () => {
         // Search Query Filter
         if (searchQuery.trim().length > 0) {
           const q = searchQuery.toLowerCase();
-          const matchTitle = rem.title.toLowerCase().includes(q);
+          const matchTitle = (rem.title || "").toLowerCase().includes(q);
           const matchNotes = rem.notes?.toLowerCase().includes(q);
           const matchMedName = rem.medicationName?.toLowerCase().includes(q);
-          const matchCategory = rem.category.toLowerCase().includes(q);
+          const matchCategory = (rem.category || "").toLowerCase().includes(q);
           return !!(matchTitle || matchNotes || matchMedName || matchCategory);
         }
         return true;
