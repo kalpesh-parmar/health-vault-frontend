@@ -97,7 +97,7 @@ const ConfirmationModal = ({
 
   const { mutateAsync: deleteMedicationMutation } = useMutation({
     mutationFn: deleteMedication,
-    onSuccess: async (result) => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({
         queryKey: ["medications"],
       });
@@ -107,6 +107,12 @@ const ConfirmationModal = ({
       queryClient.invalidateQueries({
         queryKey: ["filteredMedications"],
       });
+      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
       onClose();
       Toast.show({
         type: "success",

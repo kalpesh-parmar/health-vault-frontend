@@ -17,7 +17,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   setIsAuthenticated: (isAuthenticated: boolean) => void;
   isLoading: boolean;
-  login: (data: { accessToken: string; refreshToken: string; userId: string }) => Promise<void>;
+  login: (data: { accessToken: string; refreshToken: string; userId: string; createdAt?: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -35,21 +35,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const storedRefreshToken = await SecureStore.getItemAsync("authToken");
         const storedUserId = await SecureStore.getItemAsync("userId");
+        const refreshDateStr = await SecureStore.getItemAsync("refreshDate");
 
         if (storedRefreshToken) {
           try {
-            // Attempt to refresh the token on app load
-            const refreshResult = await refreshApiToken({ refreshToken: storedRefreshToken });
-            
-            const newAccessToken = refreshResult.data?.accessToken || refreshResult.accessToken;
-            const newRefreshToken = refreshResult.data?.refreshToken || refreshResult.refreshToken;
+            let shouldRefresh = false;
 
-            if (newAccessToken && newRefreshToken) {
-              await SecureStore.setItemAsync("accessToken", String(newAccessToken));
-              await SecureStore.setItemAsync("authToken", String(newRefreshToken));
+            if (refreshDateStr) {
+              const currentDate = new Date();
+              const yyyy = currentDate.getFullYear();
+              const mm = String(currentDate.getMonth() + 1).padStart(2, "0");
+              const dd = String(currentDate.getDate()).padStart(2, "0");
+              const currentDateOnly = `${yyyy}-${mm}-${dd}`;
               
-              setAccessToken(newAccessToken);
-              setRefreshToken(newRefreshToken);
+              // Check if current date is equal to or past the refreshDate
+              if (currentDateOnly >= refreshDateStr) {
+                shouldRefresh = true;
+              }
+            } else {
+              // If there's no refreshDate stored, we might want to refresh to be safe
+              shouldRefresh = true;
+            }
+
+            if (shouldRefresh) {
+              // Attempt to refresh the token
+              const refreshResult = await refreshApiToken({ refreshToken: storedRefreshToken });
+              
+              const newAccessToken = refreshResult.data?.accessToken || refreshResult.accessToken;
+              const newRefreshToken = refreshResult.data?.refreshToken || refreshResult.refreshToken;
+
+              if (newAccessToken && newRefreshToken) {
+                await SecureStore.setItemAsync("accessToken", String(newAccessToken));
+                await SecureStore.setItemAsync("authToken", String(newRefreshToken));
+                
+                setAccessToken(newAccessToken);
+                setRefreshToken(newRefreshToken);
+                setIsAuthenticated(true);
+
+                // Delete the old refreshDate
+                await SecureStore.deleteItemAsync("refreshDate");
+
+                // Fetch current date, add 6 days, and store it
+                const newRefreshDate = new Date();
+                newRefreshDate.setDate(newRefreshDate.getDate() + 6);
+                
+                const yyyy = newRefreshDate.getFullYear();
+                const mm = String(newRefreshDate.getMonth() + 1).padStart(2, "0");
+                const dd = String(newRefreshDate.getDate()).padStart(2, "0");
+                const newRefreshDateOnly = `${yyyy}-${mm}-${dd}`;
+                
+                await SecureStore.setItemAsync("refreshDate", newRefreshDateOnly);
+              }
+            } else {
+              // Not time to refresh, use stored tokens
+              const storedAccessToken = await SecureStore.getItemAsync("accessToken");
+              setAccessToken(storedAccessToken);
+              setRefreshToken(storedRefreshToken);
               setIsAuthenticated(true);
             }
           } catch (refreshError) {
@@ -57,6 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Optionally, we could clear the tokens here if they are invalid
             await SecureStore.deleteItemAsync("authToken");
             await SecureStore.deleteItemAsync("accessToken");
+            await SecureStore.deleteItemAsync("refreshDate");
           }
         }
 
@@ -72,7 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     checkAuth();
   }, []);
 
-  const login = async (data: { accessToken: string; refreshToken: string; userId: string }) => {
+  const login = async (data: { accessToken: string; refreshToken: string; userId: string; createdAt?: string }) => {
     try {
       setUserId(data.userId);
       setAccessToken(data.accessToken);
@@ -82,6 +124,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await SecureStore.setItemAsync("userId", String(data.userId));
       await SecureStore.setItemAsync("accessToken", String(data.accessToken));
       await SecureStore.setItemAsync("authToken", String(data.refreshToken));
+
+      // Calculate the 6th date from createdAt and store it
+      let refreshDate = new Date();
+      if (data.createdAt) {
+        // Extract just the YYYY-MM-DD from the UTC ISO string
+        const datePart = data.createdAt.split("T")[0];
+        const [year, month, day] = datePart.split("-").map(Number);
+        if (year && month && day) {
+          refreshDate = new Date(year, month - 1, day);
+        }
+      }
+      refreshDate.setDate(refreshDate.getDate() + 6);
+      
+      const yyyy = refreshDate.getFullYear();
+      const mm = String(refreshDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(refreshDate.getDate()).padStart(2, "0");
+      const formattedRefreshDate = `${yyyy}-${mm}-${dd}`;
+      
+      await SecureStore.setItemAsync("refreshDate", formattedRefreshDate);
     } catch (error) {
       console.error("Error during login:", error);
     }
@@ -92,6 +153,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await SecureStore.deleteItemAsync("authToken");
       await SecureStore.deleteItemAsync("accessToken");
       await SecureStore.deleteItemAsync("userId");
+      await SecureStore.deleteItemAsync("refreshDate");
       
       setIsAuthenticated(false);
       setAccessToken(null);

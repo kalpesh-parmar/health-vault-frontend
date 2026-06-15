@@ -15,7 +15,7 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        pressBehavior="close"
+        pressBehavior="collapse"
       />
     ),
     [],

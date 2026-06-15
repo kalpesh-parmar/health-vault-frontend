@@ -17,6 +17,7 @@ import MedicationForm from "../../../../components/MedicationForm";
 import { AddOrEditMedication } from "../../../../types";
 import { queryClient } from "../../../../config/queryClient";
 import { MedicationStackParamList } from "../../../../types/navigation";
+import { createMedicationReminder } from "../../../../services/reminderService";
 
 type AddMedicationScreenRouteProp = RouteProp<
   MedicationStackParamList,
@@ -81,60 +82,59 @@ const MedicationOperation = ({
   const { mutateAsync: addMedicationMutation, isPending: isLoading } =
     useMutation({
       mutationFn: addMedication,
-      onSuccess: () => {
-        Toast.show({
-          type: "success",
-          text1: `Medication ${operation === "add" ? "added" : "updated"} successfully`,
-        });
-        queryClient.invalidateQueries({ queryKey: ["medications"] });
-        queryClient.invalidateQueries({
-          queryKey: ["allMedications"],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["filteredMedications"],
-        });
-        navigation.goBack();
-      },
-      onError: (error: any) => {
-        Toast.show({
-          type: "error",
-          text1: error.message || "Something went wrong",
-        });
-      },
     });
 
   const { mutateAsync: editMedicationMutation, isPending: isEditingLoading } =
     useMutation({
       mutationFn: updateMedication,
-      onSuccess: () => {
+    });
+
+  const handleSubmit = async (formData: AddOrEditMedication) => {
+    try {
+      if (operation === "add") {
+        const responseData = await addMedicationMutation(formData);
+        
+        Toast.show({
+          type: "success",
+          text1: `Medication added successfully`,
+        });
+
+        if (responseData?.data?.id) {
+          try {
+            console.log("Creating Reminder. Please Wait...");
+            await createMedicationReminder({
+              medicationId: responseData.data.id,
+            });
+          } catch (error) {
+            console.log("Failed to create reminder:", error);
+          }
+        }
+      } else {
+        await editMedicationMutation({
+          medicationId: medicationId || "",
+          data: formData,
+        });
+        
         Toast.show({
           type: "success",
           text1: `Medication edited successfully`,
         });
-        queryClient.invalidateQueries({ queryKey: ["medications"] });
-        queryClient.invalidateQueries({
-          queryKey: ["allMedications"],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["filteredMedications"],
-        });
-        navigation.goBack();
-      },
-      onError: (error: any) => {
-        Toast.show({
-          type: "error",
-          text1: error.message || "Something went wrong",
-        });
-      },
-    });
+      }
 
-  const handleSubmit = async (formData: AddOrEditMedication) => {
-    if (operation === "add") {
-      await addMedicationMutation(formData);
-    } else {
-      await editMedicationMutation({
-        medicationId: medicationId || "",
-        data: formData,
+      queryClient.invalidateQueries({ queryKey: ["medications"] });
+      queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+      navigation.goBack();
+    } catch (error: any) {
+      Toast.show({
+        type: "error",
+        text1: error.message || "Something went wrong",
       });
     }
   };
@@ -151,6 +151,11 @@ const MedicationOperation = ({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10,
           paddingTop: headerPaddingTop,
           paddingBottom: headerPaddingBottom,
           borderBottomLeftRadius: headerRadius,
@@ -182,6 +187,7 @@ const MedicationOperation = ({
         onSubmit={handleSubmit}
         isLoading={operation === "add" ? isLoading : isEditingLoading}
         onScroll={handleFormScroll}
+        operation={operation}
       />
     </Container>
   );

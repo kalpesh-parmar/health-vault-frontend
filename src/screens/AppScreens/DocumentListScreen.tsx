@@ -18,7 +18,7 @@ import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
 import FilterTabs from "../../components/shared/FilterTabs";
 import SearchBar from "../../components/shared/SearchBar";
-import FilterBottomSheet from "../../components/shared/FilterBottomSheet";
+import FilterBottomSheet, { FilterOptionItem } from "../../components/shared/FilterBottomSheet";
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
@@ -35,6 +35,33 @@ const CATEGORIES = [
   { key: "Medical Documents", value: "medical_document" },
   { key: "Insurance", value: "insurance" },
   { key: "Other", value: "other" },
+];
+
+const SORT_OPTIONS = [
+  {
+    label: "Newest First",
+    description: "Recently added items",
+    value: "date_desc",
+    icon: "calendar",
+  },
+  {
+    label: "Oldest First",
+    description: "Earliest added items",
+    value: "date_asc",
+    icon: "calendar-outline",
+  },
+  {
+    label: "A-Z",
+    description: "Alphabetical ascending",
+    value: "name_asc",
+    icon: "alpha-a-box",
+  },
+  {
+    label: "Z-A",
+    description: "Alphabetical descending",
+    value: "name_desc",
+    icon: "alpha-z-box",
+  },
 ];
 
 const DocumentList = () => {
@@ -184,7 +211,7 @@ const DocumentList = () => {
         cameraRef={cameraRef}
       />
 
-      {isCapturing && <Loader visible={isCapturing} />}
+      <Loader visible={isCapturing} />
 
       <HeaderWrapper>
         <HeaderMain>
@@ -274,15 +301,28 @@ const DocumentList = () => {
 
       <FilterBottomSheet
         ref={filterSheetRef}
-        selectedSort={sortOption}
-        onSelectSort={(option) => {
-          setSortOption(option);
-        }}
+        title="Sort Documents"
+        subtitle="Choose how to order your items"
         onApply={() => {
           setIsFilterApplied(true);
           filterSheetRef.current?.dismiss();
         }}
-      />
+        onReset={() => {
+          setSortOption("date_desc");
+          setIsFilterApplied(false);
+        }}
+      >
+        {SORT_OPTIONS.map((option) => (
+          <FilterOptionItem
+            key={option.value}
+            title={option.label}
+            subtitle={option.description}
+            icon={option.icon}
+            isActive={sortOption === option.value}
+            onPress={() => setSortOption(option.value)}
+          />
+        ))}
+      </FilterBottomSheet>
     </Container>
   );
 };

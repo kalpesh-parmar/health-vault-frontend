@@ -163,10 +163,11 @@ const ResetPassword = () => {
       confirm: "",
     };
 
+    const passReg = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!password) {
       newErrors.password = "Please enter a new password.";
-    } else if (password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters.";
+    } else if (!passReg.test(password)) {
+      newErrors.password = "Min 8 chars, 1 Upper, 1 Lower, 1 Num, 1 Symbol";
     }
 
     if (!confirmPassword) {

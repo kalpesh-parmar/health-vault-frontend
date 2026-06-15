@@ -56,7 +56,7 @@ export type AppStackParamList = {
   DocumentStack: NavigatorScreenParams<DocumentsStackParamList>;
   Notifications: undefined;
   AIChat: undefined;
-  Reminders: { filter?: "All" | "Overdue" | "Upcoming" | "Completed" } | undefined;
+  Reminders: undefined;
   UploadSuccess: {
     documentName: string;
     fileSize: string;

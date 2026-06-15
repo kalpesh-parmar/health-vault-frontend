@@ -15,6 +15,7 @@ import { useAppTheme } from "../context/ThemeContext";
 import { AppStackParamList } from "./types";
 import { useQuery } from "@tanstack/react-query";
 import { getUser } from "../services/userService";
+import { getSignedUrlForFile } from "../services/fileService";
 
 const CustomDrawerContent = (props: any) => {
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -29,6 +30,16 @@ const CustomDrawerContent = (props: any) => {
       return response?.data || response;
     },
   });
+
+  const [profileImageUrl, setProfileImageUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (userDetails?.profileImageKey) {
+      getSignedUrlForFile(userDetails.profileImageKey)
+        .then((res) => setProfileImageUrl(res?.data || null))
+        .catch((e) => console.log("Failed to load profile image URL", e));
+    }
+  }, [userDetails?.profileImageKey]);
 
   // Gradient matched with the bright purple/pinkish aesthetic in the UI mockup
   const headerColors = isDark ? ["#3b0764", "#1e1b4b"] : ["#a855f7", "#6366f1"]; // Vibrant purple to Indigo gradient
@@ -50,13 +61,19 @@ const CustomDrawerContent = (props: any) => {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <ProfileImage
-              source={{
-                uri:
-                  userDetails?.profileImageKey ||
-                  "https://via.placeholder.com/150",
-              }}
-            />
+            {profileImageUrl ? (
+              <ProfileImage
+                source={{
+                  uri: profileImageUrl,
+                }}
+              />
+            ) : (
+              <AvatarFallback>
+                <AvatarFallbackText>
+                  {(userDetails?.firstName?.charAt(0).toUpperCase() || "") + (userDetails?.lastName?.charAt(0).toUpperCase() || "")}
+                </AvatarFallbackText>
+              </AvatarFallback>
+            )}
             <UserInfo>
               <Username>{userDetails?.userName || ""}</Username>
               <UserEmail>
@@ -123,6 +140,23 @@ const ProfileImage = styled.Image`
   border-radius: 32px;
   border-width: 2px;
   border-color: rgba(255, 255, 255, 0.6);
+`;
+
+const AvatarFallback = styled.View`
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.6);
+  background-color: rgba(255, 255, 255, 0.2);
+  justify-content: center;
+  align-items: center;
+`;
+
+const AvatarFallbackText = styled.Text`
+  font-size: 26px;
+  font-weight: bold;
+  color: #ffffff;
 `;
 
 const UserInfo = styled.View`

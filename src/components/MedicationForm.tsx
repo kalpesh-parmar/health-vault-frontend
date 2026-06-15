@@ -1,5 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { Animated, Switch, View, Platform } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Animated,
+  Switch,
+  View,
+  Platform,
+  KeyboardAvoidingView,
+  Keyboard,
+  TextInput,
+} from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { format, isEqual } from "date-fns";
 import DatePicker from "react-native-date-picker";
@@ -57,6 +65,7 @@ interface MedicationFormProps {
   onSubmit: (data: AddOrEditMedication) => void;
   isLoading: boolean;
   onScroll?: (...args: any[]) => void;
+  operation?: string;
 }
 
 const MedicationForm = ({
@@ -64,6 +73,7 @@ const MedicationForm = ({
   onSubmit,
   isLoading,
   onScroll,
+  operation,
 }: MedicationFormProps) => {
   const isValidDate = (d: any) => d instanceof Date && !isNaN(d.getTime());
   const [name, setName] = useState(initialData?.medicationName || "");
@@ -84,7 +94,10 @@ const MedicationForm = ({
   });
 
   const [timesOfDay, setTimesOfDay] = useState<TimeOfDay[]>(() => {
-    const rawBestTaken = initialData?.bestTaken || [];
+    let rawBestTaken: string[] = [];
+    if (initialData?.medicationSchedule) {
+      rawBestTaken = Object.keys(initialData.medicationSchedule);
+    }
     const found = TIMES_OF_DAY.filter(
       (t) => rawBestTaken?.includes(t.value) || rawBestTaken?.includes(t.key),
     );
@@ -122,12 +135,9 @@ const MedicationForm = ({
   };
 
   const [preferredTimes, setPreferredTimes] = useState<Date[]>(() => {
-    if (
-      initialData?.medicationTime &&
-      Array.isArray(initialData?.medicationTime)
-    ) {
-      return initialData?.medicationTime?.map(
-        (t: { time: string; period: string }) => parseTime(t?.time),
+    if (initialData?.medicationSchedule) {
+      return Object.values(initialData.medicationSchedule).map((timeStr: any) =>
+        parseTime(timeStr),
       );
     }
     return [];
@@ -138,30 +148,55 @@ const MedicationForm = ({
       ? initialData.ongoing !== undefined
         ? initialData.ongoing
         : true
-      : true,
+      : false,
   );
 
   const [totalPills, setTotalPills] = useState(
     initialData?.totalQuantity?.toString() || "",
   );
+  const totalPillsRef = useRef<TextInput>(null);
   const [reminders, setReminders] = useState(
-    initialData ? (initialData.doseReminders ?? true) : true,
+    initialData ? (initialData.isReminder ?? true) : true,
   );
-  const [reminderBeforeMinutes, setReminderBeforeMinutes] = useState<string>(() => {
+  const [reminderBeforeMinutes, setReminderBeforeMinutes] = useState<
+    string | null
+  >(() => {
     if (initialData && initialData.reminderBeforeMinutes !== undefined) {
-      return initialData.reminderBeforeMinutes.toString();
+      return initialData.reminderBeforeMinutes!.toString();
     }
-    return "10";
+    return null;
   });
-  const [refillAlert, setRefillAlert] = useState(
-    initialData ? (initialData.refillAlert ?? true) : true,
-  );
+
   const [notes, setNotes] = useState(initialData?.notes || "");
 
   const [picker, setPicker] = useState<{
     visible: boolean;
     type: "start" | "time";
   }>({ visible: false, type: "start" });
+
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => {
+        setKeyboardPadding(Platform.OS === "ios" ? 150 : 200);
+      },
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardPadding(0);
+      },
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const isSpecificTime = timesOfDay.some((t) => t.value === "SPECIFIC_TIME");
@@ -178,22 +213,28 @@ const MedicationForm = ({
   }, [frequency, timesOfDay]);
 
   const getUnitString = (medType: MedType) => {
-    const units = [{
-      type: "TABLET",
-      value: "PILLS",
-    }, {
-      type: "CAPSULE",
-      value: "PILLS",
-    }, {
-      type: "SYRUP",
-      value: "ML",
-    }, {
-      type: "DROP",
-      value: "DROPS",
-    }, {
-      type: "INJECTION",
-      value: "UNITS",
-    }];
+    const units = [
+      {
+        type: "TABLET",
+        value: "PILLS",
+      },
+      {
+        type: "CAPSULE",
+        value: "PILLS",
+      },
+      {
+        type: "SYRUP",
+        value: "ML",
+      },
+      {
+        type: "DROP",
+        value: "DROPS",
+      },
+      {
+        type: "INJECTION",
+        value: "UNITS",
+      },
+    ];
     return units?.find((u) => u.type === medType.value)?.value!;
   };
 
@@ -202,65 +243,77 @@ const MedicationForm = ({
   }, [type]);
 
   const handleSubmit = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    if (!name.trim()) newErrors.name = "Medication name is required";
+
+    const parsedDose = Number(doseValue);
+    if (!doseValue || isNaN(parsedDose) || parsedDose <= 0) {
+      newErrors.dose = "Valid dose required";
+    }
+
+    const parsedTotal = Number(totalPills);
+    if (!totalPills || isNaN(parsedTotal) || parsedTotal <= 0) {
+      newErrors.totalPills = "Valid quantity required";
+    }
+
     if (preferredTimes.length !== maxTimes) {
       Toast.show({
         type: "error",
         text1: `${frequency.key} needs ${maxTimes} reminder ${maxTimes === 1 ? "time" : "times"}.`,
         text2: `Please add ${maxTimes - preferredTimes.length} more reminder timings.`,
       });
-      return;
+      newErrors.times = "Missing times";
     }
 
-    console.log({
-      medicationName: name,
-      medicationType: type.value,
-      prescribedBy: doctor,
-      dosePerIntake: Number(doseValue) || 0,
-      frequency: frequency.value,
-      bestTaken: timesOfDay.map((t) => t.value),
-      foodFrequency: foodTiming.value,
-      startDate: format(startDate, "yyyy-MM-dd"),
-      ongoing: isOngoing,
-      medicationTime: preferredTimes.map((t) => {
-        return {
-          time: format(t, "hh:mm"),
-          period: format(t, "a"),
-        };
-      }),
-      totalQuantity: Number(totalPills),
-      doseReminders: reminders,
-      unit: getUnitString(type),
-      refillAlert,
-      notes,
-      reminderBefore: reminders ? (Number(reminderBeforeMinutes) || 0) : 0,
-    });
+    setErrors(newErrors);
 
-    onSubmit({
-      medicationName: name,
-      medicationType: type.value,
-      prescribedBy: doctor,
-      dosePerIntake: Number(doseValue) || 0,
-      frequency: frequency.value,
-      bestTaken: timesOfDay.map((t) => t.value),
-      foodFrequency: foodTiming.value,
-      startDate: format(startDate, "yyyy-MM-dd"),
-      ongoing: isOngoing,
-      medicationTime: preferredTimes.map((t) => {
-        return {
-          time: format(t, "hh:mm"),
-          period: format(t, "a"),
-        };
-      }),
-      totalQuantity: Number(totalPills),
-      doseReminders: reminders,
-      unit: displayDose,
-      refillAlert,
-      notes,
-      reminderBeforeMinutes: reminders ? (Number(reminderBeforeMinutes) || 0) : 0,
-    });
+    if (Object.keys(newErrors).length > 0) return;
+
+    if (operation === "add") {
+      onSubmit({
+        medicationName: name,
+        medicationType: type.value,
+        prescribedBy: doctor,
+        dosePerIntake: Number(doseValue) || 0,
+        frequency: frequency.value,
+        foodFrequency: foodTiming.value,
+        startDate: format(startDate, "yyyy-MM-dd"),
+        ongoing: isOngoing,
+        medicationSchedule: preferredTimes.reduce((acc: any, t, index) => {
+          const key =
+            timesOfDay[index]?.value || timesOfDay[0]?.value || "SPECIFIC_TIME";
+          acc[key] = format(t, "HH:mm:ss");
+          return acc;
+        }, {}),
+        totalQuantity: Number(totalPills),
+        notes,
+        reminderBeforeMinutes: reminders
+          ? Number(reminderBeforeMinutes) || 0
+          : 0,
+      });
+    } else {
+      onSubmit({
+        medicationName: name,
+        medicationType: type.value,
+        prescribedBy: doctor,
+        dosePerIntake: Number(doseValue) || 0,
+        frequency: frequency.value,
+        foodFrequency: foodTiming.value,
+        startDate: format(startDate, "yyyy-MM-dd"),
+        ongoing: isOngoing,
+        medicationSchedule: preferredTimes.reduce((acc: any, t, index) => {
+          const key =
+            timesOfDay[index]?.value || timesOfDay[0]?.value || "SPECIFIC_TIME";
+          acc[key] = format(t, "HH:mm:ss");
+          return acc;
+        }, {}),
+        totalQuantity: Number(totalPills),
+        notes,
+        reminderBeforeMinutes: Number(reminderBeforeMinutes) || 0,
+      });
+    }
   };
-
-
 
   const maxTimes = timesOfDay.some((t) => t.value === "SPECIFIC_TIME")
     ? 5
@@ -271,273 +324,311 @@ const MedicationForm = ({
         : 3;
 
   return (
-    <ScrollContent
-      showsVerticalScrollIndicator={false}
-      onScroll={onScroll}
-      scrollEventThrottle={16}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={{ flex: 1 }}
     >
-      <ModernLoader visible={isLoading} title="This May Take A While." />
-      <Card style={{ marginTop: 0 }}>
-        <SectionHeaderRow>
-          <MaterialCommunityIcons
-            name="information-outline"
-            size={20}
-            color={ACCENT}
+      <ScrollContent
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        bounces={false}
+        overScrollMode="never"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          paddingTop: 220,
+          paddingBottom: keyboardPadding,
+        }}
+      >
+        <ModernLoader visible={isLoading} title="This May Take A While." />
+        <Card style={{ marginTop: 0 }}>
+          <SectionHeaderRow>
+            <MaterialCommunityIcons
+              name="information-outline"
+              size={20}
+              color={ACCENT}
+            />
+            <SectionTitle>Basic Information</SectionTitle>
+          </SectionHeaderRow>
+          <InputLabel>Medication Name</InputLabel>
+          <StyledInput
+            placeholder="Enter Name"
+            value={name}
+            onChangeText={(text: string) => {
+              setName(text);
+              setErrors((prev) => ({ ...prev, name: "" }));
+            }}
           />
-          <SectionTitle>Basic Information</SectionTitle>
-        </SectionHeaderRow>
-        <InputLabel>Medication Name</InputLabel>
-        <StyledInput
-          placeholder="Enter Name"
-          value={name}
-          onChangeText={setName}
-        />
-        <InputLabel style={{ marginTop: 15 }}>Medication Type</InputLabel>
-        <PillContainer>
-          {MED_TYPES.map((t: MedType) => (
-            <TypePill
-              key={t.key}
-              active={type.value === t.value}
-              onPress={() => setType(t)}
-            >
-              <TypePillText active={type.value === t.value}>
-                {t.key}
-              </TypePillText>
-            </TypePill>
-          ))}
-        </PillContainer>
-        <InputLabel style={{ marginTop: 15 }}>Prescribed By</InputLabel>
-        <StyledInput
-          placeholder="Doctor Name"
-          value={doctor}
-          onChangeText={setDoctor}
-        />
-      </Card>
-
-      <Card>
-        <SectionHeaderRow>
-          <MaterialCommunityIcons name="pill" size={20} color={ACCENT} />
-          <SectionTitle>Dosage & Timing</SectionTitle>
-        </SectionHeaderRow>
-        <Row>
-          <View style={{ flex: 1 }}>
-            <InputLabel>Dose Per Intake</InputLabel>
-            <StyledInput
-              placeholder="0"
-              keyboardType="numeric"
-              value={doseValue}
-              onChangeText={setDoseValue}
-            />
-          </View>
-          <SpacerHorizontal width={12} />
-          <View style={{ flex: 1 }}>
-            <InputLabel>Dose with Unit</InputLabel>
-            <StyledInput
-              editable={false}
-              value={displayDose}
-              placeholder="--"
-              style={{ backgroundColor: "#f8fafc" }}
-            />
-          </View>
-        </Row>
-        <InputLabel style={{ marginTop: 15 }}>Frequency</InputLabel>
-        <PillContainer>
-          {FREQUENCIES.map((f) => (
-            <TypePill
-              key={f.key}
-              active={frequency.key === f.key}
-              onPress={() => {
-                setFrequency(f);
-                setTimesOfDay([timesOfDay[0]]);
-              }}
-            >
-              <TypePillText active={frequency.key === f.key}>
-                {f.key}
-              </TypePillText>
-            </TypePill>
-          ))}
-        </PillContainer>
-        <InputLabel style={{ marginTop: 15 }}>Best Taken</InputLabel>
-        <TimeGrid>
-          {TIMES_OF_DAY.map((item) => (
-            <TimeBox
-              key={item.key}
-              active={timesOfDay.some((t) => t.key === item.key)}
-              onPress={() => {
-                setTimesOfDay((prev) => {
-                  const isSelected = prev.some((t) => t.key === item.key);
-                  const hasSpecificTime = prev.some(
-                    (t) => t.value === "SPECIFIC_TIME",
-                  );
-
-                  if (frequency.value === "ONCE_DAILY") {
-                    return isSelected ? prev : [item];
-                  }
-
-                  if (item.value === "SPECIFIC_TIME") {
-                    return [item];
-                  }
-
-                  if (hasSpecificTime) {
-                    return [item];
-                  }
-
-                  if (isSelected) {
-                    if (prev.length > 1) {
-                      return prev.filter((t) => t.key !== item.key);
-                    }
-                    return prev;
-                  } else {
-                    const limit =
-                      frequency.value === "TWICE_DAILY"
-                        ? 2
-                        : frequency.value === "THREE_TIMES_DAILY"
-                          ? 3
-                          : Infinity;
-                    if (prev.length < limit) {
-                      return [...prev, item];
-                    }
-                    return prev;
-                  }
-                });
-              }}
-            >
-              <TimeText active={timesOfDay.some((t) => t.key === item.key)}>
-                {item.key}
-              </TimeText>
-            </TimeBox>
-          ))}
-        </TimeGrid>
-
-        <InputLabel style={{ marginTop: 15 }}>Food Context</InputLabel>
-        <PillContainer>
-          {FOOD_TIMINGS.map((f) => (
-            <TypePill
-              key={f.key}
-              active={foodTiming.value === f.value}
-              onPress={() => setFoodTiming(f)}
-            >
-              <TypePillText active={foodTiming.value === f.value}>
-                {f.key}
-              </TypePillText>
-            </TypePill>
-          ))}
-        </PillContainer>
-
-        <InputLabel style={{ marginTop: 15 }}>Reminder Timings</InputLabel>
-
-        {preferredTimes.length > 0 && (
-          <SelectedTimesContainer>
-            {preferredTimes.map((timings, index) => (
-              <TimeChip key={index}>
-                <TimeChipText>{format(timings, "hh:mm a")}</TimeChipText>
-                <RemoveTimeBtn
-                  onPress={() => {
-                    setPreferredTimes((prev) =>
-                      prev.filter((_, i) => i !== index),
-                    );
-                  }}
-                >
-                  <Ionicons name="close" size={16} color="#fff" />
-                </RemoveTimeBtn>
-              </TimeChip>
+          {errors.name ? <FieldErrorText>{errors.name}</FieldErrorText> : null}
+          <InputLabel style={{ marginTop: 15 }}>Medication Type</InputLabel>
+          <PillContainer>
+            {MED_TYPES.map((t: MedType) => (
+              <TypePill
+                key={t.key}
+                active={type.value === t.value}
+                onPress={() => setType(t)}
+                // disabled={operation === "edit"}
+                // style={{ opacity: operation === "edit" ? 0.6 : 1 }}
+              >
+                <TypePillText active={type.value === t.value}>
+                  {t.key}
+                </TypePillText>
+              </TypePill>
             ))}
-          </SelectedTimesContainer>
-        )}
-
-        {preferredTimes.length < maxTimes && (
-          <DateBtn
-            style={{ marginTop: preferredTimes.length > 0 ? 12 : 0 }}
-            onPress={() => setPicker({ visible: true, type: "time" })}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={ACCENT} />
-            <DateBtnText>Add Reminder Timings</DateBtnText>
-          </DateBtn>
-        )}
-      </Card>
-
-      {/* SCHEDULE & SUPPLY */}
-      <Card>
-        <SectionHeaderRow>
-          <MaterialCommunityIcons
-            name="calendar-clock"
-            size={20}
-            color={ACCENT}
+          </PillContainer>
+          <InputLabel style={{ marginTop: 15 }}>Prescribed By</InputLabel>
+          <StyledInput
+            placeholder="Doctor Name"
+            value={doctor}
+            onChangeText={setDoctor}
           />
-          <SectionTitle>Schedule & Supply</SectionTitle>
-        </SectionHeaderRow>
-        <Row>
-          <View style={{ flex: 1 }}>
-            <InputLabel>Pills To Be Taken</InputLabel>
-            <StyledInput
-              placeholder="e.g. 30"
-              keyboardType="numeric"
-              value={totalPills}
-              onChangeText={setTotalPills}
-            />
-          </View>
-          <SpacerHorizontal width={12} />
-          <View style={{ flex: 1 }}>
-            <InputLabel>Start Date</InputLabel>
-            <DateBtn
-              onPress={() => setPicker({ visible: true, type: "start" })}
-            >
-              <Ionicons name="calendar-outline" size={18} color={ACCENT} />
-              <DateBtnText>
-                {isValidDate(startDate)
-                  ? format(startDate, "dd MMM yyyy")
-                  : "Select Date"}
-              </DateBtnText>
-            </DateBtn>
-          </View>
-        </Row>
-        <Row style={{ marginTop: 15 }}></Row>
-        <ToggleRow>
-          <ToggleLeftSection>
-            <ToggleIconBox>
-              <MaterialCommunityIcons
-                name="infinity"
-                size={22}
-                color={ACCENT}
+        </Card>
+
+        <Card>
+          <SectionHeaderRow>
+            <MaterialCommunityIcons name="pill" size={20} color={ACCENT} />
+            <SectionTitle>Dosage & Timing</SectionTitle>
+          </SectionHeaderRow>
+          <Row>
+            <View style={{ flex: 1 }}>
+              <InputLabel>Dose Per Intake</InputLabel>
+              <StyledInput
+                placeholder="0"
+                keyboardType="numeric"
+                value={doseValue}
+                onChangeText={(val: string) => {
+                  setDoseValue(val);
+                  setErrors((prev) => ({ ...prev, dose: "" }));
+                }}
               />
-            </ToggleIconBox>
-            <View>
-              <ToggleTitle>Ongoing Medication</ToggleTitle>
-              <ToggleSub>No fixed end date</ToggleSub>
+              {errors.dose ? (
+                <FieldErrorText>{errors.dose}</FieldErrorText>
+              ) : null}
             </View>
-          </ToggleLeftSection>
-          <Switch
-            value={isOngoing}
-            onValueChange={setIsOngoing}
-            trackColor={{ false: "#cbd5e1", true: ACCENT }}
-            thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
-          />
-        </ToggleRow>
-      </Card>
+            <SpacerHorizontal width={12} />
+            <View style={{ flex: 1 }}>
+              <InputLabel>Dose with Unit</InputLabel>
+              <StyledInput
+                editable={false}
+                value={displayDose}
+                placeholder="--"
+                style={{ backgroundColor: "#f8fafc" }}
+              />
+            </View>
+          </Row>
+          <InputLabel style={{ marginTop: 15 }}>Frequency</InputLabel>
+          <PillContainer>
+            {FREQUENCIES.map((f) => (
+              <TypePill
+                key={f.key}
+                active={frequency.key === f.key}
+                onPress={() => {
+                  setFrequency(f);
+                  setTimesOfDay([timesOfDay[0]]);
+                }}
+              >
+                <TypePillText active={frequency.key === f.key}>
+                  {f.key}
+                </TypePillText>
+              </TypePill>
+            ))}
+          </PillContainer>
+          <InputLabel style={{ marginTop: 15 }}>Best Taken</InputLabel>
+          <TimeGrid>
+            {TIMES_OF_DAY.map((item) => (
+              <TimeBox
+                key={item.key}
+                active={timesOfDay.some((t) => t.key === item.key)}
+                onPress={() => {
+                  setTimesOfDay((prev) => {
+                    const isSelected = prev.some((t) => t.key === item.key);
+                    const hasSpecificTime = prev.some(
+                      (t) => t.value === "SPECIFIC_TIME",
+                    );
 
-      {/* ALERTS */}
-      <Card>
-        <SectionHeaderRow>
-          <MaterialCommunityIcons
-            name="bell-outline"
-            size={20}
-            color={ACCENT}
-          />
-          <SectionTitle>Alerts & Extra Info</SectionTitle>
-        </SectionHeaderRow>
-        <ToggleRow style={{ borderTopWidth: 0, marginTop: 0 }}>
-          <View style={{ flex: 1 }}>
-            <ToggleTitle>Dose Reminders</ToggleTitle>
-            <ToggleSub>Notify at preferred time</ToggleSub>
-          </View>
-          <Switch
-            value={reminders}
-            onValueChange={setReminders}
-            trackColor={{ false: "#cbd5e1", true: ACCENT }}
-            thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
-          />
-        </ToggleRow>
-        {reminders && (
+                    if (frequency.value === "ONCE_DAILY") {
+                      return isSelected ? prev : [item];
+                    }
+
+                    if (item.value === "SPECIFIC_TIME") {
+                      return [item];
+                    }
+
+                    if (hasSpecificTime) {
+                      return [item];
+                    }
+
+                    if (isSelected) {
+                      if (prev.length > 1) {
+                        return prev.filter((t) => t.key !== item.key);
+                      }
+                      return prev;
+                    } else {
+                      const limit =
+                        frequency.value === "TWICE_DAILY"
+                          ? 2
+                          : frequency.value === "THREE_TIMES_DAILY"
+                            ? 3
+                            : Infinity;
+                      if (prev.length < limit) {
+                        return [...prev, item];
+                      }
+                      return prev;
+                    }
+                  });
+                }}
+              >
+                <TimeText active={timesOfDay.some((t) => t.key === item.key)}>
+                  {item.key}
+                </TimeText>
+              </TimeBox>
+            ))}
+          </TimeGrid>
+
+          <InputLabel style={{ marginTop: 15 }}>Food Context</InputLabel>
+          <PillContainer>
+            {FOOD_TIMINGS.map((f) => (
+              <TypePill
+                key={f.key}
+                active={foodTiming.value === f.value}
+                onPress={() => setFoodTiming(f)}
+                // disabled={operation === "edit"}
+                // style={{ opacity: operation === "edit" ? 0.6 : 1 }}
+              >
+                <TypePillText active={foodTiming.value === f.value}>
+                  {f.key}
+                </TypePillText>
+              </TypePill>
+            ))}
+          </PillContainer>
+
+          <InputLabel style={{ marginTop: 15 }}>Reminder Timings</InputLabel>
+
+          {preferredTimes.length > 0 && (
+            <SelectedTimesContainer>
+              {preferredTimes.map((timings, index) => (
+                <TimeChip key={index}>
+                  <TimeChipText>{format(timings, "hh:mm a")}</TimeChipText>
+                  <RemoveTimeBtn
+                    onPress={() => {
+                      setPreferredTimes((prev) =>
+                        prev.filter((_, i) => i !== index),
+                      );
+                    }}
+                  >
+                    <Ionicons name="close" size={16} color="#fff" />
+                  </RemoveTimeBtn>
+                </TimeChip>
+              ))}
+            </SelectedTimesContainer>
+          )}
+
+          {preferredTimes.length < maxTimes && (
+            <DateBtn
+              style={{ marginTop: preferredTimes.length > 0 ? 12 : 0 }}
+              onPress={() => {
+                Keyboard.dismiss();
+                setPicker({ visible: true, type: "time" });
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={ACCENT} />
+              <DateBtnText>Add Reminder Timings</DateBtnText>
+            </DateBtn>
+          )}
+        </Card>
+
+        {/* SCHEDULE & SUPPLY */}
+        <Card>
+          <SectionHeaderRow>
+            <MaterialCommunityIcons
+              name="calendar-clock"
+              size={20}
+              color={ACCENT}
+            />
+            <SectionTitle>Schedule & Supply</SectionTitle>
+          </SectionHeaderRow>
+          <Row>
+            <View style={{ flex: 1 }}>
+              <InputLabel>
+                Total {type.value === "DROP" ? "ML" : displayDose}
+              </InputLabel>
+              <StyledInput
+                ref={totalPillsRef}
+                placeholder="e.g. 30"
+                keyboardType="numeric"
+                value={totalPills}
+                onChangeText={(val: string) => {
+                  setTotalPills(val);
+                  setErrors((prev) => ({ ...prev, totalPills: "" }));
+                }}
+              />
+              {errors.totalPills ? (
+                <FieldErrorText>{errors.totalPills}</FieldErrorText>
+              ) : null}
+            </View>
+            <SpacerHorizontal width={12} />
+            <View style={{ flex: 1 }}>
+              <InputLabel>Start Date</InputLabel>
+              <DateBtn
+                onPress={() => setPicker({ visible: true, type: "start" })}
+                // disabled={operation === "edit"}
+                // style={{ opacity: operation === "edit" ? 0.6 : 1 }}
+              >
+                <Ionicons name="calendar-outline" size={18} color={ACCENT} />
+                <DateBtnText>
+                  {isValidDate(startDate)
+                    ? format(startDate, "dd MMM yyyy")
+                    : "Select Date"}
+                </DateBtnText>
+              </DateBtn>
+            </View>
+          </Row>
+          <Row style={{ marginTop: 15 }}></Row>
+          <ToggleRow>
+            <ToggleLeftSection>
+              <ToggleIconBox>
+                <MaterialCommunityIcons
+                  name="infinity"
+                  size={22}
+                  color={ACCENT}
+                />
+              </ToggleIconBox>
+              <View>
+                <ToggleTitle>Ongoing Medication</ToggleTitle>
+                <ToggleSub>No fixed end date</ToggleSub>
+              </View>
+            </ToggleLeftSection>
+            <Switch
+              value={isOngoing}
+              onValueChange={setIsOngoing}
+              trackColor={{ false: "#cbd5e1", true: ACCENT }}
+              thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
+            />
+          </ToggleRow>
+        </Card>
+
+        {/* ALERTS */}
+        <Card>
+          <SectionHeaderRow>
+            <MaterialCommunityIcons
+              name="bell-outline"
+              size={20}
+              color={ACCENT}
+            />
+            <SectionTitle>Alerts & Extra Info</SectionTitle>
+          </SectionHeaderRow>
+          {/* <ToggleRow style={{ borderTopWidth: 0, marginTop: 0 }}>
+            <View style={{ flex: 1 }}>
+              <ToggleTitle>Dose Reminders</ToggleTitle>
+              <ToggleSub>Notify at preferred time</ToggleSub>
+            </View>
+            <Switch
+              value={reminders}
+              onValueChange={setReminders}
+              trackColor={{ false: "#cbd5e1", true: ACCENT }}
+              thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
+            />
+          </ToggleRow> */}
           <View style={{ marginTop: 15 }}>
             <InputLabel>Reminder Before (Minutes)</InputLabel>
             <ReminderInputRow>
@@ -559,76 +650,137 @@ const MedicationForm = ({
               <ReminderUnitText>Min before</ReminderUnitText>
             </ReminderInputRow>
             <PresetContainer>
-              {[0, 5, 10, 15].map((mins) => (
+              {[5, 10, 15].map((mins) => (
                 <PresetPill
                   key={mins}
-                  active={Number(reminderBeforeMinutes) === mins && reminderBeforeMinutes !== ""}
+                  active={
+                    Number(reminderBeforeMinutes) === mins &&
+                    reminderBeforeMinutes !== ""
+                  }
                   onPress={() => {
-                    console.log(mins);
-                    setReminderBeforeMinutes(mins.toString())
+                    setReminderBeforeMinutes(mins!.toString());
                   }}
                 >
-                  <PresetPillText active={Number(reminderBeforeMinutes) === mins && reminderBeforeMinutes !== ""}>
+                  <PresetPillText
+                    active={
+                      Number(reminderBeforeMinutes) === mins &&
+                      reminderBeforeMinutes !== ""
+                    }
+                  >
                     {mins === 0 ? "At Time" : `${mins} Min`}
                   </PresetPillText>
                 </PresetPill>
               ))}
             </PresetContainer>
           </View>
-        )}
-        <ToggleRow>
-          <View style={{ flex: 1 }}>
-            <ToggleTitle>Refill Alert</ToggleTitle>
-            <ToggleSub>Notify when stock is low</ToggleSub>
-          </View>
-          <Switch
-            value={refillAlert}
-            onValueChange={setRefillAlert}
-            trackColor={{ false: "#cbd5e1", true: ACCENT }}
-            thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
+          {/* <ToggleRow>
+            <View style={{ flex: 1 }}>
+              <ToggleTitle>Refill Alert</ToggleTitle>
+              <ToggleSub>Notify when stock is low</ToggleSub>
+            </View>
+            <Switch
+              value={refillAlert}
+              onValueChange={setRefillAlert}
+              trackColor={{ false: "#cbd5e1", true: ACCENT }}
+              thumbColor={Platform.OS === "ios" ? undefined : ACCENT_DARK}
+            />
+          </ToggleRow> */}
+          <InputLabel style={{ marginTop: 20 }}>Notes</InputLabel>
+          <StyledInput
+            placeholder="Special instruction.."
+            multiline
+            value={notes}
+            onChangeText={setNotes}
+            style={{ height: 80, textAlignVertical: "top" }}
           />
-        </ToggleRow>
-        <InputLabel style={{ marginTop: 20 }}>Notes</InputLabel>
-        <StyledInput
-          placeholder="Special instruction.."
-          multiline
-          value={notes}
-          onChangeText={setNotes}
-          style={{ height: 80, textAlignVertical: "top" }}
-        />
-      </Card>
+        </Card>
 
-      <Footer>
-        <SaveButton onPress={handleSubmit} disabled={isLoading}>
-          <SaveButtonText>
-            {isLoading ? "Saving..." : "Save Medication"}
-          </SaveButtonText>
-        </SaveButton>
-      </Footer>
+        <Footer>
+          <SaveButton onPress={handleSubmit} disabled={isLoading}>
+            <SaveButtonText>
+              {isLoading ? "Saving..." : "Save Medication"}
+            </SaveButtonText>
+          </SaveButton>
+        </Footer>
 
-      <DatePicker
-        modal
-        open={picker.visible}
-        mode={picker.type === "time" ? "time" : "date"}
-        date={picker.type === "start" ? startDate : new Date()}
-        onConfirm={(date) => {
-           setPicker((prev) => ({ ...prev, visible: false }));
-          if (picker.type === "start") setStartDate(date);
-          else {
-            if (preferredTimes.some((t) => isEqual(t, date))) {
-              Toast.show({
-                type: "error",
-                text1: "Time already Selected.",
-                text2: "Please select a different time.",
-              });
-              return;
-            }
-            setPreferredTimes((prev) => [...prev, date]);
+        <DatePicker
+          modal
+          open={picker.visible}
+          mode={picker.type === "time" ? "time" : "date"}
+          date={picker.type === "start" ? startDate : new Date()}
+          minimumDate={
+            picker.type === "start" && operation === "add"
+              ? new Date(new Date().setHours(0, 0, 0, 0))
+              : undefined
           }
-        }}
-        onCancel={() => setPicker({ ...picker, visible: false })}
-      />
-    </ScrollContent>
+          onConfirm={(date) => {
+            setPicker((prev) => ({ ...prev, visible: false }));
+            if (picker.type === "start") {
+              setStartDate(date);
+            } else {
+              setTimeout(() => {
+                totalPillsRef.current?.focus();
+              }, 400);
+
+              const h = date.getHours();
+              const currentSlot = timesOfDay[preferredTimes.length];
+
+              if (currentSlot) {
+                if (currentSlot.key === "Morning") {
+                  if (h < 6 || h > 10) {
+                    Toast.show({
+                      type: "error",
+                      text1: "Invalid Time",
+                      text2:
+                        "Morning time should be between 6:00 AM and 10:00 AM",
+                    });
+                    return;
+                  }
+                } else if (currentSlot.key === "Noon") {
+                  if (h < 12 || h > 17) {
+                    Toast.show({
+                      type: "error",
+                      text1: "Invalid Time",
+                      text2: "Noon time should be between 12:00 PM and 5:00 PM",
+                    });
+                    return;
+                  }
+                } else if (currentSlot.key === "Night") {
+                  if (h < 19 || h > 22) {
+                    Toast.show({
+                      type: "error",
+                      text1: "Invalid Time",
+                      text2:
+                        "Night time should be between 7:00 PM and 11:00 PM",
+                    });
+                    return;
+                  }
+                }
+              }
+
+              if (preferredTimes.some((t) => isEqual(t, date))) {
+                Toast.show({
+                  type: "error",
+                  text1: "Time already Selected.",
+                  text2: "Please select a different time.",
+                });
+                return;
+              }
+
+              setPreferredTimes((prev) => [...prev, date]);
+            }
+          }}
+          onCancel={() => {
+            setPicker((prev) => ({ ...prev, visible: false }));
+            // if (picker.type === "time") {
+            //   setTimeout(() => {
+            //     totalPillsRef.current?.focus();
+            //   }, 400);
+            // }
+          }}
+        />
+      </ScrollContent>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -637,7 +789,6 @@ export default MedicationForm;
 const ScrollContent = styled(Animated.ScrollView)`
   flex: 1;
   padding-horizontal: 20px;
-  padding-top: 20px;
 `;
 
 export const Card = styled.View`
@@ -671,6 +822,13 @@ export const InputLabel = styled.Text`
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+`;
+
+export const FieldErrorText = styled.Text`
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 4px;
+  margin-left: 4px;
 `;
 
 export const StyledInput = styled.TextInput`
@@ -794,7 +952,7 @@ export const ToggleSub = styled.Text`
 `;
 
 export const Footer = styled.View`
-  padding: 25px 0px 40px;
+  padding: 10px 0px 30px;
 `;
 
 export const SaveButton = styled.TouchableOpacity`

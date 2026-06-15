@@ -1,6 +1,6 @@
 // src/screens/AuthScreens/SignupScreen.tsx
-import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, StatusBar, View, ActivityIndicator } from "react-native";
+import React, { useState, useEffect } from "react";
+import { Platform, StatusBar, View, Keyboard } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -35,6 +35,22 @@ const SignupScreen = () => {
 
   const [email, setEmail] = useState(routeEmail);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => setKeyboardPadding(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardPadding(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -86,9 +102,8 @@ const SignupScreen = () => {
         backgroundColor="transparent"
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1, backgroundColor: "#F4F1FE" }}
+      <View
+        style={{ flex: 1, backgroundColor: "#F4F1FE", paddingBottom: keyboardPadding }}
       >
         <SignupStickyBar scrollY={scrollY} heading="Create Account" subHeading="Join us — it only takes a minute" />
 
@@ -151,7 +166,7 @@ const SignupScreen = () => {
             <SignupForm />
             
         </AnimatedScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </>
   );
 };

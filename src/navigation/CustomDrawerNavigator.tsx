@@ -8,7 +8,7 @@ import ProfileStack from "./stacks/ProfileStack";
 import DocumentStack from "./stacks/DocumentStack";
 import MedicationStack from "./stacks/MedicationStack";
 import ReminderScreen from "../screens/AppScreens/Reminders/ReminderScreen";
-import ForgotPasswordScreen from "../screens/AuthScreens/ForgotPassword";
+import PasswordResetStack from "./stacks/PasswordResetStack";
 import { useAppTheme } from "../context/ThemeContext";
 
 const Drawer = createDrawerNavigator();
@@ -116,7 +116,7 @@ const CustomDrawerNavigator = () => {
 
       <Drawer.Screen
         name="FORGOT PASSWORD"
-        component={ForgotPasswordScreen}
+        component={PasswordResetStack}
         options={{
           drawerLabel: "Forgot Password",
           drawerIcon: ({ color, size }) => (
@@ -127,7 +127,7 @@ const CustomDrawerNavigator = () => {
 
       <Drawer.Screen
         name="Reset Password"
-        component={ForgotPasswordScreen}
+        component={PasswordResetStack}
         options={{
           drawerLabel: "Reset Password",
           drawerIcon: ({ color, size }) => (

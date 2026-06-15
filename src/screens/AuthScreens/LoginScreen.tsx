@@ -1,12 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
   Text,
   TouchableOpacity,
+  Keyboard,
+  View,
 } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
@@ -29,6 +30,22 @@ const LoginScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => setKeyboardPadding(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardPadding(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
@@ -38,13 +55,13 @@ const LoginScreen = () => {
 
   const validateForm = () => {
     let isValid = true;
-    const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w\w+)+$/;
+    const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,})+$/;
 
-    if (!email) {
+    if (!email.trim()) {
       setEmailError("Email is required");
       isValid = false;
-    } else if (!emailReg.test(email)) {
-      setEmailError("Invalid email");
+    } else if (!emailReg.test(email.trim())) {
+      setEmailError("Invalid email format");
       isValid = false;
     } else {
       setEmailError(null);
@@ -66,11 +83,13 @@ const LoginScreen = () => {
       const refreshToken = result?.data?.refreshToken;
       const accessToken = result?.data?.accessToken;
       const userId = result?.data?.patient?.id;
+      const createdAt = result?.data?.createdAt;
 
       await authLogin({
         accessToken: String(accessToken),
         refreshToken: String(refreshToken),
         userId: String(userId),
+        createdAt: createdAt ? String(createdAt) : undefined,
       });
 
       Toast.show({
@@ -105,9 +124,8 @@ const LoginScreen = () => {
     <Container>
       <StatusBar barStyle={isDark ? "light-content" : "light-content"} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
+      <View
+        style={{ flex: 1, paddingBottom: keyboardPadding }}
       >
         <GradientBackground
           colors={["#8B5CF6", "#EC4899", "#FF7A59"]}
@@ -256,7 +274,7 @@ const LoginScreen = () => {
             </InnerContainer>
           </ScrollView>
         </GradientBackground>
-      </KeyboardAvoidingView>
+      </View>
     </Container>
   );
 };

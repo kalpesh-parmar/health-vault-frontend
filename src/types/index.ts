@@ -36,14 +36,14 @@ export interface LoginRequest {
 }
 
 export interface SignupRequest {
-  // profileImageKey?: string;
+  profileImageKey?: string;
   firstName: string;
   lastName: string;
-  userName: string;
+  // userName: string;
   email: string;
   password: string;
   gender: string;
-  age: number;
+  dateOfBirth: string;
   phone: string;
 }
 
@@ -86,11 +86,7 @@ export interface User {
 // ─── Update User Request ────────────────────────────────────────────────
 
 export interface UpdateUserRequest {
-  profilePicture?: {
-    uri: string;
-    name: string;
-    type: string;
-  };
+  profileImageKey?: string;
   userName?: string;
   firstName?: string;
   lastName?: string;
@@ -127,23 +123,19 @@ export interface FilterDocumentsRequest {
 export interface AddOrEditMedication {
   id?: string;
   medicationName: string;
-  medicationType: string;
+  medicationType?: string;
   prescribedBy: string;
   dosePerIntake: number;
   frequency: string;
-  medicationTime: {
-    time: string;
-    period: string;
-  }[];
-  bestTaken: string[];
-  foodFrequency: string;
-  startDate: string;
+  medicationSchedule: Record<string, string>;
+  foodFrequency?: string;
+  startDate?: string;
   ongoing: boolean;
   totalQuantity: number;
-  doseReminders: boolean;
-  unit: string;
-  reminderBeforeMinutes?: number;
-  refillAlert: boolean;
+  isReminder?: boolean;
+  unit?: string;
+  reminderBeforeMinutes?: number | null;
+  refillAlert?: boolean;
   notes: string;
 }
 
@@ -178,12 +170,57 @@ export interface ListNotificationRequest {
 // ─── Health Reminders ────────────────────────────────────────
 
 export interface Reminder {
-  id: string;
-  title: string;
-  time: string;           // e.g. "09:00 AM"
-  date: string;           // e.g. "2026-05-18"
-  status: "overdue" | "upcoming" | "completed";
-  category: "Medication" | "Vaccination" | "Appointment" | "Other";
-  notes?: string;
+  id?: string;
+  patientId?: string;
+  medicationId?: string;
   medicationName?: string;
+  medicationType?: string;
+  type?: string;
+  status?: string;
+  beforeReminderTime?: string;
+  afterReminderMinutes?: number;
+  refillAlertBeforeDays: number;
+  dosePerIntake: number;
+  frequency: string;
+  medicationTime: {
+    time: string;
+    period: string;
+  }[];
+  actualMedicationTime: string;
+  completedAt?: string;
+  isOverdue?: boolean;
+  timezone: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  softDelete: boolean;
+}
+
+export interface CreateMedicationReminderRequest {
+  medicationId: string;
+}
+
+export interface ListRemindersRequest {
+  filter: {
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    medicationName?: string;
+    medicationType?: string;
+    date?: string;
+    isOverdue?: boolean;
+  },
+  sort: {
+    sortBy: string;
+    sortOrder: "asc" | "desc";
+  }
+  page?: {
+    pageNumber: number;
+    pageLimit: number;
+  },
+}
+
+export interface MarkReminderCompletedRequest {
+  medicationId: string;
+  quantity: number;
 }

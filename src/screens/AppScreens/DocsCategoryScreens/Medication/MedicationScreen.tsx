@@ -15,9 +15,9 @@ import {
 } from "@tanstack/react-query";
 import {
   getMedicationsPaginated,
-  updateMedication,
   listMedications,
   filterMedications,
+  refillMedicationService,
 } from "../../../../services/medicationservice";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
@@ -27,7 +27,8 @@ import FilterTabs from "../../../../components/shared/FilterTabs";
 import { MedicationStackParamList } from "../../../../types/navigation";
 import SearchBar from "../../../../components/shared/SearchBar";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import FilterBottomSheet from "../../../../components/shared/FilterBottomSheet";
+import FilterBottomSheet, { FilterOptionItem } from "../../../../components/shared/FilterBottomSheet";
+import RefillBottomSheet from "./RefillBottomSheet";
 
 const MED_CATEGORIES = [
   "All",
@@ -38,6 +39,33 @@ const MED_CATEGORIES = [
   "Injection",
 ];
 
+const SORT_OPTIONS = [
+  {
+    label: "Newest First",
+    description: "Recently added items",
+    value: "date_desc",
+    icon: "calendar",
+  },
+  {
+    label: "Oldest First",
+    description: "Earliest added items",
+    value: "date_asc",
+    icon: "calendar-outline",
+  },
+  {
+    label: "A-Z",
+    description: "Alphabetical ascending",
+    value: "name_asc",
+    icon: "alpha-a-box",
+  },
+  {
+    label: "Z-A",
+    description: "Alphabetical descending",
+    value: "name_desc",
+    icon: "alpha-z-box",
+  },
+];
+
 const MedicationScreen = () => {
   const [activeTab, setActiveTab] = useState("All");
   const [sortOption, setSortOption] = useState("date_desc");
@@ -46,6 +74,8 @@ const MedicationScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isFilterApplied, setIsFilterApplied] = useState(false);
   const filterSheetRef = useRef<BottomSheetModal>(null);
+  const refillSheetRef = useRef<BottomSheetModal>(null);
+  const [selectedMedicationForRefill, setSelectedMedicationForRefill] = useState<AddOrEditMedication | null>(null);
 
   // Reset filteration states when navigating back to this screen
   useFocusEffect(
@@ -62,50 +92,41 @@ const MedicationScreen = () => {
   const { isDark } = useAppTheme();
   const queryClient = useQueryClient();
 
-  const { mutateAsync: toggleMedicationStatus } = useMutation({
-    mutationFn: updateMedication,
+  const { mutateAsync: refillMedication } = useMutation({
+    mutationFn: refillMedicationService,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["medications"] });
       queryClient.invalidateQueries({ queryKey: ["allMedications"] });
       queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
       Toast.show({
         type: "success",
-        text1: "Status Updated",
-        text2: "Medication marked as completed.",
+        text1: "Refilled",
+        text2: "Medication quantity updated.",
       });
     },
     onError: () => {
       Toast.show({
         type: "error",
         text1: "Error",
-        text2: "Failed to update medication status.",
+        text2: "Failed to refill medication.",
       });
     },
   });
 
-  const handleToggleStatus = async (item: AddOrEditMedication) => {
-    if (!item.id) return;
-    await toggleMedicationStatus({
-      medicationId: item.id,
-      data: {
-        medicationName: item?.medicationName,
-        medicationType: item?.medicationType,
-        prescribedBy: item?.prescribedBy,
-        dosePerIntake: item?.dosePerIntake,
-        frequency: item?.frequency,
-        medicationTime: item?.medicationTime,
-        bestTaken: item?.bestTaken,
-        foodFrequency: item?.foodFrequency,
-        startDate: item?.startDate,
-        ongoing: !item?.ongoing,
-        totalQuantity: item?.totalQuantity,
-        doseReminders: item?.doseReminders,
-        unit: item?.unit,
-        reminderBeforeMinutes: item?.reminderBeforeMinutes,
-        refillAlert: item?.refillAlert,
-        notes: item?.notes,
-      },
-    });
+  const handleRefillSubmit = async (amount: number) => {
+    if (selectedMedicationForRefill?.id) {
+      await refillMedication({
+        medicationId: selectedMedicationForRefill.id,
+        quantity: amount,
+      });
+      refillSheetRef.current?.dismiss();
+    }
   };
 
   // Fetch filtered medications when a filter/sort option is applied from FilterBottomSheet
@@ -248,13 +269,21 @@ const MedicationScreen = () => {
         <MedInfoMain>
           <MedName>{item.medicationName}</MedName>
           <MedTime>
-            {item.medicationTime?.map(
-              (t: { time: string; period: string }, index: number) => (
-                <TimeText key={index}>
-                  {t.time} {t.period}{" "}
-                </TimeText>
-              ),
-            )}
+            {item.medicationSchedule &&
+              Object.values(item.medicationSchedule).map(
+                (time, index) => {
+                  const [hourStr, minute] = time.split(":");
+                  let hour = parseInt(hourStr, 10);
+                  const ampm = hour >= 12 ? "PM" : "AM";
+                  hour = hour % 12 || 12;
+                  const hourFormatted = hour < 10 ? `0${hour}` : hour;
+                  return (
+                    <TimeText key={index}>
+                      {`${hourFormatted}:${minute} ${ampm}`}{" "}
+                    </TimeText>
+                  );
+                },
+              )}
             <MedTypeLabel>
               {"\n"}
               {"\n"}• {item.medicationType}
@@ -271,31 +300,10 @@ const MedicationScreen = () => {
       <CardBottomRow>
         <DateWrapper>
           <Ionicons name="calendar-outline" size={14} color="#94a3b8" />
-          <DateText>{item.startDate}</DateText>
+          <DateText>{item.startDate?.split("T")[0]}</DateText>
         </DateWrapper>
 
         <ActionButtons>
-          <IconButton
-            style={{ marginRight: 10 }}
-            onPress={() => handleToggleStatus(item)}
-            disabled={!item.ongoing}
-          >
-            {item.ongoing ? (
-              <Ionicons
-                name={
-                  item.ongoing
-                    ? "checkmark-done-outline"
-                    : "checkmark-done-circle"
-                }
-                size={18}
-                color={item.ongoing ? "#10b981" : "#f59e0b"}
-              />
-            ) : (
-              <Tag>
-                <TagText>COMPLETED</TagText>
-              </Tag>
-            )}
-          </IconButton>
           <IconButton
             onPress={() =>
               navigation.navigate("MedicationOperation", {
@@ -304,7 +312,17 @@ const MedicationScreen = () => {
               })
             }
           >
-            <Ionicons name="create-outline" size={18} color="#64748b" />
+            <ActionText>Edit</ActionText>
+          </IconButton>
+          <IconButton
+            style={{ marginLeft: 10 }}
+            onPress={() => {
+              setSelectedMedicationForRefill(item);
+              refillSheetRef.current?.present();
+            }}
+          >
+            <Ionicons name="refresh" size={20} color={"#10b981"} />
+            <ActionText style={{ color: "#10b981" }}>Refill</ActionText>
           </IconButton>
           <IconButton
             style={{ marginLeft: 10 }}
@@ -380,58 +398,75 @@ const MedicationScreen = () => {
         isDark={isDark}
       />
 
-      {isLoading ? (
-        <LoadingContainer>
-          <ActivityIndicator size="large" color="#6366f1" />
-          <LoadingText>Fetching Medications...</LoadingText>
-        </LoadingContainer>
-      ) : (
-        <ContentList
-          data={medicationData}
-          keyExtractor={(item: AddOrEditMedication) =>
-            item.id || item.medicationName
-          }
-          renderItem={renderMedicationCard}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
+      <ContentList
+        data={medicationData}
+        keyExtractor={(item: AddOrEditMedication) =>
+          item.id || item.medicationName
+        }
+        renderItem={renderMedicationCard}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          isLoading ? (
+            <ActivityIndicator size="large" color="#4f46e5" style={{ marginTop: 40 }} />
+          ) : (
             <EmptyText>
               No {activeTab.toLowerCase()} medications found.
             </EmptyText>
+          )
+        }
+        contentContainerStyle={{ paddingBottom: 40 }}
+        onEndReached={() => {
+          if (
+            !isFilterApplied &&
+            activeTab !== "All" &&
+            hasNextPage &&
+            !isFetchingNextPage
+          ) {
+            fetchNextPage();
           }
-          contentContainerStyle={{ paddingBottom: 40 }}
-          onEndReached={() => {
-            if (
-              !isFilterApplied &&
-              activeTab !== "All" &&
-              hasNextPage &&
-              !isFetchingNextPage
-            ) {
-              fetchNextPage();
-            }
-          }}
-          onEndReachedThreshold={0.2}
-          ListFooterComponent={
-            isFetchingNextPage ? (
-              <ActivityIndicator
-                size="small"
-                color="#6366f1"
-                style={{ marginVertical: 20 }}
-              />
-            ) : null
-          }
-        />
-      )}
+        }}
+        onEndReachedThreshold={0.2}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <ActivityIndicator
+              size="small"
+              color="#6366f1"
+              style={{ marginVertical: 20 }}
+            />
+          ) : null
+        }
+      />
 
       <FilterBottomSheet
         ref={filterSheetRef}
-        selectedSort={sortOption}
-        onSelectSort={(option) => {
-          setSortOption(option);
-        }}
+        title="Sort Medications"
+        subtitle="Choose how to order your items"
         onApply={() => {
           setIsFilterApplied(true);
           filterSheetRef.current?.dismiss();
         }}
+        onReset={() => {
+          setSortOption("date_desc");
+          setIsFilterApplied(false);
+        }}
+      >
+        {SORT_OPTIONS.map((option) => (
+          <FilterOptionItem
+            key={option.value}
+            title={option.label}
+            subtitle={option.description}
+            icon={option.icon}
+            isActive={sortOption === option.value}
+            onPress={() => setSortOption(option.value)}
+          />
+        ))}
+      </FilterBottomSheet>
+
+      <RefillBottomSheet
+        ref={refillSheetRef}
+        medication={selectedMedicationForRefill}
+        onCancel={() => refillSheetRef.current?.dismiss()}
+        onRefill={handleRefillSubmit}
       />
     </Container>
   );
@@ -592,8 +627,18 @@ const HeaderIconButton = styled.TouchableOpacity`
 
 const IconButton = styled.TouchableOpacity`
   background-color: #f8fafc;
-  padding: 8px;
+  padding: 8px 8px;
   border-radius: 10px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ActionText = styled.Text`
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  margin-left: 6px;
 `;
 
 const LoadingContainer = styled.View`

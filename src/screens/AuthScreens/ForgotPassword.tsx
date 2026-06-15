@@ -54,7 +54,7 @@ const ForgotPasswordScreen = () => {
   }, []);
 
   const validateEmail = (value: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,})+$/;
     return emailRegex.test(value);
   };
 

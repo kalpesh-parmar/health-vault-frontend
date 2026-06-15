@@ -2,6 +2,7 @@
 import React from "react";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../../context/ThemeContext";
+import { ActivityIndicator } from "react-native";
 
 type DualBtnParams = {
   secondaryBtnText: string;
@@ -10,6 +11,7 @@ type DualBtnParams = {
   mainBtnColor: string;
   onSecondaryPress: () => void;
   onMainPress: () => void;
+  isLoading?: boolean;
 };
 
 const DualButtons = ({
@@ -19,6 +21,7 @@ const DualButtons = ({
   mainBtnColor,
   onSecondaryPress,
   onMainPress,
+  isLoading,
 }: DualBtnParams) => {
   const { theme } = useAppTheme();
 
@@ -28,8 +31,12 @@ const DualButtons = ({
         <SecondaryBtnText>{secondaryBtnText}</SecondaryBtnText>
       </SecondaryBtn>
 
-      <MainBtn onPress={onMainPress} activeOpacity={0.8} style={{ backgroundColor: mainBtnColor }}>
-        <MainBtnText>{mainBtnText}</MainBtnText>
+      <MainBtn onPress={onMainPress} activeOpacity={0.8} style={{ backgroundColor: mainBtnColor }} disabled={isLoading}>
+        {isLoading ? (
+          <ActivityIndicator color={theme.colors.background} />
+        ) : (
+          <MainBtnText>{mainBtnText}</MainBtnText>
+        )}
       </MainBtn>
     </DualButtonContainer>
   );

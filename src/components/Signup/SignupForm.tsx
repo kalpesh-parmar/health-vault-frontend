@@ -14,10 +14,13 @@ import PhoneInput from "react-native-phone-number-input";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
+import DatePicker from "react-native-date-picker";
+import { format } from "date-fns";
 
 // Components & Hooks
 import PasswordInfoModal from "../PasswordInfo";
 import { registerUser } from "../../services/authService";
+import { uploadFileToS3 } from "../../services/fileService";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import CameraModal from "../shared/CameraModal";
 import GenderBottomSheet from "./GenderBottomSheet";
@@ -42,7 +45,8 @@ const SignupForm = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [gender, setGender] = useState<string>("");
-  const [age, setAge] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
+  const [openDatePicker, setOpenDatePicker] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showPasswordInfo, setShowPasswordInfo] = useState(false);
   const [secureText, setSecureText] = useState(true);
@@ -86,22 +90,41 @@ const SignupForm = () => {
   // ─── Validation ──────────────────────────────────────────────────────────────
   const validate = () => {
     const e: { [key: string]: string } = {};
-    if (!firstname) e.firstname = "First name is required";
-    if (!lastname) e.lastname = "Last name is required";
-    const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w\w+)+$/;
-    if (!email) e.email = "Email is required";
-    else if (!emailReg.test(email)) e.email = "Invalid email";
-    const clean = mobileNum.replace(/\D/g, "");
-    if (!clean) e.mobileNum = "Mobile number required";
-    else if (clean.length !== 10) e.mobileNum = "Enter valid 10-digit number";
-    if (!password) e.password = "Password required";
-    else if (password.length < 6) e.password = "Minimum 6 characters";
+    
+    // Name validation: alphabets and spaces only, min 2 chars
+    const nameReg = /^[A-Za-z\s]+$/;
+    if (!firstname.trim()) e.firstname = "First name is required";
+    else if (firstname.trim().length < 2) e.firstname = "Minimum 2 characters";
+    else if (!nameReg.test(firstname.trim())) e.firstname = "Alphabets only";
+
+    if (!lastname.trim()) e.lastname = "Last name is required";
+    else if (lastname.trim().length < 2) e.lastname = "Minimum 2 characters";
+    else if (!nameReg.test(lastname.trim())) e.lastname = "Alphabets only";
+
+    // Email validation
+    const emailReg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,})+$/;
+    if (!email.trim()) e.email = "Email is required";
+    else if (!emailReg.test(email.trim())) e.email = "Invalid email format";
+
+    // Phone validation (strictly 10 digits)
+    const cleanPhone = mobileNum.replace(/\D/g, "");
+    if (!cleanPhone) e.mobileNum = "Mobile number is required";
+    else if (cleanPhone.length !== 10) e.mobileNum = "Must be exactly 10 digits";
+
+    // Password validation: Minimum 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
+    const passReg = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!password) e.password = "Password is required";
+    else if (!passReg.test(password)) e.password = "Min 8 chars, 1 Upper, 1 Lower, 1 Num, 1 Symbol";
+
     if (!confirmPassword) e.confirmPassword = "Confirm your password";
-    else if (confirmPassword !== password)
-      e.confirmPassword = "Passwords do not match";
+    else if (confirmPassword !== password) e.confirmPassword = "Passwords do not match";
+
     if (!gender) e.gender = "Select gender";
-    if (!age) e.age = "Select age";
-    if (!agreeTerms) e.agreeTerms = "Agree to Terms & Conditions";
+    
+    if (!dateOfBirth) e.dateOfBirth = "Select date of birth";
+
+    if (!agreeTerms) e.agreeTerms = "You must agree to Terms & Conditions";
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -133,19 +156,30 @@ const SignupForm = () => {
       return;
     }
     isSubmitting.current = true;
-    const payload = {
-      // profileImageKey: profileImage,
-      userName,
-      firstName: firstname,
-      lastName: lastname,
-      email,
-      password,
-      gender,
-      age: age ? Number(age) : 0,
-      phone: mobileNum,
-    };
+    
     try {
+      let profileImageKey = "";
+      
+      if (profileImage) {
+        const uploadRes = await uploadFileToS3(profileImage, "PATIENT_PROFILE");
+        const fileData = uploadRes?.data?.data || uploadRes?.data || uploadRes || {};
+        profileImageKey = fileData.s3Key || "";
+      }
+
+      const payload = {
+        profileImageKey,
+        firstName: firstname,
+        lastName: lastname,
+        email,
+        password,
+        gender,
+        dateOfBirth: dateOfBirth ? format(dateOfBirth, "yyyy-MM-dd") : "",
+        phone: mobileNum,
+      };
+
       await registerMutation(payload);
+    } catch (error: any) {
+      Toast.show({ type: "error", text1: "Signup Failed", text2: error.message });
     } finally {
       isSubmitting.current = false;
     }
@@ -338,25 +372,40 @@ const SignupForm = () => {
           </HalfField>
 
           <HalfField>
-            <FieldBox hasError={!!errors.age}>
-              <Ionicons
-                name="hourglass-outline"
-                size={17}
-                color="#A78BFA"
-              />
-              <FieldText
-                value={String(age)}
-                onChangeText={(t: string) => {
-                  setAge(t);
-                  setErrors((p) => ({ ...p, age: "" }));
-                }}
-                keyboardType="number-pad"
-                maxLength={3}
-                placeholder="Age"
-                placeholderTextColor="#C4B5FD"
-              />
-            </FieldBox>
-            {errors.age ? <ErrLabel>{errors.age}</ErrLabel> : null}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                Keyboard.dismiss();
+                setOpenDatePicker(true);
+              }}
+            >
+              <FieldBox hasError={!!errors.dateOfBirth}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={17}
+                  color="#A78BFA"
+                />
+                <GenderLabel isSelected={!!dateOfBirth}>
+                  {dateOfBirth ? format(dateOfBirth, "dd MMM yyyy") : "Date of Birth"}
+                </GenderLabel>
+              </FieldBox>
+            </TouchableOpacity>
+            {errors.dateOfBirth ? <ErrLabel>{errors.dateOfBirth}</ErrLabel> : null}
+            <DatePicker
+              modal
+              open={openDatePicker}
+              date={dateOfBirth || new Date()}
+              mode="date"
+              maximumDate={new Date()}
+              onConfirm={(date) => {
+                setOpenDatePicker(false);
+                setDateOfBirth(date);
+                setErrors((p) => ({ ...p, dateOfBirth: "" }));
+              }}
+              onCancel={() => {
+                setOpenDatePicker(false);
+              }}
+            />
           </HalfField>
         </RowPair>
 

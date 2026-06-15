@@ -123,6 +123,8 @@ const SaveDocumentScreen = ({ route }: Props) => {
   const handleSave = async () => {
     const e: { docName?: string; category?: string } = {};
     if (!docName.trim()) e.docName = "Document name is required.";
+    else if (docName.trim().length < 2) e.docName = "Minimum 2 characters.";
+    
     if (!category) e.category = "Please select a category.";
     setErrors(e);
     if (Object.keys(e).length > 0) return;

@@ -2,7 +2,12 @@ import React, { useRef, useCallback, useMemo } from "react";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import { DrawerActions, useNavigation } from "@react-navigation/native";
+import {
+  DrawerActions,
+  useNavigation,
+  useIsFocused,
+} from "@react-navigation/native";
+import Animated, { FadeInRight } from "react-native-reanimated";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
@@ -13,34 +18,20 @@ import BottomSheet from "../../components/shared/BottomSheet";
 import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
 import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "../../config/queryClient";
 import { getNotificationCount } from "../../services/notificationService";
 import { getUser } from "../../services/userService";
-import { ActivityIndicator, View } from "react-native";
+import { getSignedUrlForFile } from "../../services/fileService";
+import { ActivityIndicator, View, LayoutAnimation } from "react-native";
 import ReminderCard from "../../components/shared/ReminderCard";
-
-const UPCOMING_REMINDERS = [
-  {
-    id: "rec1",
-    title: "Morning Lisinopril Dose",
-    category: "Medication",
-    medicationName: "Lisinopril 10mg",
-    time: "08:00 AM",
-    date: "Tomorrow",
-    status: "upcoming",
-    notes: "Take with food after waking up.",
-  },
-  {
-    id: "rec2",
-    title: "Flu Shot Appointment",
-    category: "Vaccination",
-    medicationName: "Influenza Vaccine",
-    time: "02:30 PM",
-    date: "20 May 2026",
-    status: "upcoming",
-    notes: "Bring medical details to Central Pharmacy.",
-  },
-];
+import {
+  listTodayOccurrences,
+  updateReminderOccurrenceStatus,
+} from "../../services/reminderService";
+import { listMedications } from "../../services/medicationservice";
+import { listDocument } from "../../services/documentService";
+import { Reminder } from "../../types";
 
 interface ActionItemProps {
   onPress: () => void;
@@ -64,6 +55,7 @@ const ActionItem = memo(
 );
 
 const HomeScreen = () => {
+  const isFocused = useIsFocused();
   const refRBSheet = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
 
@@ -92,11 +84,89 @@ const HomeScreen = () => {
     },
   });
 
-  const { data: notificationData } = useQuery({
-    queryKey: ["notificationCount"],
-    queryFn: getNotificationCount,
+  const [profileImageUrl, setProfileImageUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (data?.profileImageKey) {
+      getSignedUrlForFile(data.profileImageKey)
+        .then((res) => setProfileImageUrl(res?.data || null))
+        .catch((e) => console.log("Failed to load profile image URL", e));
+    }
+  }, [data?.profileImageKey]);
+
+  const { data: notificationData, isLoading: isLoadingNotification } = useQuery(
+    {
+      queryKey: ["notificationCount"],
+      queryFn: getNotificationCount,
+    },
+  );
+
+  const { data: remindersData, isLoading: isLoadingReminders } = useQuery({
+    queryKey: ["todayReminders"],
+    queryFn: listTodayOccurrences,
   });
-  console.log(data?.id);
+
+  const rawReminders =
+    remindersData?.data?.occurrences ||
+    remindersData?.data ||
+    remindersData ||
+    [];
+  const reminders = Array.isArray(rawReminders) ? rawReminders : [];
+
+  const { data: medicationsData } = useQuery({
+    queryKey: ["allMedications"],
+    queryFn: listMedications,
+  });
+
+  const { data: documentsData } = useQuery({
+    queryKey: ["allDocuments"],
+    queryFn: listDocument,
+  });
+
+  const medicationsCount = Array.isArray(medicationsData?.data) 
+    ? medicationsData.data.length 
+    : 0;
+
+  const documentsCount = Array.isArray((documentsData?.data as any)?.items) 
+    ? (documentsData?.data as any).items.length 
+    : (Array.isArray(documentsData?.data) ? documentsData.data.length : 0);
+
+  const pendingMedicinesCount = reminders.filter(
+    (r: Reminder) => (r.status || "").toLowerCase() === "pending"
+  ).length;
+
+  const recentTwoReminders = useMemo(() => {
+    return reminders
+      .filter((r: Reminder) => r.status?.toUpperCase() !== "COMPLETED")
+      .sort((a: any, b: any) => {
+        const timeA = new Date(a.actualMedicationTime).getTime();
+        const timeB = new Date(b.actualMedicationTime).getTime();
+        return timeA - timeB; // Ascending: soonest first
+      })
+      .slice(0, 2);
+  }, [reminders]);
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updateReminderOccurrenceStatus,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+    },
+  });
+
+  const handleToggleStatus = async (item: Reminder) => {
+    console.log(item);
+    if (item.status === "completed") return;
+
+    await updateStatusMutation.mutateAsync({
+      occurrenceId: item.id!,
+      status: "COMPLETED",
+    });
+  };
 
   const notificationBadgeCount = notificationData?.data?.count ?? 0;
 
@@ -143,27 +213,33 @@ const HomeScreen = () => {
         </TopRow>
 
         <UserRow>
-          <Avatar
-            source={{
-              uri: data?.profileImageKey || "https://via.placeholder.com/150",
-            }}
-          />
+          {profileImageUrl ? (
+            <Avatar
+              source={{
+                uri: profileImageUrl,
+              }}
+            />
+          ) : (
+            <UserAvatarFallback>
+              <UserAvatarFallbackText>
+                {(data?.firstName?.charAt(0).toUpperCase() || "") +
+                  (data?.lastName?.charAt(0).toUpperCase() || "")}
+              </UserAvatarFallbackText>
+            </UserAvatarFallback>
+          )}
           <UserTextContent>
             {isLoading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
                 <GreetingText>Hi, {data?.firstName}!</GreetingText>
-                <SubGreetingText>
-                  Health Vault Welcomes You.
-                </SubGreetingText>
+                <SubGreetingText>Health Vault Welcomes You.</SubGreetingText>
               </>
             )}
           </UserTextContent>
         </UserRow>
       </HeaderGradient>
 
-      {/* --- OVERLAPPING FIXED CARD CONTEXT --- */}
       <FixedOverviewCard
         style={{
           shadowColor: "#000",
@@ -187,49 +263,53 @@ const HomeScreen = () => {
         />
       </FixedOverviewCard>
 
-      {/* --- MAIN BODY SCROLL VIEW (PULLED BEHIND CARD) --- */}
       <ScrollContent showsVerticalScrollIndicator={false}>
-        {/* --- SECTION: TODAY'S SUMMARY --- */}
         <SectionHeader>
-          <SectionTitle>Today's Summary</SectionTitle>
+          <SectionTitle>Health Vault Summary</SectionTitle>
         </SectionHeader>
 
-        <SummaryRow horizontal showsHorizontalScrollIndicator={false}>
-          <SummaryCard>
-            <SummaryIconCircle color="#ffe4e6">
-              <Ionicons name="heart" size={20} color="#f43f5e" />
-            </SummaryIconCircle>
-            <SummaryCardLabel>Heart Rate</SummaryCardLabel>
-            <SummaryValueGroup>
-              <SummaryPrimaryValue>72</SummaryPrimaryValue>
-              <SummaryUnitValue>bpm</SummaryUnitValue>
-            </SummaryValueGroup>
-          </SummaryCard>
+        <SummaryRow>
+          <Animated.View
+            style={{ flex: 1 }}
+            key={isFocused ? "med-f" : "med-u"}
+            entering={FadeInRight.delay(100).springify()}
+          >
+            <SummaryCard>
+              <SummaryIconCircle color="#ffe4e6">
+                <MaterialCommunityIcons name="pill" size={20} color="#f43f5e" />
+              </SummaryIconCircle>
+              <SummaryCardLabel numberOfLines={1}>Medications</SummaryCardLabel>
+              <SummaryPrimaryValue>{medicationsCount}</SummaryPrimaryValue>
+            </SummaryCard>
+          </Animated.View>
 
-          <SummaryCard>
-            <SummaryIconCircle color="#dbeafe">
-              <MaterialCommunityIcons
-                name="shoe-print"
-                size={20}
-                color="#2563eb"
-              />
-            </SummaryIconCircle>
-            <SummaryCardLabel>Steps</SummaryCardLabel>
-            <SummaryPrimaryValue>4,350</SummaryPrimaryValue>
-            <SummaryTargetValue>/ 10,000</SummaryTargetValue>
-          </SummaryCard>
+          <Animated.View
+            style={{ flex: 1, marginHorizontal: 10 }}
+            key={isFocused ? "doc-f" : "doc-u"}
+            entering={FadeInRight.delay(200).springify()}
+          >
+            <SummaryCard>
+              <SummaryIconCircle color="#dbeafe">
+                <Ionicons name="document-text" size={20} color="#2563eb" />
+              </SummaryIconCircle>
+              <SummaryCardLabel numberOfLines={1}>Documents</SummaryCardLabel>
+              <SummaryPrimaryValue>{documentsCount}</SummaryPrimaryValue>
+            </SummaryCard>
+          </Animated.View>
 
-          <SummaryCard>
-            <SummaryIconCircle color="#e0f2fe">
-              <Ionicons name="water" size={20} color="#0284c7" />
-            </SummaryIconCircle>
-            <SummaryCardLabel>Water</SummaryCardLabel>
-            <SummaryValueGroup>
-              <SummaryPrimaryValue>6</SummaryPrimaryValue>
-              <SummaryUnitValue>Glass</SummaryUnitValue>
-            </SummaryValueGroup>
-            <SummaryTargetValue>/ 8 Glass</SummaryTargetValue>
-          </SummaryCard>
+          <Animated.View
+            style={{ flex: 1 }}
+            key={isFocused ? "tod-f" : "tod-u"}
+            entering={FadeInRight.delay(300).springify()}
+          >
+            <SummaryCard>
+              <SummaryIconCircle color="#e0f2fe">
+                <Ionicons name="calendar" size={20} color="#0284c7" />
+              </SummaryIconCircle>
+              <SummaryCardLabel numberOfLines={2} style={{ textAlign: "center" }}>Today's Doses</SummaryCardLabel>
+              <SummaryPrimaryValue>{pendingMedicinesCount}</SummaryPrimaryValue>
+            </SummaryCard>
+          </Animated.View>
         </SummaryRow>
 
         {/* --- SECTION: QUICK ACTIONS --- */}
@@ -286,15 +366,31 @@ const HomeScreen = () => {
         </SectionHeader>
 
         <RemindersListContainer>
-          {UPCOMING_REMINDERS.map((reminder) => (
-            <ReminderCard
-              key={reminder.id}
-              item={reminder as any}
-              isDark={isDark}
-              onActionPress={() => {}}
-              onAlarmPress={() => {}}
+          {isLoadingReminders ? (
+            <ActivityIndicator
+              size="large"
+              color="#6366f1"
+              style={{ marginVertical: 20 }}
             />
-          ))}
+          ) : (
+            <>
+              {recentTwoReminders.map((reminder: Reminder) => (
+                <ReminderCard
+                  key={reminder.id}
+                  item={reminder}
+                  isDark={isDark}
+                  onActionPress={() => handleToggleStatus(reminder)}
+                />
+              ))}
+              {recentTwoReminders.length === 0 && (
+                <View style={{ alignItems: "center", marginVertical: 20 }}>
+                  <SectionTitle style={{ fontSize: 14, color: "#64748b" }}>
+                    No upcoming reminders today
+                  </SectionTitle>
+                </View>
+              )}
+            </>
+          )}
         </RemindersListContainer>
 
         <BottomSpacing />
@@ -321,7 +417,8 @@ export default HomeScreen;
 
 const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#0f172a" : "#f8fafc")};
+  background-color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#0f172a" : "#f8fafc"};
 `;
 
 const HeaderGradient = styled(LinearGradient)`
@@ -366,6 +463,23 @@ const UserRow = styled.View`
   flex-direction: row;
   align-items: center;
   margin-top: 20px;
+`;
+
+const UserAvatarFallback = styled.View`
+  width: 54px;
+  height: 54px;
+  border-radius: 27px;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.2);
+  justify-content: center;
+  align-items: center;
+`;
+
+const UserAvatarFallbackText = styled.Text`
+  color: white;
+  font-size: 24px;
+  font-weight: bold;
 `;
 
 const Avatar = styled.Image`
@@ -450,24 +564,25 @@ const ViewAllText = styled.Text`
 `;
 
 /* Summary Row Styling setup */
-const SummaryRow = styled.ScrollView`
-  padding-left: 24px;
+const SummaryRow = styled.View`
+  padding-horizontal: 24px;
   flex-direction: row;
+  justify-content: space-between;
 `;
 
 const SummaryCard = styled.View`
   background-color: #ffffff;
-  width: 98px;
+  flex: 1;
   border-radius: 14px;
-  padding: 14px;
-  margin-right: 14px;
+  padding: 14px 6px;
+  align-items: center;
 `;
 
 const SummaryIconCircle = styled.View<{ color: string }>`
   width: 36px;
   height: 36px;
   border-radius: 18px;
-  background-color: ${({ color }: {color: string}) => color};
+  background-color: ${({ color }: { color: string }) => color};
   justify-content: center;
   align-items: center;
   margin-bottom: 12px;
@@ -519,7 +634,7 @@ const ActionItemContainer = styled.TouchableOpacity`
 `;
 
 const ActionIcon = styled.View<{ color: string }>`
-  background-color: ${({ color }: {color: string}) => color};
+  background-color: ${({ color }: { color: string }) => color};
   width: 56px;
   height: 56px;
   border-radius: 16px;

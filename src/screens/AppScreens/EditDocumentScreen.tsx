@@ -16,6 +16,8 @@ import BottomSheet from "../../components/shared/BottomSheet";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAppTheme } from "../../context/ThemeContext";
 import { Keyboard } from "react-native";
+import { queryClient } from "../../config/queryClient";
+import Loader from "../../components/shared/Loader";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -90,6 +92,7 @@ const EditScreen = ({ route }: any) => {
   const [category, setCategory] = useState(document?.documentType ?? "");
   const [notes, setNotes] = useState(document?.notes ?? "");
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
@@ -101,6 +104,9 @@ const EditScreen = ({ route }: any) => {
   const updateDocumentMutation = useMutation({
     mutationFn: updateDocument,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
+      queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
       Toast.show({
         type: "success",
         text1: "Document Updated Successfully.",
@@ -121,6 +127,11 @@ const EditScreen = ({ route }: any) => {
   });
 
   const handleSave = async () => {
+    if (!filename.trim()) {
+      setError("File name is required");
+      return;
+    }
+    
     setIsSaving(true);
 
     const payload: Partial<MedicalDocument> = {
@@ -168,11 +179,15 @@ const EditScreen = ({ route }: any) => {
             </FieldRow>
             <StyledInput
               value={filename}
-              onChangeText={setFilename}
+              onChangeText={(text: string) => {
+                setFilename(text);
+                setError(null);
+              }}
               placeholder="Enter document name"
               placeholderTextColor="#94A3B8"
               returnKeyType="done"
             />
+            {error ? <FieldErrorText>{error}</FieldErrorText> : null}
           </FieldBlock>
 
           <Divider />
@@ -267,6 +282,7 @@ const EditScreen = ({ route }: any) => {
           secondaryBtnColor="red"
           onMainPress={handleSave}
           onSecondaryPress={handleDelete}
+          isLoading={isSaving}
         />
         <BottomSpacer />
       </ScrollContent>
@@ -407,6 +423,12 @@ const StyledInput = styled.TextInput`
   font-size: 14px;
   color: ${({ theme }: any) => theme.colors.textPrimary};
   font-weight: 500;
+`;
+
+const FieldErrorText = styled.Text`
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 6px;
 `;
 
 const CatBtn = styled.TouchableOpacity`

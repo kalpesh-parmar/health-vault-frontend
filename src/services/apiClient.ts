@@ -2,10 +2,12 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 
 const apiClient = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_LIVE_API_URL,
+  baseURL: process.env.EXPO_PUBLIC_NEGLIGEE_API_URL,
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+    "Bypass-Tunnel-Reminder": "true"
   },
 });
 
@@ -31,6 +33,14 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.log("\n========== API ERROR ==========");
+    console.log("URL      :", error.config?.url || error.request?._url);
+    console.log("METHOD   :", error.config?.method?.toUpperCase());
+    console.log("MESSAGE  :", error.message);
+    console.log("RESPONSE DATA:", error.response?.data || "No response data");
+    console.log("STATUS   :", error.response?.status || "No status");
+    console.log("===============================\n");
+
     const data = error.response?.data;
     const message =
       data?.status?.description?.message ||

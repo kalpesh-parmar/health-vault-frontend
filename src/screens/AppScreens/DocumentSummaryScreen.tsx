@@ -9,7 +9,7 @@ import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAppTheme } from "../../context/ThemeContext";
-import { getSignedUrl } from "../../services/documentService";
+import { getSignedUrlForFile } from "../../services/fileService";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import {
   Gesture,
@@ -89,9 +89,11 @@ const SummaryScreen = ({ route, navigation }: any) => {
   useEffect(() => {
     (async () => {
       try {
-        const response = await getSignedUrl(document?.s3Key);
-        setImageUri(response?.data?.downloadUrl || document.imageUri);
-      } catch (e) {}
+        const response = await getSignedUrlForFile(document?.s3Key);
+        setImageUri(response?.data || document.imageUri);
+      } catch (e) {
+        console.log("Failed to load document image URL", e);
+      }
     })();
   }, []);
 
@@ -210,7 +212,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
             activeOpacity={0.9}
             onPress={() => setIsPreviewModalOpen(true)}
           >
-            {imageUri ? (
+            {imageUri && typeof imageUri === "string" && imageUri.trim() !== "" && imageUri !== "undefined" && imageUri !== "null" ? (
               <ThumbnailImage source={{ uri: imageUri }} resizeMode="cover" />
             ) : (
               <EmptyPreviewBox>
@@ -240,14 +242,25 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
             <ZoomContainer>
               <GestureDetector gesture={composedGesture}>
-                <Animated.Image
-                  source={{ uri: imageUri }}
-                  style={[
-                    { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1 },
-                    animatedStyle,
-                  ]}
-                  resizeMode="contain"
-                />
+                {imageUri && typeof imageUri === "string" && imageUri.trim() !== "" && imageUri !== "undefined" && imageUri !== "null" ? (
+                  <Animated.Image
+                    source={{ uri: imageUri }}
+                    style={[
+                      { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1 },
+                      animatedStyle,
+                    ]}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <EmptyPreviewBox>
+                    <Ionicons
+                      name="cloud-offline-outline"
+                      size={48}
+                      color="#cbd5e1"
+                    />
+                    <EmptyText>Image preview not available</EmptyText>
+                  </EmptyPreviewBox>
+                )}
               </GestureDetector>
             </ZoomContainer>
           </ModalBackdrop>

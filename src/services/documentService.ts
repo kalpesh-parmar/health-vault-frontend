@@ -7,15 +7,10 @@ import type {
   FilterDocumentsRequest,
 } from "../types";
 
-export const documentUpload = async (formData: FormData): Promise<ApiResponse<MedicalDocument>> => {
+export const documentUpload = async (payload: any): Promise<ApiResponse<MedicalDocument>> => {
   const response = await apiClient.post(
     DOCUMENT_ENDPOINTS.ADD_DOCUMENT,
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
+    payload
   );
   return response.data;
 };

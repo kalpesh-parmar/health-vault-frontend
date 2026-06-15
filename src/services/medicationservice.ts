@@ -11,6 +11,7 @@ export const addMedication = async (data: AddOrEditMedication): Promise<ApiRespo
 };
 
 export const deleteMedication = async (id: string): Promise<ApiResponse<void>> => {
+  console.log(id);
   const endpoint = MEDICATION_ENDPOINTS.DELETE_MEDICATION.replace("{id}", id);
   const response = await apiClient.delete(endpoint);
   return response.data;
@@ -66,5 +67,20 @@ export const updateMedication = async ({
     medicationId,
   );
   const response = await apiClient.put(endpoint, data);
+  return response.data;
+};
+
+export const refillMedicationService = async ({
+  medicationId,
+  quantity,
+}: {
+  medicationId: string;
+  quantity: number;
+}): Promise<ApiResponse<any>> => {
+  const endpoint = MEDICATION_ENDPOINTS.REFILL_MEDICATION.replace(
+    "{id}",
+    medicationId,
+  );
+  const response = await apiClient.post(endpoint, { quantity });
   return response.data;
 };

@@ -3,7 +3,7 @@ import CustomDrawerNavigator from "./CustomDrawerNavigator";
 import { useAuth } from "../context/ContextAPI";
 import { NavigationContainer } from "@react-navigation/native";
 import AuthStack from "./stacks/AuthStack";
-import ModernLoader from "../components/shared/Loader";
+import ModernLoader from "../components/shared/Loader"; 
 
 const RootNavigator = () => {
   const authContext = useAuth();

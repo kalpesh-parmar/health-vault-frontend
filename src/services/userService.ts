@@ -13,24 +13,7 @@ export const updateUser = async (
 ): Promise<ApiResponse<User>> => {
   const endpoint = PATIENT_ENDPOINTS.UPDATE_USER.replace("{id}", userId);
 
-  const formData = new FormData();
-
-  if (data?.profilePicture) {
-    formData.append("profilePicture", {
-      uri: data.profilePicture.uri,
-      name: data.profilePicture.name,
-      type: data.profilePicture.type,
-    } as any);
-  }
-  formData.append("userName", data?.userName!);
-  formData.append("firstName", data?.firstName!);
-  formData.append("lastName", data?.lastName!);
-
-  const response = await apiClient.put(endpoint, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await apiClient.put(endpoint, data);
   return response.data;
 };
 

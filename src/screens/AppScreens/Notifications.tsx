@@ -98,7 +98,6 @@ export default function NotificationScreen() {
   };
 
   const renderCard = ({ item }: { item: Notification }) => {
-    console.log("Notification Id :- ", item.id);
     return (
       <View>
         <CardWrapper
@@ -158,8 +157,9 @@ export default function NotificationScreen() {
           isDark={isDark}
         />
       </View>
-
-      {notifications.length === 0 ? (
+      {isPending && !isFetchingNextPage ? (
+        <ActivityIndicator size="large" color="#000" style={{ marginTop: 50 }} />
+      ) : notifications.length === 0 ? (
         <EmptyWrapper>
           <EmptyIcon>
             <Ionicons
