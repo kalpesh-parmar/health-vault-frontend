@@ -4,6 +4,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
@@ -47,6 +49,8 @@ const SignupForm = () => {
   const [gender, setGender] = useState<string>("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
   const [openDatePicker, setOpenDatePicker] = useState(false);
+  const [bloodGroup, setBloodGroup] = useState<string>("");
+  const [allergiesInput, setAllergiesInput] = useState("");
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showPasswordInfo, setShowPasswordInfo] = useState(false);
   const [secureText, setSecureText] = useState(true);
@@ -80,6 +84,8 @@ const SignupForm = () => {
     { label: "Female", value: "female", icon: "female-outline" },
     { label: "Other", value: "other", icon: "male-female-outline" },
   ];
+
+  const bloodGroupOptions = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
   const handleSelectGender = (selectedGender: string) => {
     setGender(selectedGender);
@@ -175,6 +181,8 @@ const SignupForm = () => {
         gender,
         dateOfBirth: dateOfBirth ? format(dateOfBirth, "yyyy-MM-dd") : "",
         phone: mobileNum,
+        bloodGroup: bloodGroup || undefined,
+        allergies: allergiesInput.trim() ? allergiesInput.split(",").map(s => s.trim()).filter(s => s) : undefined,
       };
 
       await registerMutation(payload);
@@ -258,14 +266,6 @@ const SignupForm = () => {
                 }}
                 placeholder="Last Name"
                 placeholderTextColor="#C4B5FD"
-                onBlur={() => {
-                  const cleanFirst = firstname.toLowerCase().trim();
-                  const cleanLast = lastname.toLowerCase().trim();
-                  setUserName(
-                    `${cleanFirst}_${cleanLast}_` +
-                    Math.floor(100 + Math.random() * 900),
-                  );
-                }}
               />
             </FieldBox>
             {errors.lastname ? (
@@ -408,6 +408,40 @@ const SignupForm = () => {
             />
           </HalfField>
         </RowPair>
+
+        <Rule />
+
+        {/* ── Health Info ── */}
+        <SingleField>
+          <SectionTag>Blood Group</SectionTag>
+          <PillsContainer>
+            {bloodGroupOptions.map((bg) => (
+              <PillButton
+                key={bg}
+                isSelected={bloodGroup === bg}
+                onPress={() => setBloodGroup(bg)}
+                activeOpacity={0.8}
+              >
+                <PillText isSelected={bloodGroup === bg}>{bg}</PillText>
+              </PillButton>
+            ))}
+          </PillsContainer>
+        </SingleField>
+
+        <Rule />
+
+        <SingleField>
+          <SectionTag>Allergies (Optional)</SectionTag>
+          <FieldBox>
+            <Ionicons name="medical-outline" size={17} color="#A78BFA" />
+            <FieldText
+              value={allergiesInput}
+              onChangeText={(t: string) => setAllergiesInput(t)}
+              placeholder="e.g. Peanuts, Penicillin (comma separated)"
+              placeholderTextColor="#C4B5FD"
+            />
+          </FieldBox>
+        </SingleField>
 
         <Rule />
 
@@ -718,6 +752,40 @@ const ErrLabel = styled.Text`
   font-size: 11.5px;
   margin-top: 5px;
   margin-left: 4px;
+`;
+
+const FieldLabel = styled.Text`
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+  margin-left: 4px;
+`;
+
+const PillsContainer = styled.View`
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
+
+const PillButton = styled.TouchableOpacity<{ isSelected: boolean }>`
+  background-color: ${({ isSelected }: { isSelected: boolean }) =>
+    isSelected ? "#7c3aed" : "#f5f3ff"};
+  border-width: 1.5px;
+  border-color: ${({ isSelected }: { isSelected: boolean }) =>
+    isSelected ? "#7c3aed" : "#EDE9FE"};
+  padding-vertical: 8px;
+  padding-horizontal: 16px;
+  border-radius: 20px;
+  align-items: center;
+  justify-content: center;
+`;
+
+const PillText = styled.Text<{ isSelected: boolean }>`
+  color: ${({ isSelected }: { isSelected: boolean }) =>
+    isSelected ? "#ffffff" : "#6b7280"};
+  font-size: 14px;
+  font-weight: 600;
 `;
 
 const AgreeRow = styled.View`

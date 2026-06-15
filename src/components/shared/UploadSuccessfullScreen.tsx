@@ -63,7 +63,7 @@ const UploadSuccessScreen = () => {
   }, []);
 
   const renderFileTypeIcon = (type: string) => {
-    const formattedType = type.toLowerCase();
+    const formattedType = (type || "").toLowerCase();
 
     if (formattedType === "pdf") {
       return (
@@ -194,11 +194,18 @@ const UploadSuccessScreen = () => {
         <TouchableOpacityAction
           activeOpacity={0.9}
           onPress={() => {
-            navigation.navigate("DocumentStack", {
-              screen: "DocumentList",
-              params: {
-                category,
-              },
+            navigation.reset({
+              index: 1,
+              routes: [
+                { name: "Home" },
+                {
+                  name: "DocumentStack",
+                  params: {
+                    screen: "DocumentList",
+                    params: { category },
+                  },
+                },
+              ],
             });
           }}
         >
@@ -302,7 +309,7 @@ const IconBadgeWrapper = styled.View<{ type: string }>`
   height: 58px;
   border-radius: 16px;
   background-color: ${({ type }: {type: string}) =>
-    type.toLowerCase() === "pdf"
+    (type || "").toLowerCase() === "pdf"
       ? "#fef2f2"
       : "#eff6ff"};
   justify-content: center;

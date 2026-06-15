@@ -7,6 +7,7 @@ import {
   ScrollView,
 } from "react-native";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
@@ -17,6 +18,8 @@ import { useMutation } from "@tanstack/react-query";
 import { resetPassword } from "../../services/authService";
 import ModernLoader from "../../components/shared/Loader";
 import { useAppTheme } from "../../context/ThemeContext";
+import { queryClient } from "../../config/queryClient";
+import { useAuth } from "../../context/ContextAPI";
 
 type StrengthLevel = "none" | "weak" | "fair" | "good" | "strong";
 
@@ -105,9 +108,12 @@ const ResetPassword = () => {
     };
   }, []);
 
-  const route = useRoute<RouteProp<AuthStackParamList, "ResetPassword">>();
+  const route = useRoute<RouteProp<any, any>>();
 
-  const email = route.params.email;
+  const cachedUser = queryClient.getQueryData(["profile"]) as any;
+  const email = route.params?.email || cachedUser?.email;
+
+  const { logout } = useAuth();
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
@@ -129,10 +135,14 @@ const ResetPassword = () => {
           text2: "You can now log in with your new password.",
         });
 
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Login" }],
-        });
+        if (logout) {
+          logout();
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" as any }],
+          });
+        }
       },
 
       onError: (error: any) => {
@@ -191,10 +201,14 @@ const ResetPassword = () => {
       text2: "You can now log in with your new password.",
     });
 
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Login" }],
-    });
+    if (logout) {
+      logout();
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" as any }],
+      });
+    }
   };
 
   return (
@@ -394,7 +408,7 @@ const ResetPassword = () => {
 
 export default ResetPassword;
 
-const Container = styled.SafeAreaView`
+const Container = styled(SafeAreaView)`
   flex: 1;
   background-color: ${({ theme }: any) => theme.colors.background};
 `;

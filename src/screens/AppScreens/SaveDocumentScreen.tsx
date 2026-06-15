@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { StatusBar, Platform, Keyboard } from "react-native";
+import { StatusBar, Platform, Keyboard, Animated } from "react-native";
 import styled from "styled-components/native";
 import DualButtons from "../../components/shared/Buttons/DualButtons";
 import BottomSheet from "../../components/shared/BottomSheet";
@@ -98,9 +98,30 @@ const SaveDocumentScreen = ({ route }: Props) => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  React.useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardPadding(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardPadding(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const selected = CATEGORIES.find((c) => c.value === category);
 
-  const { handleSave: saveDocument, isSaving, ocrState, closeOcrModal } = useSaveDocument(() => {
+   const {
+     handleSave: saveDocument,
+     isSaving,
+     progressStage,
+     progressPercentage,
+     progressMessage,
+   } = useSaveDocument(() => {
 
     navigation.navigate("UploadSuccess", {
       documentName: docName,
@@ -139,13 +160,14 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
   return (
     <>
-      <OcrProgressModal
-        visible={ocrState.visible}
-        percentage={ocrState.percentage}
-        currentStep={ocrState.currentStep}
-        hasError={ocrState.hasError}
-        onClose={closeOcrModal}
-      />
+      {isSaving && (
+        <ModernLoader
+          visible={isSaving}
+          currentStage={progressStage}
+          percentage={progressPercentage}
+          message={progressMessage}
+        />
+      )}
       <Screen>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
         <ScreenHeader title="Add Document" showBack={true} />
@@ -157,7 +179,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
         </Header>
 
         <Body showsVerticalScrollIndicator={false}>
-          <BodyPadding>
+          <BodyPadding style={{ paddingBottom: keyboardPadding + 120 }}>
             <MainCard>
               <Section>
                 <SectionTitleRow>
@@ -311,7 +333,7 @@ const HSubtitle = styled.Text`
 const Body = styled.ScrollView`
   flex: 1;
 `;
-const BodyPadding = styled.View`
+const BodyPadding = styled(Animated.View)`
   padding: 20px 16px 120px 16px;
 `;
 

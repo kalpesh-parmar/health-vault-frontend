@@ -41,7 +41,8 @@ const ReminderScreen = () => {
   const [activeTab, setActiveTab] = useState<string>(
     initialFilter.toLowerCase(),
   );
-
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [sortOption, setSortOption] = useState<string>("date_desc");
   const [medTypeFilter, setMedTypeFilter] = useState<string>("");
   const [startDateFilter, setStartDateFilter] = useState<Date | undefined>(undefined);
   const [endDateFilter, setEndDateFilter] = useState<Date | undefined>(undefined);
@@ -114,14 +115,14 @@ const ReminderScreen = () => {
     initialPageParam: 1,
   });
 
-  const filteredReminders = useMemo(() => {
-    return infiniteData?.pages.flatMap((page: any) => {
-      if (Array.isArray(page?.data)) return page.data;
-      if (Array.isArray(page?.data?.data)) return page.data.data;
-      if (Array.isArray(page?.data?.occurrences)) return page.data.occurrences;
-      return [];
-    }) || [];
-  }, [infiniteData]);
+  // const filteredReminders = useMemo(() => {
+  //   return infiniteData?.pages.flatMap((page: any) => {
+  //     if (Array.isArray(page?.data)) return page.data;
+  //     if (Array.isArray(page?.data?.data)) return page.data.data;
+  //     if (Array.isArray(page?.data?.occurrences)) return page.data.occurrences;
+  //     return [];
+  //   }) || [];
+  // }, [infiniteData]);
 
   const updateStatusMutation = useMutation({
     mutationFn: updateReminderOccurrenceStatus,
@@ -170,9 +171,53 @@ const ReminderScreen = () => {
 
   const filterSheetRef = useRef<BottomSheetModal>(null);
 
-  const handleToggleStatus = async (item: Reminder) => {
-    if (item.status === "COMPLETED") return;
+  const filteredReminders = useMemo(() => {
+    return infiniteData?.pages.flatMap((page: any) => {
+      if (Array.isArray(page?.data)) return page.data;
+      if (Array.isArray(page?.data?.data)) return page.data.data;
+      if (Array.isArray(page?.data?.occurrences)) return page.data.occurrences;
+      return [];
+    }) || [];
+  }, [infiniteData]);
 
+  const filteredData = useMemo(() => {
+    return filteredReminders
+      .filter((rem) => {
+        // Tab Filter: All, Overdue, Upcoming, Completed
+        if (activeTab !== "All") {
+          if ((rem.status || "").toLowerCase() !== activeTab.toLowerCase()) {
+            return false;
+          }
+        }
+
+        // Search Query Filter
+        if (searchQuery.trim().length > 0) {
+          const q = searchQuery.toLowerCase();
+          const matchTitle = (rem.title || "").toLowerCase().includes(q);
+          const matchNotes = rem.notes?.toLowerCase().includes(q);
+          const matchMedName = rem.medicationName?.toLowerCase().includes(q);
+          const matchCategory = (rem.category || "").toLowerCase().includes(q);
+          return !!(matchTitle || matchNotes || matchMedName || matchCategory);
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        switch (sortOption) {
+          case "name_asc":
+            return a.title.localeCompare(b.title);
+          case "name_desc":
+            return b.title.localeCompare(a.title);
+          case "date_asc":
+            return new Date(a.date).getTime() - new Date(b.date).getTime();
+          case "date_desc":
+          default:
+            return new Date(b.date).getTime() - new Date(a.date).getTime();
+        }
+      });
+  }, [filteredReminders, activeTab, searchQuery, sortOption]);
+
+  const handleToggleStatus = async (item: Reminder) => {
+    if (item.status?.toLowerCase() === "completed") return;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await updateStatusMutation.mutateAsync({
       occurrenceId: item.id!,
@@ -290,7 +335,7 @@ const ReminderScreen = () => {
       </SectionHeader>
 
       <FlatList
-        data={filteredReminders}
+        data={filteredData}
         keyExtractor={(item, index) => `${activeTab}-${item.id || index.toString()}`}
         renderItem={renderReminderCard}
         showsVerticalScrollIndicator={false}

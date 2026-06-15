@@ -1,6 +1,6 @@
 // src/screens/AuthScreens/SignupScreen.tsx
 import React, { useState, useEffect } from "react";
-import { Platform, StatusBar, View, Keyboard } from "react-native";
+import { Platform, StatusBar, Keyboard, View } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,

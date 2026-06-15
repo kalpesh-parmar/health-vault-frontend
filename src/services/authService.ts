@@ -18,6 +18,7 @@ export const login = async ({ email, password, deviceToken }: LoginRequest) => {
 };
 
 export const registerUser = async (payload: SignupRequest) => {
+  console.log("Signup Payload :- ", payload);
   const response = await apiClient.post(PATIENT_ENDPOINTS.SIGNUP, payload);
   return response.data;
 };

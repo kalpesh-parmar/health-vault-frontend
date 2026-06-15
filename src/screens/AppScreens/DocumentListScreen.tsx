@@ -7,6 +7,7 @@ import {
   ListRenderItem,
 } from "react-native";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
@@ -22,12 +23,14 @@ import FilterBottomSheet, { FilterOptionItem } from "../../components/shared/Fil
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { safeArray } from "../../utils/arrayUtils";
 import { documentListPaginated, filterDocuments, listDocument } from "../../services/documentService";
 import { useAuth } from "../../context/ContextAPI";
 import DocumentCard from "../../components/Documents/DocumentCard";
 import { useAppNavigation } from "../../types/navigation";
 import { useAppTheme } from "../../context/ThemeContext";
 import { MedicalDocument } from "../../types";
+import ErrorBoundary from "../../components/shared/ErrorBoundary";
 
 const CATEGORIES = [
   { key: "All", value: "All" },
@@ -94,6 +97,7 @@ const DocumentList = () => {
     setIsCameraVisible,
     isCapturing,
     takePicture,
+    handleDocumentPick,
   } = useDocumentMedia();
 
   // Fetch filtered documents when a filter/sort option is applied from FilterBottomSheet
@@ -155,7 +159,12 @@ const DocumentList = () => {
         pageLimit: 10,
       }),
     getNextPageParam: (lastPage, allPages) => {
-      return lastPage.data.length === 10 ? allPages.length + 1 : undefined;
+      const data = lastPage?.data
+        ? (Array.isArray(lastPage.data)
+            ? lastPage.data
+            : (Array.isArray(lastPage.data.items) ? lastPage.data.items : []))
+        : [];
+      return data.length === 10 ? allPages.length + 1 : undefined;
     },
     initialPageParam: 1,
     enabled: activeTab !== "All" && !isFilterApplied && !!userId,
@@ -168,8 +177,13 @@ const DocumentList = () => {
   const documents = useMemo(() => {
     const getSafeArray = (response: any) => {
       if (!response) return [];
-      if (Array.isArray(response)) return response;
-      if (response.data && Array.isArray(response.data)) return response.data;
+      const arr = safeArray(response);
+      if (arr.length > 0) return arr;
+      if (response.data) {
+        if (Array.isArray(response.data)) return response.data;
+        if (Array.isArray(response.data.items)) return response.data.items;
+      }
+      if (Array.isArray(response.items)) return response.items;
       return [];
     };
 
@@ -178,7 +192,8 @@ const DocumentList = () => {
     } else if (activeTab === "All") {
       return getSafeArray(allDocsData);
     } else {
-      return documentListData?.pages.flatMap((page) => getSafeArray(page)) || [];
+      const pages = Array.isArray(documentListData?.pages) ? documentListData.pages : [];
+      return pages.flatMap((page) => getSafeArray(page));
     }
   }, [allDocsData, documentListData, filteredDocuments, activeTab, isFilterApplied, searchQuery]);
 
@@ -201,7 +216,7 @@ const DocumentList = () => {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="rgba(0,0,0,0.2)" />
 
       <CameraModal
         visible={isCameraVisible}
@@ -213,7 +228,7 @@ const DocumentList = () => {
 
       <Loader visible={isCapturing} />
 
-      <HeaderWrapper>
+      <HeaderWrapper edges={["top"]}>
         <HeaderMain>
           <BackButton onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={28} color="white" />
@@ -295,7 +310,9 @@ const DocumentList = () => {
           onCameraOpen={() =>
             handleOpenCamera(() => refRBSheet.current?.dismiss())
           }
-          onDocumentPick={() => { }}
+          onDocumentPick={() =>
+            handleDocumentPick(() => refRBSheet.current?.dismiss())
+          }
         />
       </BottomSheet>
 
@@ -327,15 +344,26 @@ const DocumentList = () => {
   );
 };
 
-export default DocumentList;
+const DocumentListWithErrorBoundary = (props: any) => (
+  <ErrorBoundary
+    componentName="DocumentList"
+    receivedProps={props}
+    navigationParams={props.route?.params}
+    fallbackTitle="Unable to load documents"
+    fallbackSubtitle="There was an error displaying your documents list."
+  >
+    <DocumentList {...props} />
+  </ErrorBoundary>
+);
+
+export default DocumentListWithErrorBoundary;
 
 const Container = styled(LinearGradient)`
   flex: 1;
 `;
 
-const HeaderWrapper = styled.SafeAreaView`
+const HeaderWrapper = styled(SafeAreaView)`
   background-color: transparent;
-  padding-top: 40px;
   padding-bottom: 12px;
 `;
 

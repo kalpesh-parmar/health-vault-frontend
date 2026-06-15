@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, FlatList, ActivityIndicator } from "react-native";
+import { View, FlatList, ActivityIndicator, StatusBar } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
 import { useMutation, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
@@ -140,6 +141,7 @@ export default function NotificationScreen() {
 
   return (
     <Container>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="rgba(0,0,0,0.2)" />
       <ScreenHeader
         title="Notifications"
         showBack
@@ -196,36 +198,10 @@ export default function NotificationScreen() {
   );
 }
 
-const Container = styled.SafeAreaView`
+const Container = styled.View`
   flex: 1;
   background-color: ${({ theme }: any) => theme.colors.background};
 `;
-
-const SubHeaderRow = styled.View`
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px 20px 5px;
-`;
-
-const UnreadCountText = styled.Text`
-  font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-  font-family: "Montserrat_400Regular";
-`;
-
-const MarkAllButton = styled.TouchableOpacity`
-  align-items: flex-end;
-`;
-
-const MarkAllText = styled.Text`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.primary};
-  font-family: "Montserrat_700Bold";
-`;
-
-
 
 const CardWrapper = styled.TouchableOpacity<{ isRead: boolean }>`
   flex-direction: row;

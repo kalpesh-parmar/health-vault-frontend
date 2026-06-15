@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../../components/shared/Header";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -270,7 +271,15 @@ const EditScreen = ({ route }: any) => {
             <ReadOnlyText
               style={{ marginTop: 6, marginLeft: 40, fontSize: 14 }}
             >
-              {new Date(document?.createdAt).toISOString().split("T")[0] ?? "—"}
+              {(() => {
+                if (!document?.createdAt) return "—";
+                try {
+                  const d = new Date(document.createdAt);
+                  return isNaN(d.getTime()) ? "—" : d.toISOString().split("T")[0];
+                } catch {
+                  return "—";
+                }
+              })()}
             </ReadOnlyText>
           </FieldBlock>
         </FormCard>
@@ -326,7 +335,7 @@ const RED = "#E53535";
 const RED_BORDER = "#FECACA";
 const SLATE = "#94A3B8";
 
-const Container = styled.SafeAreaView`
+const Container = styled(SafeAreaView)`
   flex: 1;
   background-color: ${({ theme }: any) => theme.colors.background};
 `;

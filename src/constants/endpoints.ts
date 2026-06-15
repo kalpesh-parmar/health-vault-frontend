@@ -1,65 +1,73 @@
-const URL = process.env.EXPO_PUBLIC_API_URL;
-
 export const AUTH_ENDPOINTS = {
-  LOGIN: `${URL}/auth/login`,
-  LOGOUT: `${URL}/auth/logout`,
-  VERIFY_OTP: `${URL}/auth/verify-otp`,
-  REQUEST_OTP: `${URL}/auth/request-otp`,
-  FORGOT_PASSWORD: `${URL}/auth/forgot-password`,
-  RESET_PASSWORD: `${URL}/auth/reset-password`,
-  REFRESH_TOKEN: `${URL}/auth/refresh-token`,
-} as const;
-
-export const FILE_ENDPOINTS = {
-  UPLOAD: `${URL}/file/upload`,
-  GET_SIGNED_URL: `${URL}/file/getUrl`,
-  HARD_DELETE: `${URL}/file/hard-delete`,
+  LOGIN: "/auth/login",
+  LOGOUT: "/auth/logout",
+  VERIFY_OTP: "/auth/verify-otp",
+  REQUEST_OTP: "/auth/request-otp",
+  FORGOT_PASSWORD: "/auth/forgot-password",
+  RESET_PASSWORD: "/auth/reset-password",
+  REFRESH_TOKEN: "/auth/refresh-token",
 } as const;
 
 export const PATIENT_ENDPOINTS = {
-  SIGNUP: `${URL}/patient/add`,
-  GET_USER: `${URL}/patient/profile`,
-  UPDATE_USER: `${URL}/patient/{id}`,
-  DELETE_USER: `${URL}/patient/soft-delete/{id}`,
+  SIGNUP: "/patient/add",
+  GET_USER: "/patient/profile",
+  UPDATE_USER: "/patient/{id}",
+  DELETE_USER: "/patient/soft-delete/{id}",
 } as const;
 
 export const DOCUMENT_ENDPOINTS = {
-  UPLOAD_DOCUMENT: `${URL}/documents/upload`,
-  RUN_OCR: `${URL}/documents/run-ocr`,
-  OCR_PROGRESS: `${URL}/documents/ocr-progress/{fileKey}`,
-  ADD_DOCUMENT: `${URL}/documents/add`,
-  LIST_DOCUMENT: `${URL}/documents/list`, // Normal GetAllDocument API.
-  DOCUMENT_LIST_PAGINATED: `${URL}/documents/list-paginated`,
-  GET_DOCUMENT: `${URL}/documents/{id}`,
-  GET_SIGNED_URL: `${URL}/documents/download-url`,
-  DELETE_DOCUMENT: `${URL}/documents/{id}`,
-  UPDATE_DOCUMENT: `${URL}/documents/{id}`,
-  FILTER_AND_SORT: `${URL}/documents/list`, // Filter and sort API.
-} as const;
-
-export const NOTIFICATION_ENDPOINTS = {
-  LIST_NOTIFICATION: `${URL}/notifications/list`, // Normal Listing.
-  GET_NOTIFICATION_COUNT: `${URL}/notifications/badge-count`,
-  MARK_AS_READ: `${URL}/notifications/mark-read/{id}`,
-  MARK_ALL_READ: `${URL}/notifications/mark-all-read`
-} as const;
-
-export const MEDICATION_ENDPOINTS = {
-  ADD_MEDICATION: `${URL}/medications/create`,
-  LIST_MEDICATION_PAGINATED: `${URL}/medications/list-paginated`, // Pagination API.
-  GET_MEDICATION: `${URL}/medications/list`, // Normal API.
-  UPDATE_MEDICATION: `${URL}/medications/{id}`,
-  DELETE_MEDICATION: `${URL}/medications/{id}`,
-  LIST_ALL_MEDICATIONS: `${URL}/medications/list`,
-  FILTER_AND_SORT: `${URL}/medications/list`, // Filter and sort API.
-  REFILL_MEDICATION: `${URL}/medications/refill/{id}`,
+  UPLOAD_DOCUMENT: "/documents/upload",
+  RUN_OCR: "/documents/run-ocr",
+  OCR_PROGRESS: "/documents/ocr-progress/{fileKey}",
+  ADD_DOCUMENT: "/documents/add",
+  LIST_DOCUMENT: "/documents/list", // Normal GetAllDocument API.
+  DOCUMENT_LIST_PAGINATED: "/documents/list-paginated",
+  GET_DOCUMENT: "/documents/{id}",
+  GET_SIGNED_URL: "/documents/download-url",
+  DELETE_DOCUMENT: "/documents/{id}",
+  UPDATE_DOCUMENT: "/documents/{id}",
+  FILTER_AND_SORT: "/documents/list", // Filter and sort API.
 } as const;
 
 export const MEDICATION_REMINDER_ENDPOINTS = {
-  CREATE_MEDICATION_REMINDER: `${URL}/medication-reminders/create`,
-  GET_ALL_MAIN_REMINDERS_OCCURENCES: `${URL}/medication-reminders`,
-  GET_ALL_SUB_REMINDERS_OCCURRENCES: `${URL}/medication-reminders/occurrences`,
-  LIST_TODAY_OCCURRENCES: `${URL}/medication-reminders/occurrences/today`,
-  UPDATE_REMINDER_OCCURRENCE_STATUS: `${URL}/medication-reminders/occurrences/{id}`,
-  FILTER_AND_SORT_OCCURRENCES: `${URL}/medication-reminders/occurrences/list`,
+  CREATE_MEDICATION_REMINDER: "/medication-reminders/create",
+  GET_ALL_MAIN_REMINDERS_OCCURENCES: "/medication-reminders",
+  GET_ALL_SUB_REMINDERS_OCCURRENCES: "/medication-reminders/occurrences",
+  LIST_TODAY_OCCURRENCES: "/medication-reminders/occurrences/today",
+  UPDATE_REMINDER_OCCURRENCE_STATUS: "/medication-reminders/occurrences/{id}",
+  FILTER_AND_SORT_OCCURRENCES: "/medication-reminders/occurrences/list",
+} as const;
+
+export const NOTIFICATION_ENDPOINTS = {
+  LIST_NOTIFICATION: "/notifications/list-paginated",
+  GET_NOTIFICATION_COUNT: "/notifications/badge-count",
+  MARK_AS_READ: "/notifications/mark-read/{id}",
+  MARK_ALL_READ: "/notifications/mark-all-read",
+} as const;
+
+export const MEDICATION_ENDPOINTS = {
+  ADD_MEDICATION: "/medications/create",
+  LIST_MEDICATION_PAGINATED: "/medications/list-paginated", // Pagination API.
+  GET_MEDICATION: "/medications/list", // Normal API.
+  UPDATE_MEDICATION: "/medications/{id}",
+  DELETE_MEDICATION: "/medications/{id}",
+  LIST_ALL_MEDICATIONS: "/medications/list",
+  FILTER_AND_SORT: "/medications/list", // Filter and sort API.
+} as const;
+
+export const REMINDER_ENDPOINTS = {
+  ADD_REMINDER: "/reminders/create",
+  LIST_REMINDERS_PAGINATED: "/reminders/list-paginated",
+  UPDATE_REMINDER: "/reminders/{id}",
+  DELETE_REMINDER: "/reminders/{id}",
+} as const;
+
+export const FILE_ENDPOINTS = {
+  UPLOAD: "/file/upload",
+  GET_URL: "/file/getUrl",
+  DELETE: "/file/hard-delete",
+} as const;
+
+export const CHAT_ENDPOINTS = {
+  SEND_MESSAGE: "/chat/message",
 } as const;

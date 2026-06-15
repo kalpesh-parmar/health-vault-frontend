@@ -104,6 +104,8 @@ export interface SignupRequest {
   gender: string;
   dateOfBirth: string;
   phone: string;
+  bloodGroup?: string;
+  allergies?: string[];
 }
 
 export interface ForgotPasswordRequest {
@@ -131,8 +133,11 @@ export interface User {
   email: string;
   phone?: string;
   age?: number;
+  dateOfBirth?: string;
   gender?: string;
   patientCode?: string;
+  bloodGroup?: string;
+  allergies?: string;
   profileImageKey?: string | null;
   isVerified?: boolean;
   status?: string;

@@ -8,6 +8,7 @@ import { AppStackParamList, DocumentsStackParamList } from "../../navigation/typ
 import ConfirmationModal from "../shared/ConfirmationModal";
 import type { MedicalDocument } from "../../types";
 import { useAppTheme } from "../../context/ThemeContext";
+import { getFileExtension } from "../../utils/fileUtils";
 
 interface Props {
   document: MedicalDocument;
@@ -85,7 +86,7 @@ const DocumentCard = memo(({ document }: Props) => {
       >
         <IconContainer isImage={!!document.imageUri}>
           <MaterialCommunityIcons name="file" size={20} color="#ff4d4d" />
-          <Text style={{ fontSize: 10 }}>{document?.fileName.split(".")[1].toUpperCase()}</Text>
+          <Text style={{ fontSize: 10 }}>{getFileExtension(document?.fileName)}</Text>
         </IconContainer>
 
         <DocInfo>

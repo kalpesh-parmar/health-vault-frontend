@@ -1,11 +1,13 @@
 import React from "react";
 import { ScrollView, Linking, TouchableOpacity } from "react-native";
 import styled from "styled-components/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
+import { StatusBar } from "react-native";
 import { useNavigation, DrawerActions } from "@react-navigation/native";
 import ScreenHeader from "../../components/shared/Header";
 import { useAppTheme } from "../../context/ThemeContext";
+import HealthVaultLogo from "../../components/shared/HealthVaultLogo";
 
 const AboutScreen = () => {
   const navigation = useNavigation();
@@ -13,17 +15,13 @@ const AboutScreen = () => {
 
   return (
     <Container>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar barStyle={"dark-content"} translucent backgroundColor="rgba(0,0,0,0.2)" />
       <ScreenHeader title="About Us" showBack={true} />
 
       <StyledScrollView showsVerticalScrollIndicator={false}>
         <BrandSection>
           <LogoContainer>
-            <MaterialCommunityIcons
-              name="shield-check"
-              size={50}
-              color="white"
-            />
+            <HealthVaultLogo size={90} />
           </LogoContainer>
           <VersionBadge>Version 2.0.4</VersionBadge>
           <MissionText>
@@ -120,7 +118,7 @@ const AboutScreen = () => {
 
 export default AboutScreen;
 
-const Container = styled.SafeAreaView`
+const Container = styled.View`
   flex: 1;
   background-color: ${({ theme }: any) => theme.colors.background};
 `;
@@ -137,16 +135,10 @@ const BrandSection = styled.View`
 `;
 
 const LogoContainer = styled.View`
-  width: 70px;
-  height: 70px;
-  border-radius: 15px;
-  background-color: ${({ theme }: any) => theme.colors.primary};
+  width: 90px;
+  height: 90px;
   justify-content: center;
   align-items: center;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-opacity: 0.5;
-  shadow-radius: 20px;
-  elevation: 10;
 `;
 
 const VersionBadge = styled.Text`

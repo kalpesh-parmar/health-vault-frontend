@@ -60,7 +60,7 @@ export default function App() {
           });
         }
       } catch (error) {
-        console.error("Error getting push token:", error);
+        console.warn("Error getting push token:", error);
       }
     }
 

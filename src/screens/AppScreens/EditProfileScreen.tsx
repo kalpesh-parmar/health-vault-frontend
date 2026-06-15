@@ -10,20 +10,18 @@ import {
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
-import { ProfileStackParamList } from "../../navigation/types";
 import {
-  RouteProp,
   useFocusEffect,
-  useNavigation,
 } from "@react-navigation/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getUser, updateUser } from "../../services/userService";
 import { uploadFileToS3, deleteFileFromS3, getSignedUrlForFile } from "../../services/fileService";
 import { queryClient } from "../../config/queryClient";
 import Toast from "react-native-toast-message";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAppTheme } from "../../context/ThemeContext";
 import BottomSheet from "../../components/shared/BottomSheet";
+import DatePicker from "react-native-date-picker";
+import { format } from "date-fns";
 import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
@@ -67,18 +65,17 @@ const GENDER_OPTIONS = [
 ] as const;
 
 interface ProfileFormState {
-  profilePicture?: {
-    uri: string;
-    name: string;
-    type: string;
-  };
+  profileImageKey?: string;
   username: string;
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
   age: number;
+  dateOfBirth: Date | null;
   gender: string;
+  bloodGroup: string;
+  allergies: string;
 }
 
 type EditableFieldProps = {
@@ -246,35 +243,33 @@ const EditProfile = () => {
   console.log(userData?.id);
 
   const [form, setForm] = useState<ProfileFormState>({
-    profilePicture: {
-      uri: "",
-      name: "",
-      type: "",
-    },
+    profileImageKey: "",
     username: "",
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
     age: 0,
+    dateOfBirth: null,
     gender: "",
+    bloodGroup: "",
+    allergies: "",
   });
 
   useEffect(() => {
     if (userData) {
       setForm({
-        profilePicture: {
-          uri: userData.profileImageKey || "",
-          name: userData.profileImageKey || "",
-          type: userData.profileImageKey || "",
-        },
+        profileImageKey: "",
         username: userData.userName || "",
         firstName: userData.firstName || "",
         lastName: userData.lastName || "",
         email: userData.email || "",
         phone: userData.phone || "",
         age: userData.age || 0,
+        dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth) : null,
         gender: userData.gender || "",
+        bloodGroup: userData.bloodGroup || "",
+        allergies: Array.isArray(userData.allergies) ? (userData.allergies || []).join(", ") : "",
       });
     }
   }, [userData]);
@@ -290,18 +285,17 @@ const EditProfile = () => {
     setIsEditing(false);
     if (userData) {
       setForm({
-        profilePicture: {
-          uri: userData.profileImageKey || "",
-          name: userData.profileImageKey || "",
-          type: userData.profileImageKey || "",
-        },
+        profileImageKey: "",
         username: userData.userName || "",
         firstName: userData.firstName || "",
         lastName: userData.lastName || "",
         email: userData.email || "",
         phone: userData.phone || "",
         age: userData.age || 0,
+        dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth) : null,
         gender: userData.gender || "",
+        bloodGroup: userData.bloodGroup || "",
+        allergies: Array.isArray(userData.allergies) ? (userData.allergies || []).join(", ") : "",
       });
     }
     setErrors({});
@@ -366,11 +360,29 @@ const EditProfile = () => {
         profileImageKey = fileData.s3Key || profileImageKey;
       }
 
-      return await updateUser(userId, {
-        profileImageKey:profileImageKey!,
+      const payload: any = {
+        profileImageKey: profileImageKey!,
         firstName: form.firstName,
         lastName: form.lastName,
-      });
+        email: form.email,
+        phone: form.phone,
+        gender: form.gender,
+      };
+      
+      if (form.dateOfBirth) {
+        payload.dateOfBirth = format(form.dateOfBirth, "yyyy-MM-dd");
+      }
+      
+      if (form.bloodGroup) {
+        payload.bloodGroup = form.bloodGroup;
+      }
+      
+      const allergiesArray = form.allergies.split(",").map(s => s.trim()).filter(s => s.length > 0);
+      if (allergiesArray.length > 0) {
+        payload.allergies = allergiesArray;
+      }
+
+      return await updateUser(userId, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
@@ -510,14 +522,14 @@ const EditProfile = () => {
                   value={form?.email!}
                   icon="mail-outline"
                   colors={iconColors.email}
-                  isFocused={false}
-                  onFocus={() => {}}
-                  onBlur={() => {}}
-                  onChangeText={(t) => {}}
+                  isFocused={focusedField === "email"}
+                  onFocus={() => setFocusedField("email")}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(t) => updateField("email", t)}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  editable={false}
-                  isEditing={false}
+                  editable={isEditing}
+                  isEditing={isEditing}
                   error={errors.email}
                 />
                 <FieldDivider />
@@ -526,13 +538,13 @@ const EditProfile = () => {
                   value={form.phone || ""}
                   icon="call-outline"
                   colors={iconColors.phone}
-                  isFocused={false}
-                  onFocus={() => {}}
-                  onBlur={() => {}}
-                  onChangeText={(t) => {}}
+                  isFocused={focusedField === "phone"}
+                  onFocus={() => setFocusedField("phone")}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(t) => updateField("phone", t)}
                   keyboardType="phone-pad"
-                  editable={false}
-                  isEditing={false}
+                  editable={isEditing}
+                  isEditing={isEditing}
                   error={errors.phone}
                 />
               </Card>
@@ -540,7 +552,8 @@ const EditProfile = () => {
               <SectionLabel>More Details</SectionLabel>
               <Card>
                 <TouchableOpacity
-                  activeOpacity={1}
+                  activeOpacity={isEditing ? 0.7 : 1}
+                  onPress={() => isEditing && setShowDatePicker(true)}
                 >
                   <FieldRow>
                     <FieldIconBox
@@ -553,9 +566,11 @@ const EditProfile = () => {
                       />
                     </FieldIconBox>
                     <FieldContent>
-                      <FieldLabel>Age</FieldLabel>
-                      <AgeInput hasValue={!!form.age}>
-                        {form.age || "Not specified"}
+                      <FieldLabel>{isEditing ? "Date of Birth" : "Age"}</FieldLabel>
+                      <AgeInput hasValue={!!form.age || !!form.dateOfBirth}>
+                        {isEditing 
+                          ? (form.dateOfBirth ? format(form.dateOfBirth, "dd MMM yyyy") : "Select Date")
+                          : (form.age ? `${form.age} Years` : "Not specified")}
                       </AgeInput>
                     </FieldContent>
                   </FieldRow>
@@ -599,8 +614,8 @@ const EditProfile = () => {
                         <GenderChip
                           key={opt.label}
                           selected={selected}
-                          onPress={() => {}}
-                          activeOpacity={1}
+                          onPress={() => isEditing && updateField("gender", opt.label)}
+                          activeOpacity={isEditing ? 0.7 : 1}
                         >
                           <Ionicons
                             name={opt.icon as any}
@@ -624,6 +639,37 @@ const EditProfile = () => {
                     </FieldErrorText>
                   ) : null}
                 </FieldRow>
+
+                <FieldDivider />
+
+                <EditableField
+                  label="Blood Group"
+                  value={form.bloodGroup}
+                  icon="water-outline"
+                  colors={{ bg: "#fee2e2", icon: "#ef4444" }}
+                  isFocused={focusedField === "bloodGroup"}
+                  onFocus={() => setFocusedField("bloodGroup")}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(t) => updateField("bloodGroup", t)}
+                  editable={isEditing}
+                  isEditing={isEditing}
+                  autoCapitalize="characters"
+                />
+
+                <FieldDivider />
+
+                <EditableField
+                  label="Allergies (Comma separated)"
+                  value={form.allergies}
+                  icon="medical-outline"
+                  colors={{ bg: "#f3e8ff", icon: "#a855f7" }}
+                  isFocused={focusedField === "allergies"}
+                  onFocus={() => setFocusedField("allergies")}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(t) => updateField("allergies", t)}
+                  editable={isEditing}
+                  isEditing={isEditing}
+                />
               </Card>
             </ScrollInner>
           </ScrollContent>
@@ -663,6 +709,21 @@ const EditProfile = () => {
         onCapture={() => takePicture(cameraRef, "Profile")}
         isCapturing={isCapturing}
         cameraRef={cameraRef}
+      />
+
+      <DatePicker
+        modal
+        open={showDatePicker}
+        date={form.dateOfBirth || new Date()}
+        mode="date"
+        maximumDate={new Date()}
+        onConfirm={(date) => {
+          setShowDatePicker(false);
+          updateField("dateOfBirth", date);
+        }}
+        onCancel={() => {
+          setShowDatePicker(false);
+        }}
       />
     </View>
   );

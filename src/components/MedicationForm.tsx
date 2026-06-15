@@ -4,7 +4,6 @@ import {
   Switch,
   View,
   Platform,
-  KeyboardAvoidingView,
   Keyboard,
   TextInput,
 } from "react-native";
@@ -324,10 +323,7 @@ const MedicationForm = ({
         : 3;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1 }}>
       <ScrollContent
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
@@ -630,25 +626,7 @@ const MedicationForm = ({
             />
           </ToggleRow> */}
           <View style={{ marginTop: 15 }}>
-            <InputLabel>Reminder Before (Minutes)</InputLabel>
-            <ReminderInputRow>
-              <MaterialCommunityIcons
-                name="clock-alert-outline"
-                size={20}
-                color={ACCENT}
-                style={{ marginRight: 10 }}
-              />
-              <StyledReminderInput
-                placeholder="e.g. 10"
-                keyboardType="numeric"
-                value={reminderBeforeMinutes}
-                onChangeText={(val: string) => {
-                  const cleanVal = val.replace(/[^0-9]/g, "");
-                  setReminderBeforeMinutes(cleanVal);
-                }}
-              />
-              <ReminderUnitText>Min before</ReminderUnitText>
-            </ReminderInputRow>
+            <InputLabel>Reminder Before</InputLabel>
             <PresetContainer>
               {[5, 10, 15].map((mins) => (
                 <PresetPill
@@ -780,7 +758,7 @@ const MedicationForm = ({
           }}
         />
       </ScrollContent>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
