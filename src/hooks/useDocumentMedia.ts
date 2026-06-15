@@ -14,6 +14,7 @@ import {
 } from "../services/cameraServices";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../navigation/types";
+import * as DocumentPicker from "expo-document-picker";
 
 export const useDocumentMedia = () => {
   const [selectedImages, setSelectedImages] = useState<string>("");
@@ -116,6 +117,36 @@ export const useDocumentMedia = () => {
     }
   }, [previewSource]);
 
+  const handleDocumentPick = useCallback(async (onClose?: () => void) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      onClose?.();
+
+      const file = result.assets[0];
+      const fileNameWithoutExt = file.name ? file.name.replace(/\.[^/.]+$/, "") : "Document";
+
+      navigation.navigate("SaveDocument", {
+        images: file.uri,
+        fileName: fileNameWithoutExt,
+      });
+    } catch (error) {
+      console.error("Document pick error:", error);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to pick document.",
+      });
+    }
+  }, [navigation]);
+
   return {
     // state
     selectedImages,
@@ -134,5 +165,6 @@ export const useDocumentMedia = () => {
     handleOpenCamera,
     takePicture,
     handleRetake,
+    handleDocumentPick,
   };
 };

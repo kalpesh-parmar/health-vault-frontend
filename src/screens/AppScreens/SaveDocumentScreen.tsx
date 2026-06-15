@@ -10,6 +10,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useSaveDocument } from "../../hooks/useSaveDocument";
 import ModernLoader from "../../components/shared/Loader";
+import OcrProgressModal from "../../components/shared/OcrProgressModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 
@@ -85,9 +86,10 @@ interface ColProps {
 
 const SaveDocumentScreen = ({ route }: Props) => {
   const imageUri = route?.params?.images;
+  const fileNameParam = route?.params?.fileName;
   const { isDark } = useAppTheme();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const [docName, setDocName] = useState("");
+  const [docName, setDocName] = useState(fileNameParam || "");
   const [category, setCategory] = useState("");
   const [docNameFocused, setDocNameFocused] = useState(false);
   const [errors, setErrors] = useState<{ docName?: string; category?: string }>(
@@ -98,7 +100,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
   const selected = CATEGORIES.find((c) => c.value === category);
 
-   const { handleSave: saveDocument, isSaving } = useSaveDocument(() => {
+  const { handleSave: saveDocument, isSaving, ocrState, closeOcrModal } = useSaveDocument(() => {
 
     navigation.navigate("UploadSuccess", {
       documentName: docName,
@@ -137,13 +139,13 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
   return (
     <>
-      {isSaving && (
-        <ModernLoader
-          visible={isSaving}
-          title="Saving Document..."
-          subtitle="Please wait while we save your document."
-        />
-      )}
+      <OcrProgressModal
+        visible={ocrState.visible}
+        percentage={ocrState.percentage}
+        currentStep={ocrState.currentStep}
+        hasError={ocrState.hasError}
+        onClose={closeOcrModal}
+      />
       <Screen>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
         <ScreenHeader title="Add Document" showBack={true} />
@@ -218,8 +220,13 @@ const SaveDocumentScreen = ({ route }: Props) => {
                 </PreviewSectionLeft>
                 <PreviewRow>
                   <Thumb>
-                    {imageUri ? (
+                    {imageUri && !fileNameParam ? (
                       <ThumbImg source={{ uri: imageUri }} resizeMode="cover" />
+                    ) : imageUri ? (
+                      <ThumbPH>
+                        <Ionicons name="document-text" size={24} color="#3b82f6" style={{ marginTop: 8 }} />
+                        <ThumbPHTxt>PDF</ThumbPHTxt>
+                      </ThumbPH>
                     ) : (
                       <ThumbPH>
                         <ThumbPHTxt>Preview{"\n"}here</ThumbPHTxt>
@@ -240,6 +247,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
             mainBtnColor="#2563eb"
             onSecondaryPress={() => navigation?.goBack?.()}
             onMainPress={handleSave}
+            isLoading={isSaving}
           />
         </BottomBar>
 

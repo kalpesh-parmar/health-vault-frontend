@@ -5,9 +5,51 @@ import type {
   PaginatedDocumentRequest,
   ApiResponse,
   FilterDocumentsRequest,
+  UploadDocumentResponse,
+  RunOcrResponse,
+  OcrProgressResponse,
+  AddDocumentPayload,
+  AddDocumentResponse,
 } from "../types";
 
-export const documentUpload = async (payload: any): Promise<ApiResponse<MedicalDocument>> => {
+export const uploadDocument = async (
+  uri: string,
+): Promise<ApiResponse<UploadDocumentResponse>> => {
+  const formData = new FormData();
+  
+  const file = uri.split("/").pop();
+  const extension = file?.split(".").pop() || "jpg";
+
+  formData.append("file", {
+    uri,
+    name: file || `upload.${extension}`,
+    type: extension === "pdf" ? "application/pdf" : `image/${extension}`,
+  } as any);
+
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.UPLOAD_DOCUMENT, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  
+  return response.data;
+};
+
+export const runOcr = async (fileKey: string, documentType: string): Promise<ApiResponse<RunOcrResponse>> => {
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.RUN_OCR, {
+    fileKey,
+    documentType,
+  });
+  return response.data;
+};
+
+export const getOcrProgress = async (fileKey: string): Promise<ApiResponse<OcrProgressResponse>> => {
+  const endpoint = DOCUMENT_ENDPOINTS.OCR_PROGRESS.replace("{fileKey}", encodeURIComponent(fileKey));
+  const response = await apiClient.get(endpoint);
+  return response.data;
+};
+
+export const documentUpload = async (payload: AddDocumentPayload): Promise<ApiResponse<AddDocumentResponse>> => {
   const response = await apiClient.post(
     DOCUMENT_ENDPOINTS.ADD_DOCUMENT,
     payload

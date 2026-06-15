@@ -24,7 +24,8 @@ export type ImagePreviewParams = {
 
 export type SaveDocumentParams = {
   images: string;
-  aiSummary: string;
+  aiSummary?: string;
+  fileName?: string;
 };
 
 // ─── Documents Stack ───────────────────────────────────────────

@@ -1,4 +1,4 @@
-const URL = process.env.EXPO_PUBLIC_NEGLIGEE_API_URL;
+const URL = process.env.EXPO_PUBLIC_API_URL;
 
 export const AUTH_ENDPOINTS = {
   LOGIN: `${URL}/auth/login`,
@@ -24,6 +24,9 @@ export const PATIENT_ENDPOINTS = {
 } as const;
 
 export const DOCUMENT_ENDPOINTS = {
+  UPLOAD_DOCUMENT: `${URL}/documents/upload`,
+  RUN_OCR: `${URL}/documents/run-ocr`,
+  OCR_PROGRESS: `${URL}/documents/ocr-progress/{fileKey}`,
   ADD_DOCUMENT: `${URL}/documents/add`,
   LIST_DOCUMENT: `${URL}/documents/list`, // Normal GetAllDocument API.
   DOCUMENT_LIST_PAGINATED: `${URL}/documents/list-paginated`,

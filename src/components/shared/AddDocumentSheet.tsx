@@ -12,6 +12,7 @@ interface AddDocumentSheetProps {
 const AddDocumentSheet = ({
   onGalleryPick,
   onCameraOpen,
+  onDocumentPick,
 }: AddDocumentSheetProps) => {
   const { isDark } = useAppTheme();
 
@@ -55,7 +56,7 @@ const AddDocumentSheet = ({
         </OptionRow>
 
         {/* PDF Option */}
-        <OptionRow onPress={onCameraOpen} isFirst>
+        <OptionRow onPress={onDocumentPick} isFirst>
           <IconContainer bgColor="#f5f3ff">
             <MaterialCommunityIcons
               name="file-outline"

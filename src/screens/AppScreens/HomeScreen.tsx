@@ -66,6 +66,7 @@ const HomeScreen = () => {
     handleGalleryPick,
     handleOpenCamera,
     takePicture,
+    handleDocumentPick,
   } = useDocumentMedia();
 
   const navigation =
@@ -320,7 +321,7 @@ const HomeScreen = () => {
         <ActionsRow>
           <ActionItem
             onPress={() => refRBSheet?.current?.present()}
-            icon="document-attach-outline"
+            icon="add"
             label="Add Documents"
             color="#ecfdf5"
             iconColor="#10b981"
@@ -404,7 +405,9 @@ const HomeScreen = () => {
           onCameraOpen={() =>
             handleOpenCamera(() => refRBSheet.current?.dismiss())
           }
-          onDocumentPick={() => {}}
+          onDocumentPick={() => 
+            handleDocumentPick(() => refRBSheet.current?.dismiss())
+          }
         />
       </BottomSheet>
     </Container>

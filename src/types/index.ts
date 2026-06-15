@@ -27,6 +27,65 @@ export interface MedicalDocument {
   fileSize?: number;
 }
 
+export interface UploadDocumentResponse {
+  fileKey: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  storageProvider: string;
+  uploadedAt: string;
+}
+
+export interface RunOcrResponse {
+  jobId: string;
+  fileKey: string;
+  status: string;
+  stage: string;
+}
+
+export interface OcrProgressResponse {
+  id: string;
+  fileKey: string;
+  status: string;
+  stage: string;
+  percentage: number;
+  currentStep: string;
+  completedSteps: number;
+  pendingSteps: number;
+  rawOcrData: any;
+  extractedStructuredData: any;
+  graphs: any[];
+  error?: string;
+}
+
+export interface AddDocumentPayload {
+  documentType: string;
+  s3Key: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  s3Bucket: string;
+  fileStoragePath?: string;
+}
+
+export interface AddDocumentResponse {
+  document: any;
+  embeddings: {
+    chunkCount: number;
+    embeddings: number;
+  };
+  medicationsCreated: any[];
+  medicationsSkipped: {
+    raw: any;
+    reason: string;
+  }[];
+  patientSuggestions?: {
+    bloodGroup?: string;
+    allergies?: string[];
+  };
+}
+
+
 // ─── Request/Response Types ───────────────────────────────
 
 export interface LoginRequest {
