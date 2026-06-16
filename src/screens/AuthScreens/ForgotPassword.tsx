@@ -133,7 +133,7 @@ const ForgotPasswordScreen = () => {
             keyboardShouldPersistTaps="handled"
             bounces={false}
             showsVerticalScrollIndicator={false}
-          >
+            >
               <TopSection>
                 <LogoContainer>
                   <HealthVaultLogo size={80} />

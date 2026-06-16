@@ -40,13 +40,17 @@ export default function NotificationScreen() {
     refetch,
   } = useInfiniteQuery({
     queryKey: ["notifications", userId, activeFilter],
-    queryFn: () => {
-      const filterParams: any = { userId };
+    queryFn: ({ pageParam = 0 }) => {
+      const filterParams: any = {};
       if (activeFilter === "Unread") {
         filterParams.isRead = false;
       }
       return listNotifications({
         filter: filterParams,
+        page: {
+          pageNumber: pageParam as number,
+          pageLimit: 10,
+        },
         sort: {
           sortBy: "createdAt",
           orderBy: "desc",
@@ -181,6 +185,7 @@ export default function NotificationScreen() {
           data={notifications}
           renderItem={renderCard}
           keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 30 }}
           onEndReached={loadMore}

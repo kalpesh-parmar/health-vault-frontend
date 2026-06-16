@@ -22,7 +22,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "../../config/queryClient";
 import { getNotificationCount } from "../../services/notificationService";
 import { getUser } from "../../services/userService";
-import { getSignedUrlForFile } from "../../services/fileService";
+import { getFileSource } from "../../services/fileService";
 import { ActivityIndicator, View, LayoutAnimation } from "react-native";
 import ReminderCard from "../../components/shared/ReminderCard";
 import {
@@ -63,6 +63,7 @@ const HomeScreen = () => {
     isCameraVisible,
     setIsCameraVisible,
     isCapturing,
+    isProcessing,
     handleGalleryPick,
     handleOpenCamera,
     takePicture,
@@ -85,13 +86,19 @@ const HomeScreen = () => {
     },
   });
 
-  const [profileImageUrl, setProfileImageUrl] = React.useState<string | null>(null);
+  const [profileImageSource, setProfileImageSource] = React.useState<any>(null);
 
   React.useEffect(() => {
     if (data?.profileImageKey) {
-      getSignedUrlForFile(data.profileImageKey)
-        .then((res) => setProfileImageUrl(res?.data || null))
-        .catch((e) => console.log("Failed to load profile image URL", e));
+      const fetchImage = async () => {
+        try {
+          const res = await getFileSource(data.profileImageKey!);
+          setProfileImageSource(res);
+        } catch (e) {
+          console.log("Failed to load profile image URL", e);
+        }
+      };
+      fetchImage();
     }
   }, [data?.profileImageKey]);
 
@@ -160,7 +167,6 @@ const HomeScreen = () => {
   });
 
   const handleToggleStatus = async (item: Reminder) => {
-    console.log(item);
     if (item.status === "completed") return;
 
     await updateStatusMutation.mutateAsync({
@@ -189,7 +195,7 @@ const HomeScreen = () => {
         cameraRef={cameraRef}
       />
 
-      {isCapturing && <Loader visible={isCapturing} />}
+      {(isCapturing || isProcessing) && <Loader visible={isCapturing || isProcessing} currentStage={isProcessing ? "VALIDATING" : undefined} />}
 
       {/* --- BACKGROUND HEADER REGION --- */}
       <HeaderGradient
@@ -214,11 +220,9 @@ const HomeScreen = () => {
         </TopRow>
 
         <UserRow>
-          {profileImageUrl ? (
+          {profileImageSource ? (
             <Avatar
-              source={{
-                uri: profileImageUrl,
-              }}
+              source={profileImageSource}
             />
           ) : (
             <UserAvatarFallback>

@@ -162,7 +162,7 @@ const LoginScreen = () => {
             keyboardShouldPersistTaps="handled"
             bounces={false}
             showsVerticalScrollIndicator={false}
-          >
+            >
             <InnerContainer>
               <TopSection>
                 <LogoContainer>

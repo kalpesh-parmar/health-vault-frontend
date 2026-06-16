@@ -12,6 +12,7 @@ type DualBtnParams = {
   onSecondaryPress: () => void;
   onMainPress: () => void;
   isLoading?: boolean;
+  mainLoadingText?: string;
 };
 
 const DualButtons = ({
@@ -22,6 +23,7 @@ const DualButtons = ({
   onSecondaryPress,
   onMainPress,
   isLoading,
+  mainLoadingText,
 }: DualBtnParams) => {
   const { theme } = useAppTheme();
 
@@ -33,7 +35,10 @@ const DualButtons = ({
 
       <MainBtn onPress={onMainPress} activeOpacity={0.8} style={{ backgroundColor: mainBtnColor }} disabled={isLoading}>
         {isLoading ? (
-          <ActivityIndicator color={theme.colors.background} />
+          <LoadingContainer>
+            <ActivityIndicator color={theme.colors.background} />
+            {mainLoadingText && <LoadingText>{mainLoadingText}</LoadingText>}
+          </LoadingContainer>
         ) : (
           <MainBtnText>{mainBtnText}</MainBtnText>
         )}
@@ -80,4 +85,17 @@ const MainBtnText = styled.Text`
   font-size: 14px;
   font-weight: 700;
   color: ${({ theme }: any) => theme.colors.background};
+`;
+
+const LoadingContainer = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+`;
+
+const LoadingText = styled.Text`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }: any) => theme.colors.background};
+  margin-left: 8px;
 `;

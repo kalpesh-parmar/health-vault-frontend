@@ -36,12 +36,11 @@ const AVATAR_HALF = AVATAR_SIZE / 2;
 
 const SignupForm = () => {
   const navigation = useNavigation();
-  const isSubmitting = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
   const [firstname, setFirstname] = useState("");
   const [lastname, setLastname] = useState("");
-  const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
   const [mobileNum, setMobileNum] = useState("");
   const [password, setPassword] = useState("");
@@ -129,6 +128,8 @@ const SignupForm = () => {
     
     if (!dateOfBirth) e.dateOfBirth = "Select date of birth";
 
+    if (!bloodGroup) e.bloodGroup = "Select blood group";
+
     if (!agreeTerms) e.agreeTerms = "You must agree to Terms & Conditions";
 
     setErrors(e);
@@ -156,20 +157,19 @@ const SignupForm = () => {
   });
 
   const handleSignup = async () => {
-    if (isSubmitting.current) return;
+    if (isSubmitting) return;
     if (!validate()) {
       Toast.show({ type: "error", text1: "Please Fix The Errors Shown Below." });
       return;
     }
-    isSubmitting.current = true;
+    setIsSubmitting(true);
     
     try {
       let profileImageKey = "";
       
       if (profileImage) {
         const uploadRes = await uploadFileToS3(profileImage, "PATIENT_PROFILE");
-        const fileData = uploadRes?.data?.data || uploadRes?.data || uploadRes || {};
-        profileImageKey = fileData.s3Key || "";
+        profileImageKey = uploadRes?.data?.fileKey || "";
       }
 
       const payload = {
@@ -189,7 +189,7 @@ const SignupForm = () => {
     } catch (error: any) {
       Toast.show({ type: "error", text1: "Signup Failed", text2: error.message });
     } finally {
-      isSubmitting.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -419,13 +419,17 @@ const SignupForm = () => {
               <PillButton
                 key={bg}
                 isSelected={bloodGroup === bg}
-                onPress={() => setBloodGroup(bg)}
+                onPress={() => {
+                  setBloodGroup(bg);
+                  setErrors((p) => ({ ...p, bloodGroup: "" }));
+                }}
                 activeOpacity={0.8}
               >
                 <PillText isSelected={bloodGroup === bg}>{bg}</PillText>
               </PillButton>
             ))}
           </PillsContainer>
+          {errors.bloodGroup ? <ErrLabel>{errors.bloodGroup}</ErrLabel> : null}
         </SingleField>
 
         <Rule />
@@ -437,7 +441,7 @@ const SignupForm = () => {
             <FieldText
               value={allergiesInput}
               onChangeText={(t: string) => setAllergiesInput(t)}
-              placeholder="e.g. Peanuts, Penicillin (comma separated)"
+              placeholder="e.g. Dust"
               placeholderTextColor="#C4B5FD"
             />
           </FieldBox>
@@ -543,14 +547,14 @@ const SignupForm = () => {
         <SubmitBtn
           activeOpacity={0.88}
           onPress={handleSignup}
-          disabled={isLoading}
+          disabled={isLoading || isSubmitting}
         >
           <SubmitGrad
             colors={["#7C3AED", "#DB2777"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            {isLoading ? (
+            {isLoading || isSubmitting ? (
               <BusyRow>
                 <ActivityIndicator color="#FFF" size="small" />
                 <BusyLabel>Creating Account…</BusyLabel>

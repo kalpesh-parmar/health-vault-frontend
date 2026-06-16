@@ -50,8 +50,7 @@ interface EmptyDocumentsProps {
 export const EmptyDocuments = ({ message = "Please upload medical documents to get started.", onAction }: EmptyDocumentsProps) => {
   const { isDark } = useAppTheme();
   return (
-    <Container isDark={isDark}>
-      <Card>
+    <Container isDark={isDark}>      
         <IconContainer style={{ backgroundColor: "#e0f2fe" }}>
           <Ionicons name="document-text-outline" size={32} color="#0284c7" />
         </IconContainer>
@@ -62,17 +61,39 @@ export const EmptyDocuments = ({ message = "Please upload medical documents to g
             <ButtonText>Upload Document</ButtonText>
           </Button>
         )}
-      </Card>
+    </Container>
+  );
+};
+
+interface EmptyMedicationsProps {
+  message?: string;
+  onAction?: () => void;
+}
+
+export const EmptyMedications = ({ message = "Please add your medications to get started.", onAction }: EmptyMedicationsProps) => {
+  const { isDark } = useAppTheme();
+  return (
+    <Container isDark={isDark}>
+        <IconContainer style={{ backgroundColor: "#fce7f3" }}>
+          <Ionicons name="medkit-outline" size={32} color="#be185d" />
+        </IconContainer>
+        <Title>No Medications Found</Title>
+        <Subtitle>{message}</Subtitle>
+        {onAction && (
+          <Button onPress={onAction}>
+            <ButtonText>Add Medication</ButtonText>
+          </Button>
+        )}
     </Container>
   );
 };
 
 const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: ${(props: any) => (props.isDark ? "#082f49" : "#f8fafc")};
   justify-content: center;
   align-items: center;
   padding: 20px;
+  min-height: 400px;
 `;
 
 const Card = styled.View`

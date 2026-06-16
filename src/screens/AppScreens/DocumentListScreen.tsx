@@ -14,17 +14,23 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 
 import BottomSheet from "../../components/shared/BottomSheet";
 import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
-import EmptyContent from "../../components/shared/EmptyContent";
+import { EmptyDocuments } from "../../components/shared/DefensiveStates";
 import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
 import FilterTabs from "../../components/shared/FilterTabs";
 import SearchBar from "../../components/shared/SearchBar";
-import FilterBottomSheet, { FilterOptionItem } from "../../components/shared/FilterBottomSheet";
+import FilterBottomSheet, {
+  FilterOptionItem,
+} from "../../components/shared/FilterBottomSheet";
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { safeArray } from "../../utils/arrayUtils";
-import { documentListPaginated, filterDocuments, listDocument } from "../../services/documentService";
+import {
+  documentListPaginated,
+  filterDocuments,
+  listDocument,
+} from "../../services/documentService";
 import { useAuth } from "../../context/ContextAPI";
 import DocumentCard from "../../components/Documents/DocumentCard";
 import { useAppNavigation } from "../../types/navigation";
@@ -86,9 +92,8 @@ const DocumentList = () => {
       setSortOption("date_desc");
       setSearchQuery("");
       setIsFilterApplied(false);
-    }, [])
+    }, []),
   );
-
 
   const {
     handleGalleryPick,
@@ -96,6 +101,7 @@ const DocumentList = () => {
     isCameraVisible,
     setIsCameraVisible,
     isCapturing,
+    isProcessing,
     takePicture,
     handleDocumentPick,
   } = useDocumentMedia();
@@ -123,7 +129,12 @@ const DocumentList = () => {
 
       return filterDocuments({
         filter: {
-          search: searchQuery.trim().length > 0 ? searchQuery : (activeTab === "All" ? "" : activeTab),
+          search:
+            searchQuery.trim().length > 0
+              ? searchQuery
+              : activeTab === "All"
+                ? ""
+                : activeTab,
         },
         sort: {
           sortBy,
@@ -133,8 +144,6 @@ const DocumentList = () => {
     },
     enabled: (isFilterApplied || searchQuery.trim().length > 0) && !!userId,
   });
-
-  console.log("filteredDocuments", filteredDocuments?.data[0]);
 
   // Fetch all documents when "All" is active.
   const { data: allDocsData, isLoading: isLoadingAll } = useQuery({
@@ -160,9 +169,11 @@ const DocumentList = () => {
       }),
     getNextPageParam: (lastPage, allPages) => {
       const data = lastPage?.data
-        ? (Array.isArray(lastPage.data)
-            ? lastPage.data
-            : (Array.isArray(lastPage.data.items) ? lastPage.data.items : []))
+        ? Array.isArray(lastPage.data)
+          ? lastPage.data
+          : Array.isArray(lastPage.data.items)
+            ? lastPage.data.items
+            : []
         : [];
       return data.length === 10 ? allPages.length + 1 : undefined;
     },
@@ -170,9 +181,12 @@ const DocumentList = () => {
     enabled: activeTab !== "All" && !isFilterApplied && !!userId,
   });
 
-  const isLoading = (isFilterApplied || searchQuery.trim().length > 0)
-    ? isLoadingFiltered
-    : (activeTab === "All" ? isLoadingAll : isLoadingInfinite);
+  const isLoading =
+    isFilterApplied || searchQuery.trim().length > 0
+      ? isLoadingFiltered
+      : activeTab === "All"
+        ? isLoadingAll
+        : isLoadingInfinite;
 
   const documents = useMemo(() => {
     const getSafeArray = (response: any) => {
@@ -192,10 +206,19 @@ const DocumentList = () => {
     } else if (activeTab === "All") {
       return getSafeArray(allDocsData);
     } else {
-      const pages = Array.isArray(documentListData?.pages) ? documentListData.pages : [];
+      const pages = Array.isArray(documentListData?.pages)
+        ? documentListData.pages
+        : [];
       return pages.flatMap((page) => getSafeArray(page));
     }
-  }, [allDocsData, documentListData, filteredDocuments, activeTab, isFilterApplied, searchQuery]);
+  }, [
+    allDocsData,
+    documentListData,
+    filteredDocuments,
+    activeTab,
+    isFilterApplied,
+    searchQuery,
+  ]);
 
   const renderItem: ListRenderItem<MedicalDocument> = useCallback(
     ({ item }) => <DocumentCard document={item} />,
@@ -216,7 +239,11 @@ const DocumentList = () => {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <StatusBar barStyle="light-content" translucent backgroundColor="rgba(0,0,0,0.2)" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="rgba(0,0,0,0.2)"
+      />
 
       <CameraModal
         visible={isCameraVisible}
@@ -226,7 +253,7 @@ const DocumentList = () => {
         cameraRef={cameraRef}
       />
 
-      <Loader visible={isCapturing} />
+      {(isCapturing || isProcessing) && <Loader visible={isCapturing || isProcessing} currentStage={isProcessing ? "VALIDATING" : undefined} />}
 
       <HeaderWrapper edges={["top"]}>
         <HeaderMain>
@@ -268,6 +295,7 @@ const DocumentList = () => {
           data={documents}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
           ListEmptyComponent={
             isLoading ? (
@@ -277,7 +305,9 @@ const DocumentList = () => {
                 color="#8b5cf6"
               />
             ) : (
-              <EmptyContent />
+              <EmptyDocuments
+                message={`No ${activeTab === "All" ? "documents" : activeTab.toLowerCase() + " documents"} found.`}
+              />
             )
           }
           removeClippedSubviews={true}

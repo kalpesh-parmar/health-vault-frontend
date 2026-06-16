@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { getFileSource } from "../../services/fileService";
 
 interface DrawerHeaderProps {
   userDetails: any;
@@ -11,79 +12,125 @@ interface DrawerHeaderProps {
   insetsTop: number;
 }
 
-const DrawerHeader = React.memo(({ userDetails, initials, isDark, theme, navigation, insetsTop }: DrawerHeaderProps) => {
-  const [imageError, setImageError] = useState(false);
+const DrawerHeader = React.memo(
+  ({
+    userDetails,
+    initials,
+    isDark,
+    theme,
+    navigation,
+    insetsTop,
+  }: DrawerHeaderProps) => {
+    const [imageError, setImageError] = useState(false);
+    const [profileImageSource, setProfileImageSource] = useState<any>(null);
 
-  const displayName = userDetails?.fullName ||
-    (userDetails?.firstName && userDetails?.lastName ? `${userDetails.firstName} ${userDetails.lastName}` : "") ||
-    userDetails?.firstName ||
-    userDetails?.userName ||
-    "User Profile";
+    const displayName =
+      userDetails?.fullName ||
+      (userDetails?.firstName && userDetails?.lastName
+        ? `${userDetails.firstName} ${userDetails.lastName}`
+        : "") ||
+      userDetails?.firstName ||
+      userDetails?.userName ||
+      "User Profile";
 
-  const email = userDetails?.email || "";
-  const headerColors = (isDark ? ["#2e1065", "#0b0f19"] : ["#5B4BFF", "#7C6CFF"]) as [string, string, ...string[]];
-  const showInitials = imageError || !userDetails?.profileImageKey || userDetails.profileImageKey.includes("placeholder");
+    const email = userDetails?.email || "";
+    const headerColors = (
+      isDark ? ["#2e1065", "#0b0f19"] : ["#5B4BFF", "#7C6CFF"]
+    ) as [string, string, ...string[]];
+    const showInitials =
+      imageError ||
+      !userDetails?.profileImageKey ||
+      userDetails.profileImageKey.includes("placeholder");
 
-  return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={() => navigation.navigate("Profile")}
-      accessibilityLabel={`Profile header of ${displayName}. Double tap to view your profile settings.`}
-      accessibilityRole="header"
-    >
-      <LinearGradient
-        colors={headerColors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(20, insetsTop + 12),
-            height: 190 + insetsTop,
-          }
-        ]}
+    const fetchProfileImage = async () => {
+      const res = await getFileSource(userDetails?.profileImageKey!);
+      setProfileImageSource(res);
+    };
+
+    useEffect(() => {
+      if (userDetails?.profileImageKey) {
+        fetchProfileImage();
+      }
+    }, [userDetails?.profileImageKey]);
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => navigation.navigate("Profile")}
+        accessibilityLabel={`Profile header of ${displayName}. Double tap to view your profile settings.`}
+        accessibilityRole="header"
       >
-        <View style={[
-          styles.avatarContainer,
-          {
-            borderColor: isDark ? theme.colors.border : "rgba(255, 255, 255, 0.7)",
-          }
-        ]}>
-          {showInitials ? (
-            <View style={[
-              styles.initialsCircle,
+        <LinearGradient
+          colors={headerColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.headerContainer,
+            {
+              paddingTop: Math.max(20, insetsTop + 12),
+              height: 190 + insetsTop,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.avatarContainer,
               {
-                backgroundColor: isDark ? theme.colors.surface : "rgba(255, 255, 255, 0.22)"
-              }
-            ]}>
-              <Text style={styles.initialsText} allowFontScaling={true}>
-                {initials || "?"}
-              </Text>
-            </View>
-          ) : (
-            <Image
-              source={{ uri: userDetails?.profileImageKey }}
-              style={styles.avatarImage}
-              onError={() => setImageError(true)}
-              resizeMode="cover"
-            />
-          )}
-        </View>
+                borderColor: isDark
+                  ? theme.colors.border
+                  : "rgba(255, 255, 255, 0.7)",
+              },
+            ]}
+          >
+            {showInitials ? (
+              <View
+                style={[
+                  styles.initialsCircle,
+                  {
+                    backgroundColor: isDark
+                      ? theme.colors.surface
+                      : "rgba(255, 255, 255, 0.22)",
+                  },
+                ]}
+              >
+                <Text style={styles.initialsText} allowFontScaling={true}>
+                  {initials || "?"}
+                </Text>
+              </View>
+            ) : (
+              <Image
+                source={profileImageSource}
+                style={styles.avatarImage}
+                onError={() => setImageError(true)}
+                resizeMode="cover"
+              />
+            )}
+          </View>
 
-        <View style={styles.headerInfoContainer}>
-          <Text style={styles.usernameText} numberOfLines={2} allowFontScaling={true}>
-            {displayName}
-          </Text>
-          {email ? (
-            <Text style={styles.emailText} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={true}>
-              {email}
+          <View style={styles.headerInfoContainer}>
+            <Text
+              style={styles.usernameText}
+              numberOfLines={2}
+              allowFontScaling={true}
+            >
+              {displayName}
             </Text>
-          ) : null}
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-});
+            {email ? (
+              <Text
+                style={styles.emailText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                allowFontScaling={true}
+              >
+                {email}
+              </Text>
+            ) : null}
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  },
+);
 
 export default DrawerHeader;
 

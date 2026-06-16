@@ -24,6 +24,7 @@ import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
 import { TimeText } from "../../../../components/MedicationForm";
 import Toast from "react-native-toast-message";
+import { EmptyMedications } from "../../../../components/shared/DefensiveStates";
 import FilterTabs from "../../../../components/shared/FilterTabs";
 import { MedicationStackParamList } from "../../../../types/navigation";
 import SearchBar from "../../../../components/shared/SearchBar";
@@ -419,9 +420,7 @@ const MedicationScreen = () => {
           isLoading ? (
             <ActivityIndicator size="large" color="#4f46e5" style={{ marginTop: 40 }} />
           ) : (
-            <EmptyText>
-              No {activeTab.toLowerCase()} medications found.
-            </EmptyText>
+            <EmptyMedications message={`No ${activeTab.toLowerCase() === 'all' ? 'medications' : activeTab.toLowerCase()} found.`} />
           )
         }
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -651,21 +650,4 @@ const ActionText = styled.Text`
   margin-left: 6px;
 `;
 
-const LoadingContainer = styled.View`
-  flex: 1;
-  justify-content: center;
-  align-items: center;
-`;
 
-const LoadingText = styled.Text`
-  margin-top: 12px;
-  color: #64748b;
-  font-weight: 500;
-`;
-
-const EmptyText = styled.Text`
-  text-align: center;
-  color: #94a3b8;
-  margin-top: 60px;
-  font-size: 15px;
-`;

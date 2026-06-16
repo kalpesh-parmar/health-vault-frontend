@@ -23,7 +23,7 @@ export const EmptyChatState: React.FC<EmptyChatStateProps> = ({
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.container}
-    >
+     keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
       {/* Bot Icon Indicator */}
       <View style={styles.botIconWrapper}>
         <LinearGradient

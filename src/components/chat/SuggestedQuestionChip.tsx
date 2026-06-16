@@ -68,7 +68,7 @@ export const SuggestedQuestionChip: React.FC<SuggestedQuestionChipProps> = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-      >
+       keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         {questions.map((q, idx) => (
           <ChipItem
             key={`chip-${idx}`}

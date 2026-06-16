@@ -337,6 +337,7 @@ const ReminderScreen = () => {
       <FlatList
         data={filteredData}
         keyExtractor={(item, index) => `${activeTab}-${item.id || index.toString()}`}
+        keyboardShouldPersistTaps="handled"
         renderItem={renderReminderCard}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}

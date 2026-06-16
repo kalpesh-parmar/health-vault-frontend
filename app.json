@@ -9,8 +9,6 @@
     "newArchEnabled": true,
     "owner": "dharmik-bapodara",
     "splash": {
-      "image": "./assets/Splash.png",
-      "resizeMode": "cover",
       "backgroundColor": "#030a16"
     },
     "ios": {

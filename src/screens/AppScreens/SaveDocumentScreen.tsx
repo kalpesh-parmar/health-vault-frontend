@@ -178,7 +178,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
           </HGroup>
         </Header>
 
-        <Body showsVerticalScrollIndicator={false}>
+        <Body showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <BodyPadding style={{ paddingBottom: keyboardPadding + 120 }}>
             <MainCard>
               <Section>
@@ -270,6 +270,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
             onSecondaryPress={() => navigation?.goBack?.()}
             onMainPress={handleSave}
             isLoading={isSaving}
+            mainLoadingText="Saving..."
           />
         </BottomBar>
 

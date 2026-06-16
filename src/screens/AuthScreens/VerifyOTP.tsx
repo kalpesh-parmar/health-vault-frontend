@@ -5,6 +5,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  View,
 } from "react-native";
 import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -319,7 +320,10 @@ const VerifyOTP = ({ route }: VerifyOTPProps) => {
                       }}
                     >
                       {isLoading ? (
-                        <ActivityIndicator color="#ffffff" />
+                        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                          <ActivityIndicator color="#ffffff" />
+                          <VerifyButtonText>Verifying...</VerifyButtonText>
+                        </View>
                       ) : (
                         <VerifyButtonText>Verify OTP</VerifyButtonText>
                       )}

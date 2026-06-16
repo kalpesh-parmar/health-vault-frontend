@@ -116,11 +116,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (data: { accessToken: string; refreshToken: string; userId: string; createdAt?: string }) => {
     try {
-      setUserId(data.userId);
-      setAccessToken(data.accessToken);
-      setRefreshToken(data.refreshToken);
-      setIsAuthenticated(true);
-
       await SecureStore.setItemAsync("userId", String(data.userId));
       await SecureStore.setItemAsync("accessToken", String(data.accessToken));
       await SecureStore.setItemAsync("authToken", String(data.refreshToken));
@@ -143,6 +138,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const formattedRefreshDate = `${yyyy}-${mm}-${dd}`;
       
       await SecureStore.setItemAsync("refreshDate", formattedRefreshDate);
+
+      // Now that all storage operations are done, we can update the state.
+      // This prevents the HomeScreen from mounting and fetching before tokens are saved.
+      setUserId(data.userId);
+      setAccessToken(data.accessToken);
+      setRefreshToken(data.refreshToken);
+      setIsAuthenticated(true);
     } catch (error) {
       console.error("Error during login:", error);
     }

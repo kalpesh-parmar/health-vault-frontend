@@ -1,4 +1,3 @@
-// src/hooks/useDocumentMedia.ts
 import { useState, useCallback } from "react";
 import Toast from "react-native-toast-message";
 import { Linking } from "react-native";
@@ -15,6 +14,7 @@ import {
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../navigation/types";
 import * as DocumentPicker from "expo-document-picker";
+import { isValidMedicalDocument } from "../utils/documentValidator";
 
 export const useDocumentMedia = () => {
   const [selectedImages, setSelectedImages] = useState<string>("");
@@ -24,6 +24,7 @@ export const useDocumentMedia = () => {
     "camera" | "gallery" | null
   >(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
@@ -53,12 +54,29 @@ export const useDocumentMedia = () => {
 
     onClose?.();
 
-    setPreviewSource("gallery");
-    setSelectedImages(images);
-    if (from !== "Register" && from !== "Profile" && from !== "Document") {
-      navigation.navigate("ImagePreview", {
-        images: images,
-      });
+    setIsProcessing(true);
+    try {
+      if (from !== "Register" && from !== "Profile") {
+        const isValid = await isValidMedicalDocument(images, false);
+        if (!isValid) {
+          Toast.show({
+            type: "error",
+            text1: "Invalid Document",
+            text2: "Please select a valid medical document.",
+          });
+          return;
+        }
+      }
+
+      setPreviewSource("gallery");
+      setSelectedImages(images);
+      if (from !== "Register" && from !== "Profile" && from !== "Document") {
+        navigation.navigate("ImagePreview", {
+          images: images,
+        });
+      }
+    } finally {
+      setIsProcessing(false);
     }
   }, [navigation]);
 
@@ -93,6 +111,21 @@ export const useDocumentMedia = () => {
         return;
       }
 
+      setIsCameraVisible(false);
+      setIsProcessing(true);
+
+      if (from !== "Register" && from !== "Profile") {
+        const isValid = await isValidMedicalDocument(images, false);
+        if (!isValid) {
+          Toast.show({
+            type: "error",
+            text1: "Invalid Document",
+            text2: "Please capture a valid medical document.",
+          });
+          return;
+        }
+      }
+
       setPreviewSource("camera");
       if (from !== "Register" && from !== "Profile" && from !== "Document") {
         navigation.navigate("ImagePreview", {
@@ -104,7 +137,7 @@ export const useDocumentMedia = () => {
       console.error("Capture error:", error);
     } finally {
       setIsCapturing(false);
-      setIsCameraVisible(false);
+      setIsProcessing(false);
     }
   }, [navigation]);
 
@@ -131,12 +164,28 @@ export const useDocumentMedia = () => {
       onClose?.();
 
       const file = result.assets[0];
-      const fileNameWithoutExt = file.name ? file.name.replace(/\.[^/.]+$/, "") : "Document";
+      
+      setIsProcessing(true);
+      try {
+        const isValid = await isValidMedicalDocument(file.uri, true);
+        if (!isValid) {
+          Toast.show({
+            type: "error",
+            text1: "Invalid Document",
+            text2: "Please select a valid medical PDF document.",
+          });
+          return;
+        }
 
-      navigation.navigate("SaveDocument", {
-        images: file.uri,
-        fileName: fileNameWithoutExt,
-      });
+        const fileNameWithoutExt = file.name ? file.name.replace(/\.[^/.]+$/, "") : "Document";
+
+        navigation.navigate("SaveDocument", {
+          images: file.uri,
+          fileName: fileNameWithoutExt,
+        });
+      } finally {
+        setIsProcessing(false);
+      }
     } catch (error) {
       console.error("Document pick error:", error);
       Toast.show({
@@ -154,6 +203,7 @@ export const useDocumentMedia = () => {
     isCameraVisible,
     previewSource,
     isCapturing,
+    isProcessing,
 
     // setters
     setIsCameraVisible,

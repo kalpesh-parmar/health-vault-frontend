@@ -292,6 +292,7 @@ const EditScreen = ({ route }: any) => {
           onMainPress={handleSave}
           onSecondaryPress={handleDelete}
           isLoading={isSaving}
+          mainLoadingText="Updating..."
         />
         <BottomSpacer />
       </ScrollContent>
@@ -343,6 +344,7 @@ const Container = styled(SafeAreaView)`
 const ScrollContent = styled.ScrollView.attrs({
   contentContainerStyle: { padding: 16, paddingBottom: 32 },
   showsVerticalScrollIndicator: false,
+  keyboardShouldPersistTaps: "handled",
 })`
   flex: 1;
   margin-top: 7px;

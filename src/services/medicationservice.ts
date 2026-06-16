@@ -11,7 +11,6 @@ export const addMedication = async (data: AddOrEditMedication): Promise<ApiRespo
 };
 
 export const deleteMedication = async (id: string): Promise<ApiResponse<void>> => {
-  console.log(id);
   const endpoint = MEDICATION_ENDPOINTS.DELETE_MEDICATION.replace("{id}", id);
   const response = await apiClient.delete(endpoint);
   return response.data;

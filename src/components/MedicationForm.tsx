@@ -6,6 +6,7 @@ import {
   Platform,
   Keyboard,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { format, isEqual } from "date-fns";
@@ -29,7 +30,7 @@ type Frequency = {
 };
 type TimeOfDay = {
   key: "Morning" | "Noon" | "Night" | "Specific Time";
-  value: "MORNING" | "NOON" | "NIGHT" | "SPECIFIC_TIME";
+  value: "MORNING" | "NOON" | "NIGHT" | "CUSTOM";
 };
 
 const ACCENT = "#0ea5e9";
@@ -56,7 +57,7 @@ const TIMES_OF_DAY: TimeOfDay[] = [
   { key: "Morning", value: "MORNING" },
   { key: "Noon", value: "NOON" },
   { key: "Night", value: "NIGHT" },
-  { key: "Specific Time", value: "SPECIFIC_TIME" },
+  { key: "Specific Time", value: "CUSTOM" },
 ];
 
 interface MedicationFormProps {
@@ -98,7 +99,7 @@ const MedicationForm = ({
       rawBestTaken = Object.keys(initialData.medicationSchedule);
     }
     const found = TIMES_OF_DAY.filter(
-      (t) => rawBestTaken?.includes(t.value) || rawBestTaken?.includes(t.key),
+      (t) => rawBestTaken?.some(k => k.startsWith(t.value)) || rawBestTaken?.includes(t.key),
     );
     return found.length > 0 ? found : [TIMES_OF_DAY[0]];
   });
@@ -198,14 +199,11 @@ const MedicationForm = ({
   }, []);
 
   useEffect(() => {
-    const isSpecificTime = timesOfDay.some((t) => t.value === "SPECIFIC_TIME");
-    const currentMax = isSpecificTime
-      ? 5
-      : frequency.key === "Once Daily"
-        ? 1
-        : frequency.key === "Twice Daily"
-          ? 2
-          : 3;
+    const currentMax = frequency.key === "Once Daily"
+      ? 1
+      : frequency.key === "Twice Daily"
+        ? 2
+        : 3;
     if (preferredTimes.length > currentMax) {
       setPreferredTimes((prev) => prev.slice(0, currentMax));
     }
@@ -280,8 +278,11 @@ const MedicationForm = ({
         startDate: format(startDate, "yyyy-MM-dd"),
         ongoing: isOngoing,
         medicationSchedule: preferredTimes.reduce((acc: any, t, index) => {
-          const key =
-            timesOfDay[index]?.value || timesOfDay[0]?.value || "SPECIFIC_TIME";
+          let key =
+            timesOfDay[index]?.value || timesOfDay[0]?.value || "CUSTOM";
+          if (key === "CUSTOM" && frequency.value !== "ONCE_DAILY") {
+            key = `CUSTOM`;
+          }
           acc[key] = format(t, "HH:mm:ss");
           return acc;
         }, {}),
@@ -302,8 +303,11 @@ const MedicationForm = ({
         startDate: format(startDate, "yyyy-MM-dd"),
         ongoing: isOngoing,
         medicationSchedule: preferredTimes.reduce((acc: any, t, index) => {
-          const key =
-            timesOfDay[index]?.value || timesOfDay[0]?.value || "SPECIFIC_TIME";
+          let key =
+            timesOfDay[index]?.value || timesOfDay[0]?.value || "CUSTOM";
+          if (key === "CUSTOM" && frequency.value !== "ONCE_DAILY") {
+            key = `CUSTOM`;
+          }
           acc[key] = format(t, "HH:mm:ss");
           return acc;
         }, {}),
@@ -314,13 +318,11 @@ const MedicationForm = ({
     }
   };
 
-  const maxTimes = timesOfDay.some((t) => t.value === "SPECIFIC_TIME")
-    ? 5
-    : frequency.key === "Once Daily"
-      ? 1
-      : frequency.key === "Twice Daily"
-        ? 2
-        : 3;
+  const maxTimes = frequency.key === "Once Daily"
+    ? 1
+    : frequency.key === "Twice Daily"
+      ? 2
+      : 3;
 
   return (
     <View style={{ flex: 1 }}>
@@ -439,14 +441,14 @@ const MedicationForm = ({
                   setTimesOfDay((prev) => {
                     const isSelected = prev.some((t) => t.key === item.key);
                     const hasSpecificTime = prev.some(
-                      (t) => t.value === "SPECIFIC_TIME",
+                      (t) => t.value === "CUSTOM",
                     );
 
                     if (frequency.value === "ONCE_DAILY") {
                       return isSelected ? prev : [item];
                     }
 
-                    if (item.value === "SPECIFIC_TIME") {
+                    if (item.value === "CUSTOM") {
                       return [item];
                     }
 
@@ -675,9 +677,14 @@ const MedicationForm = ({
 
         <Footer>
           <SaveButton onPress={handleSubmit} disabled={isLoading}>
-            <SaveButtonText>
-              {isLoading ? "Saving..." : "Save Medication"}
-            </SaveButtonText>
+            {isLoading ? (
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                <ActivityIndicator color="#ffffff" />
+                <SaveButtonText>Saving...</SaveButtonText>
+              </View>
+            ) : (
+              <SaveButtonText>Save Medication</SaveButtonText>
+            )}
           </SaveButton>
         </Footer>
 

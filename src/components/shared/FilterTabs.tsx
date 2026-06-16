@@ -23,7 +23,7 @@ const FilterTabs = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 15 }}
-      >
+       keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         {safeArray(data).map((item) => {
           const isActive = activeTab === item;
           return (

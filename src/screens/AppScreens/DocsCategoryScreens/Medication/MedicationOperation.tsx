@@ -101,7 +101,6 @@ const MedicationOperation = ({
 
         if (responseData?.data?.id) {
           try {
-            console.log("Creating Reminder. Please Wait...");
             await createMedicationReminder({
               medicationId: responseData.data.id,
             });

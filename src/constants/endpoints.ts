@@ -53,6 +53,7 @@ export const MEDICATION_ENDPOINTS = {
   DELETE_MEDICATION: "/medications/{id}",
   LIST_ALL_MEDICATIONS: "/medications/list",
   FILTER_AND_SORT: "/medications/list", // Filter and sort API.
+  REFILL_MEDICATION: "/medications/refill/{id}",
 } as const;
 
 export const REMINDER_ENDPOINTS = {
@@ -64,8 +65,8 @@ export const REMINDER_ENDPOINTS = {
 
 export const FILE_ENDPOINTS = {
   UPLOAD: "/file/upload",
-  GET_URL: "/file/getUrl",
-  DELETE: "/file/hard-delete",
+  GET_SIGNED_URL: "/file/view",
+  HARD_DELETE: "/file/hard-delete",
 } as const;
 
 export const CHAT_ENDPOINTS = {

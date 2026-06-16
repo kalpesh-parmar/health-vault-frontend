@@ -9,7 +9,7 @@ import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAppTheme } from "../../context/ThemeContext";
-import { getSignedUrlForFile } from "../../services/fileService";
+import { getFileSource } from "../../services/fileService";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import { getFileExtension } from "../../utils/fileUtils";
 import ErrorBoundary from "../../components/shared/ErrorBoundary";
@@ -27,7 +27,7 @@ const IMAGE_HEIGHT = SCREEN_WIDTH * 1.7;
 
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
-  const [imageUri, setImageUri] = useState<string>("");
+  const [imageSource, setImageSource] = useState<any>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const { isDark } = useAppTheme();
@@ -91,8 +91,8 @@ const SummaryScreen = ({ route, navigation }: any) => {
   useEffect(() => {
     (async () => {
       try {
-        const response = await getSignedUrlForFile(document?.s3Key);
-        setImageUri(response?.data || document.imageUri);
+        const response = await getFileSource(document?.s3Key);
+        setImageSource(response || (document.imageUri ? { uri: document.imageUri } : null));
       } catch (e) {
         console.log("Failed to load document image URL", e);
       }
@@ -133,7 +133,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 40 }}
-        >
+          keyboardShouldPersistTaps="handled">
           <MainInfoCard>
             <DocHeaderRow>
               <IconBox>
@@ -214,8 +214,8 @@ const SummaryScreen = ({ route, navigation }: any) => {
             activeOpacity={0.9}
             onPress={() => setIsPreviewModalOpen(true)}
           >
-            {imageUri && typeof imageUri === "string" && imageUri.trim() !== "" && imageUri !== "undefined" && imageUri !== "null" ? (
-              <ThumbnailImage source={{ uri: imageUri }} resizeMode="cover" />
+            {imageSource ? (
+              <ThumbnailImage source={imageSource} resizeMode="cover" />
             ) : (
               <EmptyPreviewBox>
                 <Ionicons
@@ -244,9 +244,9 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
             <ZoomContainer>
               <GestureDetector gesture={composedGesture}>
-                {imageUri && typeof imageUri === "string" && imageUri.trim() !== "" && imageUri !== "undefined" && imageUri !== "null" ? (
+                {imageSource ? (
                   <Animated.Image
-                    source={{ uri: imageUri }}
+                    source={imageSource}
                     style={[
                       { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1 },
                       animatedStyle,

@@ -220,15 +220,11 @@ const StickyBar = styled(Animated.View)`
 
 const StickyBarGradient = styled(LinearGradient)`
   flex: 1;
-  border-bottom-left-radius: 28px;
-  border-bottom-right-radius: 28px;
   overflow: hidden;
   align-items: center;
   justify-content: flex-end;
   padding-horizontal: 20px;
   padding-bottom: 18px;
-  border-width: 1px;
-  border-color: rgba(255, 255, 255, 0.24);
 `;
 
 const stickyTitleText = {

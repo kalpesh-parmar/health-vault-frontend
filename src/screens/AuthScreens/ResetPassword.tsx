@@ -5,6 +5,7 @@ import {
   Keyboard,
   Platform,
   ScrollView,
+  View,
 } from "react-native";
 import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -238,7 +239,7 @@ const ResetPassword = () => {
           contentContainerStyle={{ flexGrow: 1, paddingBottom: keyboardHeight }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-        >
+         >
           <TopHeader>
             <BackButton onPress={() => navigation.goBack()}>
               <Ionicons name="chevron-back" size={22} color="#ffffff" />
@@ -392,7 +393,10 @@ const ResetPassword = () => {
                   }}
                 >
                   {isLoading ? (
-                    <ActivityIndicator color="#ffffff" />
+                    <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                      <ActivityIndicator color="#ffffff" />
+                      <ResetButtonText>Resetting Password...</ResetButtonText>
+                    </View>
                   ) : (
                     <ResetButtonText>Reset Password</ResetButtonText>
                   )}

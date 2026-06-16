@@ -32,7 +32,7 @@ const ConfirmationModal = ({
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
-  const { mutateAsync: logoutMutation } = useMutation({
+  const { mutateAsync: logoutMutation, isPending: isLoggingOut } = useMutation({
     mutationFn: logoutUser,
     onSuccess: async () => {
       await logout();
@@ -52,7 +52,7 @@ const ConfirmationModal = ({
     },
   });
 
-  const { mutateAsync: deleteUserMutation } = useMutation({
+  const { mutateAsync: deleteUserMutation, isPending: isDeletingUser } = useMutation({
     mutationFn: deleteUserAccount,
     onSuccess: async () => {
       await logout();
@@ -72,7 +72,7 @@ const ConfirmationModal = ({
     },
   });
 
-  const { mutateAsync: deleteDocumentMutation } = useMutation({
+  const { mutateAsync: deleteDocumentMutation, isPending: isDeletingDoc } = useMutation({
     mutationFn: deleteDocument,
     onSuccess: async (result) => {
       queryClient.invalidateQueries({
@@ -95,7 +95,7 @@ const ConfirmationModal = ({
     },
   });
 
-  const { mutateAsync: deleteMedicationMutation } = useMutation({
+  const { mutateAsync: deleteMedicationMutation, isPending: isDeletingMed } = useMutation({
     mutationFn: deleteMedication,
     onSuccess: async () => {
       queryClient.invalidateQueries({
@@ -183,6 +183,8 @@ const ConfirmationModal = ({
             mainBtnColor="red"
             onSecondaryPress={onClose}
             onMainPress={handleAction}
+            isLoading={isLoggingOut || isDeletingUser || isDeletingDoc || isDeletingMed}
+            mainLoadingText={mode === "Log Out" ? "Logging out..." : "Deleting..."}
           />
         </ModalCard>
       </Overlay>

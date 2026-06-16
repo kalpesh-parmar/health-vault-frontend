@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { View, StyleSheet, FlatList } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -14,6 +14,7 @@ import ConfirmationModal from "../components/shared/ConfirmationModal";
 import DrawerHeader from "../components/navigation/DrawerHeader";
 import DrawerMenuItem from "../components/navigation/DrawerMenuItem";
 import DrawerFooter from "../components/navigation/DrawerFooter";
+
 
 const CustomDrawerContent = (props: any) => {
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -63,6 +64,7 @@ const CustomDrawerContent = (props: any) => {
       <FlatList
         data={state.routes}
         keyExtractor={(item) => item.key}
+        keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"
         renderItem={({ item, index }) => {
           const { options } = descriptors[item.key];
           const label = options.drawerLabel !== undefined

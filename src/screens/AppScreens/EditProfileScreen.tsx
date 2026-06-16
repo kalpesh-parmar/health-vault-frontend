@@ -15,7 +15,7 @@ import {
 } from "@react-navigation/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getUser, updateUser } from "../../services/userService";
-import { uploadFileToS3, deleteFileFromS3, getSignedUrlForFile } from "../../services/fileService";
+import { uploadFileToS3, deleteFileFromS3, getFileSource } from "../../services/fileService";
 import { queryClient } from "../../config/queryClient";
 import Toast from "react-native-toast-message";
 import { useAppTheme } from "../../context/ThemeContext";
@@ -185,8 +185,6 @@ const EditProfile = () => {
     selectedImages,
   } = useDocumentMedia();
 
-  console.log("selectedImages :- ", selectedImages);
-
   const [isEditing, setIsEditing] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -230,17 +228,22 @@ const EditProfile = () => {
     },
   });
 
-  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [profileImageSource, setProfileImageSource] = useState<any>(null);
+
+  const fetchProfileImage = async (imageKey: string) => {
+    try {
+      const res = await getFileSource(imageKey);
+      setProfileImageSource(res);
+    } catch (e) {
+      console.log("Failed to load profile image URL", e);
+    }
+  };
 
   useEffect(() => {
     if (userData?.profileImageKey) {
-      getSignedUrlForFile(userData.profileImageKey)
-        .then((res) => setProfileImageUrl(res?.data || null))
-        .catch((e) => console.log("Failed to load profile image URL", e));
+      fetchProfileImage(userData.profileImageKey);
     }
   }, [userData?.profileImageKey]);
-
-  console.log(userData?.id);
 
   const [form, setForm] = useState<ProfileFormState>({
     profileImageKey: "",
@@ -259,14 +262,14 @@ const EditProfile = () => {
   useEffect(() => {
     if (userData) {
       setForm({
-        profileImageKey: "",
+        profileImageKey: userData.profileImageKey || "",
         username: userData.userName || "",
         firstName: userData.firstName || "",
         lastName: userData.lastName || "",
         email: userData.email || "",
         phone: userData.phone || "",
         age: userData.age || 0,
-        dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth) : null,
+        dateOfBirth: userData.dateOfBirth && !isNaN(new Date(userData.dateOfBirth).getTime()) ? new Date(userData.dateOfBirth) : null,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
         allergies: Array.isArray(userData.allergies) ? (userData.allergies || []).join(", ") : "",
@@ -285,14 +288,14 @@ const EditProfile = () => {
     setIsEditing(false);
     if (userData) {
       setForm({
-        profileImageKey: "",
+        profileImageKey: userData.profileImageKey || "",
         username: userData.userName || "",
         firstName: userData.firstName || "",
         lastName: userData.lastName || "",
         email: userData.email || "",
         phone: userData.phone || "",
         age: userData.age || 0,
-        dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth) : null,
+        dateOfBirth: userData.dateOfBirth && !isNaN(new Date(userData.dateOfBirth).getTime()) ? new Date(userData.dateOfBirth) : null,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
         allergies: Array.isArray(userData.allergies) ? (userData.allergies || []).join(", ") : "",
@@ -440,11 +443,13 @@ const EditProfile = () => {
               {/* ── Avatar ── */}
               <AvatarSection>
                 <AvatarRing>
-                  {profileImageUrl || selectedImages ? (
+                  {profileImageSource || selectedImages ? (
                     <Image
-                      source={{
-                        uri: selectedImages! || profileImageUrl!,
-                      }}
+                      source={
+                        selectedImages
+                          ? { uri: selectedImages }
+                          : profileImageSource
+                      }
                       style={{ borderRadius: 45, width: 90, height: 90 }}
                     />
                   ) : (
@@ -680,11 +685,14 @@ const EditProfile = () => {
               disabled={updateProfileMutation.isPending}
               activeOpacity={0.8}
             >
-              <SaveButtonText>
-                {updateProfileMutation.isPending
-                  ? "Saving Profile..."
-                  : "Save Profile"}
-              </SaveButtonText>
+              {updateProfileMutation.isPending ? (
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  <ActivityIndicator color="#ffffff" />
+                  <SaveButtonText>Saving Profile...</SaveButtonText>
+                </View>
+              ) : (
+                <SaveButtonText>Save Profile</SaveButtonText>
+              )}
             </SaveButton>
           )}
         </>
@@ -714,7 +722,7 @@ const EditProfile = () => {
       <DatePicker
         modal
         open={showDatePicker}
-        date={form.dateOfBirth || new Date()}
+        date={form.dateOfBirth && !isNaN(form.dateOfBirth.getTime()) ? form.dateOfBirth : new Date()}
         mode="date"
         maximumDate={new Date()}
         onConfirm={(date) => {
