@@ -98,12 +98,11 @@ export interface SignupRequest {
   profileImageKey?: string;
   firstName: string;
   lastName: string;
-  // userName: string;
   email: string;
   password: string;
   gender: string;
   dateOfBirth: string;
-  phone: string;
+  mobile: string;
   bloodGroup?: string;
   allergies?: string[];
 }
@@ -129,9 +128,8 @@ export interface User {
   firstName: string;
   lastName: string;
   fullName?: string;
-  userName: string;
   email: string;
-  phone?: string;
+  mobile?: string;
   age?: number;
   dateOfBirth?: string;
   gender?: string;
@@ -151,11 +149,10 @@ export interface User {
 
 export interface UpdateUserRequest {
   profileImageKey?: string;
-  userName?: string;
   firstName?: string;
   lastName?: string;
   email?: string;
-  phone?: string;
+  mobile?: string;
   dateOfBirth?: string;
   gender?: string;
 }

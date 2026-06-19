@@ -1,37 +1,36 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
-import {
-  Platform,
-  View,
-  KeyboardAvoidingView,
-  FlatList,
-  StyleSheet,
-  ScrollView,
-  Keyboard,
-  KeyboardEvent,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useQuery } from "@tanstack/react-query";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  FlatList,
+  Keyboard,
+  KeyboardEvent,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
-import { useQuery } from "@tanstack/react-query";
-import Toast from "react-native-toast-message";
 
-import { listDocument, sendChatMessage } from "../../services/documentService";
-import BottomSheet from "../../components/shared/BottomSheet";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import BottomSheet from "../../components/shared/BottomSheet";
+import {
+  ErrorScreen,
+  LoadingScreen,
+} from "../../components/shared/DefensiveStates";
+import { listDocument, sendChatMessage } from "../../services/documentService";
 import type { MedicalDocument } from "../../types";
 import { safeFilter, safeMap } from "../../utils/arrayUtils";
-import {
-  LoadingScreen,
-  ErrorScreen,
-} from "../../components/shared/DefensiveStates";
 
 // Reusable Redesigned Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
-import { MessageBubble } from "../../components/chat/MessageBubble";
 import { ChatInput } from "../../components/chat/ChatInput";
-import { SuggestedQuestionChip } from "../../components/chat/SuggestedQuestionChip";
 import { EmptyChatState } from "../../components/chat/EmptyChatState";
+import { MessageBubble } from "../../components/chat/MessageBubble";
+import { SuggestedQuestionChip } from "../../components/chat/SuggestedQuestionChip";
 
 enum ChatMode {
   GENERAL_HEALTH = "GENERAL_HEALTH",
@@ -389,7 +388,7 @@ const EmergencyCard = styled.View`
   border-color: #fca5a5;
   border-radius: 16px;
   padding: 12px 16px;
-  margin: 4px 16px 8px;
+  margin: 4px 10px 8px;
 `;
 
 const EmergencyTitleRow = styled.View`

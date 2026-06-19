@@ -85,7 +85,7 @@ export const SuggestedQuestionChip: React.FC<SuggestedQuestionChipProps> = ({
 const styles = StyleSheet.create({
   scrollContainer: {
     width: "100%",
-    marginVertical: 8,
+    marginVertical: 4,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -98,20 +98,20 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   gradientBorder: {
-    padding: 1.5,
+    padding: 1.0,
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
   innerPill: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
   pillText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
 });

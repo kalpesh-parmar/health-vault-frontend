@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { View, TextInput, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, TextInput, TouchableOpacity, StyleSheet, Platform, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,6 +28,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const sendScale = useSharedValue(0.0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardVisible(true)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const hasText = value.trim().length > 0;
@@ -66,7 +83,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           backgroundColor: cardBgColor,
           borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
           borderWidth: isDark ? 1 : 0,
-          marginBottom: insets.bottom + 8,
+          marginBottom: keyboardVisible ? 8 : insets.bottom + 8,
         },
       ]}
     >
@@ -85,7 +102,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         multiline
         numberOfLines={1}
         maxLength={1000}
-        editable={!isSending}
+        blurOnSubmit={false}
+        disableFullscreenUI={true}
       />
 
       {/* Voice Mic Button */}

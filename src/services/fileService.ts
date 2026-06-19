@@ -34,7 +34,7 @@ export const getFileSource = async (
   fileKey: string
 ): Promise<{ uri: string; headers: { Authorization: string } } | null> => {
   if (!fileKey) return null;
-  const token = await SecureStore.getItemAsync("authToken");
+  const token = await SecureStore.getItemAsync("accessToken");
   return {
     uri: `${BASE_URL}${FILE_ENDPOINTS.GET_SIGNED_URL}?fileKey=${encodeURIComponent(fileKey)}`,
     headers: {

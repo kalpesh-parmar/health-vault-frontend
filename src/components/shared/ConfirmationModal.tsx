@@ -5,7 +5,7 @@ import DualButtons from "./Buttons/DualButtons";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import { useAuth } from "../../context/ContextAPI";
-import { logoutUser } from "../../services/authService";
+import { logoutUser } from "../../services/auth.service";
 import { deleteDocument } from "../../services/documentService";
 import { deleteUserAccount } from "../../services/userService";
 import { useMutation } from "@tanstack/react-query";

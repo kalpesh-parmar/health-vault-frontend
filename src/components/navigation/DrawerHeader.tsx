@@ -30,7 +30,6 @@ const DrawerHeader = React.memo(
         ? `${userDetails.firstName} ${userDetails.lastName}`
         : "") ||
       userDetails?.firstName ||
-      userDetails?.userName ||
       "User Profile";
 
     const email = userDetails?.email || "";

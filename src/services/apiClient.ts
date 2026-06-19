@@ -147,10 +147,100 @@ function resolveFullUrl(baseURL?: string, url?: string): string {
   return `${base}${separator}${actualUrl}`;
 }
 
+type ForceLogoutCallback = () => void;
+let forceLogoutHandler: ForceLogoutCallback | null = null;
+let isForceLoggedOut = false;
+const pendingRequestControllers = new Set<AbortController>();
+
+export const registerForceLogoutHandler = (handler: ForceLogoutCallback) => {
+  forceLogoutHandler = handler;
+};
+
+export const resetForceLogout = () => {
+  isForceLoggedOut = false;
+};
+
+export const triggerForceLogout = async () => {
+  if (isForceLoggedOut) return;
+  isForceLoggedOut = true;
+
+  // 1. Cancel all pending requests
+  for (const controller of pendingRequestControllers) {
+    try {
+      console.log("[API LOG] AbortController Abort: Cancelling pending request due to force logout");
+      controller.abort();
+    } catch (e) {
+      // ignore
+    }
+  }
+  pendingRequestControllers.clear();
+
+  // 2. Clear AsyncStorage
+  try {
+    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+    await AsyncStorage.multiRemove([
+      "ACCESS_TOKEN",
+      "REFRESH_TOKEN",
+      "SESSION_ID",
+      "USER_ID",
+      "PATIENT_DATA",
+      "ONBOARDING_STATE"
+    ]);
+  } catch (err) {
+    console.error("[apiClient] Failed to clear AsyncStorage:", err);
+  }
+
+  // 3. Clear SecureStore
+  try {
+    await SecureStore.deleteItemAsync("authToken");
+    await SecureStore.deleteItemAsync("accessToken");
+    await SecureStore.deleteItemAsync("userId");
+    await SecureStore.deleteItemAsync("refreshDate");
+  } catch (err) {
+    console.error("[apiClient] Failed to clear SecureStore:", err);
+  }
+
+  // 4. Sign out Firebase
+  try {
+    const { signOut } = require("firebase/auth");
+    const { auth } = require("../firebase/config");
+    await signOut(auth);
+  } catch (err) {
+    console.error("[apiClient] Failed to sign out Firebase:", err);
+  }
+
+  // 5. Trigger navigation / reset AuthContext
+  if (forceLogoutHandler) {
+    forceLogoutHandler();
+  }
+};
+
 apiClient.interceptors.request.use(
   async (config) => {
+    const isAuthRequest = config.url && (
+      config.url === "/auth/firebase-login" ||
+      config.url === "/auth/login" ||
+      config.url === "/auth/verify-otp" ||
+      config.url === "/auth/request-otp" ||
+      config.url === "/auth/refresh-token"
+    );
+
+    // If in force logout state, abort immediately and do not request (except for auth requests)
+    if (isForceLoggedOut && !isAuthRequest) {
+      console.log(`[API LOG] Axios Cancel: Request cancelled due to force logout for url: ${config.url}`);
+      const controller = new AbortController();
+      controller.abort();
+      config.signal = controller.signal;
+      return config;
+    }
+
+    const controller = new AbortController();
+    config.signal = controller.signal;
+    pendingRequestControllers.add(controller);
+    (config as any).abortController = controller;
+
     // Add auth token if present
-    const token = await SecureStore.getItemAsync("authToken");
+    const token = await SecureStore.getItemAsync("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -199,8 +289,12 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => {
-    const enabled = ENABLE_API_LOGS;
     const config = response.config as any;
+    if (config?.abortController) {
+      pendingRequestControllers.delete(config.abortController);
+    }
+
+    const enabled = ENABLE_API_LOGS;
     if (enabled && config && config.metadata) {
       const duration = Date.now() - config.metadata.startTime;
       const fullUrl = resolveFullUrl(config.baseURL, config.url);
@@ -220,10 +314,35 @@ apiClient.interceptors.response.use(
 
     return response;
   },
-  (error) => {
-    const enabled = ENABLE_API_LOGS;
-    const config = error.config as any;
+  async (error) => {
+    const config = error?.config as any;
+    if (config?.abortController) {
+      pendingRequestControllers.delete(config.abortController);
+    }
+
     const data = error.response?.data;
+    
+    const isAuthRequest = config?.url && (
+      config.url === "/auth/firebase-login" ||
+      config.url === "/auth/login" ||
+      config.url === "/auth/verify-otp" ||
+      config.url === "/auth/request-otp" ||
+      config.url === "/auth/refresh-token"
+    );
+
+    // Check if response indicates session expired or force logout (except for auth requests)
+    if (
+      !isAuthRequest &&
+      error.response?.status === 401 &&
+      data &&
+      (data.forceLogout === true || data.errorCode === "SESSION_EXPIRED")
+    ) {
+      await triggerForceLogout();
+      // Return a pending promise to cancel downstream request chains and prevent retries/errors in UI
+      return new Promise(() => {});
+    }
+
+    const enabled = ENABLE_API_LOGS;
     const message =
       data?.error?.message ||
       data?.status?.description?.message ||

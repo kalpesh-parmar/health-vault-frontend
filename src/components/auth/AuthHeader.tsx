@@ -1,4 +1,4 @@
-// src/components/Signup/SignupHeader.tsx
+// src/components/auth/AuthHeader.tsx
 import React from "react";
 import { Dimensions, TouchableOpacity } from "react-native";
 import styled from "styled-components/native";
@@ -12,24 +12,25 @@ import Animated, {
   Extrapolate,
   SharedValue,
 } from "react-native-reanimated";
+import { useAppTheme } from "../../context/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ─── Layout Constants ─────────────────────────────────────────────────────────
-const MAX_HEADER_HEIGHT = 190;
-const MIN_HEADER_HEIGHT = 50;
-const SCROLL_RANGE = MAX_HEADER_HEIGHT - MIN_HEADER_HEIGHT;
-const CURVE_HEIGHT = 40; // depth of the inverted arch
+export const MAX_HEADER_HEIGHT = 190;
+export const MIN_HEADER_HEIGHT = 50;
+export const SCROLL_RANGE = MAX_HEADER_HEIGHT - MIN_HEADER_HEIGHT;
+export const CURVE_HEIGHT = 40; // depth of the inverted arch
 export const STICKY_BAR_HEIGHT = 106;
 
-interface SignupHeaderProps {
+interface AuthHeaderProps {
   scrollY: SharedValue<number>;
   heading: string;
   subHeading?: string;
 }
 
 // ─── Sticky Bar Component (Rendered outside ScrollView) ───────────────────────
-export const SignupStickyBar: React.FC<SignupHeaderProps> = ({ scrollY, heading }) => {
+export const AuthStickyBar: React.FC<AuthHeaderProps> = ({ scrollY, heading }) => {
   const navigation = useNavigation();
 
   const stickyBarAnimStyle = useAnimatedStyle(() => ({
@@ -92,7 +93,9 @@ export const SignupStickyBar: React.FC<SignupHeaderProps> = ({ scrollY, heading 
 };
 
 // ─── Collapsible Header Component (Rendered inside ScrollView) ─────────────────
-export const SignupCollapsibleHeader: React.FC<SignupHeaderProps> = ({ scrollY, heading, subHeading }) => {
+export const AuthCollapsibleHeader: React.FC<AuthHeaderProps> = ({ scrollY, heading, subHeading }) => {
+  const { theme } = useAppTheme();
+  
   const headerAnimatedStyle = useAnimatedStyle(() => ({
     height: interpolate(
       scrollY.value,
@@ -194,7 +197,7 @@ export const SignupCollapsibleHeader: React.FC<SignupHeaderProps> = ({ scrollY, 
         >
           <Path
             d={`M0,0 Q${SCREEN_WIDTH / 2},${CURVE_HEIGHT * 2.4} ${SCREEN_WIDTH},0 L${SCREEN_WIDTH},${CURVE_HEIGHT + 1} L0,${CURVE_HEIGHT + 1} Z`}
-            fill="#F4F1FE"
+            fill={theme.colors.background}
           />
         </Svg>
       </ArchOverlay>
