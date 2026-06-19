@@ -11,7 +11,7 @@ import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { RouteProp, useNavigation, useRoute, CommonActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { AuthStackParamList } from "../../navigation/types";
 import Toast from "react-native-toast-message";
@@ -114,7 +114,7 @@ const ResetPassword = () => {
   const cachedUser = queryClient.getQueryData(["profile"]) as any;
   const email = route.params?.email || cachedUser?.email;
 
-  const { logout } = useAuth();
+  const { logout, isAuthenticated } = useAuth();
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
@@ -136,13 +136,15 @@ const ResetPassword = () => {
           text2: "You can now log in with your new password.",
         });
 
-        if (logout) {
+        if (isAuthenticated) {
           logout();
         } else {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "Login" as any }],
-          });
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: "Login" as any}],
+            })
+          );
         }
       },
 
@@ -195,21 +197,6 @@ const ResetPassword = () => {
       email,
       password,
     });
-
-    Toast.show({
-      type: "success",
-      text1: "Password Updated",
-      text2: "You can now log in with your new password.",
-    });
-
-    if (logout) {
-      logout();
-    } else {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Login" as any }],
-      });
-    }
   };
 
   return (

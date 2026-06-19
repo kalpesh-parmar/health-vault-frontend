@@ -18,7 +18,7 @@ export const PATIENT_ENDPOINTS = {
 export const DOCUMENT_ENDPOINTS = {
   UPLOAD_DOCUMENT: "/documents/upload",
   RUN_OCR: "/documents/run-ocr",
-  OCR_PROGRESS: "/documents/ocr-progress/{fileKey}",
+  OCR_PROGRESS: "/documents/run-ocr-status/{fileKey}",
   ADD_DOCUMENT: "/documents/add",
   LIST_DOCUMENT: "/documents/list", // Normal GetAllDocument API.
   DOCUMENT_LIST_PAGINATED: "/documents/list-paginated",

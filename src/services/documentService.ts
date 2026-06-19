@@ -12,6 +12,7 @@ export interface UploadResponse {
   originalFileName: string;
   mimeType: string;
   fileSize: number;
+  s3Bucket: string;
   fileUrl: string;
 }
 
@@ -57,12 +58,15 @@ export interface OcrStatusResponse {
 }
 
 export interface AddDocumentRequest {
-  fileKey: string;
   documentType?: string;
+  s3Key: string;
   fileName?: string;
+  fileType?: string;
+  s3bucket?: string;
   rawOcrData: any;
   extractedStructuredData: any;
   graphs?: any[];
+  embeddingsGenerated?: boolean;
 }
 
 
@@ -94,7 +98,7 @@ export const runOcr = async (payload: RunOcrRequest): Promise<ApiResponse<RunOcr
   return response.data;
 };
 
-export const getOcrStatus = async (fileKey: string): Promise<ApiResponse<OcrStatusResponse>> => {
+export const getOcrStatus = async (fileKey: string): Promise<any> => {
   const endpoint = DOCUMENT_ENDPOINTS.OCR_PROGRESS.replace("{fileKey}", encodeURIComponent(fileKey));
   const response = await apiClient.get(endpoint);
   return response.data;

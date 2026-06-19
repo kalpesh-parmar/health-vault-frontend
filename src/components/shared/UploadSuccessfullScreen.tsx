@@ -55,7 +55,7 @@ const UploadSuccessScreen = () => {
 
       Animated.timing(opacityAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 2000,
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }),

@@ -20,8 +20,6 @@ const { width, height } = Dimensions.get("window");
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedView = Animated.createAnimatedComponent(View);
-const AnimatedSvg = Animated.createAnimatedComponent(Svg);
-const AnimatedG = Animated.createAnimatedComponent(G);
 
 interface AnimatedSplashScreenProps {
   onAnimationEnd: () => void;

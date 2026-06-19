@@ -3,7 +3,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import { documentUpload, runOcr, getOcrStatus, addDocument } from "../services/documentService";
 
-export const useSaveDocument = (onSuccessGlobal?: () => void) => {
+export interface UploadedFile {
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+}
+
+export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) => {
   const queryClient = useQueryClient();
   const [progressStage, setProgressStage] = useState<string>("IDLE");
   const [progressPercentage, setProgressPercentage] = useState<number>(0);
@@ -41,9 +47,8 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
       formData.append("uploadType", "PATIENT_DOCUMENT");
 
       const uploadRes = await documentUpload(formData);
-      const uploadData = uploadRes.data as any;
-      const fileKey = uploadData?.fileKey || (uploadRes as any).fileKey;
-      const mimeType = uploadData?.mimeType || (uploadRes as any).mimeType;
+      const fileKey = uploadRes?.data?.fileKey;
+      const mimeType = uploadRes?.data?.mimeType;
 
       if (!fileKey) {
         throw new Error("Upload response missing file key");
@@ -54,41 +59,41 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
       setProgressPercentage(25);
       setProgressMessage("Checking whether the document is medical.");
 
-      await runOcr({ fileKey, mimeType, documentType });
+      await runOcr({ fileKey, documentType });
 
       // Step 3: Poll status
-      const maxRetries = 60;
+      const maxRetries = 100;
       const delayMs = 1500;
       let job = null;
 
       for (let i = 0; i < maxRetries; i++) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         const statusRes = await getOcrStatus(fileKey);
-        const jobData = statusRes.data;
+        const jobData = statusRes?.data || statusRes;
 
-        if (jobData.stage === "OCR_QUEUED" || jobData.stage === "OCR_STARTED") {
+        if (jobData?.stage === "OCR_QUEUED" || jobData?.stage === "OCR_STARTED") {
           setProgressStage("VALIDATING");
           setProgressPercentage(30);
           setProgressMessage("Checking whether the document is medical.");
-        } else if (jobData.stage === "VALIDATING") {
+        } else if (jobData?.stage === "VALIDATING") {
           setProgressStage("VALIDATING");
           setProgressPercentage(35);
           setProgressMessage("Checking whether the document is medical.");
-        } else if (jobData.stage === "EXTRACTING") {
+        } else if (jobData?.stage === "EXTRACTING") {
           setProgressStage("EXTRACTING");
           setProgressPercentage(50);
           setProgressMessage("Reading report contents.");
-        } else if (jobData.stage === "ANALYZING") {
+        } else if (jobData?.stage === "ANALYZING") {
           setProgressStage("ANALYZING");
           setProgressPercentage(70);
           setProgressMessage("Finding tests and medical values.");
-        } else if (jobData.stage === "SUMMARIZING") {
+        } else if (jobData?.stage === "SUMMARIZING") {
           setProgressStage("SUMMARIZING");
           setProgressPercentage(90);
           setProgressMessage("Preparing easy explanation.");
         }
 
-        if (jobData.status === "COMPLETED") {
+        if (jobData?.status === "COMPLETED") {
           setProgressStage("COMPLETED");
           setProgressPercentage(100);
           setProgressMessage("You can now ask questions.");
@@ -96,8 +101,8 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
           break;
         }
 
-        if (jobData.status === "FAILED") {
-          throw new Error(jobData.error || "OCR extraction failed");
+        if (jobData?.status === "FAILED") {
+          throw new Error(jobData?.error || "OCR extraction failed");
         }
       }
 
@@ -105,20 +110,32 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
         throw new Error("OCR job timed out");
       }
 
+      console.log("filekey :- ", fileKey);
+
       // Step 4: Add document
       const addRes = await addDocument({
-        fileKey,
         documentType,
+        s3Key: fileKey,
         fileName,
+        fileType: mimeType,
+        s3bucket: uploadRes?.data?.s3Bucket,
         rawOcrData: job.rawOcrData,
         extractedStructuredData: job.extractedStructuredData,
         graphs: job.graphs || [],
+        embeddingsGenerated: true
       });
 
-      return addRes.data;
+      return {
+        data: addRes.data,
+        file: {
+          fileName,
+          fileSize: uploadRes?.data?.fileSize || 0,
+          fileType: mimeType
+        }
+      };
     },
     mutationKey: ["documents"],
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
       queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
@@ -129,7 +146,7 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
           text1: "Document Added",
           text2: "Your document has been uploaded successfully.",
         });
-        onSuccessGlobal?.();
+        onSuccessGlobal?.(result.file);
       }, 1000);
     },
     onError: (error: any) => {
@@ -152,6 +169,7 @@ export const useSaveDocument = (onSuccessGlobal?: () => void) => {
           text2: error.message || "An error occurred during upload/processing",
         });
       }
+      console.log("Error :- ", error);
     },
   });
 

@@ -10,7 +10,6 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useSaveDocument } from "../../hooks/useSaveDocument";
 import ModernLoader from "../../components/shared/Loader";
-import OcrProgressModal from "../../components/shared/OcrProgressModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 
@@ -121,12 +120,12 @@ const SaveDocumentScreen = ({ route }: Props) => {
      progressStage,
      progressPercentage,
      progressMessage,
-   } = useSaveDocument(() => {
+   } = useSaveDocument((file) => {
 
     navigation.navigate("UploadSuccess", {
-      documentName: docName,
-      fileSize: "1.84 MB",
-      fileType: "PDF",
+      documentName: file?.fileName || docName,
+      fileSize: file?.fileSize ? `${(file.fileSize / (1024 * 1024)).toFixed(2)} MB` : "Unknown",
+      fileType: file?.fileType ? file.fileType.split("/").pop()?.toUpperCase() || "UNKNOWN" : "UNKNOWN",
       uploadedAt: new Date().toLocaleString("en-US", {
         day: "numeric",
         month: "short",
