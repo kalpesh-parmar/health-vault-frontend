@@ -4,7 +4,7 @@ import { Linking } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import {
   requestGalleryPermission,
-  openGallery,
+  openGalleryAsset,
 } from "../services/mediaServices";
 
 import {
@@ -49,7 +49,7 @@ export const useDocumentMedia = () => {
       return;
     }
 
-    const images = await openGallery();
+    const images = await openGalleryAsset();
     if (!images) return;
 
     onClose?.();
@@ -57,7 +57,7 @@ export const useDocumentMedia = () => {
     setIsProcessing(true);
     try {
       if (from !== "Register" && from !== "Profile") {
-        const isValid = await isValidMedicalDocument(images, false);
+        const isValid = await isValidMedicalDocument(images.uri, false);
         if (!isValid) {
           Toast.show({
             type: "error",
@@ -69,10 +69,10 @@ export const useDocumentMedia = () => {
       }
 
       setPreviewSource("gallery");
-      setSelectedImages(images);
+      setSelectedImages(images.uri);
       if (from !== "Register" && from !== "Profile" && from !== "Document") {
         navigation.navigate("ImagePreview", {
-          images: images,
+          images: images.uri,
         });
       }
     } finally {

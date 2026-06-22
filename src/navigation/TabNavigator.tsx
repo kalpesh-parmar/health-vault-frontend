@@ -19,13 +19,22 @@ const TabNavigator = () => {
       tabBar={(props) => <TabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        tabBarStyle: {
+          position: "absolute",
+        },
       }}
     >
       <Tab.Screen name="Home" options={{ tabBarLabel: "Home" }}>
         {() => <HomeStack />}
       </Tab.Screen>
 
-      <Tab.Screen name="AIChatScreen" component={AIChatScreen} />
+      <Tab.Screen
+        name="AIChatScreen"
+        component={AIChatScreen}
+        options={{
+          tabBarStyle: { display: "none" },
+        }}
+      />
 
       <Tab.Screen
         name="Profile"

@@ -28,10 +28,6 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import CameraModal from "../../components/shared/CameraModal";
 
 const getIconColors = (isDark: boolean) => ({
-  username: {
-    bg: isDark ? "#1e3a8a" : "#eff6ff",
-    icon: isDark ? "#60a5fa" : "#2563eb",
-  },
   fullname: {
     bg: isDark ? "#14532d" : "#f0fdf4",
     icon: isDark ? "#4ade80" : "#16a34a",
@@ -48,7 +44,7 @@ const getIconColors = (isDark: boolean) => ({
     bg: isDark ? "#713f12" : "#fefce8",
     icon: isDark ? "#facc15" : "#ca8a04",
   },
-  phone: {
+  mobile: {
     bg: isDark ? "#134e4a" : "#f0fdfa",
     icon: isDark ? "#2dd4bf" : "#0d9488",
   },
@@ -64,14 +60,23 @@ const GENDER_OPTIONS = [
   { label: "Other", icon: "male-female-outline" },
 ] as const;
 
+const calculateAge = (dob: Date | null) => {
+  if (!dob) return null;
+  const today = new Date();
+  let age = today.getUTCFullYear() - dob.getUTCFullYear();
+  const m = today.getUTCMonth() - dob.getUTCMonth();
+  if (m < 0 || (m === 0 && today.getUTCDate() < dob.getUTCDate())) {
+    age--;
+  }
+  return age;
+};
+
 interface ProfileFormState {
   profileImageKey?: string;
-  username: string;
   firstName: string;
   lastName: string;
   email: string;
-  phone: string;
-  age: number;
+  mobile: string;
   dateOfBirth: Date | null;
   gender: string;
   bloodGroup: string;
@@ -189,7 +194,7 @@ const EditProfile = () => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const scrollViewRef = useRef<any>(null);
-  const usernameInputRef = useRef<any>(null);
+  const firstNameInputRef = useRef<any>(null);
 
   useEffect(() => {
     const showEvent =
@@ -247,12 +252,10 @@ const EditProfile = () => {
 
   const [form, setForm] = useState<ProfileFormState>({
     profileImageKey: "",
-    username: "",
     firstName: "",
     lastName: "",
     email: "",
-    phone: "",
-    age: 0,
+    mobile: "",
     dateOfBirth: null,
     gender: "",
     bloodGroup: "",
@@ -263,12 +266,10 @@ const EditProfile = () => {
     if (userData) {
       setForm({
         profileImageKey: userData.profileImageKey || "",
-        username: userData.userName || "",
         firstName: userData.firstName || "",
         lastName: userData.lastName || "",
         email: userData.email || "",
-        phone: userData.phone || "",
-        age: userData.age || 0,
+        mobile: userData.mobile || "",
         dateOfBirth: userData.dateOfBirth && !isNaN(new Date(userData.dateOfBirth).getTime()) ? new Date(userData.dateOfBirth) : null,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
@@ -280,7 +281,7 @@ const EditProfile = () => {
   const handleStartEdit = () => {
     setIsEditing(true);
     setTimeout(() => {
-      usernameInputRef.current?.focus();
+      firstNameInputRef.current?.focus();
     }, 100);
   };
 
@@ -289,12 +290,10 @@ const EditProfile = () => {
     if (userData) {
       setForm({
         profileImageKey: userData.profileImageKey || "",
-        username: userData.userName || "",
         firstName: userData.firstName || "",
         lastName: userData.lastName || "",
         email: userData.email || "",
-        phone: userData.phone || "",
-        age: userData.age || 0,
+        mobile: userData.mobile || "",
         dateOfBirth: userData.dateOfBirth && !isNaN(new Date(userData.dateOfBirth).getTime()) ? new Date(userData.dateOfBirth) : null,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
@@ -368,7 +367,7 @@ const EditProfile = () => {
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
-        phone: form.phone,
+        mobile: form.mobile,
         gender: form.gender,
       };
       
@@ -474,22 +473,6 @@ const EditProfile = () => {
               {/* ── Personal Info ── */}
               <SectionLabel>Personal Info</SectionLabel>
               <Card>
-                {/* <EditableField
-                  label="Username"
-                  value={form.username}
-                  icon="at"
-                  colors={iconColors.username}
-                  isFocused={focusedField === "username"}
-                  onFocus={() => setFocusedField("username")}
-                  onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("username", t)}
-                  autoCapitalize="none"
-                  editable={isEditing}
-                  inputRef={usernameInputRef}
-                  isEditing={isEditing}
-                  error={errors.username}
-                /> */}
-                {/* <FieldDivider /> */}
                 <EditableField
                   label="First Name"
                   value={form.firstName}
@@ -500,6 +483,7 @@ const EditProfile = () => {
                   onBlur={() => setFocusedField(null)}
                   onChangeText={(t) => updateField("firstName", t)}
                   editable={isEditing}
+                  inputRef={firstNameInputRef}
                   isEditing={isEditing}
                   error={errors.firstName}
                 />
@@ -540,17 +524,17 @@ const EditProfile = () => {
                 <FieldDivider />
                 <EditableField
                   label="Mobile Number"
-                  value={form.phone || ""}
+                  value={form.mobile || ""}
                   icon="call-outline"
-                  colors={iconColors.phone}
-                  isFocused={focusedField === "phone"}
-                  onFocus={() => setFocusedField("phone")}
+                  colors={iconColors.mobile}
+                  isFocused={focusedField === "mobile"}
+                  onFocus={() => setFocusedField("mobile")}
                   onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("phone", t)}
+                  onChangeText={(t) => updateField("mobile", t)}
                   keyboardType="phone-pad"
                   editable={isEditing}
                   isEditing={isEditing}
-                  error={errors.phone}
+                  error={errors.mobile}
                 />
               </Card>
 
@@ -572,24 +556,13 @@ const EditProfile = () => {
                     </FieldIconBox>
                     <FieldContent>
                       <FieldLabel>{isEditing ? "Date of Birth" : "Age"}</FieldLabel>
-                      <AgeInput hasValue={!!form.age || !!form.dateOfBirth}>
+                      <AgeInput hasValue={!!form.dateOfBirth}>
                         {isEditing 
                           ? (form.dateOfBirth ? format(form.dateOfBirth, "dd MMM yyyy") : "Select Date")
-                          : (form.age ? `${form.age} Years` : "Not specified")}
+                          : (form.dateOfBirth ? `${calculateAge(form.dateOfBirth)} Years` : "Not specified")}
                       </AgeInput>
                     </FieldContent>
                   </FieldRow>
-                  {errors.age ? (
-                    <FieldErrorText
-                      style={{
-                        marginLeft: 65,
-                        marginTop: -5,
-                        marginBottom: 10,
-                      }}
-                    >
-                      {errors.age}
-                    </FieldErrorText>
-                  ) : null}
                 </TouchableOpacity>
 
                 <FieldDivider />

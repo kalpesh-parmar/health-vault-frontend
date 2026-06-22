@@ -12,7 +12,8 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import { AppThemeProvider } from "./src/context/ThemeContext";
 import * as SecureStore from "expo-secure-store";
-import messaging from "@react-native-firebase/messaging";
+import { getMessaging, getToken, onTokenRefresh } from "@react-native-firebase/messaging";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -33,7 +34,7 @@ export default function App() {
         }
 
         // FCM Token Generation for Push Notifications using Firebase Cloud Messaging.
-        const fcmToken = await messaging().getToken();
+        const fcmToken = await getToken(getMessaging());
         console.log("FCM Token:", fcmToken);
         
         await SecureStore.setItemAsync("deviceToken", String(fcmToken));
@@ -67,7 +68,7 @@ export default function App() {
     registerForPushNotifications();
 
     // --- FCM Token Refresh Listener ---
-    const unsubscribeFCM = messaging().onTokenRefresh((newToken: string) => {
+    const unsubscribeFCM = onTokenRefresh(getMessaging(), (newToken: string) => {
       console.log("FCM Token Refreshed:", newToken);
       SecureStore.setItemAsync("deviceToken", String(newToken));
     });
@@ -79,21 +80,23 @@ export default function App() {
   }, []);
 
   return (
-    <AppThemeProvider>
-      <AuthProvider>
-        <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <BottomSheetModalProvider>
-              <RootNavigator />
-              <Toast
-                config={toastConfig}
-                topOffset={60}
-                visibilityTime={4000}
-              />
-            </BottomSheetModalProvider>
-          </GestureHandlerRootView>
-        </QueryClientProvider>
-      </AuthProvider>
-    </AppThemeProvider>
+    <SafeAreaProvider>
+      <AppThemeProvider>
+        <AuthProvider>
+          <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <BottomSheetModalProvider>
+                <RootNavigator />
+                <Toast
+                  config={toastConfig}
+                  topOffset={60}
+                  visibilityTime={4000}
+                />
+              </BottomSheetModalProvider>
+            </GestureHandlerRootView>
+          </QueryClientProvider>
+        </AuthProvider>
+      </AppThemeProvider>
+    </SafeAreaProvider>
   );
 }

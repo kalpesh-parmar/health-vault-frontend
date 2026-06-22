@@ -16,7 +16,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { AuthStackParamList } from "../../navigation/types";
 import Toast from "react-native-toast-message";
 import { useMutation } from "@tanstack/react-query";
-import { resetPassword } from "../../services/authService";
 import ModernLoader from "../../components/shared/Loader";
 import { useAppTheme } from "../../context/ThemeContext";
 import { queryClient } from "../../config/queryClient";
@@ -127,7 +126,7 @@ const ResetPassword = () => {
 
   const { mutateAsync: resetPasswordMutation, isPending: isLoading } =
     useMutation({
-      mutationFn: resetPassword,
+      // mutationFn: resetPassword,
 
       onSuccess: () => {
         Toast.show({
@@ -193,10 +192,10 @@ const ResetPassword = () => {
 
     if (newErrors.password || newErrors.confirm) return;
 
-    await resetPasswordMutation({
-      email,
-      password,
-    });
+    // await resetPasswordMutation({
+    //   email,
+    //   password,
+    // });
   };
 
   return (
