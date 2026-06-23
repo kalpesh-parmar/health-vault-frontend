@@ -6,7 +6,7 @@ import type { AddOrEditMedication, MedicalDocument } from "./index";
 // ─── Auth Stack ────────────────────────────────────────────────
 
 export type AuthStackParamList = {
-  MobileLogin: undefined;
+  Login: undefined;
   OtpVerification: { mobile: string };
   Home: NavigatorScreenParams<AppStackParamList>; 
 };

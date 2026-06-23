@@ -145,7 +145,7 @@ const OtpVerificationScreen = () => {
 
         // Get Firebase ID Token using modular API
         firebaseToken = await getIdToken(userCredential.user);
-        console.log("[OTP_LOG] Firebase ID Token Generated");
+        console.log("[OTP_LOG] Firebase ID Token Generated", firebaseToken);
       }
 
       // Submit Firebase token to backend

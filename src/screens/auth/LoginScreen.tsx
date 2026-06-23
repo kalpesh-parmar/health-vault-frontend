@@ -10,6 +10,7 @@ import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
+import MaskedView from "@react-native-masked-view/masked-view";
 import Svg, { Circle, Path } from "react-native-svg";
 import Toast from "react-native-toast-message";
 import { getAuth, signInWithPhoneNumber } from "@react-native-firebase/auth";
@@ -25,7 +26,9 @@ import AuthButton from "../../components/auth/AuthButton";
 import HealthVaultLogo from "../../components/shared/HealthVaultLogo";
 import { ENABLE_DUMMY_AUTH, isDummyNumber, getDummyConfirmationResult } from "../../services/dummyAuth.service";
 
-const MobileLoginScreen = () => {
+import SocialAuthButton from "../../components/auth/SocialAuthButton";
+
+const LoginScreen = () => {
   const [mobile, setMobile] = useState("");
   const [mobileError, setMobileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,7 +38,7 @@ const MobileLoginScreen = () => {
   const { isDark, theme } = useAppTheme();
 
   useEffect(() => {
-    console.log("[OTP_LOG] Component Mounted: MobileLoginScreen");
+    console.log("[OTP_LOG] Component Mounted: LoginScreen");
     // Clear any stale force logout state from a previous session
     resetForceLogout();
     const showSub = Keyboard.addListener(
@@ -47,7 +50,7 @@ const MobileLoginScreen = () => {
       () => setKeyboardPadding(0)
     );
     return () => {
-      console.log("[OTP_LOG] Component Unmounted: MobileLoginScreen");
+      console.log("[OTP_LOG] Component Unmounted: LoginScreen");
       showSub.remove();
       hideSub.remove();
     };
@@ -121,43 +124,25 @@ const MobileLoginScreen = () => {
 
       <View style={{ flex: 1, paddingBottom: keyboardPadding }}>
         <GradientBackground
-          colors={["#8B5CF6", "#EC4899", "#FF7A59"]}
+          colors={["#0F2027", "#203A43", "#2C5364"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <PatternContainer>
-            <Svg width="100%" height="100%" viewBox="0 0 400 800">
-              <Circle cx="50" cy="100" r="120" fill="rgba(255,255,255,0.08)" />
-              <Circle cx="340" cy="60" r="90" fill="rgba(255,255,255,0.06)" />
-              <Circle cx="320" cy="240" r="150" fill="rgba(255,255,255,0.05)" />
-              <Path
-                d="M0 250 Q120 180 220 260 T420 240"
-                stroke="rgba(255,255,255,0.10)"
-                strokeWidth="3"
-                fill="transparent"
-              />
-              <Path
-                d="M-20 330 Q130 260 260 340 T460 320"
-                stroke="rgba(255,255,255,0.08)"
-                strokeWidth="2"
-                fill="transparent"
-              />
-            </Svg>
-          </PatternContainer>
-
-          <ScrollView
-            contentContainerStyle={{ flexGrow: 1 }}
-            keyboardShouldPersistTaps="handled"
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-          >
+          <View style={{ flex: 1 }}>
             <InnerContainer>
               <TopSection>
-                <LogoContainer>
-                  <HealthVaultLogo size={80} />
-                </LogoContainer>
-                <Title>HealthCare</Title>
-                <Subtitle>Your Health, Our Priority</Subtitle>
+                <MaskedView
+                  maskElement={<Title>HEALTHCARE</Title>}
+                >
+                  <LinearGradient
+                    colors={["#43E97B", "#38F9D7"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <Title style={{ opacity: 0 }}>HEALTHCARE</Title>
+                  </LinearGradient>
+                </MaskedView>
+                <Subtitle>YOUR HEALTH, OUR PRIORITY</Subtitle>
               </TopSection>
 
               <BottomCard themeColor={theme.colors}>
@@ -183,16 +168,43 @@ const MobileLoginScreen = () => {
                   onPress={handleContinue}
                   loading={loading}
                 />
+
+                <DividerContainer>
+                  <DividerLine themeColor={theme.colors} />
+                  <DividerText themeColor={theme.colors}>or continue with</DividerText>
+                  <DividerLine themeColor={theme.colors} />
+                </DividerContainer>
+
+                <SocialAuthButton
+                  provider="google"
+                  label="Continue with Google"
+                  onPress={() => console.log("Google login")}
+                />
+                <SocialAuthButton
+                  provider="apple"
+                  label="Continue with Apple"
+                  onPress={() => console.log("Apple login")}
+                />
+                <SocialAuthButton
+                  provider="facebook"
+                  label="Continue with Facebook"
+                  onPress={() => console.log("Facebook login")}
+                />
+                <SocialAuthButton
+                  provider="microsoft"
+                  label="Continue with Microsoft"
+                  onPress={() => console.log("Microsoft login")}
+                />
               </BottomCard>
             </InnerContainer>
-          </ScrollView>
+          </View>
         </GradientBackground>
       </View>
     </Container>
   );
 };
 
-export default MobileLoginScreen;
+export default LoginScreen;
 
 const Container = styled.View<{ themeColor: any }>`
   flex: 1;
@@ -203,36 +215,30 @@ const GradientBackground = styled(LinearGradient)`
   flex: 1;
 `;
 
-const PatternContainer = styled.View`
-  position: absolute;
-  width: 100%;
-  height: 100%;
-`;
-
 const InnerContainer = styled.View`
   flex: 1;
 `;
 
 const TopSection = styled.View`
   align-items: center;
-  padding-top: 120px;
+  padding-top: 50px;
   padding-bottom: 36px;
 `;
 
-const LogoContainer = styled.View`
-  margin-bottom: 18px;
-`;
-
 const Title = styled.Text`
-  font-size: 34px;
+  font-size: 38px;
   font-weight: 800;
-  color: #ffffff;
+  color: #FFFFFF;
+  letter-spacing: 3px;
+  text-shadow: 0px 4px 10px rgba(0,0,0,0.15);
 `;
 
 const Subtitle = styled.Text`
-  margin-top: 6px;
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.85);
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 4px;
 `;
 
 const BottomCard = styled.View<{ themeColor: any }>`
@@ -261,4 +267,22 @@ const DescriptionText = styled.Text<{ themeColor: any }>`
 
 const Spacer = styled.View`
   height: 12px;
+`;
+
+const DividerContainer = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-vertical: 24px;
+`;
+
+const DividerLine = styled.View<{ themeColor: any }>`
+  flex: 1;
+  height: 1px;
+  background-color: ${(props: { themeColor: any }) => props.themeColor.border || 'rgba(0,0,0,0.1)'};
+`;
+
+const DividerText = styled.Text<{ themeColor: any }>`
+  margin-horizontal: 10px;
+  font-size: 14px;
+  color: ${(props: { themeColor: any }) => props.themeColor.textSecondary};
 `;
