@@ -13,6 +13,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 
+import * as SecureStore from "expo-secure-store";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
 
@@ -26,7 +27,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import {
   getConfirmationResult,
-  loginWithFirebaseToken,
+  socialLogin,
   setConfirmationResult,
 } from "../../services/auth.service";
 import { AuthStackParamList } from "../../types/navigation";
@@ -150,7 +151,8 @@ const OtpVerificationScreen = () => {
 
       // Submit Firebase token to backend
       console.log("[OTP_LOG] Backend Login Start: Authenticating token with server");
-      const backendResponse = await loginWithFirebaseToken(firebaseToken);
+      const deviceToken = await SecureStore.getItemAsync("deviceToken");
+      const backendResponse = await socialLogin("mobile", "mobile", firebaseToken, null, deviceToken);
       
       if (backendResponse.success && backendResponse.token) {
         console.log("[OTP_LOG] Backend Login Success: Server authenticated session");

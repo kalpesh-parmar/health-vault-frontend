@@ -3,9 +3,13 @@
     "name": "Health Vault",
     "slug": "health-vault",
     "version": "1.0.0",
+    "facebookAppId": "27183483314606544",
+    "facebookDisplayName": "Health Vault",
+    "facebookScheme": "fb27183483314606544",
     "orientation": "portrait",
     "icon": "./assets/AppIcon.png",
     "userInterfaceStyle": "light",
+    "scheme": "health-vault",
     "newArchEnabled": true,
     "owner": "dharmik-bapodara",
     "splash": {
@@ -21,7 +25,7 @@
     },
     "android": {
       "package": "com.anonymous.DocumentsVaultApp",
-      "googleServicesFile": "./google-services.json",
+      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/AppIconForeground.png",
         "backgroundColor": "#030a16"
@@ -64,7 +68,17 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "27183483314606544",
+          "clientToken": "518ba4bcb7695b7058da506d3f56e30a",
+          "displayName": "Health Vault"
+        }
+      ],
+      "@react-native-google-signin/google-signin",
+      "expo-web-browser"
     ]
   }
 }

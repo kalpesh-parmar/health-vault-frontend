@@ -77,8 +77,6 @@ export default function OnboardingScreen() {
   } | null>(null);
   const [validationDialogVisible, setValidationDialogVisible] = useState(false);
 
-
-
   const [state, setState] = useState({
     currentStep: null as string | null,
     isOnboardingCompleted: false,
@@ -252,7 +250,8 @@ export default function OnboardingScreen() {
     } else {
       finalState = {
         ...finalState,
-        preferredLanguage: aiRes.preferredLanguage || finalState.preferredLanguage,
+        preferredLanguage:
+          aiRes.preferredLanguage || finalState.preferredLanguage,
         flowMode: aiRes.flowMode || finalState.flowMode,
         documentUploaded:
           aiRes.documentUploaded !== undefined
@@ -556,10 +555,18 @@ export default function OnboardingScreen() {
         ...state.existingUserData,
         firstName: firstName || state.existingUserData.firstName || "",
         lastName: lastName || state.existingUserData.lastName || "",
-        dateOfBirth: structured.dateOfBirth || structured.reportDate || state.existingUserData.dateOfBirth || "",
+        dateOfBirth:
+          structured.dateOfBirth ||
+          structured.reportDate ||
+          state.existingUserData.dateOfBirth ||
+          "",
         gender: structured.gender || state.existingUserData.gender || "",
-        bloodGroup: structured.bloodGroup || state.existingUserData.bloodGroup || "",
-        allergies: parsedAllergies.length > 0 ? parsedAllergies : state.existingUserData.allergies || [],
+        bloodGroup:
+          structured.bloodGroup || state.existingUserData.bloodGroup || "",
+        allergies:
+          parsedAllergies.length > 0
+            ? parsedAllergies
+            : state.existingUserData.allergies || [],
         email: structured.email || state.existingUserData.email || "",
       };
 
@@ -625,8 +632,6 @@ export default function OnboardingScreen() {
     setState(newState);
     sendMessage("MANUAL", newState);
   };
-
-
 
   const renderOptions = (activeMsg: Message) => {
     const preferredLang = state.preferredLanguage || "en";
@@ -861,10 +866,7 @@ export default function OnboardingScreen() {
         </View>
 
         <View
-          style={[
-            styles.keyboardContainer,
-            { paddingBottom: keyboardPadding },
-          ]}
+          style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
         >
           {/* Messages Inverted List */}
           <View style={styles.listWrapper}>

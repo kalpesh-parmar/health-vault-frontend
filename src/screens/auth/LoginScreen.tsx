@@ -1,21 +1,20 @@
-import React, { useState, useRef, useEffect } from "react";
-import {
-  Keyboard,
-  Platform,
-  ScrollView,
-  StatusBar,
-  View,
-} from "react-native";
+import React, { useState, useEffect } from "react";
+import { Keyboard, Platform, StatusBar, View } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
 import MaskedView from "@react-native-masked-view/masked-view";
-import Svg, { Circle, Path } from "react-native-svg";
+import * as SecureStore from "expo-secure-store";
+import * as WebBrowser from "expo-web-browser";
+import * as AuthSession from "expo-auth-session";
 import Toast from "react-native-toast-message";
 import { getAuth, signInWithPhoneNumber } from "@react-native-firebase/auth";
-
-import { setConfirmationResult } from "../../services/auth.service";
+import {
+  setConfirmationResult,
+  loginSocialWithFirebase,
+  socialLogin,
+} from "../../services/auth.service";
 import { resetForceLogout } from "../../services/apiClient";
 import { useAppTheme } from "../../context/ThemeContext";
 import { AuthStackParamList } from "../../types/navigation";
@@ -23,19 +22,39 @@ import { validateMobileNumber } from "../../validations/auth.validation";
 import { formatPhoneNumberE164 } from "../../utils/auth.utils";
 import PhoneInput from "../../components/auth/PhoneInput";
 import AuthButton from "../../components/auth/AuthButton";
-import HealthVaultLogo from "../../components/shared/HealthVaultLogo";
-import { ENABLE_DUMMY_AUTH, isDummyNumber, getDummyConfirmationResult } from "../../services/dummyAuth.service";
-
+import {
+  ENABLE_DUMMY_AUTH,
+  isDummyNumber,
+  getDummyConfirmationResult,
+} from "../../services/dummyAuth.service";
+import { useAuth } from "../../hooks/useAuth";
+import {
+  loginWithGoogle,
+  loginWithFacebook,
+} from "../../services/auth.service";
 import SocialAuthButton from "../../components/auth/SocialAuthButton";
+
+WebBrowser.maybeCompleteAuthSession();
+
+const microsoftDiscovery = {
+  authorizationEndpoint:
+    "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+  tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+};
 
 const LoginScreen = () => {
   const [mobile, setMobile] = useState("");
   const [mobileError, setMobileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isFacebookLoading, setIsFacebookLoading] = useState(false);
+  const [isMicrosoftLoading, setIsMicrosoftLoading] = useState(false);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
-  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
-  const { isDark, theme } = useAppTheme();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
+  const { theme } = useAppTheme();
+  const { login: authContextLogin } = useAuth();
 
   useEffect(() => {
     console.log("[OTP_LOG] Component Mounted: LoginScreen");
@@ -43,11 +62,11 @@ const LoginScreen = () => {
     resetForceLogout();
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => setKeyboardPadding(e.endCoordinates.height)
+      (e) => setKeyboardPadding(e.endCoordinates.height),
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardPadding(0)
+      () => setKeyboardPadding(0),
     );
     return () => {
       console.log("[OTP_LOG] Component Unmounted: LoginScreen");
@@ -56,10 +75,96 @@ const LoginScreen = () => {
     };
   }, []);
 
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: "health-vault",
+    path: "auth",
+  });
+
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId:
+        process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID || "PLACEHOLDER_CLIENT_ID",
+      scopes: ["openid", "profile", "email"],
+      redirectUri,
+      responseType: "id_token token",
+      extraParams: {
+        nonce: "defaultNonce",
+        response_mode: "fragment",
+      },
+    },
+    microsoftDiscovery,
+  );
+
+  console.log("Response :- ", response);
+
+  useEffect(() => {
+    // Generate one redirectURI for redirecting the user as per the requirement
+    console.log(
+      "👉 MICROSOFT REDIRECT URI (Register this in Azure):",
+      redirectUri,
+    );
+
+    const handleMicrosoftResponse = async () => {
+      if (response?.type === "success") {
+        const { id_token, access_token } = response.params;
+
+        if (id_token) {
+          setIsMicrosoftLoading(true);
+          try {
+            const deviceToken = await SecureStore.getItemAsync("deviceToken");
+            const firebaseToken = await loginSocialWithFirebase("microsoft", id_token, access_token);
+            console.log("Firebase Token :- ", firebaseToken);
+            const backendResponse = await socialLogin(
+              "social",
+              "microsoft",
+              firebaseToken,
+              id_token,
+              deviceToken,
+            );
+
+            if (backendResponse?.data?.user?.id) {
+              await authContextLogin({
+                accessToken: backendResponse?.data?.accessToken,
+                refreshToken: backendResponse?.data?.refreshToken,
+                userId: backendResponse?.data?.user?.id,
+                createdAt: new Date().toISOString(),
+              });
+              Toast.show({
+                type: "success",
+                text1: "Logged In Successfully! 🚀",
+                text2: "Welcome to your secure health vault.",
+              });
+            } else {
+              throw new Error("Backend login failed.");
+            }
+          } catch (error: any) {
+            Toast.show({
+              type: "error",
+              text1: "Microsoft Sign-In Failed",
+              text2: error.message || "An error occurred during sign in.",
+            });
+          } finally {
+            setIsMicrosoftLoading(false);
+          }
+        }
+      } else if (response?.type === "error") {
+        Toast.show({
+          type: "error",
+          text1: "Microsoft Sign-In Failed",
+          text2: response.error?.message || "Something went wrong.",
+        });
+      }
+    };
+
+    if (response) {
+      handleMicrosoftResponse();
+    }
+  }, [response]);
+
   const handleContinue = async () => {
     if (loading) return; // Prevent duplicate clicks
     Keyboard.dismiss();
-    
+
     if (!validateMobileNumber(mobile)) {
       setMobileError("Please enter a valid 10-digit mobile number");
       return;
@@ -69,19 +174,30 @@ const LoginScreen = () => {
 
     try {
       const formattedMobile = formatPhoneNumberE164(mobile);
-      console.log(`[OTP_LOG] OTP Send Start: Sending OTP to ${formattedMobile}`);
-      
+      console.log(
+        `[OTP_LOG] OTP Send Start: Sending OTP to ${formattedMobile}`,
+      );
+
       let confirmationResult;
       if (ENABLE_DUMMY_AUTH && isDummyNumber(formattedMobile)) {
-        console.log(`[DUMMY_AUTH] Bypassing Firebase and returning dummy confirmation for ${formattedMobile}`);
+        console.log(
+          `[DUMMY_AUTH] Bypassing Firebase and returning dummy confirmation for ${formattedMobile}`,
+        );
         confirmationResult = getDummyConfirmationResult();
       } else {
-        console.log(`[FIREBASE_AUTH] Using Firebase Phone Auth for ${formattedMobile}`);
+        console.log(
+          `[FIREBASE_AUTH] Using Firebase Phone Auth for ${formattedMobile}`,
+        );
         const authInstance = getAuth();
-        confirmationResult = await signInWithPhoneNumber(authInstance, formattedMobile);
+        confirmationResult = await signInWithPhoneNumber(
+          authInstance,
+          formattedMobile,
+        );
       }
 
-      console.log(`[OTP_LOG] OTP Send Success: Verification code sent successfully to ${formattedMobile}`);
+      console.log(
+        `[OTP_LOG] OTP Send Success: Verification code sent successfully to ${formattedMobile}`,
+      );
 
       // Save confirmation result in service singleton
       setConfirmationResult(confirmationResult);
@@ -116,11 +232,104 @@ const LoginScreen = () => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    console.log(webClientId);
+    if (isGoogleLoading) return;
+    setIsGoogleLoading(true);
+    try {
+      const deviceToken = await SecureStore.getItemAsync("deviceToken");
+      const idToken = await loginWithGoogle();
+      if (idToken) {
+        const firebaseToken = await loginSocialWithFirebase("google", idToken);
+        const backendResponse = await socialLogin(
+          "social",
+          "google",
+          firebaseToken,
+          idToken,
+          deviceToken,
+        );
+        console.log("Backend Response :- ", backendResponse?.data?.user?.id);
+        
+        if (backendResponse?.data?.user?.id) {
+          await authContextLogin({
+            accessToken: backendResponse?.data?.accessToken,
+            refreshToken: backendResponse?.data?.refreshToken,
+            userId: backendResponse?.data?.user?.id,
+            createdAt: new Date().toISOString(),
+          });
+          Toast.show({
+            type: "success",
+            text1: "Logged In Successfully! 🎉",
+            text2: "Welcome to your secure health vault.",
+          });
+        } else {
+          throw new Error("Backend login failed.");
+        }
+      } else {
+        throw new Error("Google Sign-In failed.");
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: "error",
+        text1: "Google Sign-In Failed",
+        text2: error.message || "An error occurred during sign in.",
+      });
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleFacebookSignIn = async () => {
+    if (isFacebookLoading) return;
+    setIsFacebookLoading(true);
+    try {
+      const deviceToken = await SecureStore.getItemAsync("deviceToken");
+      const idToken = await loginWithFacebook();
+      console.log("Facebook Token :- ", idToken);
+      if (idToken) {
+        const firebaseToken = await loginSocialWithFirebase("facebook", idToken);
+        const backendResponse = await socialLogin(
+          "social",
+          "facebook",
+          firebaseToken,
+          idToken,
+          deviceToken,
+        );
+        console.log("Backend Response :- ", backendResponse?.data?.user?.id);
+        
+        if (backendResponse?.data?.user?.id) {
+          await authContextLogin({
+            accessToken: backendResponse?.data?.accessToken,
+            refreshToken: backendResponse?.data?.refreshToken,
+            userId: backendResponse?.data?.user.id,
+            createdAt: new Date().toISOString(),
+          });
+          Toast.show({
+            type: "success",
+            text1: "Logged In Successfully! 🎉",
+            text2: "Welcome to your secure health vault.",
+          });
+        } else {
+          throw new Error("Backend login failed.");
+        }
+      } else {
+        throw new Error("Facebook Sign-In failed.");
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: "error",
+        text1: "Facebook Sign-In Failed",
+        text2: error.message || "An error occurred during sign in.",
+      });
+    } finally {
+      setIsFacebookLoading(false);
+    }
+  };
+
   return (
     <Container themeColor={theme.colors}>
       <StatusBar barStyle="light-content" />
-
-
 
       <View style={{ flex: 1, paddingBottom: keyboardPadding }}>
         <GradientBackground
@@ -131,9 +340,7 @@ const LoginScreen = () => {
           <View style={{ flex: 1 }}>
             <InnerContainer>
               <TopSection>
-                <MaskedView
-                  maskElement={<Title>HEALTHCARE</Title>}
-                >
+                <MaskedView maskElement={<Title>HEALTHCARE</Title>}>
                   <LinearGradient
                     colors={["#43E97B", "#38F9D7"]}
                     start={{ x: 0, y: 0 }}
@@ -146,7 +353,9 @@ const LoginScreen = () => {
               </TopSection>
 
               <BottomCard themeColor={theme.colors}>
-                <WelcomeText themeColor={theme.colors}>Verify Identity</WelcomeText>
+                <WelcomeText themeColor={theme.colors}>
+                  Verify Your Identity
+                </WelcomeText>
                 <DescriptionText themeColor={theme.colors}>
                   Enter your mobile number to receive a secure login OTP
                 </DescriptionText>
@@ -171,29 +380,38 @@ const LoginScreen = () => {
 
                 <DividerContainer>
                   <DividerLine themeColor={theme.colors} />
-                  <DividerText themeColor={theme.colors}>or continue with</DividerText>
+                  <DividerText themeColor={theme.colors}>
+                    or continue with
+                  </DividerText>
                   <DividerLine themeColor={theme.colors} />
                 </DividerContainer>
 
                 <SocialAuthButton
                   provider="google"
                   label="Continue with Google"
-                  onPress={() => console.log("Google login")}
+                  onPress={handleGoogleSignIn}
+                  loading={isGoogleLoading}
+                  disabled={loading}
                 />
                 <SocialAuthButton
                   provider="apple"
                   label="Continue with Apple"
                   onPress={() => console.log("Apple login")}
+                  disabled={loading}
                 />
                 <SocialAuthButton
                   provider="facebook"
                   label="Continue with Facebook"
-                  onPress={() => console.log("Facebook login")}
+                  onPress={handleFacebookSignIn}
+                  loading={isFacebookLoading}
+                  disabled={loading}
                 />
                 <SocialAuthButton
                   provider="microsoft"
                   label="Continue with Microsoft"
-                  onPress={() => console.log("Microsoft login")}
+                  onPress={() => promptAsync()}
+                  loading={isMicrosoftLoading}
+                  disabled={loading || !request}
                 />
               </BottomCard>
             </InnerContainer>
@@ -208,7 +426,8 @@ export default LoginScreen;
 
 const Container = styled.View<{ themeColor: any }>`
   flex: 1;
-  background-color: ${(props: { themeColor: any }) => props.themeColor.background};
+  background-color: ${(props: { themeColor: any }) =>
+    props.themeColor.background};
 `;
 
 const GradientBackground = styled(LinearGradient)`
@@ -228,9 +447,9 @@ const TopSection = styled.View`
 const Title = styled.Text`
   font-size: 38px;
   font-weight: 800;
-  color: #FFFFFF;
+  color: #ffffff;
   letter-spacing: 3px;
-  text-shadow: 0px 4px 10px rgba(0,0,0,0.15);
+  text-shadow: 0px 4px 10px rgba(0, 0, 0, 0.15);
 `;
 
 const Subtitle = styled.Text`
@@ -278,7 +497,8 @@ const DividerContainer = styled.View`
 const DividerLine = styled.View<{ themeColor: any }>`
   flex: 1;
   height: 1px;
-  background-color: ${(props: { themeColor: any }) => props.themeColor.border || 'rgba(0,0,0,0.1)'};
+  background-color: ${(props: { themeColor: any }) =>
+    props.themeColor.border || "rgba(0,0,0,0.1)"};
 `;
 
 const DividerText = styled.Text<{ themeColor: any }>`
