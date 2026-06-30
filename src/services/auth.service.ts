@@ -5,7 +5,6 @@ import { configureGoogleSignIn } from "../config/googleConfig";
 import { LoginManager, AccessToken } from "react-native-fbsdk-next";
 import Toast from "react-native-toast-message";
 import auth from "@react-native-firebase/auth";
-import { getAuth, OAuthProvider } from "firebase/auth";
 
 // Singleton storage to avoid passing non-serializable objects in React Navigation params
 let activeConfirmationResult: any = null;
@@ -65,11 +64,8 @@ export const loginSocialWithFirebase = async (
       credential = auth.FacebookAuthProvider.credential(token);
       break;
     case "microsoft":
-      const webAuth = getAuth();
-      const webProvider = new OAuthProvider("microsoft.com");
-      const webCredential = webProvider.credential({ idToken: token, accessToken });
-      const webUserCredential = await import("firebase/auth").then(m => m.signInWithCredential(webAuth, webCredential));
-      return await webUserCredential.user.getIdToken(true);
+      credential = auth.OAuthProvider.credential(token, accessToken);
+      break;
     default:
       throw new Error("Invalid provider");
   }

@@ -86,11 +86,8 @@ const LoginScreen = () => {
         process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID || "PLACEHOLDER_CLIENT_ID",
       scopes: ["openid", "profile", "email"],
       redirectUri,
-      responseType: "id_token token",
-      extraParams: {
-        nonce: "defaultNonce",
-        response_mode: "fragment",
-      },
+      responseType: "code",
+      usePKCE: true,
     },
     microsoftDiscovery,
   );
@@ -106,19 +103,44 @@ const LoginScreen = () => {
 
     const handleMicrosoftResponse = async () => {
       if (response?.type === "success") {
-        const { id_token, access_token } = response.params;
+        const { code } = response.params;
 
-        if (id_token) {
+        if (code) {
           setIsMicrosoftLoading(true);
           try {
+            const tokenResult = await AuthSession.exchangeCodeAsync(
+              {
+                clientId:
+                  process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID ||
+                  "PLACEHOLDER_CLIENT_ID",
+                code,
+                redirectUri,
+                extraParams: {
+                  code_verifier: request?.codeVerifier || "",
+                },
+              },
+              microsoftDiscovery,
+            );
+            console.log("TOken result :- ", tokenResult);
+
+            const { idToken, accessToken } = tokenResult;
+
+            if (!idToken) {
+              throw new Error("No idToken received from Microsoft.");
+            }
+
             const deviceToken = await SecureStore.getItemAsync("deviceToken");
-            const firebaseToken = await loginSocialWithFirebase("microsoft", id_token, access_token);
+            const firebaseToken = await loginSocialWithFirebase(
+              "microsoft",
+              idToken,
+              accessToken,
+            );
             console.log("Firebase Token :- ", firebaseToken);
             const backendResponse = await socialLogin(
               "social",
               "microsoft",
               firebaseToken,
-              id_token,
+              idToken,
               deviceToken,
             );
 
@@ -143,6 +165,7 @@ const LoginScreen = () => {
               text1: "Microsoft Sign-In Failed",
               text2: error.message || "An error occurred during sign in.",
             });
+            console.log("Microsoft Error :- ", error.message);
           } finally {
             setIsMicrosoftLoading(false);
           }
@@ -250,7 +273,7 @@ const LoginScreen = () => {
           deviceToken,
         );
         console.log("Backend Response :- ", backendResponse?.data?.user?.id);
-        
+
         if (backendResponse?.data?.user?.id) {
           await authContextLogin({
             accessToken: backendResponse?.data?.accessToken,
@@ -288,7 +311,10 @@ const LoginScreen = () => {
       const idToken = await loginWithFacebook();
       console.log("Facebook Token :- ", idToken);
       if (idToken) {
-        const firebaseToken = await loginSocialWithFirebase("facebook", idToken);
+        const firebaseToken = await loginSocialWithFirebase(
+          "facebook",
+          idToken,
+        );
         const backendResponse = await socialLogin(
           "social",
           "facebook",
@@ -297,7 +323,7 @@ const LoginScreen = () => {
           deviceToken,
         );
         console.log("Backend Response :- ", backendResponse?.data?.user?.id);
-        
+
         if (backendResponse?.data?.user?.id) {
           await authContextLogin({
             accessToken: backendResponse?.data?.accessToken,
