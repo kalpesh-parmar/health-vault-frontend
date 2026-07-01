@@ -120,7 +120,7 @@ const OtpVerificationScreen = () => {
 
     let isSuccess = false;
     let firebaseToken;
-    
+
     try {
       const confirmationResult = getConfirmationResult();
       if (!confirmationResult) {
@@ -154,17 +154,18 @@ const OtpVerificationScreen = () => {
       console.log("[OTP_LOG] Backend Login Start: Authenticating token with server");
       const deviceToken = await SecureStore.getItemAsync("deviceToken");
       const backendResponse = await socialLogin("mobile", "mobile", firebaseToken, null, deviceToken);
+      console.log("Backend Response :- ", backendResponse);
       
-      if (backendResponse.success && backendResponse.token) {
+      if (backendResponse?.data?.success && backendResponse?.data?.token) {
         console.log("[OTP_LOG] Backend Login Success: Server authenticated session");
         isSuccess = true;
         
         console.log("[OTP_LOG] Navigation Start: Playing success animation and setting context login");
         triggerSuccessAnimation(async () => {
           await authContextLogin({
-            accessToken: backendResponse.token,
-            refreshToken: backendResponse.refreshToken,
-            userId: backendResponse.user.id,
+            accessToken: backendResponse?.data?.token,
+            refreshToken: backendResponse?.data?.refreshToken,
+            userId: backendResponse?.data?.user?.id,
             createdAt: new Date().toISOString(), // refresh date anchor
           });
 
@@ -177,10 +178,10 @@ const OtpVerificationScreen = () => {
           });
         });
       } else {
-        throw new Error("Backend login failed.");
+        throw new Error("Backend login failed. Check it on your side.");
       }
     } catch (err: any) {
-      console.error("OTP verification error:", err);
+      console.error("OTP verification error::", err);
       isSuccess = false;
       isVerifyingRef.current = false;
       

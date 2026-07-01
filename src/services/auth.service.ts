@@ -1,10 +1,10 @@
+import auth from "@react-native-firebase/auth";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { AccessToken, LoginManager } from "react-native-fbsdk-next";
+import Toast from "react-native-toast-message";
+import { configureGoogleSignIn } from "../config/googleConfig";
 import { AUTH_ENDPOINTS } from "../constants/endpoints";
 import apiClient from "./apiClient";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import { configureGoogleSignIn } from "../config/googleConfig";
-import { LoginManager, AccessToken } from "react-native-fbsdk-next";
-import Toast from "react-native-toast-message";
-import auth from "@react-native-firebase/auth";
 
 // Singleton storage to avoid passing non-serializable objects in React Navigation params
 let activeConfirmationResult: any = null;
@@ -48,8 +48,11 @@ export const socialLogin = async (
     loginType,
     provider,
     deviceToken,
-    firebaseIdToken,
   };
+
+  if (firebaseIdToken) {
+    payload.firebaseIdToken = firebaseIdToken;
+  }
 
   if (loginType === "social" && providerToken) {
     payload.providerToken = providerToken;

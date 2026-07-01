@@ -62,7 +62,7 @@ const AuthButton: React.FC<AuthButtonProps> = ({ title, onPress, loading, disabl
   );
 };
 
-export default AuthButton;
+export default React.memo(AuthButton);
 
 const AnimatedContainer = styled(Animated.View)`
   width: 100%;

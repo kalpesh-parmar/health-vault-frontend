@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Keyboard, Platform, StatusBar, View } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
@@ -9,7 +9,7 @@ import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import Toast from "react-native-toast-message";
-import { getAuth, signInWithPhoneNumber } from "@react-native-firebase/auth";
+import auth, { getAuth, signInWithPhoneNumber } from "@react-native-firebase/auth";
 import {
   setConfirmationResult,
   loginSocialWithFirebase,
@@ -47,6 +47,7 @@ const microsoftDiscovery = {
 
 const LoginScreen = () => {
   const [mobile, setMobile] = useState("");
+  const mobileRef = useRef("");
   const [mobileError, setMobileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -65,7 +66,7 @@ const LoginScreen = () => {
     resetForceLogout();
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => setKeyboardPadding(e.endCoordinates.height),
+      (e) => setKeyboardPadding(e.endCoordinates.height > 0 ? e.endCoordinates.height + 40 : 0),
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
@@ -131,32 +132,33 @@ const LoginScreen = () => {
                 },
                 microsoftDiscovery,
               );
-              console.log("Token result :- ", tokenResult);
-  
-              const { idToken, accessToken } = tokenResult;
-              console.log("Microsoft ID Token :- ", idToken);
-              console.log("Microsoft Access Token :- ", accessToken);
-  
-              if (!idToken) {
-                throw new Error("No idToken received from Microsoft.");
-              }
-  
-              const deviceToken = await SecureStore.getItemAsync("deviceToken");
-              firebaseToken = await loginSocialWithFirebase(
-                "microsoft",
-                idToken,
-                accessToken,
-              );
-            console.log("Firebase Token :- ", firebaseToken);
+            console.log("TOken result :- ", tokenResult);
+
+            const { idToken } = tokenResult;
+
+            if (!idToken) {
+              throw new Error("No idToken received from Microsoft.");
+            }
+
+            const deviceToken = await SecureStore.getItemAsync("deviceToken");
+            console.log("Calling backend socialLogin for Microsoft...");
             const backendResponse = await socialLogin(
               "social",
               "microsoft",
-              firebaseToken,
+              "", // no firebase token before backend call
               idToken,
               deviceToken,
             );
 
             if (backendResponse?.data?.user?.id) {
+              const firebaseCustomToken = backendResponse?.data?.firebaseCustomToken;
+              if (firebaseCustomToken) {
+                console.log("Signing in with Firebase Custom Token...");
+                await auth().signInWithCustomToken(firebaseCustomToken);
+              } else {
+                console.warn("No firebaseCustomToken returned from backend for Microsoft login.");
+              }
+
               await authContextLogin({
                 accessToken: backendResponse?.data?.accessToken,
                 refreshToken: backendResponse?.data?.refreshToken,
@@ -204,11 +206,13 @@ const LoginScreen = () => {
     }
   }, [response, request]);
 
-  const handleContinue = async () => {
+  const handleContinue = useCallback(async () => {
     if (loading) return; // Prevent duplicate clicks
     Keyboard.dismiss();
 
-    if (!validateMobileNumber(mobile)) {
+    const currentMobile = mobileRef.current;
+
+    if (!validateMobileNumber(currentMobile)) {
       setMobileError("Please enter a valid 10-digit mobile number");
       return;
     }
@@ -216,7 +220,7 @@ const LoginScreen = () => {
     setLoading(true);
 
     try {
-      const formattedMobile = formatPhoneNumberE164(mobile);
+      const formattedMobile = formatPhoneNumberE164(currentMobile);
       console.log(
         `[OTP_LOG] OTP Send Start: Sending OTP to ${formattedMobile}`,
       );
@@ -273,7 +277,7 @@ const LoginScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, navigation]);
 
   const handleGoogleSignIn = async () => {
     const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -432,6 +436,7 @@ const LoginScreen = () => {
                   value={mobile}
                   onChangeText={(text) => {
                     setMobile(text);
+                    mobileRef.current = text;
                     setMobileError(null);
                   }}
                   error={mobileError}
@@ -502,7 +507,10 @@ const GradientBackground = styled(LinearGradient)`
   flex: 1;
 `;
 
-const InnerContainer = styled.View`
+const InnerContainer = styled.ScrollView.attrs({
+  contentContainerStyle: { flexGrow: 1 },
+  keyboardShouldPersistTaps: "handled"
+})`
   flex: 1;
 `;
 
