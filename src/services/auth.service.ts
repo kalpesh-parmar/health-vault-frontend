@@ -17,6 +17,15 @@ export const getConfirmationResult = () => {
   return activeConfirmationResult;
 };
 
+export const reportAuthFailure = async (payload: { identifier: string; provider: string; loginType: string }) => {
+  try {
+    const response = await apiClient.post("/auth/auth-failure", payload);
+    return response?.data;
+  } catch (error) {
+    console.error("[AUTH] Auth Failure Report Error:", error);
+  }
+};
+
 export const loginWithFirebaseToken = async (
   firebaseToken: string,
   deviceToken?: string | null,
@@ -55,6 +64,9 @@ export const loginSocialWithFirebase = async (
   token: string,
   accessToken?: string,
 ) => {
+  console.log("[AUTH_SERVICE] Provider :- ", provider);
+  console.log("[AUTH_SERVICE] Token :- ", token);
+  console.log("[AUTH_SERVICE] Access Token :- ", accessToken);
   let credential;
   switch (provider) {
     case "google":
@@ -69,8 +81,10 @@ export const loginSocialWithFirebase = async (
     default:
       throw new Error("Invalid provider");
   }
+  console.log("Switch case Execution Completed.")
 
   const userCredential = await auth().signInWithCredential(credential);
+  console.log("User Credential :- ", userCredential);
   return await userCredential.user.getIdToken(true);
 };
 

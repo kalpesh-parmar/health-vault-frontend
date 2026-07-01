@@ -29,6 +29,7 @@ import {
   getConfirmationResult,
   socialLogin,
   setConfirmationResult,
+  reportAuthFailure,
 } from "../../services/auth.service";
 import { AuthStackParamList } from "../../types/navigation";
 import { maskPhoneNumber } from "../../utils/auth.utils";
@@ -118,7 +119,8 @@ const OtpVerificationScreen = () => {
     isVerifyingRef.current = true;
 
     let isSuccess = false;
-
+    let firebaseToken;
+    
     try {
       const confirmationResult = getConfirmationResult();
       if (!confirmationResult) {
@@ -129,7 +131,6 @@ const OtpVerificationScreen = () => {
 
       console.log(`[OTP_LOG] OTP Verify Start: Verifying OTP code of length ${code.length}`);
       
-      let firebaseToken;
       if (confirmationResult.isDummy) {
         console.log("[DUMMY_AUTH] OTP Verify: Bypassing Firebase confirmation and using mock user");
         const dummyUserCredential = await confirmationResult.confirm(code);
@@ -192,6 +193,7 @@ const OtpVerificationScreen = () => {
         errorMsg = "Verification cancelled. Please try again.";
       } else if (err.code === "auth/invalid-verification-code" || err.message?.toLowerCase().includes("invalid")) {
         errorMsg = "Invalid OTP entered. Please check and try again.";
+        reportAuthFailure({ identifier: firebaseToken || "", provider: "mobile", loginType: "mobile" });
       }
       
       setError(errorMsg);

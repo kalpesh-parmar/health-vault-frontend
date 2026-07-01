@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Keyboard, Platform, StatusBar, View } from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
@@ -14,7 +14,9 @@ import {
   setConfirmationResult,
   loginSocialWithFirebase,
   socialLogin,
+  reportAuthFailure,
 } from "../../services/auth.service";
+import { statusCodes } from "@react-native-google-signin/google-signin";
 import { resetForceLogout } from "../../services/apiClient";
 import { useAppTheme } from "../../context/ThemeContext";
 import { AuthStackParamList } from "../../types/navigation";
@@ -39,7 +41,8 @@ WebBrowser.maybeCompleteAuthSession();
 const microsoftDiscovery = {
   authorizationEndpoint:
     "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-  tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+  tokenEndpoint:
+    "https://login.microsoftonline.com/common/oauth2/v2.0/token",
 };
 
 const LoginScreen = () => {
@@ -80,18 +83,24 @@ const LoginScreen = () => {
     path: "auth",
   });
 
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId:
-        process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID || "PLACEHOLDER_CLIENT_ID",
-      scopes: ["openid", "profile", "email"],
-      redirectUri,
-      responseType: "code",
-      usePKCE: true,
+  const microsoftAuthConfig = useMemo(() => ({
+    clientId:
+      process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID || "PLACEHOLDER_CLIENT_ID",
+    scopes: ["openid", "profile", "email"],
+    redirectUri,
+    responseType: "code",
+    usePKCE: true,
+    extraParams: {
+      nonce: "defaultNonce",
     },
+  }), [redirectUri]);
+
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    microsoftAuthConfig,
     microsoftDiscovery,
   );
-
+  console.log("Request :- ", request);
+  console.log("Code Verifier :- ", request?.codeVerifier);
   console.log("Response :- ", response);
 
   useEffect(() => {
@@ -107,34 +116,37 @@ const LoginScreen = () => {
 
         if (code) {
           setIsMicrosoftLoading(true);
-          try {
-            const tokenResult = await AuthSession.exchangeCodeAsync(
-              {
-                clientId:
-                  process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID ||
-                  "PLACEHOLDER_CLIENT_ID",
-                code,
-                redirectUri,
-                extraParams: {
-                  code_verifier: request?.codeVerifier || "",
+            let firebaseToken = "";
+            try {
+              const tokenResult = await AuthSession.exchangeCodeAsync(
+                {
+                  clientId:
+                    process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID ||
+                    "PLACEHOLDER_CLIENT_ID",
+                  code,
+                  redirectUri,
+                  extraParams: {
+                    code_verifier: request?.codeVerifier || "",
+                  },
                 },
-              },
-              microsoftDiscovery,
-            );
-            console.log("TOken result :- ", tokenResult);
-
-            const { idToken, accessToken } = tokenResult;
-
-            if (!idToken) {
-              throw new Error("No idToken received from Microsoft.");
-            }
-
-            const deviceToken = await SecureStore.getItemAsync("deviceToken");
-            const firebaseToken = await loginSocialWithFirebase(
-              "microsoft",
-              idToken,
-              accessToken,
-            );
+                microsoftDiscovery,
+              );
+              console.log("Token result :- ", tokenResult);
+  
+              const { idToken, accessToken } = tokenResult;
+              console.log("Microsoft ID Token :- ", idToken);
+              console.log("Microsoft Access Token :- ", accessToken);
+  
+              if (!idToken) {
+                throw new Error("No idToken received from Microsoft.");
+              }
+  
+              const deviceToken = await SecureStore.getItemAsync("deviceToken");
+              firebaseToken = await loginSocialWithFirebase(
+                "microsoft",
+                idToken,
+                accessToken,
+              );
             console.log("Firebase Token :- ", firebaseToken);
             const backendResponse = await socialLogin(
               "social",
@@ -160,6 +172,14 @@ const LoginScreen = () => {
               throw new Error("Backend login failed.");
             }
           } catch (error: any) {
+            const errorMsg = String(error.message || "").toLowerCase();
+            const isCancelled = errorMsg.includes("cancel");
+            const isNetwork = errorMsg.includes("network") || error.code === "auth/network-request-failed";
+            
+            if (!isCancelled && !isNetwork) {
+              reportAuthFailure({ identifier: firebaseToken,  provider: "microsoft", loginType: "social" });
+            }
+
             Toast.show({
               type: "error",
               text1: "Microsoft Sign-In Failed",
@@ -182,7 +202,7 @@ const LoginScreen = () => {
     if (response) {
       handleMicrosoftResponse();
     }
-  }, [response]);
+  }, [response, request]);
 
   const handleContinue = async () => {
     if (loading) return; // Prevent duplicate clicks
@@ -260,11 +280,12 @@ const LoginScreen = () => {
     console.log(webClientId);
     if (isGoogleLoading) return;
     setIsGoogleLoading(true);
+    let firebaseToken = "";
     try {
       const deviceToken = await SecureStore.getItemAsync("deviceToken");
       const idToken = await loginWithGoogle();
       if (idToken) {
-        const firebaseToken = await loginSocialWithFirebase("google", idToken);
+        firebaseToken = await loginSocialWithFirebase("google", idToken);
         const backendResponse = await socialLogin(
           "social",
           "google",
@@ -293,6 +314,18 @@ const LoginScreen = () => {
         throw new Error("Google Sign-In failed.");
       }
     } catch (error: any) {
+      const isCancelled =
+        error.code === statusCodes.SIGN_IN_CANCELLED ||
+        error.code === statusCodes.IN_PROGRESS ||
+        String(error.message).toLowerCase().includes("cancel");
+      const isNetwork =
+        String(error.message).toLowerCase().includes("network") ||
+        error.code === "auth/network-request-failed";
+
+      if (!isCancelled && !isNetwork) {
+        reportAuthFailure({ identifier: firebaseToken, provider: "google", loginType: "social" });
+      }
+
       Toast.show({
         type: "error",
         text1: "Google Sign-In Failed",
@@ -306,12 +339,13 @@ const LoginScreen = () => {
   const handleFacebookSignIn = async () => {
     if (isFacebookLoading) return;
     setIsFacebookLoading(true);
+    let firebaseToken = "";
     try {
       const deviceToken = await SecureStore.getItemAsync("deviceToken");
       const idToken = await loginWithFacebook();
       console.log("Facebook Token :- ", idToken);
       if (idToken) {
-        const firebaseToken = await loginSocialWithFirebase(
+        firebaseToken = await loginSocialWithFirebase(
           "facebook",
           idToken,
         );
@@ -343,6 +377,14 @@ const LoginScreen = () => {
         throw new Error("Facebook Sign-In failed.");
       }
     } catch (error: any) {
+      const errorMsg = String(error.message || "").toLowerCase();
+      const isCancelled = errorMsg.includes("cancel");
+      const isNetwork = errorMsg.includes("network") || error.code === "auth/network-request-failed";
+
+      if (!isCancelled && !isNetwork) {
+        reportAuthFailure({ identifier: firebaseToken, provider: "facebook", loginType: "social" });
+      }
+
       Toast.show({
         type: "error",
         text1: "Facebook Sign-In Failed",
