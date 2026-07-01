@@ -9,7 +9,7 @@ import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import Toast from "react-native-toast-message";
-import { getAuth, signInWithPhoneNumber } from "@react-native-firebase/auth";
+import auth, { getAuth, signInWithPhoneNumber } from "@react-native-firebase/auth";
 import {
   setConfirmationResult,
   loginSocialWithFirebase,
@@ -130,21 +130,24 @@ const LoginScreen = () => {
             }
 
             const deviceToken = await SecureStore.getItemAsync("deviceToken");
-            const firebaseToken = await loginSocialWithFirebase(
-              "microsoft",
-              idToken,
-              accessToken,
-            );
-            console.log("Firebase Token :- ", firebaseToken);
+            console.log("Calling backend socialLogin for Microsoft...");
             const backendResponse = await socialLogin(
               "social",
               "microsoft",
-              firebaseToken,
+              "", // no firebase token before backend call
               idToken,
               deviceToken,
             );
 
             if (backendResponse?.data?.user?.id) {
+              const firebaseCustomToken = backendResponse?.data?.firebaseCustomToken;
+              if (firebaseCustomToken) {
+                console.log("Signing in with Firebase Custom Token...");
+                await auth().signInWithCustomToken(firebaseCustomToken);
+              } else {
+                console.warn("No firebaseCustomToken returned from backend for Microsoft login.");
+              }
+
               await authContextLogin({
                 accessToken: backendResponse?.data?.accessToken,
                 refreshToken: backendResponse?.data?.refreshToken,
