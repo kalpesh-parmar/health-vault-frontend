@@ -89,6 +89,13 @@ export default function OnboardingScreen() {
     documentExtracted: false,
     bloodGroupSkipped: false,
     allergiesSkipped: false,
+    hasSocialData: false,
+    foundMedicines: [] as any[],
+    medicinesFlowStarted: false,
+    medicinesConfirmed: false,
+    medicinesToAdd: [] as any[],
+    currentMedicineIndex: 0,
+    medicinesSavedToDb: false,
     existingUserData: {
       firstName: "",
       lastName: "",
@@ -167,6 +174,13 @@ export default function OnboardingScreen() {
         documentExtracted: false,
         bloodGroupSkipped: false,
         allergiesSkipped: false,
+        hasSocialData: !!((userData as any)?.googleId || (userData as any)?.appleId || (userData as any)?.socialId),
+        foundMedicines: [],
+        medicinesFlowStarted: false,
+        medicinesConfirmed: false,
+        medicinesToAdd: [],
+        currentMedicineIndex: 0,
+        medicinesSavedToDb: false,
         existingUserData: initialUserData,
       };
 
@@ -191,6 +205,7 @@ export default function OnboardingScreen() {
         timeout: 90000,
       });
       const resData = response.data?.data;
+      console.log("AI Response :- ", resData);
 
       if (resData) {
         processAssistantResponse(resData, currentState);
@@ -273,6 +288,13 @@ export default function OnboardingScreen() {
           aiRes.allergiesSkipped !== undefined
             ? aiRes.allergiesSkipped
             : finalState.allergiesSkipped,
+        hasSocialData: aiRes.hasSocialData !== undefined ? aiRes.hasSocialData : finalState.hasSocialData,
+        foundMedicines: aiRes.foundMedicines || finalState.foundMedicines,
+        medicinesFlowStarted: aiRes.medicinesFlowStarted !== undefined ? aiRes.medicinesFlowStarted : finalState.medicinesFlowStarted,
+        medicinesConfirmed: aiRes.medicinesConfirmed !== undefined ? aiRes.medicinesConfirmed : finalState.medicinesConfirmed,
+        medicinesToAdd: aiRes.medicinesToAdd || finalState.medicinesToAdd,
+        currentMedicineIndex: aiRes.currentMedicineIndex !== undefined ? aiRes.currentMedicineIndex : finalState.currentMedicineIndex,
+        medicinesSavedToDb: aiRes.medicinesSavedToDb !== undefined ? aiRes.medicinesSavedToDb : finalState.medicinesSavedToDb,
         existingUserData: updatedUserData,
       };
     }
@@ -309,9 +331,12 @@ export default function OnboardingScreen() {
         state: updatedState,
       };
 
+      console.log("Payload for Onboarding Chat :- ", payload);
+
       const response = await apiClient.post("/v1/onboarding/chat", payload, {
         timeout: 90000,
       });
+      console.log("Response for Onboarding Chat :- ", response);
       const resData = response.data?.data;
 
       if (resData) {
@@ -879,6 +904,7 @@ export default function OnboardingScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
+                console.log("Message Item : ", item);
                 const isAi = item.role === "assistant";
                 const mappedMsg = {
                   id: item.id,
