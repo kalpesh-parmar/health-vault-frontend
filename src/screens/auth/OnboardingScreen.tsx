@@ -64,6 +64,7 @@ export default function OnboardingScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
@@ -306,13 +307,13 @@ export default function OnboardingScreen() {
     }
   };
 
-  const sendMessage = async (userText: string, updatedState = state) => {
+  const sendMessage = async (userText: string, updatedState = state, displayLabel?: string) => {
     if (!userText.trim()) return;
 
     const userMsg: Message = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: userText,
+      content: displayLabel || userText,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -398,17 +399,22 @@ export default function OnboardingScreen() {
 
   const handleDateConfirm = (date: Date) => {
     setDatePickerVisible(false);
-    const dobString = format(date, "yyyy-MM-dd");
-    const updatedUserData = {
-      ...state.existingUserData,
-      dateOfBirth: dobString,
-    };
-    const newState = {
-      ...state,
-      existingUserData: updatedUserData,
-    };
-    setState(newState);
-    sendMessage(dobString, newState);
+    if (datePickerMode === "time") {
+      const timeString = format(date, "hh:mm a");
+      sendMessage(timeString, state);
+    } else {
+      const dobString = format(date, "yyyy-MM-dd");
+      const updatedUserData = {
+        ...state.existingUserData,
+        dateOfBirth: dobString,
+      };
+      const newState = {
+        ...state,
+        existingUserData: updatedUserData,
+      };
+      setState(newState);
+      sendMessage(dobString, newState);
+    }
   };
 
   const handleGenderSelect = (gender: string) => {
@@ -671,7 +677,7 @@ export default function OnboardingScreen() {
               onPress={() => {
                 const newState = { ...state, preferredLanguage: opt.value };
                 setState(newState);
-                sendMessage(opt.value, newState);
+                sendMessage(opt.value, newState, opt.label);
               }}
             >
               <Text style={styles.chipText}>{opt.label}</Text>
@@ -689,12 +695,12 @@ export default function OnboardingScreen() {
 
       const uploadLabel =
         preferredLang === "gujarati"
-          ? uploadOpt.label_gu
-          : uploadOpt.label_en || "Upload Medical Report";
+          ? uploadOpt.label_gu || uploadOpt.label || "મેડિકલ રિપોર્ટ અપલોડ કરો"
+          : uploadOpt.label_en || uploadOpt.label || "Upload Medical Report";
       const manualLabel =
         preferredLang === "gujarati"
-          ? manualOpt.label_gu
-          : manualOpt.label_en || "Skip and Enter Manually";
+          ? manualOpt.label_gu || manualOpt.label || "છોડો અને મેન્યુઅલી દાખલ કરો"
+          : manualOpt.label_en || manualOpt.label || "Skip and Enter Manually";
 
       return (
         <View style={styles.optionContainer}>
@@ -728,7 +734,7 @@ export default function OnboardingScreen() {
             onPress={() => {
               const newState = { ...state, flowMode: "MANUAL" };
               setState(newState);
-              sendMessage("MANUAL", newState);
+              sendMessage("MANUAL", newState, manualLabel);
             }}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#64748b" }]}>
@@ -749,12 +755,17 @@ export default function OnboardingScreen() {
         <View style={styles.chipRow}>
           {(activeMsg.options || []).map((opt) => {
             const label =
-              preferredLang === "gujarati" ? opt.label_gu : opt.label_en;
+              preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
             return (
               <TouchableOpacity
                 key={opt.value}
                 style={[styles.chip, { backgroundColor: theme.colors.primary }]}
-                onPress={() => handleGenderSelect(opt.value)}
+                onPress={() => {
+                  const updatedUserData = { ...state.existingUserData, gender: opt.value };
+                  const newState = { ...state, existingUserData: updatedUserData };
+                  setState(newState);
+                  sendMessage(opt.value, newState, label);
+                }}
               >
                 <Text style={styles.chipText}>{label}</Text>
               </TouchableOpacity>
@@ -764,7 +775,7 @@ export default function OnboardingScreen() {
       );
     }
 
-    if (activeMsg.action === "ASK_DOB") {
+    if (activeMsg.action === "ASK_DOB" || activeMsg.action === "ASK_MEDICINE_START_DATE") {
       return (
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -772,7 +783,10 @@ export default function OnboardingScreen() {
               styles.actionButton,
               { backgroundColor: theme.colors.primary },
             ]}
-            onPress={() => setDatePickerVisible(true)}
+            onPress={() => {
+              setDatePickerMode("date");
+              setDatePickerVisible(true);
+            }}
           >
             <Ionicons
               name="calendar"
@@ -782,10 +796,73 @@ export default function OnboardingScreen() {
             />
             <Text style={styles.actionButtonText}>
               {preferredLang === "gujarati"
-                ? "જન્મ તારીખ પસંદ કરો"
-                : "Choose Date of Birth"}
+                ? "તારીખ પસંદ કરો"
+                : "Choose Date"}
             </Text>
           </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (activeMsg.action === "ASK_MEDICINE_SCHEDULE") {
+      return (
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              { backgroundColor: theme.colors.primary },
+            ]}
+            onPress={() => {
+              setDatePickerMode("time");
+              setDatePickerVisible(true);
+            }}
+          >
+            <Ionicons
+              name="time"
+              size={18}
+              color="#fff"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.actionButtonText}>
+              {preferredLang === "gujarati"
+                ? "સમય પસંદ કરો"
+                : "Choose Time"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (activeMsg.action === "REVIEW_MEDICINES_LIST") {
+      return (
+        <View style={styles.summaryContainer}>
+          <Text style={[styles.summaryTitle, { color: theme.colors.textPrimary }]}>
+            {preferredLang === "gujarati" ? "દવાઓની સૂચિ" : "Medication Summary"}
+          </Text>
+          {(state.medicinesToAdd || []).map((med, index) => (
+            <View key={index} style={[styles.medCard, { backgroundColor: isDark ? "#334155" : "#f1f5f9" }]}>
+              <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold" }}>
+                {med.medicationName || "Unknown"}
+              </Text>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
+                {preferredLang === "gujarati" ? "ડોઝ: " : "Dose: "}{med.dosePerIntake} | {preferredLang === "gujarati" ? "સમય: " : "Frequency: "}{med.frequency}
+              </Text>
+            </View>
+          ))}
+          <View style={styles.chipRow}>
+            {(activeMsg.options || []).map((opt) => {
+              const label = preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.chip, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => sendMessage(opt.value, state, label)}
+                >
+                  <Text style={styles.chipText}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       );
     }
@@ -795,7 +872,7 @@ export default function OnboardingScreen() {
         <View style={styles.chipRow}>
           {(activeMsg.options || []).map((opt) => {
             const label =
-              preferredLang === "gujarati" ? opt.label_gu : opt.label_en;
+              preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
             return (
               <TouchableOpacity
                 key={opt.value}
@@ -805,9 +882,9 @@ export default function OnboardingScreen() {
                     queryClient.invalidateQueries({ queryKey: ["profile"] });
                   } else {
                     sendMessage(
-                      preferredLang === "gujarati"
-                        ? "આરોગ્ય સંબંધિત પ્રશ્ન"
-                        : "Ask Health Question",
+                      opt.value,
+                      state,
+                      label
                     );
                   }
                 }}
@@ -828,14 +905,14 @@ export default function OnboardingScreen() {
               typeof opt === "string"
                 ? opt
                 : preferredLang === "gujarati"
-                  ? opt.label_gu
-                  : opt.label_en || opt.label;
+                  ? opt.label_gu || opt.label_en || opt.label || opt.value
+                  : opt.label_en || opt.label || opt.value;
             const value = typeof opt === "string" ? opt : opt.value;
             return (
               <TouchableOpacity
                 key={value}
                 style={[styles.chip, { backgroundColor: theme.colors.primary }]}
-                onPress={() => sendMessage(value)}
+                onPress={() => sendMessage(value, state, typeof label === "string" ? label : undefined)}
               >
                 <Text style={styles.chipText}>{label}</Text>
               </TouchableOpacity>
@@ -849,9 +926,6 @@ export default function OnboardingScreen() {
   };
 
   const activeAction = messages[messages.length - 1]?.action;
-
-  // Inverted FlatList requires reversing data source
-  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
   return (
     <LinearGradient
@@ -893,16 +967,17 @@ export default function OnboardingScreen() {
         <View
           style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
         >
-          {/* Messages Inverted List */}
+          {/* Messages List */}
           <View style={styles.listWrapper}>
             <FlatList
               ref={flatListRef}
-              data={reversedMessages}
-              inverted
+              data={messages}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
               renderItem={({ item }) => {
                 console.log("Message Item : ", item);
                 const isAi = item.role === "assistant";
@@ -959,14 +1034,17 @@ export default function OnboardingScreen() {
             activeAction !== "ASK_UPLOAD_OR_SKIP" &&
             activeAction !== "ASK_GENDER" &&
             activeAction !== "ASK_DOB" &&
+            activeAction !== "ASK_MEDICINE_START_DATE" &&
+            activeAction !== "ASK_MEDICINE_SCHEDULE" &&
+            activeAction !== "REVIEW_MEDICINES_LIST" &&
             activeAction !== "POST_ONBOARDING" && (
               <ChatInput
                 value={input}
                 onChangeText={setInput}
                 onSend={handleSend}
-                onAttach={handleDocumentUpload}
                 isSending={loading}
                 isDark={isDark}
+                keyboardType={(activeAction === "ASK_DOSE_PER_INTAKE" || activeAction === "ASK_MEDICINE_QUANTITY") ? "numeric" : "default"}
               />
             )}
         </View>
@@ -974,8 +1052,8 @@ export default function OnboardingScreen() {
         {/* Modal Date Picker */}
         <DateTimePickerModal
           isVisible={isDatePickerVisible}
-          mode="date"
-          maximumDate={new Date()}
+          mode={datePickerMode}
+          maximumDate={datePickerMode === "date" ? new Date() : undefined}
           onConfirm={handleDateConfirm}
           onCancel={() => setDatePickerVisible(false)}
         />
@@ -1036,14 +1114,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 24,
+    padding: 8,
+    paddingBottom: 16,
   },
   optionsWrapper: {
     paddingLeft: 48,
     paddingRight: 16,
-    marginBottom: 12,
-    marginTop: 4,
+    marginBottom: 8,
+    marginTop: 2,
   },
   optionContainer: {
     flexDirection: "row",
@@ -1126,5 +1204,20 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     fontWeight: "bold",
+  },
+  summaryContainer: {
+    padding: 12,
+    backgroundColor: "rgba(100, 116, 139, 0.05)",
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  summaryTitle: {
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  medCard: {
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
   },
 });

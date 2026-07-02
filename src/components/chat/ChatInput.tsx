@@ -9,10 +9,9 @@ interface ChatInputProps {
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
-  onAttach?: () => void;
-  onVoice?: () => void;
   isSending: boolean;
   isDark: boolean;
+  keyboardType?: "default" | "numeric" | "email-address" | "phone-pad";
 }
 
 const AnimatedTouch = Animated.createAnimatedComponent(TouchableOpacity);
@@ -21,10 +20,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   value,
   onChangeText,
   onSend,
-  onAttach,
-  onVoice,
   isSending,
   isDark,
+  keyboardType = "default",
 }) => {
   const insets = useSafeAreaInsets();
   const sendScale = useSharedValue(0.0);
@@ -60,16 +58,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   });
 
-  const micStyle = useAnimatedStyle(() => {
-    const hasText = value.trim().length > 0;
-    return {
-      transform: [{ scale: withSpring(hasText ? 0.0 : 1.0, { damping: 15 }) }],
-      opacity: withSpring(hasText ? 0.0 : 1.0),
-      width: hasText ? 0 : 36,
-      marginLeft: hasText ? 0 : 4,
-    };
-  });
-
   const cardBgColor = isDark ? "#1e293b" : "#ffffff";
   const inputTextColor = isDark ? "#ffffff" : "#1e293b";
   const placeholderColor = isDark ? "rgba(255,255,255,0.4)" : "rgba(30,41,59,0.4)";
@@ -87,11 +75,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         },
       ]}
     >
-      {/* Attachment Button */}
-      <TouchableOpacity onPress={onAttach} style={styles.iconButton} activeOpacity={0.65}>
-        <Ionicons name="attach-outline" size={22} color={iconColor} />
-      </TouchableOpacity>
-
       {/* TextInput */}
       <TextInput
         style={[styles.textInput, { color: inputTextColor }]}
@@ -104,16 +87,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         maxLength={1000}
         blurOnSubmit={false}
         disableFullscreenUI={true}
+        keyboardType={keyboardType}
       />
-
-      {/* Voice Mic Button */}
-      <AnimatedTouch
-        onPress={onVoice}
-        style={[styles.iconButton, micStyle]}
-        activeOpacity={0.65}
-      >
-        <Ionicons name="mic-outline" size={22} color={iconColor} />
-      </AnimatedTouch>
 
       {/* Send Button */}
       <AnimatedTouch
