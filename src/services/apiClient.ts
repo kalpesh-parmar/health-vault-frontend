@@ -217,6 +217,9 @@ export const triggerForceLogout = async () => {
 
 apiClient.interceptors.request.use(
   async (config) => {
+    if (config.url && config.url.includes("/ocr/extract")) {
+      config.timeout = 240000;
+    }
     const isAuthRequest = config.url && (
       config.url === "/auth/firebase-login" ||
       config.url === "/auth/login" ||

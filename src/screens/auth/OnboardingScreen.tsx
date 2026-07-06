@@ -11,6 +11,7 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -19,6 +20,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
 
+import { useNavigation } from "@react-navigation/native";
+import { useAuth } from "../../context/ContextAPI";
 import { useAppTheme } from "../../context/ThemeContext";
 import apiClient from "../../services/apiClient";
 import {
@@ -44,6 +47,9 @@ type Message = {
   content: string;
   action?: string;
   options?: any[];
+  fields?: any[];
+  loginSummary?: string;
+  documentSummary?: string;
 };
 
 type UserData = {
@@ -59,12 +65,17 @@ type UserData = {
 export default function OnboardingScreen() {
   const { theme, isDark } = useAppTheme();
   const queryClient = useQueryClient();
+  const navigation = useNavigation<any>();
+  const { logout } = useAuth();
+  const isUploadingRef = useRef(false);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
+  const [isEditingProfileManually, setIsEditingProfileManually] = useState(false);
+  const [editedProfileData, setEditedProfileData] = useState<any>({});
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
@@ -90,7 +101,7 @@ export default function OnboardingScreen() {
     documentExtracted: false,
     bloodGroupSkipped: false,
     allergiesSkipped: false,
-    hasSocialData: false,
+    hasSocialData: undefined as boolean | undefined,
     foundMedicines: [] as any[],
     medicinesFlowStarted: false,
     medicinesConfirmed: false,
@@ -175,7 +186,7 @@ export default function OnboardingScreen() {
         documentExtracted: false,
         bloodGroupSkipped: false,
         allergiesSkipped: false,
-        hasSocialData: !!((userData as any)?.googleId || (userData as any)?.appleId || (userData as any)?.socialId),
+        hasSocialData: undefined,
         foundMedicines: [],
         medicinesFlowStarted: false,
         medicinesConfirmed: false,
@@ -238,6 +249,9 @@ export default function OnboardingScreen() {
       content: messageContent || "Please provide the information.",
       action: aiRes.action,
       options: aiRes.options,
+      fields: aiRes.fields,
+      loginSummary: aiRes.loginSummary,
+      documentSummary: aiRes.documentSummary,
     };
 
     setMessages((prev) => [...prev, newMsg]);
@@ -441,6 +455,7 @@ export default function OnboardingScreen() {
 
   // Upload actions for BottomSheet
   const handleTakePhoto = async () => {
+    if (loading) return;
     const permission = await requestCameraPermission();
     if (!permission.granted) {
       Toast.show({
@@ -475,6 +490,7 @@ export default function OnboardingScreen() {
   };
 
   const handleChooseGallery = async () => {
+    if (loading) return;
     const permission = await requestGalleryPermission();
     if (!permission.granted) {
       Toast.show({
@@ -509,6 +525,7 @@ export default function OnboardingScreen() {
   };
 
   const handleChooseDocument = async () => {
+    if (loading) return;
     const asset = await pickDocumentAsset();
     if (!asset) return;
 
@@ -534,13 +551,148 @@ export default function OnboardingScreen() {
   };
 
   const handleDocumentUpload = () => {
+    if (loading) return;
     Keyboard.dismiss();
     uploadSheetRef.current?.present();
   };
 
+  const pollOcrStatus = async (documentId: string): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const interval = setInterval(async () => {
+        try {
+          const statusRes = await apiClient.get(`/v1/ocr/status/${documentId}`);
+          const resData = statusRes.data?.data;
+          console.log("[ONBOARDING] Poll OCR Status:", resData?.status);
+
+          if (resData?.status === "done") {
+            clearInterval(interval);
+            resolve(resData);
+          } else if (resData?.status === "failed") {
+            clearInterval(interval);
+            reject(new Error("Document processing failed on the server."));
+          }
+        } catch (error) {
+          console.error("[ONBOARDING] Status poll error:", error);
+        }
+      }, 3000);
+    });
+  };
+
+  const pollLatestDocumentStatus = async (fileName: string): Promise<any> => {
+    const startTime = Date.now();
+    const pollTimeout = 240000; // 4 minutes
+    const pollInterval = 5000;  // 5 seconds
+
+    return new Promise((resolve, reject) => {
+      const interval = setInterval(async () => {
+        if (Date.now() - startTime > pollTimeout) {
+          clearInterval(interval);
+          reject(new Error("Document processing timed out on server."));
+          return;
+        }
+
+        try {
+          const listRes = await apiClient.get("/v1/documents/list?limit=5");
+          const items = listRes.data?.data?.items || [];
+          const latestDoc = items.find((item: any) => item.fileName === fileName);
+          
+          if (latestDoc) {
+            console.log("[ONBOARDING] Polling latest document status:", latestDoc.ocrStatus);
+            if (latestDoc.ocrStatus === "completed") {
+              clearInterval(interval);
+              resolve({
+                document: latestDoc,
+                structuredData: latestDoc.structuredExtractedData || {},
+              });
+            } else if (latestDoc.ocrStatus === "failed") {
+              clearInterval(interval);
+              reject(new Error("Document processing failed on server."));
+            }
+          }
+        } catch (error) {
+          console.warn("[ONBOARDING] Polling latest document error:", error);
+        }
+      }, pollInterval);
+    });
+  };
+
+  const handleSuccessfulOcr = async (pollResult: any, fileName: string) => {
+    const docData = pollResult.document || {};
+    const extractedText = docData.ocrExtractedText || "";
+    const structured = pollResult.structuredData || {};
+
+    console.log("[ONBOARDING] Extracted Structured Data:", structured);
+
+    const parsedAllergies = Array.isArray(structured.allergies)
+      ? structured.allergies
+      : [];
+
+    let firstName = structured.firstName || "";
+    let lastName = structured.lastName || "";
+    if (!firstName && !lastName && structured.patientName) {
+      const parts = structured.patientName.trim().split(/\s+/);
+      if (parts.length > 0) {
+        firstName = parts[0];
+        lastName = parts.slice(1).join(" ");
+      }
+    }
+
+    const updatedUserData = {
+      ...state.existingUserData,
+      firstName: firstName || state.existingUserData.firstName || "",
+      lastName: lastName || state.existingUserData.lastName || "",
+      dateOfBirth:
+        structured.dateOfBirth ||
+        structured.reportDate ||
+        state.existingUserData.dateOfBirth ||
+        "",
+      gender: structured.gender || state.existingUserData.gender || "",
+      bloodGroup:
+        structured.bloodGroup || state.existingUserData.bloodGroup || "",
+      allergies:
+        parsedAllergies.length > 0
+          ? parsedAllergies
+          : state.existingUserData.allergies || [],
+      email: structured.email || state.existingUserData.email || "",
+      phoneNumber: structured.phoneNumber || state.existingUserData.phoneNumber || "",
+    };
+
+    const newState = {
+      ...state,
+      flowMode: "UPLOAD",
+      uploadedMedicalDocument: true,
+      documentUploaded: true,
+      documentText: extractedText,
+      documentExtracted: true,
+      documentData: {
+        firstName: firstName || null,
+        lastName: lastName || null,
+        dateOfBirth: structured.dateOfBirth || structured.reportDate || null,
+        gender: structured.gender || null,
+        email: structured.email || null,
+        phoneNumber: structured.phoneNumber || null,
+      },
+      existingUserData: updatedUserData,
+    };
+
+    setState(newState);
+    setUploadProgress(null);
+
+    // Reset selected states
+    setSelectedFile(null);
+    setInput("");
+
+    sendMessage("Document Uploaded: " + fileName, newState);
+  };
+
   const uploadSelectedFile = async (fileToUpload = selectedFile) => {
     if (!fileToUpload) return;
+    if (isUploadingRef.current) {
+      console.log("[ONBOARDING] Upload already in progress. Ignoring duplicate trigger.");
+      return;
+    }
 
+    isUploadingRef.current = true;
     setLoading(true);
     setUploadProgress("Uploading and validating report...");
     console.log("[ONBOARDING] Upload Started");
@@ -554,79 +706,49 @@ export default function OnboardingScreen() {
 
       const response = await apiClient.post("/v1/ocr/extract", formData, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 90000,
+        timeout: 240000,
       });
 
-      console.log("[ONBOARDING] Upload Success");
-      console.log("[ONBOARDING] OCR Started");
+      console.log("[ONBOARDING] Upload Success, checking document status...");
+      const docId = response.data?.data?.documentId || response.data?.data?.document?.id;
+      if (!docId) {
+        throw new Error("Failed to start processing: no document ID returned.");
+      }
 
-      const extractedText =
-        response.data?.data?.document?.ocrExtractedText || "";
-      const structured = response.data?.data?.structuredData || {};
+      setUploadProgress("Analyzing report details...");
+      const pollResult = await pollOcrStatus(docId);
+      await handleSuccessfulOcr(pollResult, fileToUpload.name);
 
-      console.log("[ONBOARDING] Extracted Structured Data:", structured);
+    } catch (error: any) {
+      console.error("[Onboarding] Document processing failed:", error);
+      
+      const isTimeoutOrNetworkError = 
+        error.message?.toLowerCase().includes("timeout") ||
+        error.message?.toLowerCase().includes("network") ||
+        error.code === "ECONNABORTED" ||
+        !error.response;
 
-      const parsedAllergies = Array.isArray(structured.allergies)
-        ? structured.allergies
-        : [];
-
-      // Split name if patientName is found but firstName/lastName are missing
-      let firstName = structured.firstName || "";
-      let lastName = structured.lastName || "";
-      if (!firstName && !lastName && structured.patientName) {
-        const parts = structured.patientName.trim().split(/\s+/);
-        if (parts.length > 0) {
-          firstName = parts[0];
-          lastName = parts.slice(1).join(" ");
+      if (isTimeoutOrNetworkError) {
+        setUploadProgress("Analyzing report details (connection timed out, polling status)...");
+        try {
+          const pollResult = await pollLatestDocumentStatus(fileToUpload.name);
+          if (pollResult) {
+            await handleSuccessfulOcr(pollResult, fileToUpload.name);
+            return;
+          }
+        } catch (pollErr) {
+          console.error("[Onboarding] Polling latest document status failed:", pollErr);
         }
       }
 
-      // Populate existingUserData in the state
-      const updatedUserData = {
-        ...state.existingUserData,
-        firstName: firstName || state.existingUserData.firstName || "",
-        lastName: lastName || state.existingUserData.lastName || "",
-        dateOfBirth:
-          structured.dateOfBirth ||
-          structured.reportDate ||
-          state.existingUserData.dateOfBirth ||
-          "",
-        gender: structured.gender || state.existingUserData.gender || "",
-        bloodGroup:
-          structured.bloodGroup || state.existingUserData.bloodGroup || "",
-        allergies:
-          parsedAllergies.length > 0
-            ? parsedAllergies
-            : state.existingUserData.allergies || [],
-        email: structured.email || state.existingUserData.email || "",
-      };
-
-      const newState = {
-        ...state,
-        flowMode: "UPLOAD",
-        uploadedMedicalDocument: true,
-        documentUploaded: true,
-        documentText: extractedText,
-        documentExtracted: true,
-        existingUserData: updatedUserData,
-      };
-
-      setState(newState);
-      setUploadProgress(null);
-
-      // Reset selected states
-      setSelectedFile(null);
-      setInput("");
-
-      sendMessage("Document Uploaded: " + fileToUpload.name, newState);
-    } catch (error: any) {
-      console.error("[Onboarding] Document processing failed:", error);
       setUploadProgress(null);
 
       const errCode = error?.response?.data?.error?.code;
       if (errCode === "INVALID_MEDICAL_DOCUMENT") {
         setValidationDialogVisible(true);
       } else {
+        // Signal failure to backend state machine
+        sendMessage("OCR_FAILED", state);
         Toast.show({
           type: "error",
           text1: "Scan Failed",
@@ -637,6 +759,7 @@ export default function OnboardingScreen() {
         });
       }
     } finally {
+      isUploadingRef.current = false;
       setLoading(false);
     }
   };
@@ -666,6 +789,302 @@ export default function OnboardingScreen() {
 
   const renderOptions = (activeMsg: Message) => {
     const preferredLang = state.preferredLanguage || "en";
+
+    const handleOptionPress = (value: string, label: string) => {
+      if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
+        queryClient.invalidateQueries({ queryKey: ["profile"] });
+        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      } else if (value === "ADD_MORE_MEDICINES") {
+        queryClient.invalidateQueries({ queryKey: ["profile"] });
+        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+        setTimeout(() => {
+          navigation.navigate("MEDICATION", {
+            screen: "MedicationOperation",
+            params: { operation: "add" },
+          });
+        }, 500);
+      } else if (value === "VIEW_MEDICINES" || value === "VIEW_MY_MEDICINES") {
+        queryClient.invalidateQueries({ queryKey: ["profile"] });
+        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+        setTimeout(() => {
+          navigation.navigate("MEDICATION", {
+            screen: "MedicationList",
+          });
+        }, 500);
+      } else if (value === "ASK_ABOUT_REPORT") {
+        queryClient.invalidateQueries({ queryKey: ["profile"] });
+        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+        setTimeout(() => {
+          navigation.navigate("HOME", {
+            screen: "AIChatScreen",
+          });
+        }, 500);
+      } else if (value === "LOGOUT") {
+        logout();
+      } else {
+        sendMessage(value, state, label);
+      }
+    };
+
+    const getFieldIcon = (key: string) => {
+      switch (key) {
+        case "firstName":
+        case "lastName":
+          return "person-outline";
+        case "phoneNumber":
+        case "mobile":
+          return "call-outline";
+        case "dateOfBirth":
+        case "dob":
+          return "calendar-outline";
+        case "gender":
+          return "male-female-outline";
+        case "email":
+          return "mail-outline";
+        case "bloodGroup":
+          return "water-outline";
+        default:
+          return "help-circle-outline";
+      }
+    };
+
+    if (activeMsg.action === "RESOLVE_PROFILE_SOURCE") {
+      const fields = activeMsg.fields || [];
+      const loginSummary = activeMsg.loginSummary || "";
+      const documentSummary = activeMsg.documentSummary || "";
+
+      if (isEditingProfileManually) {
+        return (
+          <View style={styles.resolveCardContainer}>
+            <View style={styles.resolveCardHeader}>
+              <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
+              <Text style={[styles.resolveCardTitle, { color: theme.colors.textPrimary, marginLeft: 8 }]}>
+                {preferredLang === "gujarati" ? "પ્રોફાઇલ વિગતો સુધારો" : "Edit Profile Details"}
+              </Text>
+            </View>
+            <View style={styles.editFormContainer}>
+              {fields.map((field: any) => (
+                <View key={field.key} style={styles.inputGroup}>
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+                    <Ionicons name={getFieldIcon(field.key)} size={14} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
+                      {field.label}
+                    </Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      {
+                        color: theme.colors.textPrimary,
+                        borderColor: isDark ? "#475569" : "#cbd5e1",
+                        backgroundColor: isDark ? "#1e293b" : "#f8fafc",
+                      },
+                    ]}
+                    value={editedProfileData[field.key] || ""}
+                    onChangeText={(val) =>
+                      setEditedProfileData((prev: any) => ({ ...prev, [field.key]: val }))
+                    }
+                    placeholder={field.label}
+                    placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                  />
+                </View>
+              ))}
+            </View>
+            <View style={styles.resolveActionButtonsRow}>
+              <TouchableOpacity
+                style={[styles.resolveActionButton, { backgroundColor: theme.colors.primary, flex: 1, marginRight: 8 }]}
+                onPress={() => {
+                  setIsEditingProfileManually(false);
+                  sendMessage(JSON.stringify({ edited: editedProfileData }), state, "Saved manual changes");
+                }}
+              >
+                <Text style={styles.resolveActionButtonText}>
+                  {preferredLang === "gujarati" ? "સાચવો" : "Save Details"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.resolveActionButton,
+                  { backgroundColor: isDark ? "#334155" : "#e2e8f0", flex: 1 },
+                ]}
+                onPress={() => setIsEditingProfileManually(false)}
+              >
+                <Text style={[styles.resolveActionButtonText, { color: theme.colors.textPrimary }]}>
+                  {preferredLang === "gujarati" ? "રદ કરો" : "Cancel"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      }
+
+      return (
+        <View style={styles.resolveCardContainer}>
+          {/* Header */}
+          <View style={styles.resolveCardHeader}>
+            <View style={[styles.shieldIconContainer, { backgroundColor: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff" }]}>
+              <Ionicons name="shield-checkmark" size={24} color="#3b82f6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.resolveCardTitle, { color: theme.colors.textPrimary }]}>
+                {activeMsg.title || (preferredLang === "gujarati" ? "અમને બે અલગ પ્રોફાઇલ મળી છે" : "We found two different profiles")}
+              </Text>
+              <Text style={[styles.resolveCardSubtitle, { color: theme.colors.textSecondary }]}>
+                {activeMsg.subtitle || (preferredLang === "gujarati" ? "કૃપા કરીને સમીક્ષા કરો અને તમારી પસંદગી પસંદ કરો" : "Please review and choose the one you prefer")}
+              </Text>
+            </View>
+          </View>
+
+          {/* VS Card Columns */}
+          <View style={styles.vsContainer}>
+            {/* Social Login Column */}
+            <View style={[styles.vsColumn, { borderColor: "rgba(59, 130, 246, 0.2)" }]}>
+              <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff" }]}>
+                <Ionicons name="logo-google" size={16} color="#3b82f6" style={{ marginRight: 6 }} />
+                <Text style={[styles.columnHeaderTitle, { color: "#3b82f6" }]}>
+                  {preferredLang === "gujarati" ? "સોશિયલ લોગિનથી" : "From Social Login"}
+                </Text>
+              </View>
+              <View style={styles.columnBody}>
+                {fields.map((field: any) => {
+                  const val = field.loginValue;
+                  return (
+                    <View key={field.key} style={styles.fieldRow}>
+                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                        <Ionicons name={getFieldIcon(field.key)} size={11} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]} numberOfLines={1}>
+                          {field.label}
+                        </Text>
+                        {field.isMismatch ? (
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#d97706", marginLeft: 4 }} />
+                        ) : null}
+                      </View>
+                      {field.isMismatch ? (
+                        <View style={[styles.highlightChip, { backgroundColor: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7" }]}>
+                          <Text style={[styles.fieldValue, { color: "#d97706", fontWeight: "bold" }]} numberOfLines={1}>
+                            {val || "—"}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={[styles.fieldValue, { color: theme.colors.textPrimary, paddingLeft: 15 }]} numberOfLines={1}>
+                          {val || "—"}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* VS Badge */}
+            <View style={[styles.vsBadge, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#475569" : "#cbd5e1" }]}>
+              <Text style={[styles.vsBadgeText, { color: theme.colors.textPrimary }]}>VS</Text>
+            </View>
+
+            {/* Document Column */}
+            <View style={[styles.vsColumn, { borderColor: "rgba(16, 185, 129, 0.2)" }]}>
+              <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5" }]}>
+                <Ionicons name="document-text" size={16} color="#10b981" style={{ marginRight: 6 }} />
+                <Text style={[styles.columnHeaderTitle, { color: "#10b981" }]}>
+                  {preferredLang === "gujarati" ? "દસ્તાવેજથી" : "From Document"}
+                </Text>
+              </View>
+              <View style={styles.columnBody}>
+                {fields.map((field: any) => {
+                  const val = field.documentValue;
+                  return (
+                    <View key={field.key} style={styles.fieldRow}>
+                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                        <Ionicons name={getFieldIcon(field.key)} size={11} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]} numberOfLines={1}>
+                          {field.label}
+                        </Text>
+                        {field.isMismatch ? (
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#d97706", marginLeft: 4 }} />
+                        ) : null}
+                      </View>
+                      {field.isMismatch ? (
+                        <View style={[styles.highlightChip, { backgroundColor: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7" }]}>
+                          <Text style={[styles.fieldValue, { color: "#d97706", fontWeight: "bold" }]} numberOfLines={1}>
+                            {val || "—"}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={[styles.fieldValue, { color: theme.colors.textPrimary, paddingLeft: 15 }]} numberOfLines={1}>
+                          {val || "—"}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+
+          {/* Explainer box */}
+          <View style={[styles.explainerBox, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
+            <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} style={{ marginRight: 8, marginTop: 2 }} />
+            <Text style={[styles.explainerText, { color: theme.colors.textSecondary }]}>
+              {activeMsg.explainer || (preferredLang === "gujarati"
+                ? "વિગતો દસ્તાવેજો અને સામાજિક પ્રોફાઇલમાં ક્યારેક અલગ હોઈ શકે છે."
+                : "Name details can sometimes be written differently in documents vs social profiles.")}
+            </Text>
+          </View>
+
+          {/* Large Action Buttons Side-by-Side */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+            <TouchableOpacity
+              style={[styles.bigActionButtonSide, { backgroundColor: "#3b82f6", flex: 1, marginRight: 6 }]}
+              onPress={() => sendMessage(JSON.stringify({ source: "LOGIN" }), state, "Use Social Login")}
+            >
+              <View style={{ alignItems: "center" }}>
+                <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
+                  {preferredLang === "gujarati" ? "સોશિયલ લોગિન વાપરો" : "Use Social Login"}
+                </Text>
+                {loginSummary ? (
+                  <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
+                    {loginSummary}
+                  </Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.bigActionButtonSide, { backgroundColor: "#10b981", flex: 1, marginLeft: 6 }]}
+              onPress={() => sendMessage(JSON.stringify({ source: "DOCUMENT" }), state, "Use Document")}
+            >
+              <View style={{ alignItems: "center" }}>
+                <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
+                  {preferredLang === "gujarati" ? "દસ્તાવેજ વાપરો" : "Use Document"}
+                </Text>
+                {documentSummary ? (
+                  <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
+                    {documentSummary}
+                  </Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Center Manual Edit Link */}
+          <TouchableOpacity
+            style={styles.manualEditLink}
+            onPress={() => {
+              const initData: any = {};
+              fields.forEach((f: any) => {
+                initData[f.key] = f.loginValue || f.documentValue || "";
+              });
+              setEditedProfileData(initData);
+              setIsEditingProfileManually(true);
+            }}
+          >
+            <Text style={[styles.manualEditLinkLabel, { color: theme.colors.primary }]}>
+              {preferredLang === "gujarati" ? "તેના બદલે વિગતો જાતે સુધારો" : "Edit manually instead"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
 
     if (activeMsg.action === "ASK_LANGUAGE") {
       return (
@@ -877,17 +1296,7 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 key={opt.value}
                 style={[styles.chip, { backgroundColor: theme.colors.primary }]}
-                onPress={() => {
-                  if (opt.value === "DASHBOARD") {
-                    queryClient.invalidateQueries({ queryKey: ["profile"] });
-                  } else {
-                    sendMessage(
-                      opt.value,
-                      state,
-                      label
-                    );
-                  }
-                }}
+                onPress={() => handleOptionPress(opt.value, label)}
               >
                 <Text style={styles.chipText}>{label}</Text>
               </TouchableOpacity>
@@ -912,7 +1321,7 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 key={value}
                 style={[styles.chip, { backgroundColor: theme.colors.primary }]}
-                onPress={() => sendMessage(value, state, typeof label === "string" ? label : undefined)}
+                onPress={() => handleOptionPress(value, typeof label === "string" ? label : value)}
               >
                 <Text style={styles.chipText}>{label}</Text>
               </TouchableOpacity>
@@ -1219,5 +1628,185 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     marginBottom: 8,
+  },
+  resolveCardContainer: {
+    width: "100%",
+    padding: 12,
+    borderRadius: 20,
+    backgroundColor: "transparent",
+    marginTop: 8,
+  },
+  resolveCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  shieldIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  resolveCardTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+  resolveCardSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  vsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "stretch",
+    position: "relative",
+    marginBottom: 16,
+  },
+  vsColumn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginHorizontal: 4,
+  },
+  columnHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  columnHeaderTitle: {
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+  columnBody: {
+    padding: 8,
+  },
+  fieldRow: {
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  fieldValue: {
+    fontSize: 12,
+  },
+  highlightChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  vsBadge: {
+    position: "absolute",
+    top: "40%",
+    left: "50%",
+    marginLeft: -16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  vsBadgeText: {
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  explainerBox: {
+    flexDirection: "row",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  explainerText: {
+    fontSize: 11,
+    flex: 1,
+    lineHeight: 16,
+  },
+  bigActionButton: {
+    width: "100%",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bigActionButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  bigActionButtonSubtitle: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  manualEditLink: {
+    width: "100%",
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  manualEditLinkLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  editFormContainer: {
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  textInput: {
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  resolveActionButtonsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  resolveActionButton: {
+    height: 44,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  resolveActionButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  bigActionButtonSide: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bigActionButtonTextSide: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+  bigActionButtonSubtitleSide: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 10,
+    marginTop: 2,
+    textAlign: "center",
   },
 });
