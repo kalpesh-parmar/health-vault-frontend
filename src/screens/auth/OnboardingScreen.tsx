@@ -50,6 +50,10 @@ type Message = {
   fields?: any[];
   loginSummary?: string;
   documentSummary?: string;
+  mode?: string;
+  title?: string;
+  subtitle?: string;
+  explainer?: string;
 };
 
 type UserData = {
@@ -252,6 +256,10 @@ export default function OnboardingScreen() {
       fields: aiRes.fields,
       loginSummary: aiRes.loginSummary,
       documentSummary: aiRes.documentSummary,
+      mode: aiRes.mode,
+      title: aiRes.title,
+      subtitle: aiRes.subtitle,
+      explainer: aiRes.explainer,
     };
 
     setMessages((prev) => [...prev, newMsg]);
@@ -418,16 +426,20 @@ export default function OnboardingScreen() {
       sendMessage(timeString, state);
     } else {
       const dobString = format(date, "yyyy-MM-dd");
-      const updatedUserData = {
-        ...state.existingUserData,
-        dateOfBirth: dobString,
-      };
-      const newState = {
-        ...state,
-        existingUserData: updatedUserData,
-      };
-      setState(newState);
-      sendMessage(dobString, newState);
+      if (isEditingProfileManually) {
+        setEditedProfileData((prev: any) => ({ ...prev, dateOfBirth: dobString }));
+      } else {
+        const updatedUserData = {
+          ...state.existingUserData,
+          dateOfBirth: dobString,
+        };
+        const newState = {
+          ...state,
+          existingUserData: updatedUserData,
+        };
+        setState(newState);
+        sendMessage(dobString, newState);
+      }
     }
   };
 
@@ -863,32 +875,187 @@ export default function OnboardingScreen() {
               </Text>
             </View>
             <View style={styles.editFormContainer}>
-              {fields.map((field: any) => (
-                <View key={field.key} style={styles.inputGroup}>
-                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
-                    <Ionicons name={getFieldIcon(field.key)} size={14} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
-                      {field.label}
-                    </Text>
+              {fields.map((field: any) => {
+                if (field.verified) return null;
+
+                if (field.key === "dateOfBirth") {
+                  return (
+                    <View key={field.key} style={styles.inputGroup}>
+                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+                        <Ionicons name={getFieldIcon(field.key)} size={14} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
+                          {field.label}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.textInput,
+                          {
+                            borderColor: isDark ? "#475569" : "#cbd5e1",
+                            backgroundColor: isDark ? "#1e293b" : "#f8fafc",
+                            justifyContent: "center",
+                          },
+                        ]}
+                        onPress={() => {
+                          setDatePickerMode("date");
+                          setDatePickerVisible(true);
+                        }}
+                      >
+                        <Text style={{ color: editedProfileData.dateOfBirth ? theme.colors.textPrimary : (isDark ? "#64748b" : "#94a3b8") }}>
+                          {editedProfileData.dateOfBirth || (preferredLang === "gujarati" ? "જન્મ તારીખ પસંદ કરો" : "Select Date of Birth")}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+
+                if (field.key === "gender") {
+                  const currentGen = (editedProfileData.gender || "").toLowerCase();
+                  return (
+                    <View key={field.key} style={styles.inputGroup}>
+                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+                        <Ionicons name={getFieldIcon(field.key)} size={14} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
+                          {field.label}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                        <TouchableOpacity
+                          style={[
+                            styles.resolveActionButton,
+                            {
+                              flex: 1,
+                              marginRight: 6,
+                              backgroundColor: currentGen === "male" ? theme.colors.primary : (isDark ? "#1e293b" : "#f1f5f9"),
+                              borderColor: currentGen === "male" ? theme.colors.primary : (isDark ? "#475569" : "#cbd5e1"),
+                              borderWidth: 1,
+                            },
+                          ]}
+                          onPress={() => setEditedProfileData((prev: any) => ({ ...prev, gender: "male" }))}
+                        >
+                          <Text style={[styles.resolveActionButtonText, { color: currentGen === "male" ? "#ffffff" : theme.colors.textPrimary }]}>
+                            {preferredLang === "gujarati" ? "પુરુષ" : "Male"}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.resolveActionButton,
+                            {
+                              flex: 1,
+                              marginLeft: 6,
+                              backgroundColor: currentGen === "female" ? theme.colors.primary : (isDark ? "#1e293b" : "#f1f5f9"),
+                              borderColor: currentGen === "female" ? theme.colors.primary : (isDark ? "#475569" : "#cbd5e1"),
+                              borderWidth: 1,
+                            },
+                          ]}
+                          onPress={() => setEditedProfileData((prev: any) => ({ ...prev, gender: "female" }))}
+                        >
+                          <Text style={[styles.resolveActionButtonText, { color: currentGen === "female" ? "#ffffff" : theme.colors.textPrimary }]}>
+                            {preferredLang === "gujarati" ? "સ્ત્રી" : "Female"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                }
+
+                if (field.key === "phoneNumber") {
+                  const phoneStr = editedProfileData.phoneNumber || "";
+                  let countryCode = "+91";
+                  let nationalNumber = phoneStr;
+                  if (phoneStr.startsWith("+")) {
+                    countryCode = phoneStr.slice(0, 3);
+                    nationalNumber = phoneStr.slice(3);
+                  } else if (phoneStr.length > 10) {
+                    countryCode = "+" + phoneStr.slice(0, 2);
+                    nationalNumber = phoneStr.slice(2);
+                  }
+
+                  return (
+                    <View key={field.key} style={styles.inputGroup}>
+                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+                        <Ionicons name={getFieldIcon(field.key)} size={14} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
+                          {field.label}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row" }}>
+                        <TextInput
+                          style={[
+                            styles.textInput,
+                            {
+                              width: 60,
+                              marginRight: 8,
+                              textAlign: "center",
+                              color: theme.colors.textPrimary,
+                              borderColor: isDark ? "#475569" : "#cbd5e1",
+                              backgroundColor: isDark ? "#1e293b" : "#f8fafc",
+                            },
+                          ]}
+                          value={countryCode}
+                          onChangeText={(cc) => {
+                            setEditedProfileData((prev: any) => ({
+                              ...prev,
+                              phoneNumber: cc + nationalNumber,
+                            }));
+                          }}
+                          placeholder="+91"
+                          placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                        />
+                        <TextInput
+                          style={[
+                            styles.textInput,
+                            {
+                              flex: 1,
+                              color: theme.colors.textPrimary,
+                              borderColor: isDark ? "#475569" : "#cbd5e1",
+                              backgroundColor: isDark ? "#1e293b" : "#f8fafc",
+                            },
+                          ]}
+                          value={nationalNumber}
+                          onChangeText={(num) => {
+                            setEditedProfileData((prev: any) => ({
+                              ...prev,
+                              phoneNumber: countryCode + num,
+                            }));
+                          }}
+                          keyboardType="phone-pad"
+                          placeholder="Phone Number"
+                          placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                        />
+                      </View>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View key={field.key} style={styles.inputGroup}>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+                      <Ionicons name={getFieldIcon(field.key)} size={14} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
+                        {field.label}
+                      </Text>
+                    </View>
+                    <TextInput
+                      style={[
+                        styles.textInput,
+                        {
+                          color: theme.colors.textPrimary,
+                          borderColor: isDark ? "#475569" : "#cbd5e1",
+                          backgroundColor: isDark ? "#1e293b" : "#f8fafc",
+                        },
+                      ]}
+                      value={editedProfileData[field.key] || ""}
+                      onChangeText={(val) =>
+                        setEditedProfileData((prev: any) => ({ ...prev, [field.key]: val }))
+                      }
+                      placeholder={field.label}
+                      placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                      keyboardType={field.key === "email" ? "email-address" : "default"}
+                    />
                   </View>
-                  <TextInput
-                    style={[
-                      styles.textInput,
-                      {
-                        color: theme.colors.textPrimary,
-                        borderColor: isDark ? "#475569" : "#cbd5e1",
-                        backgroundColor: isDark ? "#1e293b" : "#f8fafc",
-                      },
-                    ]}
-                    value={editedProfileData[field.key] || ""}
-                    onChangeText={(val) =>
-                      setEditedProfileData((prev: any) => ({ ...prev, [field.key]: val }))
-                    }
-                    placeholder={field.label}
-                    placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
-                  />
-                </View>
-              ))}
+                );
+              })}
             </View>
             <View style={styles.resolveActionButtonsRow}>
               <TouchableOpacity
@@ -918,6 +1085,8 @@ export default function OnboardingScreen() {
         );
       }
 
+      const mode = activeMsg.mode || "CONFIRM";
+
       return (
         <View style={styles.resolveCardContainer}>
           {/* Header */}
@@ -927,161 +1096,286 @@ export default function OnboardingScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.resolveCardTitle, { color: theme.colors.textPrimary }]}>
-                {activeMsg.title || (preferredLang === "gujarati" ? "અમને બે અલગ પ્રોફાઇલ મળી છે" : "We found two different profiles")}
+                {activeMsg.title || (mode === "CONFIRM"
+                  ? (preferredLang === "gujarati" ? "પ્રોફાઇલ વિગતોની પુષ્ટિ કરો" : "Confirm your profile details")
+                  : (preferredLang === "gujarati" ? "અમને બે અલગ પ્રોફાઇલ મળી છે" : "We found two different profiles"))}
               </Text>
               <Text style={[styles.resolveCardSubtitle, { color: theme.colors.textSecondary }]}>
-                {activeMsg.subtitle || (preferredLang === "gujarati" ? "કૃપા કરીને સમીક્ષા કરો અને તમારી પસંદગી પસંદ કરો" : "Please review and choose the one you prefer")}
+                {activeMsg.subtitle || (mode === "CONFIRM"
+                  ? (preferredLang === "gujarati" ? "કૃપા કરીને નીચેની બધી વિગતો તપાસો અને પુષ્ટિ કરો" : "Please check and confirm all details below")
+                  : (preferredLang === "gujarati" ? "કૃપા કરીને સમીક્ષા કરો અને તમારી પસંદગી પસંદ કરો" : "Please review and choose the one you prefer"))}
               </Text>
             </View>
           </View>
 
-          {/* VS Card Columns */}
-          <View style={styles.vsContainer}>
-            {/* Social Login Column */}
-            <View style={[styles.vsColumn, { borderColor: "rgba(59, 130, 246, 0.2)" }]}>
-              <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff" }]}>
-                <Ionicons name="logo-google" size={16} color="#3b82f6" style={{ marginRight: 6 }} />
-                <Text style={[styles.columnHeaderTitle, { color: "#3b82f6" }]}>
-                  {preferredLang === "gujarati" ? "સોશિયલ લોગિનથી" : "From Social Login"}
+          {/* VS Card Columns or CONFIRM layout */}
+          {mode === "CONFIRM" ? (
+            <View style={[styles.vsColumn, { borderColor: isDark ? "#475569" : "#cbd5e1", width: "100%", marginBottom: 12, borderWidth: 1, borderRadius: 8, overflow: "hidden" }]}>
+              <View style={[styles.columnHeader, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
+                <Ionicons name="person-circle-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
+                <Text style={[styles.columnHeaderTitle, { color: theme.colors.textPrimary }]}>
+                  {preferredLang === "gujarati" ? "તમારી વિગતો" : "Your Details"}
                 </Text>
               </View>
               <View style={styles.columnBody}>
                 {fields.map((field: any) => {
-                  const val = field.loginValue;
+                  const val = field.value;
                   return (
                     <View key={field.key} style={styles.fieldRow}>
-                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
-                        <Ionicons name={getFieldIcon(field.key)} size={11} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
-                        <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]} numberOfLines={1}>
-                          {field.label}
-                        </Text>
-                        {field.isMismatch ? (
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#d97706", marginLeft: 4 }} />
-                        ) : null}
-                      </View>
-                      {field.isMismatch ? (
-                        <View style={[styles.highlightChip, { backgroundColor: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7" }]}>
-                          <Text style={[styles.fieldValue, { color: "#d97706", fontWeight: "bold" }]} numberOfLines={1}>
-                            {val || "—"}
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginBottom: 2 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <Ionicons name={getFieldIcon(field.key)} size={11} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                          <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]} numberOfLines={1}>
+                            {field.label}
                           </Text>
+                          {field.verified ? (
+                            <Ionicons name="checkmark-circle" size={12} color="#10b981" style={{ marginLeft: 4 }} />
+                          ) : null}
                         </View>
-                      ) : (
-                        <Text style={[styles.fieldValue, { color: theme.colors.textPrimary, paddingLeft: 15 }]} numberOfLines={1}>
-                          {val || "—"}
-                        </Text>
-                      )}
+                        {!field.verified && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              const initData: any = {};
+                              fields.forEach((f: any) => {
+                                initData[f.key] = f.value || "";
+                              });
+                              setEditedProfileData(initData);
+                              setIsEditingProfileManually(true);
+                            }}
+                          >
+                            <Ionicons name="pencil" size={12} color={theme.colors.primary} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.fieldValue,
+                          {
+                            color: field.verified
+                              ? (isDark ? "#64748b" : "#94a3b8")
+                              : theme.colors.textPrimary,
+                            paddingLeft: 15
+                          }
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {val || "—"}
+                      </Text>
                     </View>
                   );
                 })}
               </View>
             </View>
-
-            {/* VS Badge */}
-            <View style={[styles.vsBadge, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#475569" : "#cbd5e1" }]}>
-              <Text style={[styles.vsBadgeText, { color: theme.colors.textPrimary }]}>VS</Text>
-            </View>
-
-            {/* Document Column */}
-            <View style={[styles.vsColumn, { borderColor: "rgba(16, 185, 129, 0.2)" }]}>
-              <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5" }]}>
-                <Ionicons name="document-text" size={16} color="#10b981" style={{ marginRight: 6 }} />
-                <Text style={[styles.columnHeaderTitle, { color: "#10b981" }]}>
-                  {preferredLang === "gujarati" ? "દસ્તાવેજથી" : "From Document"}
-                </Text>
-              </View>
-              <View style={styles.columnBody}>
-                {fields.map((field: any) => {
-                  const val = field.documentValue;
-                  return (
-                    <View key={field.key} style={styles.fieldRow}>
-                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
-                        <Ionicons name={getFieldIcon(field.key)} size={11} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
-                        <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]} numberOfLines={1}>
-                          {field.label}
-                        </Text>
+          ) : (
+            <View style={styles.vsContainer}>
+              {/* Social Login Column */}
+              <View style={[styles.vsColumn, { borderColor: "rgba(59, 130, 246, 0.2)" }]}>
+                <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff" }]}>
+                  <Ionicons name="logo-google" size={16} color="#3b82f6" style={{ marginRight: 6 }} />
+                  <Text style={[styles.columnHeaderTitle, { color: "#3b82f6" }]}>
+                    {preferredLang === "gujarati" ? "સોશિયલ લોગિનથી" : "From Social Login"}
+                  </Text>
+                </View>
+                <View style={styles.columnBody}>
+                  {fields.map((field: any) => {
+                    const val = field.loginValue;
+                    return (
+                      <View key={field.key} style={styles.fieldRow}>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                          <Ionicons name={getFieldIcon(field.key)} size={11} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                          <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]} numberOfLines={1}>
+                            {field.label}
+                          </Text>
+                          {field.verified ? (
+                            <Ionicons name="checkmark-circle" size={12} color="#10b981" style={{ marginLeft: 4 }} />
+                          ) : field.isMismatch ? (
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#d97706", marginLeft: 4 }} />
+                          ) : null}
+                        </View>
                         {field.isMismatch ? (
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#d97706", marginLeft: 4 }} />
-                        ) : null}
-                      </View>
-                      {field.isMismatch ? (
-                        <View style={[styles.highlightChip, { backgroundColor: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7" }]}>
-                          <Text style={[styles.fieldValue, { color: "#d97706", fontWeight: "bold" }]} numberOfLines={1}>
+                          <View style={[styles.highlightChip, { backgroundColor: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7" }]}>
+                            <Text style={[styles.fieldValue, { color: "#d97706", fontWeight: "bold" }]} numberOfLines={1}>
+                              {val || "—"}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text
+                            style={[
+                              styles.fieldValue,
+                              {
+                                color: field.verified
+                                  ? (isDark ? "#64748b" : "#94a3b8")
+                                  : theme.colors.textPrimary,
+                                paddingLeft: 15
+                              }
+                            ]}
+                            numberOfLines={1}
+                          >
                             {val || "—"}
                           </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* VS Badge */}
+              <View style={[styles.vsBadge, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#475569" : "#cbd5e1" }]}>
+                <Text style={[styles.vsBadgeText, { color: theme.colors.textPrimary }]}>VS</Text>
+              </View>
+
+              {/* Document Column */}
+              <View style={[styles.vsColumn, { borderColor: "rgba(16, 185, 129, 0.2)" }]}>
+                <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5" }]}>
+                  <Ionicons name="document-text" size={16} color="#10b981" style={{ marginRight: 6 }} />
+                  <Text style={[styles.columnHeaderTitle, { color: "#10b981" }]}>
+                    {preferredLang === "gujarati" ? "દસ્તાવેજથી" : "From Document"}
+                  </Text>
+                </View>
+                <View style={styles.columnBody}>
+                  {fields.map((field: any) => {
+                    const val = field.documentValue;
+                    return (
+                      <View key={field.key} style={styles.fieldRow}>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                          <Ionicons name={getFieldIcon(field.key)} size={11} color={theme.colors.textSecondary} style={{ marginRight: 4 }} />
+                          <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]} numberOfLines={1}>
+                            {field.label}
+                          </Text>
+                          {field.verified ? (
+                            <Ionicons name="checkmark-circle" size={12} color="#10b981" style={{ marginLeft: 4 }} />
+                          ) : field.isMismatch ? (
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#d97706", marginLeft: 4 }} />
+                          ) : null}
                         </View>
-                      ) : (
-                        <Text style={[styles.fieldValue, { color: theme.colors.textPrimary, paddingLeft: 15 }]} numberOfLines={1}>
-                          {val || "—"}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })}
+                        {field.isMismatch ? (
+                          <View style={[styles.highlightChip, { backgroundColor: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7" }]}>
+                            <Text style={[styles.fieldValue, { color: "#d97706", fontWeight: "bold" }]} numberOfLines={1}>
+                              {val || "—"}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text
+                            style={[
+                              styles.fieldValue,
+                              {
+                                color: field.verified
+                                  ? (isDark ? "#64748b" : "#94a3b8")
+                                  : theme.colors.textPrimary,
+                                paddingLeft: 15
+                              }
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {val || "—"}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
             </View>
-          </View>
+          )}
 
           {/* Explainer box */}
-          <View style={[styles.explainerBox, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
-            <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} style={{ marginRight: 8, marginTop: 2 }} />
-            <Text style={[styles.explainerText, { color: theme.colors.textSecondary }]}>
-              {activeMsg.explainer || (preferredLang === "gujarati"
-                ? "વિગતો દસ્તાવેજો અને સામાજિક પ્રોફાઇલમાં ક્યારેક અલગ હોઈ શકે છે."
-                : "Name details can sometimes be written differently in documents vs social profiles.")}
-            </Text>
-          </View>
+          {mode === "CONFLICT" && (
+            <View style={[styles.explainerBox, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
+              <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} style={{ marginRight: 8, marginTop: 2 }} />
+              <Text style={[styles.explainerText, { color: theme.colors.textSecondary }]}>
+                {activeMsg.explainer || (preferredLang === "gujarati"
+                  ? "વિગતો દસ્તાવેજો અને સામાજિક પ્રોફાઇલમાં ક્યારેક અલગ હોઈ શકે છે."
+                  : "Name details can sometimes be written differently in documents vs social profiles.")}
+              </Text>
+            </View>
+          )}
 
           {/* Large Action Buttons Side-by-Side */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-            <TouchableOpacity
-              style={[styles.bigActionButtonSide, { backgroundColor: "#3b82f6", flex: 1, marginRight: 6 }]}
-              onPress={() => sendMessage(JSON.stringify({ source: "LOGIN" }), state, "Use Social Login")}
-            >
-              <View style={{ alignItems: "center" }}>
-                <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
-                  {preferredLang === "gujarati" ? "સોશિયલ લોગિન વાપરો" : "Use Social Login"}
+          {mode === "CONFIRM" ? (
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+              <TouchableOpacity
+                style={[styles.bigActionButtonSide, { backgroundColor: "#10b981", flex: 1, marginRight: 6, justifyContent: "center", paddingVertical: 12 }]}
+                onPress={() => sendMessage(JSON.stringify({ confirmed: true }), state, "Confirm Details")}
+              >
+                <Text style={[styles.bigActionButtonTextSide, { color: "#ffffff", textAlign: "center" }]} numberOfLines={1}>
+                  {preferredLang === "gujarati" ? "પુષ્ટિ કરો અને ચાલુ રાખો" : "Confirm & Continue"}
                 </Text>
-                {loginSummary ? (
-                  <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
-                    {loginSummary}
-                  </Text>
-                ) : null}
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.bigActionButtonSide, { backgroundColor: "#10b981", flex: 1, marginLeft: 6 }]}
-              onPress={() => sendMessage(JSON.stringify({ source: "DOCUMENT" }), state, "Use Document")}
-            >
-              <View style={{ alignItems: "center" }}>
-                <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
-                  {preferredLang === "gujarati" ? "દસ્તાવેજ વાપરો" : "Use Document"}
+              <TouchableOpacity
+                style={[
+                  styles.bigActionButtonSide,
+                  { backgroundColor: isDark ? "#334155" : "#e2e8f0", flex: 1, marginLeft: 6, justifyContent: "center", paddingVertical: 12 },
+                ]}
+                onPress={() => {
+                  const initData: any = {};
+                  fields.forEach((f: any) => {
+                    initData[f.key] = f.value || "";
+                  });
+                  setEditedProfileData(initData);
+                  setIsEditingProfileManually(true);
+                }}
+              >
+                <Text style={[styles.bigActionButtonTextSide, { color: theme.colors.textPrimary, textAlign: "center" }]} numberOfLines={1}>
+                  {preferredLang === "gujarati" ? "વિગતો સુધારો" : "Edit Details"}
                 </Text>
-                {documentSummary ? (
-                  <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
-                    {documentSummary}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+              <TouchableOpacity
+                style={[styles.bigActionButtonSide, { backgroundColor: "#3b82f6", flex: 1, marginRight: 6 }]}
+                onPress={() => sendMessage(JSON.stringify({ source: "LOGIN" }), state, "Use Social Login")}
+              >
+                <View style={{ alignItems: "center" }}>
+                  <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
+                    {preferredLang === "gujarati" ? "સોશિયલ લોગિન વાપરો" : "Use Social Login"}
                   </Text>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          </View>
+                  {loginSummary ? (
+                    <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
+                      {loginSummary}
+                    </Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.bigActionButtonSide, { backgroundColor: "#10b981", flex: 1, marginLeft: 6 }]}
+                onPress={() => sendMessage(JSON.stringify({ source: "DOCUMENT" }), state, "Use Document")}
+              >
+                <View style={{ alignItems: "center" }}>
+                  <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
+                    {preferredLang === "gujarati" ? "દસ્તાવેજ વાપરો" : "Use Document"}
+                  </Text>
+                  {documentSummary ? (
+                    <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
+                      {documentSummary}
+                    </Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Center Manual Edit Link */}
-          <TouchableOpacity
-            style={styles.manualEditLink}
-            onPress={() => {
-              const initData: any = {};
-              fields.forEach((f: any) => {
-                initData[f.key] = f.loginValue || f.documentValue || "";
-              });
-              setEditedProfileData(initData);
-              setIsEditingProfileManually(true);
-            }}
-          >
-            <Text style={[styles.manualEditLinkLabel, { color: theme.colors.primary }]}>
-              {preferredLang === "gujarati" ? "તેના બદલે વિગતો જાતે સુધારો" : "Edit manually instead"}
-            </Text>
-          </TouchableOpacity>
+          {mode === "CONFLICT" && (
+            <TouchableOpacity
+              style={styles.manualEditLink}
+              onPress={() => {
+                const initData: any = {};
+                fields.forEach((f: any) => {
+                  initData[f.key] = f.loginValue || f.documentValue || "";
+                });
+                setEditedProfileData(initData);
+                setIsEditingProfileManually(true);
+              }}
+            >
+              <Text style={[styles.manualEditLinkLabel, { color: theme.colors.primary }]}>
+                {preferredLang === "gujarati" ? "તેના બદલે વિગતો જાતે સુધારો" : "Edit manually instead"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -1463,6 +1757,7 @@ export default function OnboardingScreen() {
           isVisible={isDatePickerVisible}
           mode={datePickerMode}
           maximumDate={datePickerMode === "date" ? new Date() : undefined}
+          minimumDate={datePickerMode === "date" ? new Date("1900-01-01") : undefined}
           onConfirm={handleDateConfirm}
           onCancel={() => setDatePickerVisible(false)}
         />
