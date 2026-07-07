@@ -78,6 +78,12 @@ const ConfirmationModal = ({
       queryClient.invalidateQueries({
         queryKey: ["documents"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["allDocuments"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["filteredDocuments"],
+      });
       onClose();
       Toast.show({
         type: "success",

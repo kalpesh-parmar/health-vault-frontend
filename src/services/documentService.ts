@@ -105,11 +105,10 @@ export const getOcrStatus = async (fileKey: string): Promise<any> => {
 };
 
 export const addDocument = async (payload: AddDocumentRequest): Promise<ApiResponse<any>> => {
+  console.log("Document Payload :- ", payload);
   const response = await apiClient.post(DOCUMENT_ENDPOINTS.ADD_DOCUMENT, payload);
   return response.data;
 };
-
-// Payload :- {"filter": {"search": "family"}, "sort": {"orderBy": "asc", "sortBy": "createdAt"}}
 
 export const filterDocuments = async (payload: FilterDocumentsRequest) => {
   const response = await apiClient.post(DOCUMENT_ENDPOINTS.FILTER_AND_SORT, payload);

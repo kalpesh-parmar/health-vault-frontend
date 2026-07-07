@@ -13,6 +13,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
+  TextInput,
+  StatusBar,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +32,12 @@ import {
   pickDocumentAsset,
 } from "../../services/mediaServices";
 import { getUser, updateUser } from "../../services/userService";
+import {
+  documentUpload,
+  runOcr,
+  getOcrStatus,
+  addDocument,
+} from "../../services/documentService";
 
 // Reusable Redesigned Components
 import { ChatInput } from "../../components/chat/ChatInput";
@@ -37,6 +46,8 @@ import TypingIndicator from "../../components/chat/TypingIndicator";
 import UploadBottomSheet from "../../components/upload/UploadBottomSheet";
 import DocumentPreview from "../../components/upload/DocumentPreview";
 import UploadValidationDialog from "../../components/upload/UploadValidationDialog";
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
+import { listMedications } from "../../services/medicationservice";
 
 type Message = {
   id: string;
@@ -68,6 +79,10 @@ export default function OnboardingScreen() {
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
+  // Custom dose UI state
+  const [capsuleCount, setCapsuleCount] = useState(1);
+  const [liquidDose, setLiquidDose] = useState("");
+
   // Document upload state
   const [selectedFile, setSelectedFile] = useState<{
     uri: string;
@@ -77,6 +92,7 @@ export default function OnboardingScreen() {
     fileType: "pdf" | "image";
   } | null>(null);
   const [validationDialogVisible, setValidationDialogVisible] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [state, setState] = useState({
     currentStep: null as string | null,
@@ -175,7 +191,11 @@ export default function OnboardingScreen() {
         documentExtracted: false,
         bloodGroupSkipped: false,
         allergiesSkipped: false,
-        hasSocialData: !!((userData as any)?.googleId || (userData as any)?.appleId || (userData as any)?.socialId),
+        hasSocialData: !!(
+          (userData as any)?.googleId ||
+          (userData as any)?.appleId ||
+          (userData as any)?.socialId
+        ),
         foundMedicines: [],
         medicinesFlowStarted: false,
         medicinesConfirmed: false,
@@ -244,11 +264,6 @@ export default function OnboardingScreen() {
 
     let updatedUserData = { ...currentState.existingUserData };
 
-    if (aiRes.action === "REGISTER_USER" && aiRes.data) {
-      handleRegistration(aiRes.data);
-      return;
-    }
-
     if (aiRes.extractedData) {
       updatedUserData = {
         ...updatedUserData,
@@ -289,13 +304,28 @@ export default function OnboardingScreen() {
           aiRes.allergiesSkipped !== undefined
             ? aiRes.allergiesSkipped
             : finalState.allergiesSkipped,
-        hasSocialData: aiRes.hasSocialData !== undefined ? aiRes.hasSocialData : finalState.hasSocialData,
+        hasSocialData:
+          aiRes.hasSocialData !== undefined
+            ? aiRes.hasSocialData
+            : finalState.hasSocialData,
         foundMedicines: aiRes.foundMedicines || finalState.foundMedicines,
-        medicinesFlowStarted: aiRes.medicinesFlowStarted !== undefined ? aiRes.medicinesFlowStarted : finalState.medicinesFlowStarted,
-        medicinesConfirmed: aiRes.medicinesConfirmed !== undefined ? aiRes.medicinesConfirmed : finalState.medicinesConfirmed,
+        medicinesFlowStarted:
+          aiRes.medicinesFlowStarted !== undefined
+            ? aiRes.medicinesFlowStarted
+            : finalState.medicinesFlowStarted,
+        medicinesConfirmed:
+          aiRes.medicinesConfirmed !== undefined
+            ? aiRes.medicinesConfirmed
+            : finalState.medicinesConfirmed,
         medicinesToAdd: aiRes.medicinesToAdd || finalState.medicinesToAdd,
-        currentMedicineIndex: aiRes.currentMedicineIndex !== undefined ? aiRes.currentMedicineIndex : finalState.currentMedicineIndex,
-        medicinesSavedToDb: aiRes.medicinesSavedToDb !== undefined ? aiRes.medicinesSavedToDb : finalState.medicinesSavedToDb,
+        currentMedicineIndex:
+          aiRes.currentMedicineIndex !== undefined
+            ? aiRes.currentMedicineIndex
+            : finalState.currentMedicineIndex,
+        medicinesSavedToDb:
+          aiRes.medicinesSavedToDb !== undefined
+            ? aiRes.medicinesSavedToDb
+            : finalState.medicinesSavedToDb,
         existingUserData: updatedUserData,
       };
     }
@@ -307,7 +337,11 @@ export default function OnboardingScreen() {
     }
   };
 
-  const sendMessage = async (userText: string, updatedState = state, displayLabel?: string) => {
+  const sendMessage = async (
+    userText: string,
+    updatedState = state,
+    displayLabel?: string,
+  ) => {
     if (!userText.trim()) return;
 
     const userMsg: Message = {
@@ -332,12 +366,9 @@ export default function OnboardingScreen() {
         state: updatedState,
       };
 
-      console.log("Payload for Onboarding Chat :- ", payload);
-
       const response = await apiClient.post("/v1/onboarding/chat", payload, {
         timeout: 90000,
       });
-      console.log("Response for Onboarding Chat :- ", response);
       const resData = response.data?.data;
 
       if (resData) {
@@ -349,48 +380,6 @@ export default function OnboardingScreen() {
         type: "error",
         text1: "Error",
         text2: "Failed to get response from onboarding assistant.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegistration = async (registerData: UserData) => {
-    setLoading(true);
-    try {
-      const user = await getUser();
-      const userId = user?.data?.id;
-      if (!userId) throw new Error("No user ID found.");
-
-      const payload = {
-        firstName: registerData.firstName,
-        lastName: registerData.lastName,
-        dateOfBirth: registerData.dateOfBirth,
-        gender: registerData.gender,
-        bloodGroup: registerData.bloodGroup || undefined,
-        allergies:
-          registerData.allergies && registerData.allergies.length > 0
-            ? registerData.allergies
-            : undefined,
-      };
-
-      await updateUser(userId, payload);
-
-      Toast.show({
-        type: "success",
-        text1: "Onboarding Completed! 🎉",
-        text2: "Welcome to your health dashboard.",
-      });
-
-      // Refetch profile queries
-      await queryClient.invalidateQueries({ queryKey: ["profile"] });
-      await queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-    } catch (error: any) {
-      console.error("[Onboarding] Registration failed:", error);
-      Toast.show({
-        type: "error",
-        text1: "Registration Error",
-        text2: error.message || "Failed to update profile.",
       });
     } finally {
       setLoading(false);
@@ -415,19 +404,6 @@ export default function OnboardingScreen() {
       setState(newState);
       sendMessage(dobString, newState);
     }
-  };
-
-  const handleGenderSelect = (gender: string) => {
-    const updatedUserData = {
-      ...state.existingUserData,
-      gender,
-    };
-    const newState = {
-      ...state,
-      existingUserData: updatedUserData,
-    };
-    setState(newState);
-    sendMessage(gender, newState);
   };
 
   const handleSend = () => {
@@ -542,7 +518,7 @@ export default function OnboardingScreen() {
     if (!fileToUpload) return;
 
     setLoading(true);
-    setUploadProgress("Uploading and validating report...");
+    setUploadProgress("Uploading report to secure storage...");
     console.log("[ONBOARDING] Upload Started");
     try {
       const formData = new FormData();
@@ -551,18 +527,73 @@ export default function OnboardingScreen() {
         name: fileToUpload.name,
         type: fileToUpload.type,
       } as any);
+      formData.append("uploadType", "PATIENT_DOCUMENT");
 
-      const response = await apiClient.post("/v1/ocr/extract", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        timeout: 90000,
-      });
+      const uploadRes = await documentUpload(formData);
+      const fileKey = uploadRes?.data?.fileKey;
+
+      if (!fileKey) {
+        throw new Error("Upload response missing file key");
+      }
 
       console.log("[ONBOARDING] Upload Success");
       console.log("[ONBOARDING] OCR Started");
 
+      setUploadProgress("Checking whether the document is medical...");
+      await runOcr({ fileKey, documentType: "medical_document" });
+
+      const maxRetries = 100;
+      const delayMs = 1500;
+      let job = null;
+
+      for (let i = 0; i < maxRetries; i++) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        const statusRes = await getOcrStatus(fileKey);
+        const jobData = statusRes?.data || statusRes;
+
+        if (
+          jobData?.stage === "OCR_QUEUED" ||
+          jobData?.stage === "OCR_STARTED" ||
+          jobData?.stage === "VALIDATING"
+        ) {
+          setUploadProgress("Checking whether the document is medical...");
+        } else if (jobData?.stage === "EXTRACTING") {
+          setUploadProgress("Reading report contents...");
+        } else if (jobData?.stage === "ANALYZING") {
+          setUploadProgress("Finding tests and medical values...");
+        } else if (jobData?.stage === "SUMMARIZING") {
+          setUploadProgress("Preparing easy explanation...");
+        }
+
+        if (jobData?.status === "COMPLETED") {
+          await addDocument({
+            documentType: "medical_document",
+            s3Key: fileKey,
+            fileName: uploadRes.data?.originalFileName,
+            fileType: uploadRes.data?.mimeType,
+            s3bucket: uploadRes.data?.s3Bucket,
+            rawOcrData: jobData.rawOcrData,
+            extractedStructuredData: jobData.extractedStructuredData,
+            graphs: jobData.graphs,
+            embeddingsGenerated: true
+          });
+          setUploadProgress("You can now ask questions.");
+          job = jobData;
+          break;
+        }
+
+        if (jobData?.status === "FAILED") {
+          throw new Error(jobData?.error || "OCR extraction failed");
+        }
+      }
+
+      if (!job) {
+        throw new Error("OCR job timed out");
+      }
+
       const extractedText =
-        response.data?.data?.document?.ocrExtractedText || "";
-      const structured = response.data?.data?.structuredData || {};
+        job?.rawOcrData?.ocrExtractedText || job?.rawOcrData?.text || "";
+      const structured = job?.extractedStructuredData || {};
 
       console.log("[ONBOARDING] Extracted Structured Data:", structured);
 
@@ -577,7 +608,8 @@ export default function OnboardingScreen() {
         const parts = structured.patientName.trim().split(/\s+/);
         if (parts.length > 0) {
           firstName = parts[0];
-          lastName = parts.slice(1).join(" ");
+          // Slice returns a new array starting from index 1 and join joins the other indexes after 1(if found) with Space in between.
+          lastName = parts.slice(1).join(" "); 
         }
       }
 
@@ -618,7 +650,7 @@ export default function OnboardingScreen() {
       setSelectedFile(null);
       setInput("");
 
-      sendMessage("Document Uploaded: " + fileToUpload.name, newState);
+      await sendMessage("Document Uploaded: " + fileToUpload.name, newState);
     } catch (error: any) {
       console.error("[Onboarding] Document processing failed:", error);
       setUploadProgress(null);
@@ -664,9 +696,54 @@ export default function OnboardingScreen() {
     sendMessage("MANUAL", newState);
   };
 
-  const renderOptions = (activeMsg: Message) => {
-    const preferredLang = state.preferredLanguage || "en";
+  const handleEditMedicineField = (field: string, value: any) => {
+    const newMedicines = [...state.medicinesToAdd];
+    const currentIndex = state.currentMedicineIndex;
+    if (!newMedicines[currentIndex]) newMedicines[currentIndex] = {};
+    newMedicines[currentIndex] = {
+      ...newMedicines[currentIndex],
+      [field]: value,
+    };
+    setState({ ...state, medicinesToAdd: newMedicines });
+  };
 
+  const handleViewMedicines = async () => {
+    setLoading(true);
+    try {
+      const res = await listMedications();
+      console.log("[MEDICINES] ", res?.data);
+      const meds = res?.data || [];
+      if (meds.length >= 0) {
+        const medList = meds
+          .map((m: any) => `- **${m.medicationName}**`)
+          .join("\n");
+        const msg: Message = {
+          id: `ai-${Date.now()}`,
+          role: "assistant",
+          content: `Here are your medicines:\n${medList}`,
+        };
+        setMessages((prev) => [...prev, msg]);
+      } else {
+        const msg: Message = {
+          id: `ai-${Date.now()}`,
+          role: "assistant",
+          content: `You have no medicines added yet.`,
+        };
+        setMessages((prev) => [...prev, msg]);
+      }
+    } catch (error) {
+      console.error("Error fetching medicines:", error);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to fetch medicines.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderOptions = (activeMsg: Message) => {
     if (activeMsg.action === "ASK_LANGUAGE") {
       return (
         <View style={styles.chipRow}>
@@ -693,14 +770,8 @@ export default function OnboardingScreen() {
       const manualOpt =
         (activeMsg.options || []).find((o) => o.value === "MANUAL") || {};
 
-      const uploadLabel =
-        preferredLang === "gujarati"
-          ? uploadOpt.label_gu || uploadOpt.label || "મેડિકલ રિપોર્ટ અપલોડ કરો"
-          : uploadOpt.label_en || uploadOpt.label || "Upload Medical Report";
-      const manualLabel =
-        preferredLang === "gujarati"
-          ? manualOpt.label_gu || manualOpt.label || "છોડો અને મેન્યુઅલી દાખલ કરો"
-          : manualOpt.label_en || manualOpt.label || "Skip and Enter Manually";
+      const uploadLabel = uploadOpt.label || "Upload Medical Report";
+      const manualLabel = manualOpt.label || "Skip and Enter Manually";
 
       return (
         <View style={styles.optionContainer}>
@@ -754,15 +825,20 @@ export default function OnboardingScreen() {
       return (
         <View style={styles.chipRow}>
           {(activeMsg.options || []).map((opt) => {
-            const label =
-              preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
+            const label = opt.label;
             return (
               <TouchableOpacity
                 key={opt.value}
                 style={[styles.chip, { backgroundColor: theme.colors.primary }]}
                 onPress={() => {
-                  const updatedUserData = { ...state.existingUserData, gender: opt.value };
-                  const newState = { ...state, existingUserData: updatedUserData };
+                  const updatedUserData = {
+                    ...state.existingUserData,
+                    gender: opt.value,
+                  };
+                  const newState = {
+                    ...state,
+                    existingUserData: updatedUserData,
+                  };
                   setState(newState);
                   sendMessage(opt.value, newState, label);
                 }}
@@ -775,7 +851,11 @@ export default function OnboardingScreen() {
       );
     }
 
-    if (activeMsg.action === "ASK_DOB" || activeMsg.action === "ASK_MEDICINE_START_DATE") {
+    if (
+      activeMsg.action === "ASK_DOB" ||
+      activeMsg.action === "ASK_MEDICINE_START_DATE"
+    ) {
+      const btnLabel = activeMsg.options?.[0]?.label || "Choose Date";
       return (
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -794,17 +874,14 @@ export default function OnboardingScreen() {
               color="#fff"
               style={{ marginRight: 8 }}
             />
-            <Text style={styles.actionButtonText}>
-              {preferredLang === "gujarati"
-                ? "તારીખ પસંદ કરો"
-                : "Choose Date"}
-            </Text>
+            <Text style={styles.actionButtonText}>{btnLabel}</Text>
           </TouchableOpacity>
         </View>
       );
     }
 
     if (activeMsg.action === "ASK_MEDICINE_SCHEDULE") {
+      const btnLabel = activeMsg.options?.[0]?.label || "Choose Time";
       return (
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -823,42 +900,511 @@ export default function OnboardingScreen() {
               color="#fff"
               style={{ marginRight: 8 }}
             />
-            <Text style={styles.actionButtonText}>
-              {preferredLang === "gujarati"
-                ? "સમય પસંદ કરો"
-                : "Choose Time"}
-            </Text>
+            <Text style={styles.actionButtonText}>{btnLabel}</Text>
           </TouchableOpacity>
         </View>
       );
     }
 
-    if (activeMsg.action === "REVIEW_MEDICINES_LIST") {
+    if (activeMsg.action === "ASK_DOSE_PER_INTAKE") {
+      const currentMedType =
+        state.medicinesToAdd[
+          state.currentMedicineIndex
+        ]?.medicationType?.toUpperCase() || "";
+
+      if (currentMedType === "TABLET") {
+        const tabletOptions = [
+          {
+            label: "1/4",
+            value: "0.25",
+            image: require("../../../assets/one-fourth.png"),
+          },
+          {
+            label: "1/3",
+            value: "0.33",
+            image: require("../../../assets/one-third.png"),
+          },
+          {
+            label: "1/2",
+            value: "0.5",
+            image: require("../../../assets/half.png"),
+          },
+          {
+            label: "1",
+            value: "1",
+            image: require("../../../assets/one-medicine.png"),
+          },
+          {
+            label: "1 1/2",
+            value: "1.5",
+            image: require("../../../assets/one-and-a-half.png"),
+          },
+          {
+            label: "2",
+            value: "2",
+            image: require("../../../assets/two-medicines.png"),
+          },
+        ];
+
+        return (
+          <View style={styles.tabletGrid}>
+            {tabletOptions.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[
+                  styles.tabletOptionCard,
+                  {
+                    backgroundColor: theme.colors.primary + "15",
+                    borderColor: theme.colors.primary,
+                  },
+                ]}
+                onPress={() => sendMessage(opt.value, state, opt.label)}
+              >
+                <Image
+                  source={opt.image}
+                  style={styles.tabletImage}
+                  resizeMode="contain"
+                />
+                <Text
+                  style={[
+                    styles.tabletLabel,
+                    { color: theme.colors.textPrimary },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        );
+      }
+
+      if (currentMedType === "CAPSULE") {
+        return (
+          <View style={styles.counterContainer}>
+            <TouchableOpacity
+              style={[
+                styles.counterBtn,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() => setCapsuleCount((prev) => Math.max(1, prev - 1))}
+            >
+              <Ionicons name="remove" size={18} color="#fff" />
+            </TouchableOpacity>
+            <Text
+              style={[styles.counterValue, { color: theme.colors.textPrimary }]}
+            >
+              {capsuleCount}
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.counterBtn,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() => setCapsuleCount((prev) => prev + 1)}
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+            </TouchableOpacity>
+            <View
+              style={{
+                width: 1,
+                height: 24,
+                backgroundColor: "rgba(100,116,139,0.2)",
+                marginHorizontal: 8,
+              }}
+            />
+            <TouchableOpacity
+              style={[
+                styles.counterSubmit,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() =>
+                sendMessage(
+                  capsuleCount.toString(),
+                  state,
+                  capsuleCount.toString(),
+                )
+              }
+            >
+              <Ionicons name="checkmark" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        );
+      }
+
+      // Fallback for Syrup, Injection, Drops, or anything else if they hit ASK_DOSE_PER_INTAKE
+      let unit = "";
+      if (currentMedType === "SYRUP" || currentMedType === "INJECTION")
+        unit = "ML";
+      if (currentMedType === "DROPS") unit = "DROPS";
+
+      return (
+        <View style={styles.liquidContainer}>
+          <TextInput
+            style={[styles.liquidInput, { color: theme.colors.textPrimary }]}
+            value={liquidDose}
+            onChangeText={setLiquidDose}
+            keyboardType="numeric"
+            placeholder="Amount"
+            placeholderTextColor={theme.colors.textSecondary}
+          />
+          {unit ? (
+            <Text
+              style={[styles.liquidUnit, { color: theme.colors.textSecondary }]}
+            >
+              {unit}
+            </Text>
+          ) : null}
+          <View
+            style={{
+              width: 1,
+              height: 24,
+              backgroundColor: "rgba(100,116,139,0.2)",
+              marginHorizontal: 8,
+            }}
+          />
+          <TouchableOpacity
+            style={[
+              styles.liquidSubmit,
+              {
+                backgroundColor: theme.colors.primary,
+                opacity: liquidDose.trim() ? 1 : 0.5,
+              },
+            ]}
+            disabled={!liquidDose.trim()}
+            onPress={() => {
+              const val = liquidDose.trim();
+              const displayLabel = unit ? `${val} ${unit}` : val;
+              sendMessage(val, state, displayLabel);
+              setLiquidDose(""); // Reset for next time
+            }}
+          >
+            <Ionicons name="send" size={16} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (activeMsg.action === "EDIT_MEDICINE") {
+      const currentMed = state.medicinesToAdd[state.currentMedicineIndex] || {};
+      const confirmOpt = activeMsg.options?.[0] || {
+        label: "Confirm",
+        value: "CONFIRM",
+      };
+
+      return (
+        <View
+          style={[
+            styles.editMedicineCard,
+            {
+              backgroundColor: theme.colors.primary + "15",
+              borderColor: theme.colors.primary + "30",
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.editMedicineTitle,
+              { color: theme.colors.textPrimary },
+            ]}
+          >
+            Edit Details
+          </Text>
+
+          <View style={styles.editField}>
+            <Text
+              style={[
+                styles.editFieldLabel,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Name
+            </Text>
+            <TextInput
+              style={[
+                styles.editFieldInput,
+                {
+                  color: theme.colors.textPrimary,
+                  borderColor: "rgba(100, 116, 139, 0.2)",
+                },
+              ]}
+              value={currentMed.medicationName || ""}
+              onChangeText={(t) => handleEditMedicineField("medicationName", t)}
+              placeholder="Medication Name"
+              placeholderTextColor={theme.colors.textSecondary}
+            />
+          </View>
+
+          <View style={styles.editRow}>
+            <View style={[styles.editField, { flex: 1, marginRight: 8 }]}>
+              <Text
+                style={[
+                  styles.editFieldLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Type
+              </Text>
+              <TextInput
+                style={[
+                  styles.editFieldInput,
+                  {
+                    color: theme.colors.textPrimary,
+                    borderColor: "rgba(100, 116, 139, 0.2)",
+                  },
+                ]}
+                value={currentMed.medicationType || ""}
+                onChangeText={(t) =>
+                  handleEditMedicineField("medicationType", t)
+                }
+                placeholder="Tablet"
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+            </View>
+            <View style={[styles.editField, { flex: 1 }]}>
+              <Text
+                style={[
+                  styles.editFieldLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Dose
+              </Text>
+              <TextInput
+                style={[
+                  styles.editFieldInput,
+                  {
+                    color: theme.colors.textPrimary,
+                    borderColor: "rgba(100, 116, 139, 0.2)",
+                  },
+                ]}
+                value={currentMed.dosePerIntake?.toString() || ""}
+                onChangeText={(t) =>
+                  handleEditMedicineField("dosePerIntake", t)
+                }
+                placeholder="1"
+                placeholderTextColor={theme.colors.textSecondary}
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
+          <View style={styles.editRow}>
+            <View style={[styles.editField, { flex: 1, marginRight: 8 }]}>
+              <Text
+                style={[
+                  styles.editFieldLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Frequency
+              </Text>
+              <TextInput
+                style={[
+                  styles.editFieldInput,
+                  {
+                    color: theme.colors.textPrimary,
+                    borderColor: "rgba(100, 116, 139, 0.2)",
+                  },
+                ]}
+                value={currentMed.frequency || ""}
+                onChangeText={(t) => handleEditMedicineField("frequency", t)}
+                placeholder="ONCE_DAILY"
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+            </View>
+            <View style={[styles.editField, { flex: 1 }]}>
+              <Text
+                style={[
+                  styles.editFieldLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Food
+              </Text>
+              <TextInput
+                style={[
+                  styles.editFieldInput,
+                  {
+                    color: theme.colors.textPrimary,
+                    borderColor: "rgba(100, 116, 139, 0.2)",
+                  },
+                ]}
+                value={currentMed.foodFrequency || ""}
+                onChangeText={(t) =>
+                  handleEditMedicineField("foodFrequency", t)
+                }
+                placeholder="AFTER_FOOD"
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.editConfirmBtn,
+              { backgroundColor: theme.colors.primary },
+            ]}
+            onPress={() =>
+              sendMessage(confirmOpt.value, state, confirmOpt.label)
+            }
+          >
+            <Text style={styles.editConfirmBtnText}>{confirmOpt.label}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (activeMsg.action === "CONFIRM_DOCUMENT_DETAILS") {
+      const summaryTitleLabel = activeMsg.content || "Document Details Summary";
+      const uData = state.existingUserData || {};
+      const formatVal = (val: any) =>
+        val && typeof val === "string" && val.trim().length > 0
+          ? val
+          : "Not Extracted";
+
       return (
         <View style={styles.summaryContainer}>
-          <Text style={[styles.summaryTitle, { color: theme.colors.textPrimary }]}>
-            {preferredLang === "gujarati" ? "દવાઓની સૂચિ" : "Medication Summary"}
+          <Text
+            style={[styles.summaryTitle, { color: theme.colors.textPrimary }]}
+          >
+            {summaryTitleLabel}
           </Text>
-          {(state.medicinesToAdd || []).map((med, index) => (
-            <View key={index} style={[styles.medCard, { backgroundColor: isDark ? "#334155" : "#f1f5f9" }]}>
-              <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold" }}>
-                {med.medicationName || "Unknown"}
+          <View
+            style={[
+              styles.medCard,
+              { backgroundColor: isDark ? "#334155" : "#f1f5f9" },
+            ]}
+          >
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontWeight: "bold",
+                fontSize: 16,
+                marginBottom: 10,
+              }}
+            >
+              Personal Information
+            </Text>
+            {uData?.firstName && (
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>First Name:</Text>{" "}
+                {formatVal(uData.firstName)}
               </Text>
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                {preferredLang === "gujarati" ? "ડોઝ: " : "Dose: "}{med.dosePerIntake} | {preferredLang === "gujarati" ? "સમય: " : "Frequency: "}{med.frequency}
-              </Text>
-            </View>
-          ))}
+            )}
+
+            {uData?.lastName && (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 13,
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ fontWeight: "600" }}>Last Name:</Text>{" "}
+              {formatVal(uData.lastName)}
+            </Text>
+            )}
+            {uData?.dateOfBirth && (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 13,
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ fontWeight: "600" }}>Date of Birth:</Text>{" "}
+              {formatVal(uData.dateOfBirth)}
+            </Text>
+            )}
+            {uData?.gender && (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 13,
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ fontWeight: "600" }}>Gender:</Text>{" "}
+              {formatVal(uData.gender)}
+            </Text>
+            )}
+            {uData?.bloodGroup && (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 13,
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ fontWeight: "600" }}>Blood Group:</Text>{" "}
+              {formatVal(uData.bloodGroup)}
+            </Text>
+            )}
+            {uData?.allergies && (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 13,
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ fontWeight: "600" }}>Allergies:</Text>{" "}
+              {Array.isArray(uData.allergies) && uData.allergies.length > 0
+                ? uData.allergies.join(", ")
+                : "Not Extracted"}
+            </Text>
+            )}
+            {uData?.email && (
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 13,
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ fontWeight: "600" }}>Email:</Text>{" "}
+              {formatVal(uData.email)}
+            </Text>
+            )}
+          </View>
           <View style={styles.chipRow}>
-            {(activeMsg.options || []).map((opt) => {
-              const label = preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
+            {(activeMsg.options || []).map((opt, index) => {
+              let label =
+                typeof opt === "string" ? opt : opt.label || opt.value;
+              let value =
+                typeof opt === "string" ? opt : opt.value || opt.label;
+              if (typeof label === "object" && label !== null)
+                label =
+                  label.name ||
+                  label.value ||
+                  label.label ||
+                  JSON.stringify(label);
+              if (typeof value === "object" && value !== null)
+                value =
+                  value.value ||
+                  value.name ||
+                  value.label ||
+                  JSON.stringify(value);
+              const strLabel = String(label);
+              const strValue = String(value);
+
               return (
                 <TouchableOpacity
-                  key={opt.value}
-                  style={[styles.chip, { backgroundColor: theme.colors.primary }]}
-                  onPress={() => sendMessage(opt.value, state, label)}
+                  key={strValue || index.toString()}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                  onPress={() => sendMessage(strValue, state, strLabel)}
                 >
-                  <Text style={styles.chipText}>{label}</Text>
+                  <Text style={styles.chipText}>{strLabel}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -867,29 +1413,214 @@ export default function OnboardingScreen() {
       );
     }
 
-    if (activeMsg.action === "POST_ONBOARDING") {
+    if (activeMsg.action === "CONFIRM_MEDICINE") {
+      const summaryTitleLabel = activeMsg.content || "Medication Summary";
+      return (
+        <View style={styles.summaryContainer}>
+          <Text
+            style={[styles.summaryTitle, { color: theme.colors.textPrimary }]}
+          >
+            {summaryTitleLabel}
+          </Text>
+          {(state.medicinesToAdd || []).map((med, index) => (
+            <View
+              key={index}
+              style={[
+                styles.medCard,
+                { backgroundColor: isDark ? "#334155" : "#f1f5f9" },
+              ]}
+            >
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontWeight: "bold",
+                  fontSize: 16,
+                  marginBottom: 6,
+                }}
+              >
+                {med.medicationName || "Unknown"}
+              </Text>
+
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 2,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Type:</Text>{" "}
+                {med.medicationType}
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 2,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Dose:</Text>{" "}
+                {med.dosePerIntake}
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 2,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Frequency:</Text>{" "}
+                {med.frequency?.replace(/_/g, " ")}
+              </Text>
+
+              {med.medicationSchedule &&
+                Object.keys(med.medicationSchedule).length > 0 && (
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontSize: 13,
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "600" }}>Time:</Text>{" "}
+                    {Object.entries(med.medicationSchedule)
+                      .map(([k, v]) => `${k} (${v})`)
+                      .join(", ")}
+                  </Text>
+                )}
+
+              {med.foodFrequency && (
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontSize: 13,
+                    marginBottom: 2,
+                  }}
+                >
+                  <Text style={{ fontWeight: "600" }}>Food Info:</Text>{" "}
+                  {med.foodFrequency.replace(/_/g, " ")}
+                </Text>
+              )}
+
+              {med.startDate && (
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontSize: 13,
+                    marginBottom: 2,
+                  }}
+                >
+                  <Text style={{ fontWeight: "600" }}>Start Date:</Text>{" "}
+                  {med.startDate}
+                </Text>
+              )}
+
+              {med.totalQuantity !== undefined && (
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontSize: 13,
+                    marginBottom: 2,
+                  }}
+                >
+                  <Text style={{ fontWeight: "600" }}>Total Quantity:</Text>{" "}
+                  {med.totalQuantity}
+                </Text>
+              )}
+
+              {med.ongoing !== undefined && (
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontSize: 13,
+                    marginBottom: 2,
+                  }}
+                >
+                  <Text style={{ fontWeight: "600" }}>Ongoing:</Text>{" "}
+                  {med.ongoing ? "Yes" : "No"}
+                </Text>
+              )}
+            </View>
+          ))}
+          <View style={styles.chipRow}>
+            {(activeMsg.options || []).map((opt, index) => {
+              let label =
+                typeof opt === "string" ? opt : opt.label || opt.value;
+              let value =
+                typeof opt === "string" ? opt : opt.value || opt.label;
+              if (typeof label === "object" && label !== null)
+                label =
+                  label.name ||
+                  label.value ||
+                  label.label ||
+                  JSON.stringify(label);
+              if (typeof value === "object" && value !== null)
+                value =
+                  value.value ||
+                  value.name ||
+                  value.label ||
+                  JSON.stringify(value);
+              const strLabel = String(label);
+              const strValue = String(value);
+
+              return (
+                <TouchableOpacity
+                  key={strValue || index.toString()}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                  onPress={() => sendMessage(strValue, state, strLabel)}
+                >
+                  <Text style={styles.chipText}>{strLabel}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
+
+    if (
+      activeMsg.action === "COMPLETE" ||
+      activeMsg.action === "POST_ONBOARDING"
+    ) {
       return (
         <View style={styles.chipRow}>
-          {(activeMsg.options || []).map((opt) => {
-            const label =
-              preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
+          {(activeMsg.options || []).map((opt, index) => {
+            let label = typeof opt === "string" ? opt : opt.label || opt.value;
+            let value = typeof opt === "string" ? opt : opt.value || opt.label;
+            if (typeof label === "object" && label !== null)
+              label =
+                label.name ||
+                label.value ||
+                label.label ||
+                JSON.stringify(label);
+            if (typeof value === "object" && value !== null)
+              value =
+                value.value ||
+                value.name ||
+                value.label ||
+                JSON.stringify(value);
+            const strLabel = String(label);
+            const strValue = String(value);
+
             return (
               <TouchableOpacity
-                key={opt.value}
+                key={strValue || index.toString()}
                 style={[styles.chip, { backgroundColor: theme.colors.primary }]}
                 onPress={() => {
-                  if (opt.value === "DASHBOARD") {
+                  if (strValue === "GO_TO_DASHBOARD") {
                     queryClient.invalidateQueries({ queryKey: ["profile"] });
+                  } else if (strValue === "VIEW_MEDICINES") {
+                    handleViewMedicines();
+                  } else if (strValue === "LOGOUT") {
+                    setShowLogoutModal(true);
                   } else {
-                    sendMessage(
-                      opt.value,
-                      state,
-                      label
-                    );
+                    sendMessage(strValue, state, strLabel);
                   }
                 }}
               >
-                <Text style={styles.chipText}>{label}</Text>
+                <Text style={styles.chipText}>{strLabel}</Text>
               </TouchableOpacity>
             );
           })}
@@ -900,21 +1631,39 @@ export default function OnboardingScreen() {
     if (activeMsg.options && activeMsg.options.length > 0) {
       return (
         <View style={styles.chipRow}>
-          {activeMsg.options.map((opt) => {
-            const label =
-              typeof opt === "string"
-                ? opt
-                : preferredLang === "gujarati"
-                  ? opt.label_gu || opt.label_en || opt.label || opt.value
-                  : opt.label_en || opt.label || opt.value;
-            const value = typeof opt === "string" ? opt : opt.value;
+          {activeMsg.options.map((opt, index) => {
+            let label = typeof opt === "string" ? opt : opt.label || opt.value;
+            let value = typeof opt === "string" ? opt : opt.value || opt.label;
+            if (typeof label === "object" && label !== null)
+              label =
+                label.name ||
+                label.value ||
+                label.label ||
+                JSON.stringify(label);
+            if (typeof value === "object" && value !== null)
+              value =
+                value.value ||
+                value.name ||
+                value.label ||
+                JSON.stringify(value);
+            const strLabel = String(label);
+            const strValue = String(value);
+
             return (
               <TouchableOpacity
-                key={value}
+                key={strValue || index.toString()}
                 style={[styles.chip, { backgroundColor: theme.colors.primary }]}
-                onPress={() => sendMessage(value, state, typeof label === "string" ? label : undefined)}
+                onPress={() => {
+                  if (strValue === "VIEW_MEDICINES") {
+                    handleViewMedicines();
+                  } else if (strValue === "LOGOUT") {
+                    setShowLogoutModal(true);
+                  } else {
+                    sendMessage(strValue, state, strLabel);
+                  }
+                }}
               >
-                <Text style={styles.chipText}>{label}</Text>
+                <Text style={styles.chipText}>{strLabel}</Text>
               </TouchableOpacity>
             );
           })}
@@ -933,6 +1682,7 @@ export default function OnboardingScreen() {
       style={styles.container}
     >
       <SafeAreaView style={{ flex: 1 }}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
             <View
@@ -976,8 +1726,12 @@ export default function OnboardingScreen() {
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-              onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              onContentSizeChange={() =>
+                flatListRef.current?.scrollToEnd({ animated: true })
+              }
+              onLayout={() =>
+                flatListRef.current?.scrollToEnd({ animated: true })
+              }
               renderItem={({ item }) => {
                 console.log("Message Item : ", item);
                 const isAi = item.role === "assistant";
@@ -1034,17 +1788,27 @@ export default function OnboardingScreen() {
             activeAction !== "ASK_UPLOAD_OR_SKIP" &&
             activeAction !== "ASK_GENDER" &&
             activeAction !== "ASK_DOB" &&
+            activeAction !== "ASK_BLOOD_GROUP" &&
+            activeAction !== "ASK_ON_MEDICINES" &&
             activeAction !== "ASK_MEDICINE_START_DATE" &&
             activeAction !== "ASK_MEDICINE_SCHEDULE" &&
             activeAction !== "REVIEW_MEDICINES_LIST" &&
-            activeAction !== "POST_ONBOARDING" && (
+            activeAction !== "CONFIRM_MEDICINE" &&
+            activeAction !== "CONFIRM_DOCUMENT_DETAILS" &&
+            activeAction !== "COMPLETE" &&
+            activeAction !== "ASK_DOSE_PER_INTAKE" &&
+            activeAction !== "EDIT_MEDICINE" && (
               <ChatInput
                 value={input}
                 onChangeText={setInput}
                 onSend={handleSend}
                 isSending={loading}
                 isDark={isDark}
-                keyboardType={(activeAction === "ASK_DOSE_PER_INTAKE" || activeAction === "ASK_MEDICINE_QUANTITY") ? "numeric" : "default"}
+                keyboardType={
+                  activeAction === "ASK_MEDICINE_QUANTITY"
+                    ? "numeric"
+                    : "default"
+                }
               />
             )}
         </View>
@@ -1074,6 +1838,11 @@ export default function OnboardingScreen() {
           onClose={() => setValidationDialogVisible(false)}
         />
       </SafeAreaView>
+      <ConfirmationModal
+        showModal={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        mode="Log Out"
+      />
     </LinearGradient>
   );
 }
@@ -1206,10 +1975,144 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   summaryContainer: {
-    padding: 12,
-    backgroundColor: "rgba(100, 116, 139, 0.05)",
-    borderRadius: 12,
+    alignItems: "center",
+    borderTopColor: "rgba(100, 116, 139, 0.1)",
+    borderTopWidth: 1,
+    paddingTop: 8,
+  },
+  tabletGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     marginTop: 8,
+  },
+  tabletOptionCard: {
+    width: "31%",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  tabletImage: {
+    width: 32,
+    height: 32,
+    marginBottom: 6,
+  },
+  tabletLabel: {
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  counterContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(100, 116, 139, 0.15)",
+    backgroundColor: "rgba(100, 116, 139, 0.05)",
+  },
+  counterBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  counterValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginHorizontal: 12,
+    minWidth: 20,
+    textAlign: "center",
+  },
+  counterSubmit: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  liquidContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(100, 116, 139, 0.15)",
+    backgroundColor: "rgba(100, 116, 139, 0.05)",
+  },
+  liquidInput: {
+    minWidth: 80,
+    height: 36,
+    fontSize: 15,
+    fontWeight: "500",
+    backgroundColor: "transparent",
+    paddingHorizontal: 8,
+  },
+  liquidUnit: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginHorizontal: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  liquidSubmit: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editMedicineCard: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  editMedicineTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 12,
+  },
+  editRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  editField: {
+    marginBottom: 10,
+  },
+  editFieldLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: "600",
+  },
+  editFieldInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 40,
+    fontSize: 14,
+    backgroundColor: "transparent",
+  },
+  editConfirmBtn: {
+    marginTop: 6,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editConfirmBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "bold",
   },
   summaryTitle: {
     fontWeight: "bold",
