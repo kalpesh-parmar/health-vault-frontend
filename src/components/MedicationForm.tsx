@@ -120,23 +120,55 @@ const MedicationForm = ({
     parseInitialDate(initialData?.startDate) || new Date(),
   );
 
-  const parseTime = (timeStr: string) => {
-    if (!timeStr) return new Date();
+  const parseTime = (timeStr: any) => {
+    const date = new Date();
+    if (typeof timeStr !== "string" || !timeStr.trim()) {
+      date.setHours(8, 0, 0, 0);
+      return date;
+    }
 
-    const [time, modifier] = timeStr.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
+    let normalizedTime = timeStr.trim();
+    let modifier = "";
+    if (normalizedTime.toUpperCase().endsWith("PM")) {
+      modifier = "PM";
+      normalizedTime = normalizedTime.slice(0, -2).trim();
+    } else if (normalizedTime.toUpperCase().endsWith("AM")) {
+      modifier = "AM";
+      normalizedTime = normalizedTime.slice(0, -2).trim();
+    } else if (normalizedTime.includes(" ")) {
+      const parts = normalizedTime.split(" ");
+      normalizedTime = parts[0];
+      modifier = parts[1]?.toUpperCase() || "";
+    }
+
+    if (!normalizedTime.includes(":")) {
+      date.setHours(8, 0, 0, 0);
+      return date;
+    }
+
+    let [hours, minutes] = normalizedTime.split(":").map(Number);
+    hours = hours || 0;
+    minutes = minutes || 0;
 
     if (modifier === "PM" && hours < 12) hours += 12;
     if (modifier === "AM" && hours === 12) hours = 0;
 
-    const date = new Date();
     date.setHours(hours, minutes, 0, 0);
     return date;
   };
 
   const [preferredTimes, setPreferredTimes] = useState<Date[]>(() => {
     if (initialData?.medicationSchedule) {
-      return Object.values(initialData.medicationSchedule).map((timeStr: any) =>
+      const schedule = initialData.medicationSchedule;
+      let timesList: any[] = [];
+      if (Array.isArray(schedule.times)) {
+        timesList = schedule.times;
+      } else if (Array.isArray(schedule.reminderTimes)) {
+        timesList = schedule.reminderTimes;
+      } else {
+        timesList = Object.keys(schedule).filter(key => typeof key === "string" && key.includes(":"));
+      }
+      return (timesList || []).filter(Boolean).map((timeStr: any) =>
         parseTime(timeStr),
       );
     }
