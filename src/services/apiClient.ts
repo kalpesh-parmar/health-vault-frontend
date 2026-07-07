@@ -1,5 +1,6 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
+import Toast from "react-native-toast-message";
 import { BASE_URL, API_TIMEOUT, ENABLE_API_LOGS } from "../config/api";
 
 const apiClient = axios.create({
@@ -163,6 +164,12 @@ export const resetForceLogout = () => {
 export const triggerForceLogout = async () => {
   if (isForceLoggedOut) return;
   isForceLoggedOut = true;
+
+  Toast.show({
+    type: "error",
+    text1: "Session Expired",
+    text2: "Your session has expired. Please log in again.",
+  });
 
   // 1. Cancel all pending requests
   for (const controller of pendingRequestControllers) {
@@ -330,18 +337,6 @@ apiClient.interceptors.response.use(
       config.url === "/auth/refresh-token"
     );
 
-    // Check if response indicates session expired or force logout (except for auth requests)
-    if (
-      !isAuthRequest &&
-      error.response?.status === 401 &&
-      data &&
-      (data.forceLogout === true || data.errorCode === "SESSION_EXPIRED")
-    ) {
-      await triggerForceLogout();
-      // Return a pending promise to cancel downstream request chains and prevent retries/errors in UI
-      return new Promise(() => {});
-    }
-
     const enabled = ENABLE_API_LOGS;
     const message =
       data?.error?.message ||
@@ -368,6 +363,18 @@ apiClient.interceptors.response.use(
       };
 
       console.error(`[API LOG] OUTGOING RESPONSE ERROR:\n${JSON.stringify(errorLog, null, 2)}`);
+    }
+
+    // Check if response indicates session expired or force logout (except for auth requests)
+    if (
+      !isAuthRequest &&
+      error.response?.status === 401 &&
+      data &&
+      (data.forceLogout === true || data.errorCode === "SESSION_EXPIRED")
+    ) {
+      await triggerForceLogout();
+      // Return a pending promise to cancel downstream request chains and prevent retries/errors in UI
+      return new Promise(() => {});
     }
 
     return Promise.reject(new Error(message));

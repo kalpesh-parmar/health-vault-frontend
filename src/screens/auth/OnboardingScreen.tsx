@@ -575,7 +575,7 @@ export default function OnboardingScreen() {
             rawOcrData: jobData.rawOcrData,
             extractedStructuredData: jobData.extractedStructuredData,
             graphs: jobData.graphs,
-            embeddingsGenerated: true
+            embeddingsGenerated: true,
           });
           setUploadProgress("You can now ask questions.");
           job = jobData;
@@ -609,7 +609,7 @@ export default function OnboardingScreen() {
         if (parts.length > 0) {
           firstName = parts[0];
           // Slice returns a new array starting from index 1 and join joins the other indexes after 1(if found) with Space in between.
-          lastName = parts.slice(1).join(" "); 
+          lastName = parts.slice(1).join(" ");
         }
       }
 
@@ -1300,78 +1300,78 @@ export default function OnboardingScreen() {
             )}
 
             {uData?.lastName && (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>Last Name:</Text>{" "}
-              {formatVal(uData.lastName)}
-            </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Last Name:</Text>{" "}
+                {formatVal(uData.lastName)}
+              </Text>
             )}
             {uData?.dateOfBirth && (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>Date of Birth:</Text>{" "}
-              {formatVal(uData.dateOfBirth)}
-            </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Date of Birth:</Text>{" "}
+                {formatVal(uData.dateOfBirth)}
+              </Text>
             )}
             {uData?.gender && (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>Gender:</Text>{" "}
-              {formatVal(uData.gender)}
-            </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Gender:</Text>{" "}
+                {formatVal(uData.gender)}
+              </Text>
             )}
             {uData?.bloodGroup && (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>Blood Group:</Text>{" "}
-              {formatVal(uData.bloodGroup)}
-            </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Blood Group:</Text>{" "}
+                {formatVal(uData.bloodGroup)}
+              </Text>
             )}
             {uData?.allergies && (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>Allergies:</Text>{" "}
-              {Array.isArray(uData.allergies) && uData.allergies.length > 0
-                ? uData.allergies.join(", ")
-                : "Not Extracted"}
-            </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Allergies:</Text>{" "}
+                {Array.isArray(uData.allergies) && uData.allergies.length > 0
+                  ? uData.allergies.join(", ")
+                  : "Not Extracted"}
+              </Text>
             )}
             {uData?.email && (
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>Email:</Text>{" "}
-              {formatVal(uData.email)}
-            </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: 13,
+                  marginBottom: 4,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>Email:</Text>{" "}
+                {formatVal(uData.email)}
+              </Text>
             )}
           </View>
           <View style={styles.chipRow}>
@@ -1682,7 +1682,11 @@ export default function OnboardingScreen() {
       style={styles.container}
     >
       <SafeAreaView style={{ flex: 1 }}>
-        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="transparent"
+          translucent
+        />
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
             <View
