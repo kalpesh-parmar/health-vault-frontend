@@ -1286,6 +1286,11 @@ function ReviewMedicinesListCard({
                   <Text style={[styles.medListItemSubtitle, { color: theme.colors.textSecondary }]}>
                     {med.subtitle}
                   </Text>
+                  {med.needsReview && Object.values(med.needsReview).some(v => v === true) && (
+                    <Text style={{ color: "#d97706", fontSize: 11, fontWeight: "600", marginTop: 2 }}>
+                      ⚠️ {preferredLang === "gujarati" ? "સમીક્ષા જરૂરી" : "Review"}
+                    </Text>
+                  )}
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1385,7 +1390,7 @@ function ConfirmMedicineCard({
       <Text style={[styles.medCardTitle, { color: theme.colors.textPrimary }]}>
         {t("verifyTitle")}
       </Text>
-      
+
       <View style={[styles.confirmSummaryBox, { backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderColor: isDark ? "#334155" : "#e2e8f0" }]}>
         <Text style={[styles.confirmSummaryTitle, { color: theme.colors.primary }]}>{title}</Text>
         {lines.map((line: string, i: number) => {
@@ -2116,7 +2121,9 @@ export default function OnboardingScreen() {
         gender: structured.gender || null,
         email: structured.email || null,
         phoneNumber: structured.phoneNumber || null,
+        medications: structured.medications || [],
       },
+      documentId: docData.id || null,
       existingUserData: updatedUserData,
     };
 
@@ -3046,6 +3053,7 @@ export default function OnboardingScreen() {
 
       return (
         <AddMedicineCard
+          key={med.client_med_id || med.id || "new"}
           med={med}
           isEditingLocal={isEditingLocal}
           preferredLang={preferredLang}
