@@ -215,7 +215,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
             onPress={() => setIsPreviewModalOpen(true)}
           >
             {imageSource ? (
-              <ThumbnailImage source={imageSource} resizeMode="cover" />
+              <ThumbnailImage source={imageSource} resizeMode="contain" />
             ) : (
               <EmptyPreviewBox>
                 <Ionicons
@@ -248,7 +248,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                   <Animated.Image
                     source={imageSource}
                     style={[
-                      { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1 },
+                      { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1.5, padding: 10 },
                       animatedStyle,
                     ]}
                     resizeMode="contain"

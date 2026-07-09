@@ -39,7 +39,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
     );
   };
 
-  const renderMarkdown = (content: string, textColor: string) => {
+  const renderMarkdown = (content: string, textColor: string, isUserMsg = false) => {
     // 1. Split by code blocks first
     const codeBlockRegex = /```([\s\S]*?)```/g;
     const parts = [];
@@ -174,8 +174,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
           flushList(`pre-paragraph-${i}`);
           if (line) {
             elements.push(
-              <View key={`para-${partIdx}-${i}`} style={styles.paragraph}>
-                <Text style={styles.bodyText}>
+              <View key={`para-${partIdx}-${i}`} style={[styles.paragraph, isUserMsg && { marginBottom: 0 }]}>
+                <Text style={[styles.bodyText, isUserMsg && { textAlign: 'center' }]}>
                   {renderInlineBold(line, `para-bold-${partIdx}-${i}`, textColor)}
                 </Text>
               </View>
@@ -199,9 +199,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
           colors={["#5B4BFF", "#7C6CFF"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.userBubble}
+          style={[styles.userBubble, { alignItems: 'center', justifyContent: 'center' }]}
         >
-          {renderMarkdown(message.text, "#ffffff")}
+          {renderMarkdown(message.text, "#ffffff", true)}
         </LinearGradient>
       </Animated.View>
     );
@@ -230,7 +230,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
           },
         ]}
       >
-        {renderMarkdown(message.text, aiTextColor)}
+        {renderMarkdown(message.text, aiTextColor, false)}
       </View>
     </Animated.View>
   );

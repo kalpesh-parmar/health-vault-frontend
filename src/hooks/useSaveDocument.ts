@@ -45,6 +45,7 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
         type: type,
       } as any);
       formData.append("uploadType", "PATIENT_DOCUMENT");
+      formData.append("category", documentType || "medical_document");
 
       const uploadRes = await documentUpload(formData);
       const fileKey = uploadRes?.data?.fileKey;

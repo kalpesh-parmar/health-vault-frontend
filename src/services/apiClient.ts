@@ -224,6 +224,9 @@ export const triggerForceLogout = async () => {
 
 apiClient.interceptors.request.use(
   async (config) => {
+    if (config.url && config.url.includes("/ocr/extract")) {
+      config.timeout = 240000;
+    }
     const isAuthRequest = config.url && (
       config.url === "/auth/firebase-login" ||
       config.url === "/auth/login" ||
@@ -293,6 +296,18 @@ apiClient.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const onRerefreshed = (token: string) => {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+};
+
+const addRefreshSubscriber = (cb: (token: string) => void) => {
+  refreshSubscribers.push(cb);
+};
 
 apiClient.interceptors.response.use(
   (response) => {
@@ -365,16 +380,65 @@ apiClient.interceptors.response.use(
       console.error(`[API LOG] OUTGOING RESPONSE ERROR:\n${JSON.stringify(errorLog, null, 2)}`);
     }
 
-    // Check if response indicates session expired or force logout (except for auth requests)
     if (
       !isAuthRequest &&
       error.response?.status === 401 &&
       data &&
       (data.forceLogout === true || data.errorCode === "SESSION_EXPIRED")
     ) {
-      await triggerForceLogout();
-      // Return a pending promise to cancel downstream request chains and prevent retries/errors in UI
-      return new Promise(() => {});
+      const originalRequest = config;
+      
+      if (!isRefreshing) {
+        isRefreshing = true;
+        try {
+          const refreshToken = await SecureStore.getItemAsync("authToken");
+          if (!refreshToken) {
+            await triggerForceLogout();
+            return new Promise(() => {});
+          }
+
+          const refreshUrl = resolveFullUrl(config.baseURL, "/auth/refresh-token");
+          
+          const refreshResponse = await axios.post(refreshUrl, {
+            refreshToken
+          }, {
+            headers: {
+              "Content-Type": "application/json",
+              "ngrok-skip-browser-warning": "true",
+              "Bypass-Tunnel-Reminder": "true"
+            }
+          });
+
+          const newAccessToken = refreshResponse.data?.data?.accessToken || refreshResponse.data?.accessToken;
+          const newRefreshToken = refreshResponse.data?.data?.refreshToken || refreshResponse.data?.refreshToken;
+
+          if (newAccessToken && newRefreshToken) {
+            await SecureStore.setItemAsync("accessToken", String(newAccessToken));
+            await SecureStore.setItemAsync("authToken", String(newRefreshToken));
+            
+            isRefreshing = false;
+            onRerefreshed(newAccessToken);
+
+            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            return apiClient(originalRequest);
+          } else {
+            isRefreshing = false;
+            await triggerForceLogout();
+            return new Promise(() => {});
+          }
+        } catch (refreshErr) {
+          isRefreshing = false;
+          await triggerForceLogout();
+          return new Promise(() => {});
+        }
+      } else {
+        return new Promise((resolve) => {
+          addRefreshSubscriber((token: string) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            resolve(apiClient(originalRequest));
+          });
+        });
+      }
     }
 
     return Promise.reject(new Error(message));

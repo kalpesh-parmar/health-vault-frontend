@@ -62,6 +62,7 @@ export interface AddDocumentRequest {
   s3Key: string;
   fileName?: string;
   fileType?: string;
+  fileSize?: number;
   s3bucket?: string;
   rawOcrData: any;
   extractedStructuredData: any;

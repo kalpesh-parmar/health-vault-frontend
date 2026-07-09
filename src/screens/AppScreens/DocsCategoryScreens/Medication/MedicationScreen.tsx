@@ -280,21 +280,47 @@ const MedicationScreen = () => {
         <MedInfoMain>
           <MedName>{item.medicationName}</MedName>
           <MedTime>
-            {item.medicationSchedule &&
-              Object.values(item.medicationSchedule).map(
-                (time, index) => {
-                  const [hourStr, minute] = time.split(":");
-                  let hour = parseInt(hourStr, 10);
-                  const ampm = hour >= 12 ? "PM" : "AM";
-                  hour = hour % 12 || 12;
-                  const hourFormatted = hour < 10 ? `0${hour}` : hour;
-                  return (
-                    <TimeText key={index}>
-                      {`${hourFormatted}:${minute} ${ampm}`}{" "}
-                    </TimeText>
-                  );
-                },
-              )}
+            {(() => {
+              const schedule = item.medicationSchedule || {};
+              let timesList: string[] = [];
+              if (Array.isArray(schedule)) {
+                timesList = schedule;
+              } else if (Array.isArray(schedule.times)) {
+                timesList = schedule.times;
+              } else if (Array.isArray(schedule.reminderTimes)) {
+                timesList = schedule.reminderTimes;
+              } else {
+                Object.values(schedule).forEach((val: any) => {
+                  if (Array.isArray(val)) {
+                    timesList.push(...val);
+                  } else if (typeof val === "string" && val.includes(":")) {
+                    timesList.push(val);
+                  }
+                });
+                if (timesList.length === 0) {
+                  timesList = Object.keys(schedule).filter(key => typeof key === "string" && key.includes(":"));
+                }
+              }
+              
+              const parseTime = (t: any) => {
+                if (typeof t !== "string" || !t.includes(":")) return { h: 8, m: 0 };
+                const [h, m] = t.split(":");
+                return { h: parseInt(h, 10) || 0, m: parseInt(m, 10) || 0 };
+              };
+
+              return (timesList || []).filter(Boolean).map((timeStr, index) => {
+                const { h, m } = parseTime(timeStr);
+                const ampm = h >= 12 ? "PM" : "AM";
+                const displayHour = h % 12 || 12;
+                const hourFormatted = displayHour < 10 ? `0${displayHour}` : displayHour;
+                const minuteFormatted = m < 10 ? `0${m}` : m;
+                return (
+                  <TimeText key={index}>
+                    {`${hourFormatted}:${minuteFormatted} ${ampm}`}{" "}
+                  </TimeText>
+                );
+              });
+            })()}
             <MedTypeLabel>
               {"\n"}
               {"\n"}• {item.medicationType}
