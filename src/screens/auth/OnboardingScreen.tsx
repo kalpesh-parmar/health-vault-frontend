@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { LinearGradient } from "expo-linear-gradient";
@@ -100,8 +101,21 @@ const I18N_MEDICINE: Record<string, Record<string, string>> = {
     goToDashboard: "Go to Dashboard",
     askAboutReport: "Ask About My Report",
     verifyTitle: "Verify Information",
-    confirmSave: "Confirm & Save",
     edit: "Edit",
+    "dosePreview.tablet": "{count} tablet(s) per intake",
+    "dosePreview.capsule": "{count} capsule(s) per intake",
+    "dosePreview.puff": "{count} puff(s) per intake",
+    "dosePreview.other": "{count} {unit} per intake",
+    "medicineType.TABLET": "Tablet",
+    "medicineType.CAPSULE": "Capsule",
+    "medicineType.SYRUP": "Syrup",
+    "medicineType.INJECTION": "Injection",
+    "medicineType.DROPS": "Drops",
+    "medicineType.SPRAY": "Spray",
+    "medicineType.INHALER": "Inhaler",
+    "placeholder.paracetamol": "e.g. Paracetamol",
+    "placeholder.qty": "e.g. 30",
+    "placeholder.notes": "Additional notes...",
   },
   gujarati: {
     morning: "સવાર (08:00)",
@@ -129,8 +143,21 @@ const I18N_MEDICINE: Record<string, Record<string, string>> = {
     goToDashboard: "ડેશબોર્ડ પર જાઓ",
     askAboutReport: "મારા રિપોર્ટ વિશે પૂછો",
     verifyTitle: "માહિતીની ચકાસણી",
-    confirmSave: "હા, યોગ્ય છે",
     edit: "સુધારો",
+    "dosePreview.tablet": "{count} ગોળી પ્રત્યેક ડોઝ દીઠ",
+    "dosePreview.capsule": "{count} કેપ્સ્યુલ પ્રત્યેક ડોઝ દીઠ",
+    "dosePreview.puff": "{count} પફ પ્રત્યેક ડોઝ દીઠ",
+    "dosePreview.other": "{count} {unit} પ્રત્યેક ડોઝ દીઠ",
+    "medicineType.TABLET": "ટેબ્લેટ (ગોળી)",
+    "medicineType.CAPSULE": "કેપ્સ્યુલ",
+    "medicineType.SYRUP": "સિરાપ (પ્રવાહી)",
+    "medicineType.INJECTION": "ઇન્જેક્શન",
+    "medicineType.DROPS": "ટીપાં (ડ્રોપ્સ)",
+    "medicineType.SPRAY": "સ્પ્રે",
+    "medicineType.INHALER": "ઇનહેલર",
+    "placeholder.paracetamol": "દા.ત. પેરાસીટામોલ",
+    "placeholder.qty": "દા.ત. ૩૦",
+    "placeholder.notes": "વધારાની નોંધો...",
   },
   hindi: {
     morning: "सुबह (08:00)",
@@ -158,8 +185,21 @@ const I18N_MEDICINE: Record<string, Record<string, string>> = {
     goToDashboard: "डैशबोर्ड पर जाएं",
     askAboutReport: "मेरे रिपोर्ट के बारे में पूछें",
     verifyTitle: "जानकारी सत्यापित करें",
-    confirmSave: "हाँ, सही है",
     edit: "संपादित करें",
+    "dosePreview.tablet": "{count} टैबलेट प्रति खुराक",
+    "dosePreview.capsule": "{count} कैप्सूल प्रति खुराक",
+    "dosePreview.puff": "{count} पफ प्रति खुराक",
+    "dosePreview.other": "{count} {unit} प्रति खुराक",
+    "medicineType.TABLET": "टैबलेट",
+    "medicineType.CAPSULE": "कैप्सूल",
+    "medicineType.SYRUP": "सिरप",
+    "medicineType.INJECTION": "इंजेक्शन",
+    "medicineType.DROPS": "ड्रॉप्स",
+    "medicineType.SPRAY": "स्प्रे",
+    "medicineType.INHALER": "इनहेलर",
+    "placeholder.paracetamol": "उदा. पैरासिटामोल",
+    "placeholder.qty": "उदा. ३०",
+    "placeholder.notes": "अतिरिक्त टिप्पणियाँ...",
   },
   marathi: {
     morning: "सकाळ (08:00)",
@@ -187,8 +227,21 @@ const I18N_MEDICINE: Record<string, Record<string, string>> = {
     goToDashboard: "डॅशबोर्डवर जा",
     askAboutReport: "माझ्या रिपोर्टबद्दल विचारा",
     verifyTitle: "माहितीची पडताळणी",
-    confirmSave: "होय, योग्य आहे",
     edit: "संपादित करा",
+    "dosePreview.tablet": "{count} गोळी प्रत्येक डोससाठी",
+    "dosePreview.capsule": "{count} कॅप्सूल प्रत्येक डोससाठी",
+    "dosePreview.puff": "{count} पफ प्रत्येक डोससाठी",
+    "dosePreview.other": "{count} {unit} प्रत्येक डोससाठी",
+    "medicineType.TABLET": "टॅबलेट",
+    "medicineType.CAPSULE": "कॅप्सूल",
+    "medicineType.SYRUP": "सिरप",
+    "medicineType.INJECTION": "इंजेक्शन",
+    "medicineType.DROPS": "ड्रॉप्स",
+    "medicineType.SPRAY": "स्प्रे",
+    "medicineType.INHALER": "इन्हेलर",
+    "placeholder.paracetamol": "उदा. पॅरासिटामॉल",
+    "placeholder.qty": "उदा. ३०",
+    "placeholder.notes": "अतिरिक्त नोंदी...",
   },
   tamil: {
     morning: "காலை (08:00)",
@@ -218,6 +271,208 @@ const I18N_MEDICINE: Record<string, Record<string, string>> = {
     verifyTitle: "தகவலைச் சரிபார்க்கவும்",
     confirmSave: "ஆம், சரியானது",
     edit: "திருத்து",
+    "dosePreview.tablet": "ஒவ்வொரு வேளைக்கும் {count} மாத்திரை",
+    "dosePreview.capsule": "ஒவ்வொரு வேளைக்கும் {count} கேப்சூல்",
+    "dosePreview.puff": "ஒவ்வொரு வேளைக்கும் {count} பஃப்",
+    "dosePreview.other": "ஒவ்வொரு வேளைக்கும் {count} {unit}",
+    "medicineType.TABLET": "மாத்திரை",
+    "medicineType.CAPSULE": "கேப்சூல்",
+    "medicineType.SYRUP": "சிரப்",
+    "medicineType.INJECTION": "ஊசி",
+    "medicineType.DROPS": "சொட்டு மருந்து",
+    "medicineType.SPRAY": "ஸ்ப்ரே",
+    "medicineType.INHALER": "இன்ஹேலர்",
+    "placeholder.paracetamol": "உதாரணமாக. பாராசிட்டமால்",
+    "placeholder.qty": "உதாரணமாக. 30",
+    "placeholder.notes": "கூடுதல் குறிப்புகள்...",
+  }
+};
+
+const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
+  english: {
+    extractedMedicationsList: "Extracted Medications List",
+    pleaseCheckWhichMedicines: "Please check which medicines to keep in your list:",
+    review: "Review",
+    confirmSelection: "Confirm Selection",
+    addNew: "Add New",
+    skipAll: "Skip All",
+    verifyInformation: "Verify Information",
+    editProfileDetails: "Edit Profile Details",
+    selectDateOfBirth: "Select Date of Birth",
+    male: "Male",
+    female: "Female",
+    saveDetails: "Save Details",
+    cancel: "Cancel",
+    confirmYourProfileDetails: "Confirm your profile details",
+    weFoundTwoDifferentProfiles: "We found two different profiles",
+    pleaseCheckAndConfirmAllDetails: "Please check and confirm all details below",
+    pleaseReviewAndChooseOneYouPrefer: "Please review and choose the one you prefer",
+    yourDetails: "Your Details",
+    fromDocument: "From Document",
+    confirmAndContinue: "Confirm & Continue",
+    editDetails: "Edit Details",
+    useSocialLogin: "Use Social Login",
+    useDocument: "Use Document",
+    editManuallyInstead: "Edit manually instead",
+    chooseDate: "Choose Date",
+    chooseTime: "Choose Time",
+    fromSocialLogin: "From Social Login",
+    fromGoogle: "From Google",
+    fromFacebook: "From Facebook",
+    fromPhone: "From Phone",
+    fromEmail: "From Email",
+    documentUploaded: "Document Uploaded: ",
+    whyAmISeeingThis: "Why am I seeing this?",
+    fromApple: "From Apple",
+    fromMicrosoft: "From Microsoft",
+  },
+  gujarati: {
+    extractedMedicationsList: "મેળવેલી દવાઓની યાદી",
+    pleaseCheckWhichMedicines: "કૃપા કરીને તપાસો કે કઈ દવાઓ તમારી સૂચિમાં રાખવી છે:",
+    review: "સમીક્ષા જરૂરી",
+    confirmSelection: "આગળ વધો",
+    addNew: "ઉમેરો",
+    skipAll: "બધું છોડી દો",
+    verifyInformation: "માહિતીની ચકાસણી",
+    editProfileDetails: "પ્રોફાઇલ વિગતો સુધારો",
+    selectDateOfBirth: "જન્મ તારીખ પસંદ કરો",
+    male: "પુરુષ",
+    female: "સ્ત્રી",
+    saveDetails: "સાચવો",
+    cancel: "રદ કરો",
+    confirmYourProfileDetails: "પ્રોફાઇલ વિગતોની પુષ્ટિ કરો",
+    weFoundTwoDifferentProfiles: "અમને બે અલગ પ્રોફાઇલ મળી છે",
+    pleaseCheckAndConfirmAllDetails: "કૃપા કરીને નીચેની બધી વિગતો તપાસો અને પુષ્ટિ કરો",
+    pleaseReviewAndChooseOneYouPrefer: "કૃપા કરીને સમીક્ષા કરો અને તમારી પસંદગી પસંદ કરો",
+    yourDetails: "તમારી વિગતો",
+    fromDocument: "દસ્તાવેજથી",
+    confirmAndContinue: "પુષ્ટિ કરો અને ચાલુ રાખો",
+    editDetails: "વિગતો સુધારો",
+    useSocialLogin: "સોશિયલ લોગિન વાપરો",
+    useDocument: "દસ્તાવેજ વાપરો",
+    editManuallyInstead: "તેના બદલે વિગતો જાતે સુધારો",
+    chooseDate: "તારીખ પસંદ કરો",
+    chooseTime: "સમય પસંદ કરો",
+    fromSocialLogin: "સોશિયલ લોગિનથી",
+    fromGoogle: "Google થી",
+    fromFacebook: "Facebook થી",
+    fromPhone: "ફોન નંબરથી",
+    fromEmail: "ઇમેઇલથી",
+    documentUploaded: "દસ્તાવેજ અપલોડ થયો: ",
+    whyAmISeeingThis: "હું આ કેમ જોઈ રહ્યો છું?",
+    fromApple: "Apple થી",
+    fromMicrosoft: "Microsoft થી",
+  },
+  hindi: {
+    extractedMedicationsList: "निकाली गई दवाओं की सूची",
+    pleaseCheckWhichMedicines: "कृपया जांचें कि कौन सी दवाएं अपनी सूची में रखनी हैं:",
+    review: "समीक्षा आवश्यक",
+    confirmSelection: "चयन की पुष्टि करें",
+    addNew: "नई जोड़ें",
+    skipAll: "सभी छोड़ें",
+    verifyInformation: "जानकारी सत्यापित करें",
+    editProfileDetails: "प्रोफ़ाइल विवरण संपादित करें",
+    selectDateOfBirth: "जन्म तिथि चुनें",
+    male: "पुरुष",
+    female: "महिला",
+    saveDetails: "विवरण सहेजें",
+    cancel: "रद्द करें",
+    confirmYourProfileDetails: "अपने प्रोफ़ाइल विवरण की पुष्टि करें",
+    weFoundTwoDifferentProfiles: "हमें दो अलग-अलग प्रोफ़ाइल मिली हैं",
+    pleaseCheckAndConfirmAllDetails: "कृपया नीचे दिए गए सभी विवरणों की जांच करें और पुष्टि करें",
+    pleaseReviewAndChooseOneYouPrefer: "कृपया समीक्षा करें और अपनी पसंदीदा प्रोफ़ाइल चुनें",
+    yourDetails: "आपका विवरण",
+    fromDocument: "दस्तावेज़ से",
+    confirmAndContinue: "पुष्टि करें और जारी रखें",
+    editDetails: "विवरण संपादित करें",
+    useSocialLogin: "सोशल लॉगिन का उपयोग करें",
+    useDocument: "दस्तावेज़ का उपयोग करें",
+    editManuallyInstead: "इसके बजाय मैन्युअल रूप से संपादित करें",
+    chooseDate: "तारीख चुनें",
+    chooseTime: "समय चुनें",
+    fromSocialLogin: "सोशल लॉगिन से",
+    fromGoogle: "Google से",
+    fromFacebook: "Facebook से",
+    fromPhone: "फ़ोन से",
+    fromEmail: "ईमेल से",
+    documentUploaded: "दस्तावेज़ अपलोड किया गया: ",
+    whyAmISeeingThis: "मैं यह क्यों देख रहा हूँ?",
+    fromApple: "Apple से",
+    fromMicrosoft: "Microsoft से",
+  },
+  marathi: {
+    extractedMedicationsList: "काढलेल्या औषधांची यादी",
+    pleaseCheckWhichMedicines: "कृपया आपली औषध तपासणी करून घ्या आणि कोणती ठेवायची आहेत ते निवडा:",
+    review: "पुनरावलोकन आवश्यक",
+    confirmSelection: "निवडीची पुष्टी करा",
+    addNew: "नवीन जोडा",
+    skipAll: "सर्व वगळा",
+    verifyInformation: "माहितीची पडताळणी",
+    editProfileDetails: "प्रोफाइल तपशील संपादित करा",
+    selectDateOfBirth: "जन्म तारीख निवडा",
+    male: "पुरुष",
+    female: "स्त्री",
+    saveDetails: "तपशील जतन करा",
+    cancel: "रद्द करा",
+    confirmYourProfileDetails: "तुमच्या प्रोफाइल तपशीलाची पुष्टी करा",
+    weFoundTwoDifferentProfiles: "आम्हाला दोन भिन्न प्रोफाइल सापडल्या",
+    pleaseCheckAndConfirmAllDetails: "कृपया खालील सर्व तपशील तपासा आणि पुष्टी करा",
+    pleaseReviewAndChooseOneYouPrefer: "कृपया पुनरावलोकन करा आणि आपल्याला हवे ते निवडा",
+    yourDetails: "तुमचे तपशील",
+    fromDocument: "दस्तऐवजावरून",
+    confirmAndContinue: "पुष्टी करा आणि पुढे जा",
+    editDetails: "तपशील सुधारा",
+    useSocialLogin: "सोशल लॉगिन वापरा",
+    useDocument: "दस्तऐवज वापरा",
+    editManuallyInstead: "त्याऐवजी मॅन्युअली संपादन करा",
+    chooseDate: "तारीख निवडा",
+    chooseTime: "वेळ निवडा",
+    fromSocialLogin: "सोशल लॉगिनवरून",
+    fromGoogle: "Google वरून",
+    fromFacebook: "Facebook वरून",
+    fromPhone: "फोनवरून",
+    fromEmail: "ईमेलवरून",
+    documentUploaded: "दस्तऐवज अपलोड केला: ",
+    whyAmISeeingThis: "मला हे का दिसत आहे?",
+    fromApple: "Apple वरून",
+    fromMicrosoft: "Microsoft वरून",
+  },
+  tamil: {
+    extractedMedicationsList: "பிரித்தெடுக்கப்பட்ட மருந்துகளின் பட்டியல்",
+    pleaseCheckWhichMedicines: "தயவுசெய்து உங்கள் பட்டியலில் வைக்க வேண்டிய மருந்துகளைச் சரிபார்க்கவும்:",
+    review: "மதிப்பாய்வு தேவை",
+    confirmSelection: "தேர்வை உறுதிப்படுத்துக",
+    addNew: "புதியதைச் சேர்",
+    skipAll: "அனைத்தையும் தவிர்",
+    verifyInformation: "தகவலைச் சரிபார்க்கவும்",
+    editProfileDetails: "சுயவிவர விவரங்களைத் திருத்தவும்",
+    selectDateOfBirth: "பிறந்த தேதியைத் தேர்ந்தெடுக்கவும்",
+    male: "ஆண்",
+    female: "பெண்",
+    saveDetails: "விவரங்களைச் சேமிக்கவும்",
+    cancel: "ரத்துசெய்",
+    confirmYourProfileDetails: "உங்கள் சுயவிவர விவரங்களை உறுதிப்படுத்தவும்",
+    weFoundTwoDifferentProfiles: "நாங்கள் இரண்டு வெவ்வேறு சுயவிவரங்களைக் கண்டறிந்துள்ளோம்",
+    pleaseCheckAndConfirmAllDetails: "தயவுசெய்து கீழே உள்ள அனைத்து விவரங்களையும் சரிபார்த்து உறுதிப்படுத்தவும்",
+    pleaseReviewAndChooseOneYouPrefer: "தயவுசெய்து மதிப்பாய்வு செய்து நீங்கள் விரும்பும் ஒன்றை தேர்ந்தெடுக்கவும்",
+    yourDetails: "உங்கள் விவரங்கள்",
+    fromDocument: "ஆவணத்திலிருந்து",
+    confirmAndContinue: "உறுதிப்படுத்தித் தொடரவும்",
+    editDetails: "விவரங்களைத் திருத்தவும்",
+    useSocialLogin: "சமூக உள்நுழைவைப் பயன்படுத்தவும்",
+    useDocument: "ஆவணத்தைப் பயன்படுத்தவும்",
+    editManuallyInstead: "அதற்கு பதிலாக கைமுறையாக திருத்தவும்",
+    chooseDate: "தேதியைத் தேர்ந்தெடு",
+    chooseTime: "நேரத்தைத் தேர்ந்தெடு",
+    fromSocialLogin: "சமூக உள்நுழைவிலிருந்து",
+    fromGoogle: "Google இலிருந்து",
+    fromFacebook: "Facebook இலிருந்து",
+    fromPhone: "தொலைபேசியிலிருந்து",
+    fromEmail: "மின்னஞ்சலிலிருந்து",
+    documentUploaded: "ஆவணம் பதிவேற்றப்பட்டது: ",
+    whyAmISeeingThis: "இதை நான் ஏன் பார்க்கிறேன்?",
+    fromApple: "Apple இலிருந்து",
+    fromMicrosoft: "Microsoft இலிருந்து",
   }
 };
 
@@ -655,18 +910,19 @@ function AddMedicineCard({
   };
 
   const getDosePreviewText = () => {
-    const isGuj = preferredLang === "gujarati";
     if (formType === "TABLET") {
       const fracLabel = formatTabletDose(formCount);
-      return isGuj ? `${fracLabel} ગોળી પ્રત્યેક ડોઝ દીઠ` : `${fracLabel} tablet(s) per intake`;
+      return t("dosePreview.tablet").replace("{count}", fracLabel);
     }
     if (formType === "CAPSULE") {
-      return isGuj ? `${formCount} કેપ્સ્યુલ પ્રત્યેક ડોઝ દીઠ` : `${formCount} capsule(s) per intake`;
+      return t("dosePreview.capsule").replace("{count}", String(formCount));
     }
     if (formType === "SPRAY" || formType === "INHALER") {
-      return isGuj ? `${formVal} પફ પ્રત્યેક ડોઝ દીઠ` : `${formVal} puff(s) per intake`;
+      return t("dosePreview.puff").replace("{count}", String(formVal));
     }
-    return isGuj ? `${formVal} ${formUnit} પ્રત્યેક ડોઝ દીઠ` : `${formVal} ${formUnit} per intake`;
+    return t("dosePreview.other")
+      .replace("{count}", String(formVal))
+      .replace("{unit}", formUnit);
   };
 
   const renderDoseInput = () => {
@@ -957,16 +1213,6 @@ function AddMedicineCard({
     );
   };
 
-  const currentLabelLabels: Record<string, { en: string; gu: string }> = {
-    TABLET: { en: "Tablet", gu: "ટેબ્લેટ (ગોળી)" },
-    CAPSULE: { en: "Capsule", gu: "કેપ્સ્યુલ" },
-    SYRUP: { en: "Syrup", gu: "સિરાપ (પ્રવાહી)" },
-    INJECTION: { en: "Injection", gu: "ઇન્જેક્શન" },
-    DROPS: { en: "Drops", gu: "ટીપાં (ડ્રોપ્સ)" },
-    SPRAY: { en: "Spray", gu: "સ્પ્રે" },
-    INHALER: { en: "Inhaler", gu: "ઇનહેલર" },
-  };
-
   return (
     <View style={[styles.medEditCard, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#334155" : "#e2e8f0" }]}>
       <Text style={[styles.medCardTitle, { color: theme.colors.textPrimary }]}>
@@ -984,7 +1230,7 @@ function AddMedicineCard({
           style={[styles.textInput, { color: theme.colors.textPrimary, borderColor: isDark ? "#475569" : "#cbd5e1", backgroundColor: isDark ? "#0f172a" : "#f8fafc" }]}
           value={formName}
           onChangeText={setFormName}
-          placeholder={preferredLang === "gujarati" ? "દા.ત. પેરાસીટામોલ" : "e.g. Paracetamol"}
+          placeholder={t("placeholder.paracetamol")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
         />
       </View>
@@ -999,7 +1245,7 @@ function AddMedicineCard({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: "row", marginVertical: 4 }}>
           {["TABLET", "CAPSULE", "SYRUP", "INJECTION", "DROPS", "SPRAY", "INHALER"].map(tItem => {
             const isSelected = formType === tItem;
-            const label = preferredLang === "gujarati" ? currentLabelLabels[tItem].gu : currentLabelLabels[tItem].en;
+            const label = t(`medicineType.${tItem}`);
             return (
               <TouchableOpacity
                 key={tItem}
@@ -1103,7 +1349,7 @@ function AddMedicineCard({
             value={formQty}
             onChangeText={setFormQty}
             keyboardType="numeric"
-            placeholder={preferredLang === "gujarati" ? "દા.ત. 30" : "e.g. 30"}
+            placeholder={t("placeholder.qty")}
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           />
         </View>
@@ -1120,7 +1366,7 @@ function AddMedicineCard({
           style={[styles.textInput, { color: theme.colors.textPrimary, borderColor: isDark ? "#475569" : "#cbd5e1", backgroundColor: isDark ? "#0f172a" : "#f8fafc" }]}
           value={formPrescribed}
           onChangeText={setFormPrescribed}
-          placeholder={preferredLang === "gujarati" ? "ડૉક્ટર નું નામ" : "Doctor's Name"}
+          placeholder={t("prescribedBy")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
         />
       </View>
@@ -1129,14 +1375,14 @@ function AddMedicineCard({
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
           <Ionicons name="document-text-outline" size={14} color={theme.colors.textSecondary} style={{ marginRight: 6 }} />
           <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
-            {preferredLang === "gujarati" ? "નોંધ" : "Notes"}
+            {t("notes")}
           </Text>
         </View>
         <TextInput
           style={[styles.textInput, { height: 60, color: theme.colors.textPrimary, borderColor: isDark ? "#475569" : "#cbd5e1", backgroundColor: isDark ? "#0f172a" : "#f8fafc" }]}
           value={formNotes}
           onChangeText={setFormNotes}
-          placeholder={preferredLang === "gujarati" ? "વધારાની નોંધો..." : "Additional notes..."}
+          placeholder={t("placeholder.notes")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           multiline
         />
@@ -1164,7 +1410,7 @@ function AddMedicineCard({
           onPress={handleSave}
         >
           <Text style={[styles.bigActionButtonTextSide, { color: selectedSlots.length !== N ? (isDark ? "#94a3b8" : "#64748b") : "#ffffff" }]}>
-            {preferredLang === "gujarati" ? "સાચવો" : "Save Medicine"}
+            {t("saveMedicine")}
           </Text>
         </TouchableOpacity>
         {isEditingLocal && onCancel && (
@@ -1173,7 +1419,7 @@ function AddMedicineCard({
             onPress={onCancel}
           >
             <Text style={[styles.bigActionButtonTextSide, { color: theme.colors.textPrimary }]}>
-              {preferredLang === "gujarati" ? "રદ કરો" : "Cancel"}
+              {t("cancel")}
             </Text>
           </TouchableOpacity>
         )}
@@ -1255,13 +1501,19 @@ function ReviewMedicinesListCard({
     onConfirm(checkedMeds);
   };
 
+  const t = (key: string) => {
+    const lang = preferredLang || "english";
+    const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
+    return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
+  };
+
   return (
     <View style={[styles.medListCard, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#334155" : "#e2e8f0" }]}>
       <Text style={[styles.medCardTitle, { color: theme.colors.textPrimary }]}>
-        {preferredLang === "gujarati" ? "મેળવેલી દવાઓની યાદી" : "Extracted Medications List"}
+        {t("extractedMedicationsList")}
       </Text>
       <Text style={[styles.medCardSubtitleText, { color: theme.colors.textSecondary }]}>
-        {preferredLang === "gujarati" ? "કૃપા કરીને તપાસો કે કઈ દવાઓ તમારી સૂચિમાં રાખવી છે:" : "Please check which medicines to keep in your list:"}
+        {t("pleaseCheckWhichMedicines")}
       </Text>
 
       <View style={{ marginVertical: 12 }}>
@@ -1288,7 +1540,7 @@ function ReviewMedicinesListCard({
                   </Text>
                   {med.needsReview && Object.values(med.needsReview).some(v => v === true) && (
                     <Text style={{ color: "#d97706", fontSize: 11, fontWeight: "600", marginTop: 2 }}>
-                      ⚠️ {preferredLang === "gujarati" ? "સમીક્ષા જરૂરી" : "Review"}
+                      ⚠️ {t("review")}
                     </Text>
                   )}
                 </View>
@@ -1310,7 +1562,7 @@ function ReviewMedicinesListCard({
           onPress={handleConfirm}
         >
           <Text style={styles.bigActionButtonTextSide}>
-            {preferredLang === "gujarati" ? "આગળ વધો" : "Confirm Selection"}
+            {t("confirmSelection")}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -1318,7 +1570,7 @@ function ReviewMedicinesListCard({
           onPress={onAddNew}
         >
           <Text style={[styles.bigActionButtonTextSide, { color: theme.colors.textPrimary }]}>
-            {preferredLang === "gujarati" ? "ઉમેરો" : "Add New"}
+            {t("addNew")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1328,7 +1580,7 @@ function ReviewMedicinesListCard({
         onPress={onSkipAll}
       >
         <Text style={[styles.skipListText, { color: theme.colors.textSecondary }]}>
-          {preferredLang === "gujarati" ? "બધું છોડી દો" : "Skip All"}
+          {t("skipAll")}
         </Text>
       </TouchableOpacity>
     </View>
@@ -1487,6 +1739,119 @@ function MedicineOptionsPanel({
   );
 }
 
+const ONBOARDING_I18N: Record<string, Record<string, string>> = {
+  english: {
+    validating: "Verifying file details...",
+    uploading: "Uploading report...",
+    queued: "Queued for processing...",
+    processing: "Analyzing report details...",
+    cancelling: "Cancelling upload...",
+    upload_cancelled: "Upload cancelled",
+    retry_count: "Retrying ({attempt}/{max})...",
+    page_progress: "Page {current} of {total}",
+    eta_hint: "Estimated time: ~45 seconds per page",
+    btn_try_again: "Try Again",
+    btn_choose_different: "Choose a different file",
+    btn_cancel: "Cancel",
+    err_network_timeout: "Connection timed out. The server took too long to respond.",
+    err_server_busy: "Server is busy. Please try again in a moment.",
+    err_ocr_failed: "Document analysis failed. Please verify it is a valid medical record.",
+    err_unsupported_file: "Unsupported file type. Please upload a PDF or image (PNG, JPG, WEBP).",
+    err_file_too_large: "File is too large. Limit is 50MB.",
+    err_server_unreachable: "AI server is unreachable. Please check your connection and try again.",
+    err_upload_failed: "File upload failed. Please check your network connection.",
+    err_unexpected_error: "An unexpected error occurred during processing. Please try again."
+  },
+  gujarati: {
+    validating: "દસ્તાવેજની વિગતો ચકાસાઈ રહી છે...",
+    uploading: "મેડિકલ રિપોર્ટ અપલોડ થઈ રહ્યો છે...",
+    queued: "પ્રક્રિયા માટે કતારમાં...",
+    processing: "રિપોર્ટ વિગતોનું વિશ્લેષણ કરવામાં આવી રહ્યું છે...",
+    cancelling: "અપલોડ રદ કરી રહ્યાં છીએ...",
+    upload_cancelled: "અપલોડ રદ કરવામાં આવ્યું",
+    retry_count: "ફરી પ્રયાસ કરી રહ્યા છીએ ({attempt}/{max})...",
+    page_progress: "પૃષ્ઠ {total} માંથી {current}",
+    eta_hint: "અંદાજિત સમય: પૃષ્ઠ દીઠ ~45 સેકન્ડ",
+    btn_try_again: "ફરી પ્રયાસ કરો",
+    btn_choose_different: "બીજી ફાઈલ પસંદ કરો",
+    btn_cancel: "રદ કરો",
+    err_network_timeout: "જોડાણ સમયસીમા સમાપ્ત થઈ ગઈ. સર્વરે પ્રતિસાદ આપવામાં ઘણો સમય લીધો.",
+    err_server_busy: "સર્વર વ્યસ્ત છે. કૃપા કરીને થોડીવાર પછી ફરી પ્રયાસ કરો.",
+    err_ocr_failed: "દસ્તાવેજ વિશ્લેષણ નિષ્ફળ ગયું. કૃપા કરીને ચકાસો કે તે માન્ય મેડિકલ રેકોર્ડ છે.",
+    err_unsupported_file: "અસમર્થિત ફાઇલ પ્રકાર. કૃપા કરીને પીડીએફ અથવા છબી (PNG, JPG, WEBP) અપલોડ કરો.",
+    err_file_too_large: "ફાઇલ ખૂબ મોટી છે. મર્યાદા 50MB છે.",
+    err_server_unreachable: "AI સર્વર અગમ્ય છે. કૃપા કરીને તમારું કનેક્શન તપાસો અને ફરી પ્રયાસ કરો.",
+    err_upload_failed: "ફાઇલ અપલોડ નિષ્ફળ ગઈ. કૃપા કરીને તમારું નેટવર્ક કનેક્શન તપાસો.",
+    err_unexpected_error: "પ્રક્રિયા દરમિયાન એક અનપેક્ષિત ભૂல் આવી. કૃપા કરીને ફરી પ્રયાસ કરો."
+  },
+  hindi: {
+    validating: "दस्तावेज़ विवरण सत्यापित किया जा रहा है...",
+    uploading: "रिपोर्ट अपलोड की जा रही है...",
+    queued: "प्रसंस्करण के लिए कतारबद्ध...",
+    processing: "रिपोर्ट विवरण का विश्लेषण किया जा रहा है...",
+    cancelling: "अपलोड रद्द किया जा रहा है...",
+    upload_cancelled: "अपलोड रद्द कर दिया गया",
+    retry_count: "पुनः प्रयास कर रहे हैं ({attempt}/{max})...",
+    page_progress: "पृष्ठ {total} में से {current}",
+    eta_hint: "अनुमानित समय: लगभग 45 सेकंड प्रति पृष्ठ",
+    btn_try_again: "पुनः प्रयास करें",
+    btn_choose_different: "दूसरी फ़ाइल चुनें",
+    btn_cancel: "रद्द करें",
+    err_network_timeout: "कनेक्शन का समय समाप्त हो गया। सर्वर ने प्रतिक्रिया देने में बहुत लंबा समय लिया।",
+    err_server_busy: "सर्वर व्यस्त है। कृपया कुछ क्षणों में पुनः प्रयास करें।",
+    err_ocr_failed: "दस्तावेज़ विश्लेषण विफल रहा। कृपया सत्यापित करें कि यह एक वैध मेडिकल रिकॉर्ड है।",
+    err_unsupported_file: "असमर्थित फ़ाइल प्रकार। कृपया पीडीएफ या छवि (PNG, JPG, WEBP) अपलोड करें।",
+    err_file_too_large: "फ़ाइल बहुत बड़ी है। सीमा 50MB है।",
+    err_server_unreachable: "एआई सर्वर अनुपलब्ध है। कृपया अपना कनेक्शन जांचें और पुनः प्रयास करें।",
+    err_upload_failed: "फ़ाइल अपलोड विफल रही। कृपया अपना नेटवर्क कनेक्शन जांचें।",
+    err_unexpected_error: "प्रसंस्करण के दौरान एक अप्रत्याशित त्रुटि हुई। कृपया पुनः प्रयास करें।"
+  },
+  marathi: {
+    validating: "दस्तऐवज तपशील तपासत आहे...",
+    uploading: "अहवाल अपलोड होत आहे...",
+    queued: "प्रक्रियेसाठी रांगेत...",
+    processing: "अहवाल तपशीलांचे विश्लेषण करत आहे...",
+    cancelling: "अपलोड रद्द करत आहे...",
+    upload_cancelled: "अपलोड रद्द केले",
+    retry_count: "पुन्हा प्रयत्न करत आहे ({attempt}/{max})...",
+    page_progress: "पान {total} पैकी {current}",
+    eta_hint: "अंदाजे वेळ: प्रति पृष्ठ ~४५ सेकंद",
+    btn_try_again: "पुन्हा प्रयत्न करा",
+    btn_choose_different: "वेगळी फाईल निवडा",
+    btn_cancel: "रद्द करा",
+    err_network_timeout: "कनेक्शनची वेळ संपली. सर्व्हरने प्रतिसाद देण्यास खूप वेळ घेतला.",
+    err_server_busy: "सर्व्हर व्यस्त आहे. कृपया काही वेळात पुन्हा प्रयत्न करा.",
+    err_ocr_failed: "दस्तऐवज विश्लेषण अयशस्वी झाले. कृपया ते वैध वैद्यकीय रेकॉर्ड असल्याची खात्री करा.",
+    err_unsupported_file: "असमर्थित फाईल प्रकार. कृपया पीडीएफ किंवा प्रतिमा (PNG, JPG, WEBP) अपलोड करा.",
+    err_file_too_large: "फाईल खूप मोठी आहे. मर्यादा 50MB आहे.",
+    err_server_unreachable: "AI सर्व्हर अनुपलब्ध आहे. कृपया आपले कनेक्शन तपासा आणि पुन्हा प्रयत्न करा.",
+    err_upload_failed: "फाईल अपलोड अयशस्वी झाली. कृपया आपले नेटवर्क कनेक्शन तपासा.",
+    err_unexpected_error: "प्रक्रियेदरम्यान अनपेक्षित त्रुटी आली. कृपया पुन्हा प्रयत्न करा."
+  },
+  tamil: {
+    validating: "ஆவண விவரங்கள் சரிபார்க்கப்படுகின்றன...",
+    uploading: "அறிக்கை பதிவேற்றப்படுகிறது...",
+    queued: "செயலாக்கத்திற்காக வரிசைப்படுத்தப்பட்டுள்ளது...",
+    processing: "அறிக்கை விவரங்கள் பகுப்பாய்வு செய்யப்படுகின்றன...",
+    cancelling: "பதிவேற்றம் ரத்து செய்யப்படுகிறது...",
+    upload_cancelled: "பதிவேற்றம் ரத்து செய்யப்பட்டது",
+    retry_count: "மீண்டும் முயற்சிக்கிறது ({attempt}/{max})...",
+    page_progress: "பக்கம் {total}-ல் {current}",
+    eta_hint: "மதிப்பிடப்பட்ட நேரம்: ஒரு பக்கத்திற்கு ~45 வினாடிகள்",
+    btn_try_again: "மீண்டும் முயற்சி செய்",
+    btn_choose_different: "வேறு கோப்பைத் தேர்ந்தெடுக்கவும்",
+    btn_cancel: "ரத்து செய்",
+    err_network_timeout: "இணைப்பு காலாவதியானது. பதிலளிக்க சேவையகம் அதிக நேரம் எடுத்துக்கொண்டது.",
+    err_server_busy: "சேவையகம் பிஸியாக உள்ளது. சற்று நேரத்தில் மீண்டும் முயற்சிக்கவும்.",
+    err_ocr_failed: "ஆவண பகுப்பாய்வு தோல்வியடைந்தது. இது ஒரு செல்லுபடியாகும் மருத்துவ அறிக்கை என்பதை உறுதிப்படுத்தவும்.",
+    err_unsupported_file: "ஆதரிக்கப்படாத கோப்பு வகை. பிடிஎஃப் அல்லது படம் (PNG, JPG, WEBP) பதிவேற்றவும்.",
+    err_file_too_large: "கோப்பு மிகப்பெரியது. வரம்பு 50MB ஆகும்.",
+    err_server_unreachable: "AI சேவையகத்தை இணைக்க முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.",
+    err_upload_failed: "கோப்பு பதிவேற்றம் தோல்வியடைந்தது. உங்கள் இணைய இணைப்பைச் சரிபார்க்கவும்.",
+    err_unexpected_error: "செயலாக்கத்தின் போது எதிர்பாராத பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்."
+  }
+};
+
 export default function OnboardingScreen() {
   const { theme, isDark } = useAppTheme();
   const queryClient = useQueryClient();
@@ -1503,6 +1868,38 @@ export default function OnboardingScreen() {
   const [editedProfileData, setEditedProfileData] = useState<any>({});
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  // State Machine states for OCR Redesign
+  const [uploadState, setUploadState] = useState<'idle' | 'validating' | 'uploading' | 'queued' | 'processing' | 'success' | 'failed' | 'timed_out' | 'cancelled'>('idle');
+  const [uploadPercent, setUploadPercent] = useState<number>(0);
+  const [pollElapsedTime, setPollElapsedTime] = useState<number>(0);
+  const [pollTotalPages, setPollTotalPages] = useState<number>(1);
+  const [pollCurrentPage, setPollCurrentPage] = useState<number>(1);
+  const [autoRetryCount, setAutoRetryCount] = useState<number>(0);
+  const [isOffline, setIsOffline] = useState<boolean>(false);
+  const [activeErrorCode, setActiveErrorCode] = useState<string | null>(null);
+  const [activeErrorDetails, setActiveErrorDetails] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+  const [versionToken, setVersionToken] = useState<string | null>(null);
+
+  // Safe reference mapping to avoid stale hook variables inside async polling loops
+  const isOfflineRef = useRef(false);
+  const selectedFileRef = useRef<any>(null);
+  const uploadStateRef = useRef<string>('idle');
+  const pollActiveRef = useRef<boolean>(false);
+  const cancelRequestedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    isOfflineRef.current = isOffline;
+  }, [isOffline]);
+
+  useEffect(() => {
+    selectedFileRef.current = selectedFile;
+  }, [selectedFile]);
+
+  useEffect(() => {
+    uploadStateRef.current = uploadState;
+  }, [uploadState]);
 
 
 
@@ -1546,6 +1943,12 @@ export default function OnboardingScreen() {
     },
   });
 
+  const uiT = (key: string) => {
+    const lang = state.preferredLanguage || "english";
+    const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
+    return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
+  };
+
   // Local medicines state for UI checkbox tracking and local edits
   const [localMedicines, setLocalMedicines] = useState<any[]>([]);
   const [activeMedicineToEdit, setActiveMedicineToEdit] = useState<any>(null);
@@ -1575,6 +1978,82 @@ export default function OnboardingScreen() {
       showSub.remove();
       hideSub.remove();
     };
+  }, []);
+
+  // Network detection check
+  useEffect(() => {
+    let active = true;
+    const checkConnection = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        await fetch("https://clients3.google.com/generate_204", {
+          method: "HEAD",
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (active) setIsOffline(false);
+      } catch {
+        if (active) setIsOffline(true);
+      }
+    };
+    
+    const interval = setInterval(checkConnection, 5000);
+    checkConnection();
+    
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Startup crash recovery / polling resume hook
+  useEffect(() => {
+    const resumePendingJob = async () => {
+      try {
+        const pendingDocId = await AsyncStorage.getItem("onboarding_pending_document_id");
+        if (pendingDocId) {
+          console.log("[ONBOARDING] Resuming pending document ID on startup:", pendingDocId);
+          // Query the latest status
+          const statusRes = await apiClient.get(`/v1/ocr/status/${pendingDocId}`);
+          const resData = statusRes.data?.data;
+          
+          if (resData) {
+            if (resData.status === "done") {
+              await AsyncStorage.removeItem("onboarding_pending_document_id");
+              setUploadState("success");
+              await handleSuccessfulOcr(resData, resData.document?.fileName || "report.pdf");
+            } else if (resData.status === "failed") {
+              await AsyncStorage.removeItem("onboarding_pending_document_id");
+              setUploadState("failed");
+              setActiveErrorCode(resData.errorCode || "OCR_FAILED");
+              setActiveErrorDetails(resData.errorMessage || null);
+            } else if (resData.status === "cancelled") {
+              await AsyncStorage.removeItem("onboarding_pending_document_id");
+              setUploadState("idle");
+            } else {
+              // It is processing or queued
+              const createdTime = resData.createdAt ? new Date(resData.createdAt).getTime() : Date.now();
+              const initialElapsed = Math.max(0, Date.now() - createdTime);
+              setPollElapsedTime(initialElapsed);
+              setPollCurrentPage(resData.currentPage || 1);
+              setPollTotalPages(resData.totalPages || 1);
+              
+              // Generate a version token if not present
+              const token = Math.random().toString(36).substring(7) + Date.now();
+              setVersionToken(token);
+              
+              // Resume the active polling check
+              startPolling(pendingDocId, token);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[ONBOARDING] Failed to resume pending job:", err);
+      }
+    };
+
+    resumePendingJob();
   }, []);
 
   // Fetch initial profile
@@ -1677,10 +2156,7 @@ export default function OnboardingScreen() {
     const preferredLang =
       aiRes.preferredLanguage || currentState.preferredLanguage || "english";
 
-    const messageContent =
-      preferredLang === "gujarati"
-        ? aiRes.message_gu || aiRes.message
-        : aiRes.message_en || aiRes.message;
+    const messageContent = aiRes.message || aiRes.message_en || aiRes.message_gu;
 
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
@@ -2006,64 +2482,141 @@ export default function OnboardingScreen() {
     uploadSheetRef.current?.present();
   };
 
-  const pollOcrStatus = async (documentId: string): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      const interval = setInterval(async () => {
-        try {
-          const statusRes = await apiClient.get(`/v1/ocr/status/${documentId}`);
-          const resData = statusRes.data?.data;
-          console.log("[ONBOARDING] Poll OCR Status:", resData?.status);
+  const uploadAbortControllerRef = useRef<AbortController | null>(null);
 
-          if (resData?.status === "done") {
-            clearInterval(interval);
-            resolve(resData);
-          } else if (resData?.status === "failed") {
-            clearInterval(interval);
-            reject(new Error("Document processing failed on the server."));
-          }
-        } catch (error) {
-          console.error("[ONBOARDING] Status poll error:", error);
-        }
-      }, 3000);
-    });
-  };
+  const startPolling = async (documentId: string, currentVersionToken: string) => {
+    pollActiveRef.current = true;
+    cancelRequestedRef.current = false;
+    setUploadState("queued");
+    setPollElapsedTime(0);
+    setPollCurrentPage(1);
+    setPollTotalPages(1);
 
-  const pollLatestDocumentStatus = async (fileName: string): Promise<any> => {
-    const startTime = Date.now();
-    const pollTimeout = 240000; // 4 minutes
-    const pollInterval = 5000;  // 5 seconds
+    let localElapsedTime = 0;
+    let autoRetryAttempts = 0;
+    const maxStatusRetries = 3;
 
-    return new Promise((resolve, reject) => {
-      const interval = setInterval(async () => {
-        if (Date.now() - startTime > pollTimeout) {
-          clearInterval(interval);
-          reject(new Error("Document processing timed out on server."));
+    const runPoll = async () => {
+      if (!pollActiveRef.current) return;
+
+      // If user requested cancel
+      if (cancelRequestedRef.current) {
+        pollActiveRef.current = false;
+        await handleCancelJob(documentId);
+        return;
+      }
+
+      // If offline, pause polling
+      if (isOfflineRef.current) {
+        setTimeout(runPoll, 3000);
+        return;
+      }
+
+      try {
+        const statusRes = await apiClient.get(`/v1/ocr/status/${documentId}`);
+        const resData = statusRes.data?.data;
+        console.log("[ONBOARDING] Poll OCR Status:", resData?.status);
+
+        // Reset retry count on successful poll
+        autoRetryAttempts = 0;
+
+        if (resData?.status === "done") {
+          pollActiveRef.current = false;
+          await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadState("success");
+          await handleSuccessfulOcr(resData, selectedFileRef.current?.name || "report.pdf");
+          return;
+        } else if (resData?.status === "failed") {
+          pollActiveRef.current = false;
+          await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadState("failed");
+          setActiveErrorCode(resData.errorCode || "OCR_FAILED");
+          setActiveErrorDetails(resData.errorMessage || null);
+          return;
+        } else if (resData?.status === "cancelled") {
+          pollActiveRef.current = false;
+          await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadState("cancelled");
+          Toast.show({ type: "info", text1: "Upload cancelled" });
           return;
         }
 
-        try {
-          const listRes = await apiClient.get("/v1/documents/list?limit=5");
-          const items = listRes.data?.data?.items || [];
-          const latestDoc = items.find((item: any) => item.fileName === fileName);
+        // It is processing/queued
+        setUploadState("processing");
+        setPollCurrentPage(resData?.currentPage || 1);
+        setPollTotalPages(resData?.totalPages || 1);
 
-          if (latestDoc) {
-            console.log("[ONBOARDING] Polling latest document status:", latestDoc.ocrStatus);
-            if (latestDoc.ocrStatus === "completed") {
-              clearInterval(interval);
-              resolve({
-                document: latestDoc,
-                structuredData: latestDoc.structuredExtractedData || {},
-              });
-            } else if (latestDoc.ocrStatus === "failed") {
-              clearInterval(interval);
-              reject(new Error("Document processing failed on server."));
-            }
-          }
-        } catch (error) {
-          console.warn("[ONBOARDING] Polling latest document error:", error);
+        const totalPages = resData?.totalPages || 1;
+        const pageCeiling = Math.max(120000, totalPages * 45000 + 30000);
+
+        localElapsedTime += 3000;
+        setPollElapsedTime(localElapsedTime);
+
+        if (localElapsedTime >= pageCeiling) {
+          console.warn("[ONBOARDING] Polling ceiling exceeded:", localElapsedTime, "ms");
+          pollActiveRef.current = false;
+          setUploadState("timed_out");
+          setActiveErrorCode("NETWORK_TIMEOUT");
+          return;
         }
-      }, pollInterval);
-    });
+
+      } catch (error: any) {
+        console.error("[ONBOARDING] Status poll error:", error);
+        
+        autoRetryAttempts++;
+        if (autoRetryAttempts <= maxStatusRetries) {
+          const backoffDelay = Math.pow(2, autoRetryAttempts) * 1000;
+          console.log(`[ONBOARDING] Status query failed. Auto-retrying status check (${autoRetryAttempts}/${maxStatusRetries}) in ${backoffDelay}ms...`);
+          setTimeout(runPoll, backoffDelay);
+          return;
+        } else {
+          pollActiveRef.current = false;
+          await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadState("failed");
+          setActiveErrorCode("SERVER_UNREACHABLE");
+          return;
+        }
+      }
+
+      setTimeout(runPoll, 3000);
+    };
+
+    setTimeout(runPoll, 1000);
+  };
+
+  const handleCancelJob = async (documentId: string) => {
+    try {
+      await AsyncStorage.removeItem("onboarding_pending_document_id");
+      await apiClient.post(`/v1/ocr/cancel/${documentId}`);
+    } catch (err) {
+      console.warn("[ONBOARDING] Failed to notify cancel to backend:", err);
+    }
+    setUploadState("cancelled");
+    Toast.show({ type: "info", text1: "Upload cancelled" });
+  };
+
+  const handleChooseDifferentFile = () => {
+    setUploadState("idle");
+    setSelectedFile(null);
+    setInput("");
+    setIdempotencyKey(null);
+    setVersionToken(null);
+  };
+
+  const cancelProcessing = async () => {
+    cancelRequestedRef.current = true;
+    pollActiveRef.current = false;
+    if (uploadAbortControllerRef.current) {
+      uploadAbortControllerRef.current.abort();
+      uploadAbortControllerRef.current = null;
+    }
+    const pendingDocId = await AsyncStorage.getItem("onboarding_pending_document_id");
+    if (pendingDocId) {
+      await handleCancelJob(pendingDocId);
+    } else {
+      setUploadState("cancelled");
+      Toast.show({ type: "info", text1: "Upload cancelled" });
+    }
   };
 
   const handleSuccessfulOcr = async (pollResult: any, fileName: string) => {
@@ -2146,70 +2699,114 @@ export default function OnboardingScreen() {
 
     isUploadingRef.current = true;
     setLoading(true);
-    setUploadProgress("Uploading and validating report...");
-    console.log("[ONBOARDING] Upload Started");
-    try {
-      const formData = new FormData();
-      formData.append("file", {
-        uri: fileToUpload.uri,
-        name: fileToUpload.name,
-        type: fileToUpload.type,
-      } as any);
+    setUploadState("validating");
+    setActiveErrorCode(null);
+    setActiveErrorDetails(null);
+    setUploadPercent(0);
 
-      const response = await apiClient.post("/v1/ocr/extract", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        timeout: 240000,
-      });
+    // Generate or reuse idempotencyKey and versionToken
+    let activeIdempotencyKey = idempotencyKey;
+    if (!activeIdempotencyKey) {
+      activeIdempotencyKey = Math.random().toString(36).substring(2, 15) + Date.now();
+      setIdempotencyKey(activeIdempotencyKey);
+    }
+    const activeVersionToken = Math.random().toString(36).substring(2, 15) + Date.now();
+    setVersionToken(activeVersionToken);
 
-      console.log("[ONBOARDING] Upload Success, checking document status...");
-      const docId = response.data?.data?.documentId || response.data?.data?.document?.id;
-      if (!docId) {
-        throw new Error("Failed to start processing: no document ID returned.");
+    console.log("[ONBOARDING] Upload Started. Idempotency Key:", activeIdempotencyKey, "Version Token:", activeVersionToken);
+
+    const maxUploadRetries = 3;
+    let uploadAttempts = 0;
+
+    const performUpload = async (): Promise<string> => {
+      uploadAttempts++;
+      try {
+        const formData = new FormData();
+        formData.append("file", {
+          uri: fileToUpload.uri,
+          name: fileToUpload.name,
+          type: fileToUpload.type,
+        } as any);
+        formData.append("idempotencyKey", activeIdempotencyKey);
+        formData.append("versionToken", activeVersionToken);
+
+        setUploadState("uploading");
+        setAutoRetryCount(uploadAttempts - 1);
+
+        const controller = new AbortController();
+        uploadAbortControllerRef.current = controller;
+
+        const response = await apiClient.post("/v1/ocr/extract", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 90000, // 90s timeout for upload phase
+          signal: controller.signal,
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadPercent(percentCompleted);
+            }
+          }
+        });
+
+        const docId = response.data?.data?.documentId || response.data?.data?.document?.id;
+        if (!docId) {
+          throw new Error("Failed to start processing: no document ID returned.");
+        }
+        return docId;
+      } catch (err: any) {
+        console.warn(`[ONBOARDING] Upload attempt ${uploadAttempts} failed:`, err.message);
+        
+        // Auto-retry transient errors
+        const isTransient = !err.response || err.response.status >= 500 || err.code === "ECONNABORTED";
+        if (isTransient && uploadAttempts <= maxUploadRetries) {
+          const backoffDelay = Math.pow(2, uploadAttempts) * 1000;
+          console.log(`[ONBOARDING] Retrying upload in ${backoffDelay}ms...`);
+          await new Promise((r) => setTimeout(r, backoffDelay));
+          return performUpload();
+        }
+        throw err;
       }
+    };
 
-      setUploadProgress("Analyzing report details...");
-      const pollResult = await pollOcrStatus(docId);
-      await handleSuccessfulOcr(pollResult, fileToUpload.name);
+    try {
+      const docId = await performUpload();
+      console.log("[ONBOARDING] Upload Success, docId:", docId);
+      
+      // Persist documentId for crash recovery
+      await AsyncStorage.setItem("onboarding_pending_document_id", docId);
+      
+      // Start status polling
+      startPolling(docId, activeVersionToken);
 
     } catch (error: any) {
-      console.error("[Onboarding] Document processing failed:", error);
+      console.error("[ONBOARDING] Document upload failed after retries:", error);
+      setUploadState("failed");
+      isUploadingRef.current = false;
+      setLoading(false);
 
-      const isTimeoutOrNetworkError =
-        error.message?.toLowerCase().includes("timeout") ||
-        error.message?.toLowerCase().includes("network") ||
-        error.code === "ECONNABORTED" ||
-        !error.response;
-
-      if (isTimeoutOrNetworkError) {
-        setUploadProgress("Analyzing report details (connection timed out, polling status)...");
-        try {
-          const pollResult = await pollLatestDocumentStatus(fileToUpload.name);
-          if (pollResult) {
-            await handleSuccessfulOcr(pollResult, fileToUpload.name);
-            return;
-          }
-        } catch (pollErr) {
-          console.error("[Onboarding] Polling latest document status failed:", pollErr);
+      // Classify error
+      let errCode = "UPLOAD_FAILED";
+      let errMsg = error.message || "";
+      if (error.response) {
+        const backendErr = error.response.data?.error;
+        if (backendErr?.code === "INVALID_MEDICAL_DOCUMENT") {
+          setValidationDialogVisible(true);
+          setUploadState("idle");
+          return;
         }
+        if (backendErr?.code) {
+          errCode = backendErr.code;
+        } else if (error.response.status === 413) {
+          errCode = "FILE_TOO_LARGE";
+        } else if (error.response.status === 415) {
+          errCode = "UNSUPPORTED_FILE";
+        }
+      } else if (errMsg.includes("timeout") || error.code === "ECONNABORTED") {
+        errCode = "NETWORK_TIMEOUT";
       }
 
-      setUploadProgress(null);
-
-      const errCode = error?.response?.data?.error?.code;
-      if (errCode === "INVALID_MEDICAL_DOCUMENT") {
-        setValidationDialogVisible(true);
-      } else {
-        // Signal failure to backend state machine
-        sendMessage("OCR_FAILED", state);
-        Toast.show({
-          type: "error",
-          text1: "Scan Failed",
-          text2:
-            error?.response?.data?.error?.message ||
-            error.message ||
-            "Failed to process medical document.",
-        });
-      }
+      setActiveErrorCode(errCode);
+      setActiveErrorDetails(errMsg);
     } finally {
       isUploadingRef.current = false;
       setLoading(false);
@@ -2269,24 +2866,23 @@ export default function OnboardingScreen() {
     };
 
     const getProviderLabel = (p: string | undefined) => {
-      const isGuj = preferredLang === "gujarati";
-      if (!p) return isGuj ? "સોશિયલ લોગિનથી" : "From Social Login";
+      if (!p) return uiT("fromSocialLogin");
 
       switch (p.toLowerCase()) {
         case "google":
-          return isGuj ? "Google થી" : "From Google";
+          return uiT("fromGoogle");
         case "facebook":
-          return isGuj ? "Facebook થી" : "From Facebook";
+          return uiT("fromFacebook");
         case "apple":
-          return isGuj ? "Apple થી" : "From Apple";
+          return uiT("fromApple");
         case "microsoft":
-          return isGuj ? "Microsoft થી" : "From Microsoft";
+          return uiT("fromMicrosoft");
         case "mobile":
-          return isGuj ? "ફોન લોગિનથી" : "From Phone";
+          return uiT("fromPhone");
         case "email":
-          return isGuj ? "ઈમેલ લોગિનથી" : "From Email";
+          return uiT("fromEmail");
         default:
-          return isGuj ? "સોશિયલ લોગિનથી" : "From Social Login";
+          return uiT("fromSocialLogin");
       }
     };
 
@@ -2354,7 +2950,7 @@ export default function OnboardingScreen() {
             <View style={styles.resolveCardHeader}>
               <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
               <Text style={[styles.resolveCardTitle, { color: theme.colors.textPrimary, marginLeft: 8 }]}>
-                {preferredLang === "gujarati" ? "પ્રોફાઇલ વિગતો સુધારો" : "Edit Profile Details"}
+                {uiT("editProfileDetails")}
               </Text>
             </View>
             <View style={styles.editFormContainer}>
@@ -2385,7 +2981,7 @@ export default function OnboardingScreen() {
                         }}
                       >
                         <Text style={{ color: editedProfileData.dateOfBirth ? theme.colors.textPrimary : (isDark ? "#64748b" : "#94a3b8") }}>
-                          {editedProfileData.dateOfBirth || (preferredLang === "gujarati" ? "જન્મ તારીખ પસંદ કરો" : "Select Date of Birth")}
+                          {editedProfileData.dateOfBirth || uiT("selectDateOfBirth")}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -2417,7 +3013,7 @@ export default function OnboardingScreen() {
                           onPress={() => setEditedProfileData((prev: any) => ({ ...prev, gender: "male" }))}
                         >
                           <Text style={[styles.resolveActionButtonText, { color: currentGen === "male" ? "#ffffff" : theme.colors.textPrimary }]}>
-                            {preferredLang === "gujarati" ? "પુરુષ" : "Male"}
+                            {uiT("male")}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -2434,7 +3030,7 @@ export default function OnboardingScreen() {
                           onPress={() => setEditedProfileData((prev: any) => ({ ...prev, gender: "female" }))}
                         >
                           <Text style={[styles.resolveActionButtonText, { color: currentGen === "female" ? "#ffffff" : theme.colors.textPrimary }]}>
-                            {preferredLang === "gujarati" ? "સ્ત્રી" : "Female"}
+                            {uiT("female")}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -2454,6 +3050,11 @@ export default function OnboardingScreen() {
                     nationalNumber = phoneStr.slice(2);
                   }
 
+                  const setPhoneNumber = (val: string) => {
+                    const clean = val.replace(/\D/g, "");
+                    setEditedProfileData((prev: any) => ({ ...prev, phoneNumber: countryCode + clean }));
+                  };
+
                   return (
                     <View key={field.key} style={styles.inputGroup}>
                       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
@@ -2463,48 +3064,33 @@ export default function OnboardingScreen() {
                         </Text>
                       </View>
                       <View style={{ flexDirection: "row" }}>
-                        <TextInput
+                        <View
                           style={[
-                            styles.textInput,
+                            styles.countryCodeInput,
                             {
-                              width: 60,
-                              marginRight: 8,
-                              textAlign: "center",
-                              color: theme.colors.textPrimary,
                               borderColor: isDark ? "#475569" : "#cbd5e1",
                               backgroundColor: isDark ? "#1e293b" : "#f8fafc",
                             },
                           ]}
-                          value={countryCode}
-                          onChangeText={(cc) => {
-                            setEditedProfileData((prev: any) => ({
-                              ...prev,
-                              phoneNumber: cc + nationalNumber,
-                            }));
-                          }}
-                          placeholder="+91"
-                          placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
-                        />
+                        >
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{countryCode}</Text>
+                        </View>
                         <TextInput
                           style={[
                             styles.textInput,
                             {
                               flex: 1,
+                              marginLeft: 8,
                               color: theme.colors.textPrimary,
                               borderColor: isDark ? "#475569" : "#cbd5e1",
                               backgroundColor: isDark ? "#1e293b" : "#f8fafc",
                             },
                           ]}
                           value={nationalNumber}
-                          onChangeText={(num) => {
-                            setEditedProfileData((prev: any) => ({
-                              ...prev,
-                              phoneNumber: countryCode + num,
-                            }));
-                          }}
-                          keyboardType="phone-pad"
-                          placeholder="Phone Number"
+                          onChangeText={setPhoneNumber}
+                          placeholder="98765 43210"
                           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                          keyboardType="phone-pad"
                         />
                       </View>
                     </View>
@@ -2549,7 +3135,7 @@ export default function OnboardingScreen() {
                 }}
               >
                 <Text style={styles.resolveActionButtonText}>
-                  {preferredLang === "gujarati" ? "સાચવો" : "Save Details"}
+                  {uiT("saveDetails")}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -2560,7 +3146,7 @@ export default function OnboardingScreen() {
                 onPress={() => setIsEditingProfileManually(false)}
               >
                 <Text style={[styles.resolveActionButtonText, { color: theme.colors.textPrimary }]}>
-                  {preferredLang === "gujarati" ? "રદ કરો" : "Cancel"}
+                  {uiT("cancel")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2580,13 +3166,13 @@ export default function OnboardingScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.resolveCardTitle, { color: theme.colors.textPrimary }]}>
                 {activeMsg.title || (mode === "CONFIRM"
-                  ? (preferredLang === "gujarati" ? "પ્રોફાઇલ વિગતોની પુષ્ટિ કરો" : "Confirm your profile details")
-                  : (preferredLang === "gujarati" ? "અમને બે અલગ પ્રોફાઇલ મળી છે" : "We found two different profiles"))}
+                  ? uiT("confirmYourProfileDetails")
+                  : uiT("weFoundTwoDifferentProfiles"))}
               </Text>
               <Text style={[styles.resolveCardSubtitle, { color: theme.colors.textSecondary }]}>
                 {activeMsg.subtitle || (mode === "CONFIRM"
-                  ? (preferredLang === "gujarati" ? "કૃપા કરીને નીચેની બધી વિગતો તપાસો અને પુષ્ટિ કરો" : "Please check and confirm all details below")
-                  : (preferredLang === "gujarati" ? "કૃપા કરીને સમીક્ષા કરો અને તમારી પસંદગી પસંદ કરો" : "Please review and choose the one you prefer"))}
+                  ? uiT("pleaseCheckAndConfirmAllDetails")
+                  : uiT("pleaseReviewAndChooseOneYouPrefer"))}
               </Text>
             </View>
           </View>
@@ -2597,7 +3183,7 @@ export default function OnboardingScreen() {
               <View style={[styles.columnHeader, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
                 <Ionicons name="person-circle-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
                 <Text style={[styles.columnHeaderTitle, { color: theme.colors.textPrimary }]}>
-                  {preferredLang === "gujarati" ? "તમારી વિગતો" : "Your Details"}
+                  {uiT("yourDetails")}
                 </Text>
               </View>
               <View style={styles.columnBody}>
@@ -2718,7 +3304,7 @@ export default function OnboardingScreen() {
                 <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5" }]}>
                   <Ionicons name="document-text" size={16} color="#10b981" style={{ marginRight: 6 }} />
                   <Text style={[styles.columnHeaderTitle, { color: "#10b981" }]}>
-                    {preferredLang === "gujarati" ? "દસ્તાવેજથી" : "From Document"}
+                    {uiT("fromDocument")}
                   </Text>
                 </View>
                 <View style={styles.columnBody}>
@@ -2772,9 +3358,7 @@ export default function OnboardingScreen() {
             <View style={[styles.explainerBox, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
               <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} style={{ marginRight: 8, marginTop: 2 }} />
               <Text style={[styles.explainerText, { color: theme.colors.textSecondary }]}>
-                {activeMsg.explainer || (preferredLang === "gujarati"
-                  ? "વિગતો દસ્તાવેજો અને સામાજિક પ્રોફાઇલમાં ક્યારેક અલગ હોઈ શકે છે."
-                  : "Name details can sometimes be written differently in documents vs social profiles.")}
+                {activeMsg.explainer || ""}
               </Text>
             </View>
           )}
@@ -2787,7 +3371,7 @@ export default function OnboardingScreen() {
                 onPress={() => sendMessage(JSON.stringify({ confirmed: true }), state, "Confirm Details")}
               >
                 <Text style={[styles.bigActionButtonTextSide, { color: "#ffffff", textAlign: "center" }]} numberOfLines={1}>
-                  {preferredLang === "gujarati" ? "પુષ્ટિ કરો અને ચાલુ રાખો" : "Confirm & Continue"}
+                  {uiT("confirmAndContinue")}
                 </Text>
               </TouchableOpacity>
 
@@ -2806,7 +3390,7 @@ export default function OnboardingScreen() {
                 }}
               >
                 <Text style={[styles.bigActionButtonTextSide, { color: theme.colors.textPrimary, textAlign: "center" }]} numberOfLines={1}>
-                  {preferredLang === "gujarati" ? "વિગતો સુધારો" : "Edit Details"}
+                  {uiT("editDetails")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2818,7 +3402,7 @@ export default function OnboardingScreen() {
               >
                 <View style={{ alignItems: "center" }}>
                   <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
-                    {preferredLang === "gujarati" ? "સોશિયલ લોગિન વાપરો" : "Use Social Login"}
+                    {uiT("useSocialLogin")}
                   </Text>
                   {loginSummary ? (
                     <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
@@ -2834,7 +3418,7 @@ export default function OnboardingScreen() {
               >
                 <View style={{ alignItems: "center" }}>
                   <Text style={styles.bigActionButtonTextSide} numberOfLines={1}>
-                    {preferredLang === "gujarati" ? "દસ્તાવેજ વાપરો" : "Use Document"}
+                    {uiT("useDocument")}
                   </Text>
                   {documentSummary ? (
                     <Text style={styles.bigActionButtonSubtitleSide} numberOfLines={1}>
@@ -2860,7 +3444,7 @@ export default function OnboardingScreen() {
               }}
             >
               <Text style={[styles.manualEditLinkLabel, { color: theme.colors.primary }]}>
-                {preferredLang === "gujarati" ? "તેના બદલે વિગતો જાતે સુધારો" : "Edit manually instead"}
+                {uiT("editManuallyInstead")}
               </Text>
             </TouchableOpacity>
           )}
@@ -2893,15 +3477,8 @@ export default function OnboardingScreen() {
         (activeMsg.options || []).find((o) => o.value === "UPLOAD") || {};
       const manualOpt =
         (activeMsg.options || []).find((o) => o.value === "MANUAL") || {};
-
-      const uploadLabel =
-        preferredLang === "gujarati"
-          ? uploadOpt.label_gu || uploadOpt.label || "મેડિકલ રિપોર્ટ અપલોડ કરો"
-          : uploadOpt.label_en || uploadOpt.label || "Upload Medical Report";
-      const manualLabel =
-        preferredLang === "gujarati"
-          ? manualOpt.label_gu || manualOpt.label || "છોડો અને મેન્યુઅલી દાખલ કરો"
-          : manualOpt.label_en || manualOpt.label || "Skip and Enter Manually";
+      const uploadLabel = uploadOpt.label || uiT("useDocument");
+      const manualLabel = manualOpt.label || uiT("editManuallyInstead");
 
       return (
         <View style={styles.optionContainer}>
@@ -2955,8 +3532,7 @@ export default function OnboardingScreen() {
       return (
         <View style={styles.chipRow}>
           {(activeMsg.options || []).map((opt) => {
-            const label =
-              preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
+            const label = opt.label;
             return (
               <TouchableOpacity
                 key={opt.value}
@@ -2996,9 +3572,7 @@ export default function OnboardingScreen() {
               style={{ marginRight: 8 }}
             />
             <Text style={styles.actionButtonText}>
-              {preferredLang === "gujarati"
-                ? "તારીખ પસંદ કરો"
-                : "Choose Date"}
+              {uiT("chooseDate")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -3025,9 +3599,7 @@ export default function OnboardingScreen() {
               style={{ marginRight: 8 }}
             />
             <Text style={styles.actionButtonText}>
-              {preferredLang === "gujarati"
-                ? "સમય પસંદ કરો"
-                : "Choose Time"}
+              {uiT("chooseTime")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -3044,9 +3616,15 @@ export default function OnboardingScreen() {
           setActiveMedicineToEdit(null);
         } else {
           setCurrentClientMedId(null);
-          const displayLabel = preferredLang === "gujarati"
+          const displayLabel = preferredLang === "gujarati" || preferredLang === "gu"
             ? `દવા ઉમેરો: ${updatedMed.name}`
-            : `Add medicine: ${updatedMed.name}`;
+            : (preferredLang === "hindi" || preferredLang === "hi"
+              ? `दवा जोड़ें: ${updatedMed.name}`
+              : (preferredLang === "marathi" || preferredLang === "mr"
+                ? `औषध जोडा: ${updatedMed.name}`
+                : (preferredLang === "tamil" || preferredLang === "ta"
+                  ? `மருந்தைச் சேர்: ${updatedMed.name}`
+                  : `Add medicine: ${updatedMed.name}`)));
           sendMessage(JSON.stringify({ medicine: updatedMed, clientMedId: currentClientMedId }), state, displayLabel);
         }
       };
@@ -3069,13 +3647,13 @@ export default function OnboardingScreen() {
 
     if (activeMsg.action === "REVIEW_MEDICINES_LIST") {
       const handleConfirm = (checkedMeds: string[]) => {
-        sendMessage(JSON.stringify({ selected: checkedMeds }), state, preferredLang === "gujarati" ? "પસંદ કરેલી દવાઓની પુષ્ટિ કરો" : "Confirm Selected");
+        sendMessage(JSON.stringify({ selected: checkedMeds }), state, uiT("confirmSelection"));
       };
       const handleAddNew = () => {
-        sendMessage(JSON.stringify({ addNew: true }), state, preferredLang === "gujarati" ? "નવી દવા ઉમેરો" : "Add New");
+        sendMessage(JSON.stringify({ addNew: true }), state, uiT("addNew"));
       };
       const handleSkipAll = () => {
-        sendMessage(JSON.stringify({ skipAll: true }), state, preferredLang === "gujarati" ? "બધી દવાઓ છોડી દો" : "Skip All");
+        sendMessage(JSON.stringify({ skipAll: true }), state, uiT("skipAll"));
       };
       const handleEdit = (med: any) => {
         setActiveMedicineToEdit(med);
@@ -3098,10 +3676,28 @@ export default function OnboardingScreen() {
 
     if (activeMsg.action === "CONFIRM_MEDICINE") {
       const handleConfirm = () => {
-        sendMessage(JSON.stringify({ confirmed: true }), state, preferredLang === "gujarati" ? "હા, યોગ્ય છે" : "Yes, Correct");
+        const displayLabel = preferredLang === "gujarati" || preferredLang === "gu"
+          ? "હા, યોગ્ય છે"
+          : (preferredLang === "hindi" || preferredLang === "hi"
+            ? "हाँ, सही है"
+            : (preferredLang === "marathi" || preferredLang === "mr"
+              ? "होय, योग्य आहे"
+              : (preferredLang === "tamil" || preferredLang === "ta"
+                ? "ஆம், சரியானது"
+                : "Yes, Correct")));
+        sendMessage(JSON.stringify({ confirmed: true }), state, displayLabel);
       };
       const handleEdit = () => {
-        sendMessage(JSON.stringify({ edit: true }), state, preferredLang === "gujarati" ? "સુધારો" : "Edit");
+        const displayLabel = preferredLang === "gujarati" || preferredLang === "gu"
+          ? "સુધારો"
+          : (preferredLang === "hindi" || preferredLang === "hi"
+            ? "संपादित करें"
+            : (preferredLang === "marathi" || preferredLang === "mr"
+              ? "संपादित करा"
+              : (preferredLang === "tamil" || preferredLang === "ta"
+                ? "திருத்து"
+                : "Edit")));
+        sendMessage(JSON.stringify({ edit: true }), state, displayLabel);
       };
 
       return (
@@ -3131,8 +3727,7 @@ export default function OnboardingScreen() {
       return (
         <View style={styles.chipRow}>
           {(activeMsg.options || []).map((opt) => {
-            const label =
-              preferredLang === "gujarati" ? opt.label_gu || opt.label : opt.label_en || opt.label;
+            const label = opt.label;
             return (
               <TouchableOpacity
                 key={opt.value}
@@ -3154,9 +3749,7 @@ export default function OnboardingScreen() {
             const label =
               typeof opt === "string"
                 ? opt
-                : preferredLang === "gujarati"
-                  ? opt.label_gu || opt.label_en || opt.label || opt.value
-                  : opt.label_en || opt.label || opt.value;
+                : opt.label || opt.value;
             const value = typeof opt === "string" ? opt : opt.value;
             return (
               <TouchableOpacity
@@ -3254,18 +3847,143 @@ export default function OnboardingScreen() {
           {/* Typing Indicator */}
           {loading && <TypingIndicator isDark={isDark} />}
 
-          {/* Document Upload Progress Overlay */}
-          {uploadProgress && (
-            <View style={styles.progressCard}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text
-                style={[
-                  styles.progressText,
-                  { color: theme.colors.textPrimary },
-                ]}
-              >
-                {uploadProgress}
-              </Text>
+          {/* Document Upload & OCR Experience States */}
+          {uploadState !== "idle" && uploadState !== "success" && (
+            <View style={[styles.progressCard, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#334155" : "#e2e8f0", borderWidth: 1 }]}>
+              {/* Progress UI for Validating */}
+              {uploadState === "validating" && (
+                <View style={{ alignItems: "center", padding: 15 }}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                  <Text style={[styles.progressText, { color: theme.colors.textPrimary, marginTop: 10 }]}>
+                    {ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.validating || ONBOARDING_I18N.english.validating}
+                  </Text>
+                </View>
+              )}
+
+              {/* Progress UI for Uploading */}
+              {uploadState === "uploading" && (
+                <View style={{ width: "100%", padding: 15 }}>
+                  <Text style={[styles.progressText, { color: theme.colors.textPrimary, marginBottom: 8, fontWeight: "bold" }]}>
+                    {autoRetryCount > 0 
+                      ? (ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.retry_count || ONBOARDING_I18N.english.retry_count).replace("{attempt}", String(autoRetryCount)).replace("{max}", "3") 
+                      : (ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.uploading || ONBOARDING_I18N.english.uploading)}
+                  </Text>
+                  {/* Linear Progress Bar */}
+                  <View style={{ height: 6, backgroundColor: isDark ? "#334155" : "#e2e8f0", borderRadius: 3, overflow: "hidden", marginVertical: 10 }}>
+                    <View style={{ height: "100%", width: `${uploadPercent}%`, backgroundColor: theme.colors.primary }} />
+                  </View>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>{uploadPercent}%</Text>
+                    <TouchableOpacity
+                      accessibilityLabel={ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
+                      accessibilityRole="button"
+                      onPress={cancelProcessing}
+                      style={{ paddingHorizontal: 15, paddingVertical: 6, borderRadius: 15, backgroundColor: isDark ? "#334155" : "#f1f5f9" }}
+                    >
+                      <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 12 }}>
+                        {ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Progress UI for Queued */}
+              {uploadState === "queued" && (
+                <View style={{ alignItems: "center", padding: 15 }}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                  <Text style={[styles.progressText, { color: theme.colors.textPrimary, marginTop: 10 }]}>
+                    {ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.queued || ONBOARDING_I18N.english.queued}
+                  </Text>
+                </View>
+              )}
+
+              {/* Progress UI for Processing */}
+              {uploadState === "processing" && (
+                <View style={{ width: "100%", padding: 15 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
+                    <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginRight: 10 }} />
+                    <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold" }} accessibilityLiveRegion="polite">
+                      {isOffline ? "Internet connection lost. Analysis paused..." : (ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.processing || ONBOARDING_I18N.english.processing)}
+                    </Text>
+                  </View>
+                  
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginVertical: 8 }}>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                      {(ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.page_progress || ONBOARDING_I18N.english.page_progress).replace("{current}", String(pollCurrentPage)).replace("{total}", String(pollTotalPages))}
+                    </Text>
+                    {/* Screen reader isolated timer */}
+                    <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 13 }} importantForAccessibility="no-hide-descendants">
+                      {Math.round(pollElapsedTime / 1000)}s
+                    </Text>
+                  </View>
+
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 11, fontStyle: "italic", marginBottom: 12 }}>
+                    {ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.eta_hint || ONBOARDING_I18N.english.eta_hint}
+                  </Text>
+
+                  <TouchableOpacity
+                    accessibilityLabel={ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
+                    accessibilityRole="button"
+                    onPress={cancelProcessing}
+                    style={{ alignSelf: "flex-end", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? "#334155" : "#f1f5f9" }}
+                  >
+                    <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 13 }}>
+                      {ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Failure / Timeout Card */}
+              {(uploadState === "failed" || uploadState === "timed_out") && (
+                <View style={{ width: "100%", padding: 15 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                    <Ionicons name="alert-circle" size={24} color="#ef4444" style={{ marginRight: 8 }} />
+                    <Text style={{ color: "#ef4444", fontWeight: "bold", fontSize: 16 }}>
+                      {uploadState === "timed_out" ? "Analysis Timeout" : "Analysis Failed"}
+                    </Text>
+                  </View>
+
+                  <Text style={{ color: theme.colors.textPrimary, marginBottom: 15, fontSize: 14 }}>
+                    {uploadState === "timed_out" 
+                      ? (ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.err_network_timeout || ONBOARDING_I18N.english.err_network_timeout)
+                      : (ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()][`err_${activeErrorCode?.toLowerCase()}`] || ONBOARDING_I18N.english.err_unexpected_error)}
+                  </Text>
+
+                  {__DEV__ && activeErrorDetails && (
+                    <View style={{ backgroundColor: isDark ? "#0f172a" : "#f8fafc", padding: 8, borderRadius: 6, marginBottom: 15 }}>
+                      <Text style={{ color: "#ef4444", fontFamily: Platform.OS === "ios" ? "Courier" : "monospace", fontSize: 11 }} numberOfLines={4}>
+                        {activeErrorDetails}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={{ flexDirection: "column", gap: 8 }}>
+                    <TouchableOpacity
+                      accessibilityLabel={ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_try_again || ONBOARDING_I18N.english.btn_try_again}
+                      accessibilityRole="button"
+                      onPress={() => uploadSelectedFile(selectedFile)}
+                      style={{ width: "100%", paddingVertical: 12, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: "center" }}
+                    >
+                      <Text style={{ color: "#ffffff", fontWeight: "bold" }}>
+                        {ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_try_again || ONBOARDING_I18N.english.btn_try_again}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      accessibilityLabel={ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_choose_different || ONBOARDING_I18N.english.btn_choose_different}
+                      accessibilityRole="button"
+                      onPress={handleChooseDifferentFile}
+                      style={{ width: "100%", paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.primary, alignItems: "center" }}
+                    >
+                      <Text style={{ color: theme.colors.primary, fontWeight: "bold" }}>
+                        {ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.btn_choose_different || ONBOARDING_I18N.english.btn_choose_different}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
           )}
 

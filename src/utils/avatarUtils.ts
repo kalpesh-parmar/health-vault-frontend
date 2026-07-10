@@ -22,3 +22,22 @@ export const getInitials = (firstName?: string | null, lastName?: string | null)
     return "";
   }
 };
+
+/**
+ * Utility to construct a display name preferring the profile's first/last name,
+ * and falling back to Google account name (fullName) or default.
+ */
+export const getDisplayName = (
+  user?: { firstName?: string | null; lastName?: string | null; fullName?: string | null } | null,
+  profile?: { firstName?: string | null; lastName?: string | null } | null
+): string => {
+  const target = profile || user;
+  if (!target) return "User Profile";
+  const profileName = (target.firstName || target.lastName)
+    ? `${target.firstName || ""} ${target.lastName || ""}`.trim()
+    : "";
+  if (profileName) return profileName;
+  if (user?.fullName) return user.fullName;
+  return "User Profile";
+};
+
