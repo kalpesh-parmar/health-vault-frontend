@@ -47,7 +47,7 @@ type ChatMessage = {
 
 const AIChatScreen = () => {
   const navigation = useNavigation();
-  const { isDark, theme } = useAppTheme();
+  const { isDark } = useAppTheme();
   const [input, setInput] = useState("");
   const [selectedDocument, setSelectedDocument] =
     useState<MedicalDocument | null>(null);

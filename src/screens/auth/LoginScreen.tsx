@@ -392,7 +392,7 @@ const LoginScreen = () => {
       Toast.show({
         type: "error",
         text1: "Facebook Sign-In Failed",
-        text2: error.message || "An error occurred during sign in.",
+        text2: errorMsg || "An error occurred during sign in.",
       });
     } finally {
       setIsFacebookLoading(false);

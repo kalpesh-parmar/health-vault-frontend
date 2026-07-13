@@ -586,8 +586,12 @@ function AddMedicineCard({
   onSave,
   onCancel,
 }: AddMedicineCardProps) {
-  const [formName, setFormName] = useState(med.name || "");
-  const [formType, setFormType] = useState(med.type || "TABLET");
+  const [formName, setFormName] = useState(
+    med.name || med.medicationName || "",
+  );
+  const [formType, setFormType] = useState(
+    med.type || med.medicationType || "TABLET",
+  );
   const [formFreq, setFormFreq] = useState(med.frequency || "ONCE");
   const [formNotes, setFormNotes] = useState(med.notes || "");
   const [formPrescribed, setFormPrescribed] = useState(
@@ -602,7 +606,7 @@ function AddMedicineCard({
       : String(med.totalQuantity ?? "1"),
   );
   const [formFoodFreq, setFormFoodFreq] = useState(
-    med.foodContext || med.medicationSchedule?.foodContext || "AFTER_FOOD"
+    med.foodContext || med.medicationSchedule?.foodContext || "AFTER_FOOD",
   );
   const [startDate, setStartDate] = useState<Date | null>(
     med.startDate ? new Date(med.startDate) : null,
@@ -655,6 +659,7 @@ function AddMedicineCard({
     if (!isEditingLocal && !currentClientMedId) {
       const newId =
         med.client_med_id ||
+        med.id ||
         `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       setCurrentClientMedId(newId);
     }
@@ -816,15 +821,24 @@ function AddMedicineCard({
 
     const updatedMed = {
       name: formName.trim(),
+      medicationName: formName.trim(),
       type: formType,
+      medicationType: formType,
       dose,
+      dosePerIntake:
+        formType === "TABLET" || formType === "CAPSULE"
+          ? String(formCount)
+          : `${formVal} ${formUnit}`,
       frequency: formFreq,
       notes: formNotes.trim(),
       prescribed_by: formPrescribed.trim() || null,
       refill_alert: formRefill,
       total_quantity: qtyVal,
       startDate,
-      client_med_id: isEditingLocal ? med.client_med_id : currentClientMedId,
+      client_med_id: isEditingLocal
+        ? med.client_med_id || med.id
+        : currentClientMedId,
+      id: med.id,
       source: med.source || "MANUAL",
       medicationSchedule: sortedTimes,
       foodFrequency: formFoodFreq,
@@ -1660,17 +1674,40 @@ function AddMedicineCard({
       </View>
 
       <View style={styles.inputGroup}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
-          <Ionicons name="restaurant-outline" size={14} color={theme.colors.textSecondary} style={{ marginRight: 6 }} />
-          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
-            {preferredLang === "gujarati" ? "ભોજન સાથેનો સમય" : "Food Frequency"}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 6,
+          }}
+        >
+          <Ionicons
+            name="restaurant-outline"
+            size={14}
+            color={theme.colors.textSecondary}
+            style={{ marginRight: 6 }}
+          />
+          <Text
+            style={[
+              styles.inputLabel,
+              { color: theme.colors.textSecondary, marginBottom: 0 },
+            ]}
+          >
+            {preferredLang === "gujarati"
+              ? "ભોજન સાથેનો સમય"
+              : "Food Frequency"}
           </Text>
         </View>
         <View style={styles.chipRow}>
           {["BEFORE_FOOD", "AFTER_FOOD"].map((f) => {
-            const label = f === "BEFORE_FOOD" 
-              ? (preferredLang === "gujarati" ? "જમ્યા પહેલા" : "Before Food")
-              : (preferredLang === "gujarati" ? "જમ્યા પછી" : "After Food");
+            const label =
+              f === "BEFORE_FOOD"
+                ? preferredLang === "gujarati"
+                  ? "જમ્યા પહેલા"
+                  : "Before Food"
+                : preferredLang === "gujarati"
+                  ? "જમ્યા પછી"
+                  : "After Food";
             return (
               <TouchableOpacity
                 key={f}
@@ -1678,7 +1715,11 @@ function AddMedicineCard({
                   styles.freqChip,
                   {
                     backgroundColor:
-                      formFoodFreq === f ? theme.colors.primary : isDark ? "#334155" : "#f1f5f9",
+                      formFoodFreq === f
+                        ? theme.colors.primary
+                        : isDark
+                          ? "#334155"
+                          : "#f1f5f9",
                     paddingVertical: 8,
                     paddingHorizontal: 16,
                     borderRadius: 10,
@@ -1688,7 +1729,18 @@ function AddMedicineCard({
                 ]}
                 onPress={() => setFormFoodFreq(f)}
               >
-                <Text style={[styles.freqChipText, { color: formFoodFreq === f ? "#ffffff" : theme.colors.textPrimary, fontWeight: "bold" }]}>
+                <Text
+                  style={[
+                    styles.freqChipText,
+                    {
+                      color:
+                        formFoodFreq === f
+                          ? "#ffffff"
+                          : theme.colors.textPrimary,
+                      fontWeight: "bold",
+                    },
+                  ]}
+                >
                   {label}
                 </Text>
               </TouchableOpacity>
@@ -2584,21 +2636,14 @@ export default function OnboardingScreen() {
         userData.gender;
 
       const initialUserData: UserData = {
-        firstName:
-          userData.firstName === "User" ? "" : userData.firstName || "",
-        lastName: userData.lastName?.startsWith("+")
-          ? ""
-          : userData.lastName || "",
+        firstName: userData.firstName || "",
+        lastName: userData.lastName || "",
         dateOfBirth: userData.dateOfBirth
           ? format(new Date(userData.dateOfBirth), "yyyy-MM-dd")
           : "",
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
-        allergies: Array.isArray(userData.allergies)
-          ? userData.allergies
-          : typeof userData.allergies === "string" && userData.allergies
-            ? (userData.allergies as string).split(",").map((s) => s.trim())
-            : [],
+        allergies: Array.isArray(userData.allergies) ? userData.allergies : [],
         email: userData.email || "",
       };
 
@@ -3023,7 +3068,11 @@ export default function OnboardingScreen() {
     setSelectedFile(null);
     setInput("");
 
-    sendMessage("DOCUMENT_UPLOADED", newState, "Document Uploaded: " + fileName);
+    await sendMessage(
+      "DOCUMENT_UPLOADED",
+      newState,
+      "Document Uploaded: " + fileName,
+    );
   };
 
   const pollOcrStatus = async (fileKey: string): Promise<any> => {
@@ -3037,7 +3086,12 @@ export default function OnboardingScreen() {
         try {
           const resData = await getOcrStatus(fileKey);
           const jobData = resData?.data || resData;
-          console.log("[ONBOARDING] Poll OCR Status:", jobData?.status, "Stage:", jobData?.stage);
+          console.log(
+            "[ONBOARDING] Poll OCR Status:",
+            jobData?.status,
+            "Stage:",
+            jobData?.stage,
+          );
 
           if (jobData?.status === "COMPLETED") {
             clearInterval(interval);
@@ -3112,15 +3166,21 @@ export default function OnboardingScreen() {
           rawOcrData: pollResult.rawOcrData,
           extractedStructuredData: pollResult.extractedStructuredData,
           graphs: pollResult.graphs,
-          embeddingsGenerated: true
+          embeddingsGenerated: true,
         });
 
-        await handleSuccessfulOcr({
-          document: { ocrExtractedText: pollResult.rawOcrData },
-          structuredData: pollResult.extractedStructuredData || {}
-        }, fileToUpload.name);
+        await handleSuccessfulOcr(
+          {
+            document: { ocrExtractedText: pollResult.rawOcrData },
+            structuredData: pollResult.extractedStructuredData || {},
+          },
+          fileToUpload.name,
+        );
       } else {
-        throw new Error("OCR failed or did not complete successfully. Stage: " + pollResult?.stage);
+        throw new Error(
+          "OCR failed or did not complete successfully. Stage: " +
+            pollResult?.stage,
+        );
       }
     } catch (error: any) {
       console.error("[Onboarding] Document processing failed:", error);
@@ -3138,12 +3198,14 @@ export default function OnboardingScreen() {
         !error.response;
 
       if (isTimeoutOrNetworkError && fileKey) {
-        setUploadProgress(
-          "Analyzing report details...",
-        );
+        setUploadProgress("Analyzing report details...");
         try {
           const pollResult = await pollOcrStatus(fileKey);
-          if (pollResult && (pollResult.status === "COMPLETED" || pollResult.stage === "COMPLETED")) {
+          if (
+            pollResult &&
+            (pollResult.status === "COMPLETED" ||
+              pollResult.stage === "COMPLETED")
+          ) {
             setUploadProgress("Saving Document...");
             await addDocument({
               s3Key: fileKey,
@@ -3154,17 +3216,17 @@ export default function OnboardingScreen() {
               graphs: pollResult.graphs,
             });
 
-            await handleSuccessfulOcr({
-              document: { ocrExtractedText: pollResult.rawOcrData },
-              structuredData: pollResult.extractedStructuredData || {}
-            }, fileToUpload.name);
+            await handleSuccessfulOcr(
+              {
+                document: { ocrExtractedText: pollResult.rawOcrData },
+                structuredData: pollResult.extractedStructuredData || {},
+              },
+              fileToUpload.name,
+            );
             return;
           }
         } catch (pollErr) {
-          console.error(
-            "[Onboarding] Polling OCR status failed:",
-            pollErr,
-          );
+          console.error("[Onboarding] Polling OCR status failed:", pollErr);
         }
       }
 
@@ -3213,16 +3275,17 @@ export default function OnboardingScreen() {
     sendMessage("MANUAL", newState);
   };
 
-  // const handleEditMedicineField = (field: string, value: any) => {
-  //   const newMedicines = [...state.medicinesToAdd];
-  //   const currentIndex = state.currentMedicineIndex;
-  //   if (!newMedicines[currentIndex]) newMedicines[currentIndex] = {};
-  //   newMedicines[currentIndex] = {
-  //     ...newMedicines[currentIndex],
-  //     [field]: value,
-  //   };
-  //   setState({ ...state, medicinesToAdd: newMedicines });
-  // };
+  const handleEditMedicineField = (field: string, value: any) => {
+    const newMedicines = [...state.medicinesToAdd];
+    const currentIndex = state.currentMedicineIndex;
+    if (!newMedicines[currentIndex]) newMedicines[currentIndex] = {};
+    newMedicines[currentIndex] = {
+      ...newMedicines[currentIndex],
+      [field]: value,
+    };
+    setState({ ...state, medicinesToAdd: newMedicines });
+  };
+
   const renderOptions = (activeMsg: Message) => {
     const preferredLang = state.preferredLanguage || "english";
 
@@ -4554,7 +4617,7 @@ export default function OnboardingScreen() {
         if (isEditingLocal) {
           setLocalMedicines((prev) =>
             prev.map((m) =>
-              m.client_med_id === med.client_med_id
+              (m.client_med_id || m.id) === (med.client_med_id || med.id)
                 ? {
                     ...m,
                     ...updatedMed,
@@ -4567,6 +4630,20 @@ export default function OnboardingScreen() {
                 : m,
             ),
           );
+
+          // let newState = state;
+          // if (state.currentMedicineIndex !== undefined && state.currentMedicineIndex >= 0) {
+          //   const newMedicines = [...(state.medicinesToAdd || [])];
+          //   if (newMedicines[state.currentMedicineIndex]) {
+          //     newMedicines[state.currentMedicineIndex] = {
+          //       ...newMedicines[state.currentMedicineIndex],
+          //       ...updatedMed,
+          //     };
+          //     newState = { ...state, medicinesToAdd: newMedicines };
+          //     setState(newState);
+          //   }
+          // }
+
           setActiveMedicineToEdit(null);
         } else {
           setCurrentClientMedId(null);
@@ -4574,12 +4651,29 @@ export default function OnboardingScreen() {
             preferredLang === "gujarati"
               ? `દવા ઉમેરો: ${updatedMed.name}`
               : `Add medicine: ${updatedMed.name}`;
+
+          let newState = state;
+          if (
+            state.currentMedicineIndex !== undefined &&
+            state.currentMedicineIndex >= 0
+          ) {
+            const newMedicines = [...(state.medicinesToAdd || [])];
+            if (newMedicines[state.currentMedicineIndex]) {
+              newMedicines[state.currentMedicineIndex] = {
+                ...newMedicines[state.currentMedicineIndex],
+                ...updatedMed,
+              };
+              newState = { ...state, medicinesToAdd: newMedicines };
+              setState(newState);
+            }
+          }
+
           sendMessage(
             JSON.stringify({
               medicine: updatedMed,
               clientMedId: currentClientMedId,
             }),
-            state,
+            newState,
             displayLabel,
           );
         }
@@ -4655,6 +4749,11 @@ export default function OnboardingScreen() {
         );
       };
       const handleEdit = () => {
+        const medToEdit =
+          state.medicinesToAdd?.[state.currentMedicineIndex || 0];
+        if (medToEdit) {
+          setActiveMedicineToEdit(medToEdit);
+        }
         sendMessage(
           JSON.stringify({ edit: true }),
           state,
@@ -4682,172 +4781,6 @@ export default function OnboardingScreen() {
           theme={theme}
           onOptionPress={handleOptionPress}
         />
-      );
-    }
-
-    if (activeMsg.action === "CONFIRM_MEDICINE") {
-      const summaryTitleLabel = activeMsg.content || "Medication Summary";
-      return (
-        <View style={styles.summaryContainer}>
-          <Text
-            style={[styles.summaryTitle, { color: theme.colors.textPrimary }]}
-          >
-            {summaryTitleLabel}
-          </Text>
-          {(state.medicinesToAdd || []).map((med, index) => (
-            <View
-              key={index}
-              style={[
-                styles.medCard,
-                { backgroundColor: isDark ? "#334155" : "#f1f5f9" },
-              ]}
-            >
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontWeight: "bold",
-                  fontSize: 16,
-                  marginBottom: 6,
-                }}
-              >
-                {med.medicationName || "Unknown"}
-              </Text>
-
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontSize: 13,
-                  marginBottom: 2,
-                }}
-              >
-                <Text style={{ fontWeight: "600" }}>Type:</Text>{" "}
-                {med.medicationType}
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontSize: 13,
-                  marginBottom: 2,
-                }}
-              >
-                <Text style={{ fontWeight: "600" }}>Dose:</Text>{" "}
-                {med.dosePerIntake}
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontSize: 13,
-                  marginBottom: 2,
-                }}
-              >
-                <Text style={{ fontWeight: "600" }}>Frequency:</Text>{" "}
-                {med.frequency?.replace(/_/g, " ")}
-              </Text>
-
-              {med.medicationSchedule &&
-                Array.isArray(med.medicationSchedule) &&
-                med.medicationSchedule.length > 0 && (
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontSize: 13,
-                      marginBottom: 2,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "600" }}>Time:</Text>{" "}
-                    {med.medicationSchedule.join(", ")}
-                  </Text>
-                )}
-
-              {med.foodFrequency && (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontSize: 13,
-                    marginBottom: 2,
-                  }}
-                >
-                  <Text style={{ fontWeight: "600" }}>Food Info:</Text>{" "}
-                  {med.foodFrequency.replace(/_/g, " ")}
-                </Text>
-              )}
-
-              {med.startDate && (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontSize: 13,
-                    marginBottom: 2,
-                  }}
-                >
-                  <Text style={{ fontWeight: "600" }}>Start Date:</Text>{" "}
-                  {med.startDate}
-                </Text>
-              )}
-
-              {med.totalQuantity !== undefined && (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontSize: 13,
-                    marginBottom: 2,
-                  }}
-                >
-                  <Text style={{ fontWeight: "600" }}>Total Quantity:</Text>{" "}
-                  {med.totalQuantity}
-                </Text>
-              )}
-
-              {med.ongoing !== undefined && (
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontSize: 13,
-                    marginBottom: 2,
-                  }}
-                >
-                  <Text style={{ fontWeight: "600" }}>Ongoing:</Text>{" "}
-                  {med.ongoing ? "Yes" : "No"}
-                </Text>
-              )}
-            </View>
-          ))}
-          <View style={styles.chipRow}>
-            {(activeMsg.options || []).map((opt, index) => {
-              let label =
-                typeof opt === "string" ? opt : opt.label || opt.value;
-              let value =
-                typeof opt === "string" ? opt : opt.value || opt.label;
-              if (typeof label === "object" && label !== null)
-                label =
-                  label.name ||
-                  label.value ||
-                  label.label ||
-                  JSON.stringify(label);
-              if (typeof value === "object" && value !== null)
-                value =
-                  value.value ||
-                  value.name ||
-                  value.label ||
-                  JSON.stringify(value);
-              const strLabel = String(label);
-              const strValue = String(value);
-
-              return (
-                <TouchableOpacity
-                  key={strValue || index.toString()}
-                  style={[
-                    styles.chip,
-                    { backgroundColor: theme.colors.primary },
-                  ]}
-                  onPress={() => sendMessage(strValue, state, strLabel)}
-                >
-                  <Text style={styles.chipText}>{strLabel}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
       );
     }
 
@@ -4995,7 +4928,7 @@ export default function OnboardingScreen() {
                 flatListRef.current?.scrollToEnd({ animated: true })
               }
               renderItem={({ item }) => {
-                console.log("Message Item : ", item);
+                // console.log("Message Item : ", item);
                 const isAi = item.role === "assistant";
                 const mappedMsg = {
                   id: item.id,
@@ -5013,8 +4946,11 @@ export default function OnboardingScreen() {
                       <MessageBubble message={mappedMsg} isDark={isDark} />
                     )}
                     {isAi && options !== null && (
-                      <View 
-                        style={[styles.optionsWrapper, { opacity: isLast ? 1 : 0.5 }]} 
+                      <View
+                        style={[
+                          styles.optionsWrapper,
+                          { opacity: isLast ? 1 : 0.5 },
+                        ]}
                         pointerEvents={isLast ? "auto" : "none"}
                       >
                         {options}
