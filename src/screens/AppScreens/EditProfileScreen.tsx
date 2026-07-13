@@ -98,6 +98,7 @@ type EditableFieldProps = {
   inputRef?: React.RefObject<any>;
   isEditing?: boolean;
   error?: string;
+  isVerified?: boolean;
 };
 
 const EditableField = ({
@@ -115,10 +116,14 @@ const EditableField = ({
   inputRef,
   isEditing = true,
   error,
+  isVerified = false,
 }: EditableFieldProps) => {
   const { theme } = useAppTheme();
+  const actuallyEditable = editable && !isVerified;
+  const showDisabledStyle = isEditing && isVerified;
+
   return (
-    <View>
+    <View style={{ opacity: showDisabledStyle ? 0.6 : 1 }}>
       <FieldRow
         style={
           isFocused
@@ -139,22 +144,31 @@ const EditableField = ({
           <FieldLabel style={isFocused ? { color: colors.icon } : {}}>
             {label}
           </FieldLabel>
-          <ActiveInput
-            ref={inputRef}
-            value={value}
-            onChangeText={onChangeText}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            keyboardType={keyboardType}
-            autoCapitalize={autoCapitalize}
-            placeholderTextColor={theme.colors.textMuted}
-            placeholder={`Enter ${label.toLowerCase()}`}
-            isFocused={isFocused}
-            accentColor={colors.icon}
-            editable={editable}
-          />
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <ActiveInput
+              ref={inputRef}
+              value={value}
+              onChangeText={onChangeText}
+              onFocus={onFocus}
+              onBlur={onBlur}
+              keyboardType={keyboardType}
+              autoCapitalize={autoCapitalize}
+              placeholderTextColor={theme.colors.textMuted}
+              placeholder={`Enter ${label.toLowerCase()}`}
+              isFocused={isFocused}
+              accentColor={colors.icon}
+              editable={actuallyEditable}
+              style={{ flex: 1 }}
+            />
+            {isVerified && (
+              <VerifiedBadge>
+                <Ionicons name="checkmark-circle" size={14} color="#0284c7" />
+                <VerifiedText>Verified</VerifiedText>
+              </VerifiedBadge>
+            )}
+          </View>
         </FieldContent>
-        {isEditing && !isFocused && (
+        {isEditing && !isFocused && actuallyEditable && (
           <EditChip>
             <Ionicons
               name="create-outline"
@@ -520,6 +534,7 @@ const EditProfile = () => {
                   editable={isEditing}
                   isEditing={isEditing}
                   error={errors.email}
+                  isVerified={userData?.isEmailVerified}
                 />
                 <FieldDivider />
                 <EditableField
@@ -535,6 +550,7 @@ const EditProfile = () => {
                   editable={isEditing}
                   isEditing={isEditing}
                   error={errors.mobile}
+                  isVerified={userData?.isMobileVerified}
                 />
               </Card>
 
@@ -556,7 +572,7 @@ const EditProfile = () => {
                     </FieldIconBox>
                     <FieldContent>
                       <FieldLabel>{isEditing ? "Date of Birth" : "Age"}</FieldLabel>
-                      <AgeInput hasValue={!!form.dateOfBirth}>
+                      <AgeInput hasValue={!!form.dateOfBirth} editable={false}>
                         {isEditing 
                           ? (form.dateOfBirth ? format(form.dateOfBirth, "dd MMM yyyy") : "Select Date")
                           : (form.dateOfBirth ? `${calculateAge(form.dateOfBirth)} Years` : "Not specified")}
@@ -933,4 +949,20 @@ const FieldErrorText = styled.Text`
   margin-top: -10px;
   margin-bottom: 10px;
   margin-left: 65px;
+`;
+
+const VerifiedBadge = styled.View`
+  flex-direction: row;
+  align-items: center;
+  background-color: #e0f2fe;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: 8px;
+`;
+
+const VerifiedText = styled.Text`
+  font-size: 10px;
+  color: #0284c7;
+  font-weight: 700;
+  margin-left: 4px;
 `;

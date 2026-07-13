@@ -32,6 +32,7 @@ import {
 import { listMedications } from "../../services/medicationservice";
 import { listDocument } from "../../services/documentService";
 import { Reminder } from "../../types";
+import { getInitials } from "../../utils/avatarUtils";
 
 interface ActionItemProps {
   onPress: () => void;
@@ -227,8 +228,7 @@ const HomeScreen = () => {
           ) : (
             <UserAvatarFallback>
               <UserAvatarFallbackText>
-                {(data?.firstName?.charAt(0).toUpperCase() || "") +
-                  (data?.lastName?.charAt(0).toUpperCase() || "")}
+                {getInitials(data?.firstName, data?.lastName) || "?"}
               </UserAvatarFallbackText>
             </UserAvatarFallback>
           )}

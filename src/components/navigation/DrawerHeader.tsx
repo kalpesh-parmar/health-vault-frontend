@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { getFileSource } from "../../services/fileService";
+import { getDisplayName } from "../../utils/avatarUtils";
 
 interface DrawerHeaderProps {
   userDetails: any;
@@ -24,13 +25,8 @@ const DrawerHeader = React.memo(
     const [imageError, setImageError] = useState(false);
     const [profileImageSource, setProfileImageSource] = useState<any>(null);
 
-    const displayName =
-      userDetails?.fullName ||
-      (userDetails?.firstName && userDetails?.lastName
-        ? `${userDetails.firstName} ${userDetails.lastName}`
-        : "") ||
-      userDetails?.firstName ||
-      "User Profile";
+    const displayName = getDisplayName(userDetails);
+
 
     const email = userDetails?.email || "";
     const headerColors = (

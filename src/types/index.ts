@@ -143,6 +143,8 @@ export interface User {
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string | null;
+  isMobileVerified: boolean;
+  isEmailVerified: boolean;
 }
 
 // ─── Update User Request ────────────────────────────────────────────────

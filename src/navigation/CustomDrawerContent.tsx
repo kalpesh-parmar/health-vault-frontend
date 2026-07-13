@@ -9,6 +9,7 @@ import { useAppTheme } from "../context/ThemeContext";
 import { AppStackParamList } from "./types";
 import { getUser } from "../services/userService";
 import ConfirmationModal from "../components/shared/ConfirmationModal";
+import { getInitials } from "../utils/avatarUtils";
 
 // Import modular drawer components
 import DrawerHeader from "../components/navigation/DrawerHeader";
@@ -31,18 +32,7 @@ const CustomDrawerContent = (props: any) => {
   });
 
   const initials = useMemo(() => {
-    const first = userDetails?.firstName ? userDetails.firstName.trim() : "";
-    const last = userDetails?.lastName ? userDetails.lastName.trim() : "";
-    if (first && last) {
-      return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
-    }
-    if (first) {
-      return first.charAt(0).toUpperCase();
-    }
-    if (last) {
-      return last.charAt(0).toUpperCase();
-    }
-    return "?";
+    return getInitials(userDetails?.firstName, userDetails?.lastName) || "?";
   }, [userDetails?.firstName, userDetails?.lastName]);
 
   const state = props.state;
