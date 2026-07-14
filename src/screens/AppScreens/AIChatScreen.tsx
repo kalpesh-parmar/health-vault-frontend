@@ -44,6 +44,7 @@ import { ReviewMedicinesListCard } from "../../components/chat/widgets/ReviewMed
 import { ConfirmMedicineCard } from "../../components/chat/widgets/ConfirmMedicineCard";
 import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOptionsPanel";
 import { findHistoricalUserReply, HistoricalChips } from "../../components/chat/widgets/HistoricalChips";
+import TypingIndicator from "../../components/chat/TypingIndicator";
 
 enum ChatMode {
   GENERAL_HEALTH = "GENERAL_HEALTH",
@@ -764,6 +765,31 @@ const AIChatScreen = () => {
                 isLoadingMore ? (
                   <View style={{ paddingVertical: 10 }}>
                     <ActivityIndicator size="small" color="#0f766e" />
+                  </View>
+                ) : null
+              }
+              ListHeaderComponent={
+                isSending ? (
+                  <View style={{ flexDirection: "row", alignSelf: "flex-start", paddingLeft: 12, marginTop: 4, marginBottom: 8 }}>
+                    <View style={{ alignSelf: "flex-end" }}>
+                      <LinearGradient
+                        colors={["#0f766e", "#0ea5e9"]}
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: "rgba(255,255,255,0.3)",
+                        }}
+                      >
+                        <Ionicons name="sparkles" size={14} color="#ffffff" />
+                      </LinearGradient>
+                    </View>
+                    <View style={{ marginLeft: -4 }}>
+                      <TypingIndicator isDark={isDark} />
+                    </View>
                   </View>
                 ) : null
               }
