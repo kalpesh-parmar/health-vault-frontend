@@ -1100,6 +1100,14 @@ export default function OnboardingScreen() {
 
       if (resData) {
         processAssistantResponse(resData, updatedState);
+        if (
+          resData.action === "COMPLETE" ||
+          resData.action === "POST_ONBOARDING" ||
+          resData.state?.isOnboardingCompleted
+        ) {
+          queryClient.invalidateQueries({ queryKey: ["profile"] });
+          queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+        }
       }
     } catch (error: any) {
       console.error("[Onboarding] Send message failed:", error);
@@ -1700,22 +1708,16 @@ export default function OnboardingScreen() {
 
     const handleOptionPress = (value: string, label: string) => {
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
-        queryClient.invalidateQueries({ queryKey: ["profile"] });
-        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
         sendMessage(value, state, label);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
         sendMessage(value, state, label);
       } else if (value === "VIEW_MEDICINES" || value === "VIEW_MY_MEDICINES") {
-        queryClient.invalidateQueries({ queryKey: ["profile"] });
-        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
         setTimeout(() => {
           navigation.navigate("MEDICATION", {
             screen: "MedicationList",
           });
         }, 500);
       } else if (value === "ASK_ABOUT_REPORT" || value === "ASK_REPORT") {
-        queryClient.invalidateQueries({ queryKey: ["profile"] });
-        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
         sendMessage(value, state, label);
         setTimeout(() => {
           navigation.navigate("HOME", {
@@ -2091,39 +2093,7 @@ export default function OnboardingScreen() {
       activeMsg.action === "COMPLETE" ||
       activeMsg.action === "POST_ONBOARDING"
     ) {
-      return (
-        <View style={styles.chipRow} pointerEvents={isHistorical ? "none" : "auto"}>
-          {(activeMsg.options || []).map((opt) => {
-            const label = opt.label;
-            const isChosen = isHistorical && (
-              (chosenVal && String(opt.value).toLowerCase() === String(chosenVal).toLowerCase()) ||
-              (chosenLabel && String(label).toLowerCase() === String(chosenLabel).toLowerCase())
-            );
-            const isUnchosen = isHistorical && !isChosen;
-
-            return (
-              <TouchableOpacity
-                key={opt.value}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: theme.colors.primary,
-                    opacity: isUnchosen ? 0.55 : 1,
-                    borderWidth: isChosen ? 2 : 0,
-                    borderColor: isChosen ? "#ffffff" : "transparent",
-                  }
-                ]}
-                onPress={() => handleOptionPress(opt.value, label)}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  {isChosen && <Ionicons name="checkmark" size={14} color="#fff" style={{ marginRight: 4 }} />}
-                  <Text style={styles.chipText}>{label}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      );
+      return null;
     }
 
     if (activeMsg.options && activeMsg.options.length > 0) {

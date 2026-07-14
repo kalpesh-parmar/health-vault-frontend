@@ -617,11 +617,11 @@ const AIChatScreen = () => {
                 const isChipStep =
                   !isComplexStep &&
                   !isExcludedStep &&
+                  item.action !== "COMPLETE" &&
+                  item.action !== "POST_ONBOARDING" &&
                   (item.action === "ASK_LANGUAGE" ||
                    item.action === "ASK_GENDER" ||
                    item.action === "ASK_BLOOD_GROUP" ||
-                   item.action === "COMPLETE" ||
-                   item.action === "POST_ONBOARDING" ||
                    (item.options && item.options.length > 0));
 
                 const renderAssistantPrompt = (card: React.ReactNode) => {
