@@ -399,6 +399,7 @@ const LoginScreen = () => {
     }
   };
 
+
   return (
     <Container themeColor={theme.colors}>
       <StatusBar barStyle="light-content" />
@@ -469,8 +470,8 @@ const LoginScreen = () => {
                 <SocialAuthButton
                   provider="apple"
                   label="Continue with Apple"
-                  onPress={() => console.log("Apple login")}
-                  disabled={loading}
+                  onPress={() => {}}
+                  disabled={true}
                 />
                 <SocialAuthButton
                   provider="facebook"

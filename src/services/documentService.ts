@@ -19,6 +19,7 @@ export interface UploadResponse {
 export interface ChatMessageRequest {
   documentKey?: string;
   question: string;
+  sessionId?: string | null;
 }
 
 export interface ChatMessageResponse {

@@ -43,11 +43,13 @@ export const socialLogin = async (
   firebaseIdToken: string,
   providerToken?: string | null,
   deviceToken?: string | null,
+  extraDetails?: { email?: string | null; firstName?: string | null; lastName?: string | null } | null,
 ) => {
   const payload: any = {
     loginType,
     provider,
     deviceToken,
+    ...extraDetails,
   };
 
   if (firebaseIdToken) {
@@ -63,7 +65,7 @@ export const socialLogin = async (
 };
 
 export const loginSocialWithFirebase = async (
-  provider: "google" | "facebook" | "microsoft" | "apple" | "phone",
+  provider: "google" | "facebook" | "microsoft" | "phone",
   token: string,
   accessToken?: string,
 ) => {
