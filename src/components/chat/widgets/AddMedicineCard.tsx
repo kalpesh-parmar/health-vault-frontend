@@ -59,7 +59,7 @@ export function AddMedicineCard({
     med.foodContext || med.medicationSchedule?.foodContext || "AFTER_FOOD",
   );
   const [startDate, setStartDate] = useState<Date | null>(
-    med.startDate ? new Date(med.startDate) : null,
+    med.startDate ? new Date(med.startDate) : new Date(),
   );
   const [isStartDatePickerVisible, setStartDatePickerVisible] = useState(false);
 

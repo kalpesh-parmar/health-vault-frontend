@@ -29,7 +29,6 @@ export interface ChatMessageRequest {
   sessionId: string;
   documentId?: string;
   question: string;
-  sessionId?: string | null;
 }
 
 export interface ChatMessageResponse {

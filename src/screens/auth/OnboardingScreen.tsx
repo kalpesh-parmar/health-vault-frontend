@@ -1947,8 +1947,7 @@ export default function OnboardingScreen() {
       activeMsg.action === "ASK_DOB" ||
       activeMsg.action === "ASK_MEDICINE_START_DATE"
     ) {
-      const displayDate =
-        isHistorical && chosenLabel ? chosenLabel : uiT("chooseDate");
+      const displayDate = uiT("chooseDate");
       return (
         <View
           style={styles.actionRow}
@@ -1983,8 +1982,7 @@ export default function OnboardingScreen() {
     }
 
     if (activeMsg.action === "ASK_MEDICINE_SCHEDULE") {
-      const displayTime =
-        isHistorical && chosenLabel ? chosenLabel : uiT("chooseTime");
+      const displayTime = uiT("chooseTime");
       return (
         <View
           style={styles.actionRow}
