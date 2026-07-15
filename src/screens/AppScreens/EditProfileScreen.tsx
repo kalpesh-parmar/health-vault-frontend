@@ -10,12 +10,14 @@ import {
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
-import {
-  useFocusEffect,
-} from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getUser, updateUser } from "../../services/userService";
-import { uploadFileToS3, deleteFileFromS3, getFileSource } from "../../services/fileService";
+import {
+  uploadFileToS3,
+  deleteFileFromS3,
+  getFileSource,
+} from "../../services/fileService";
 import { queryClient } from "../../config/queryClient";
 import Toast from "react-native-toast-message";
 import { useAppTheme } from "../../context/ThemeContext";
@@ -141,9 +143,17 @@ const EditableField = ({
           />
         </FieldIconBox>
         <FieldContent>
-          <FieldLabel style={isFocused ? { color: colors.icon } : {}}>
-            {label}
-          </FieldLabel>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+            <FieldLabel style={[{ marginBottom: 0 }, isFocused ? { color: colors.icon } : {}]}>
+              {label}
+            </FieldLabel>
+            {isVerified && (
+              <VerifiedBadge>
+                <Ionicons name="checkmark-circle" size={14} color="#0284c7" />
+                <VerifiedText>Verified</VerifiedText>
+              </VerifiedBadge>
+            )}
+          </View>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <ActiveInput
               ref={inputRef}
@@ -158,14 +168,9 @@ const EditableField = ({
               isFocused={isFocused}
               accentColor={colors.icon}
               editable={actuallyEditable}
+              multiline={true}
               style={{ flex: 1 }}
             />
-            {isVerified && (
-              <VerifiedBadge>
-                <Ionicons name="checkmark-circle" size={14} color="#0284c7" />
-                <VerifiedText>Verified</VerifiedText>
-              </VerifiedBadge>
-            )}
           </View>
         </FieldContent>
         {isEditing && !isFocused && actuallyEditable && (
@@ -180,7 +185,9 @@ const EditableField = ({
         {isFocused && <ActiveDot style={{ backgroundColor: colors.icon }} />}
       </FieldRow>
       {error ? (
-        <FieldErrorText style={{ marginLeft: 65, marginTop: -5, marginBottom: 10 }}>
+        <FieldErrorText
+          style={{ marginLeft: 65, marginTop: -5, marginBottom: 10 }}
+        >
           {error}
         </FieldErrorText>
       ) : null}
@@ -284,10 +291,16 @@ const EditProfile = () => {
         lastName: userData.lastName || "",
         email: userData.email || "",
         mobile: userData.mobile || "",
-        dateOfBirth: userData.dateOfBirth && !isNaN(new Date(userData.dateOfBirth).getTime()) ? new Date(userData.dateOfBirth) : null,
+        dateOfBirth:
+          userData.dateOfBirth &&
+          !isNaN(new Date(userData.dateOfBirth).getTime())
+            ? new Date(userData.dateOfBirth)
+            : null,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
-        allergies: Array.isArray(userData.allergies) ? (userData.allergies || []).join(", ") : "",
+        allergies: Array.isArray(userData.allergies)
+          ? (userData.allergies || []).join(", ")
+          : "",
       });
     }
   }, [userData]);
@@ -308,10 +321,16 @@ const EditProfile = () => {
         lastName: userData.lastName || "",
         email: userData.email || "",
         mobile: userData.mobile || "",
-        dateOfBirth: userData.dateOfBirth && !isNaN(new Date(userData.dateOfBirth).getTime()) ? new Date(userData.dateOfBirth) : null,
+        dateOfBirth:
+          userData.dateOfBirth &&
+          !isNaN(new Date(userData.dateOfBirth).getTime())
+            ? new Date(userData.dateOfBirth)
+            : null,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
-        allergies: Array.isArray(userData.allergies) ? (userData.allergies || []).join(", ") : "",
+        allergies: Array.isArray(userData.allergies)
+          ? (userData.allergies || []).join(", ")
+          : "",
       });
     }
     setErrors({});
@@ -356,11 +375,14 @@ const EditProfile = () => {
       const userId = user?.data?.id;
       const currentUserData = user?.data;
       if (!userId) throw new Error("No user ID found.");
-      
+
       let profileImageKey = currentUserData?.profileImageKey;
 
       // If a new image was selected (it will be a local file URI, not an S3 key/url)
-      if (selectedImages && selectedImages !== currentUserData?.profileImageKey) {
+      if (
+        selectedImages &&
+        selectedImages !== currentUserData?.profileImageKey
+      ) {
         // 1. Delete old profile picture if exists
         if (currentUserData?.profileImageKey) {
           try {
@@ -369,10 +391,14 @@ const EditProfile = () => {
             console.log("Failed to delete old profile picture", e);
           }
         }
-        
+
         // 2. Upload new profile picture
-        const uploadRes = await uploadFileToS3(selectedImages, "PATIENT_PROFILE");
-        const fileData = uploadRes?.data?.data || uploadRes?.data || uploadRes || {};
+        const uploadRes = await uploadFileToS3(
+          selectedImages,
+          "PATIENT_PROFILE",
+        );
+        const fileData =
+          uploadRes?.data?.data || uploadRes?.data || uploadRes || {};
         profileImageKey = fileData.s3Key || profileImageKey;
       }
 
@@ -381,19 +407,22 @@ const EditProfile = () => {
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
-        mobile: form.mobile,
+        mobile: form.mobile.startsWith("+") ? form.mobile.slice(3) : "",
         gender: form.gender,
       };
-      
+
       if (form.dateOfBirth) {
         payload.dateOfBirth = format(form.dateOfBirth, "yyyy-MM-dd");
       }
-      
+
       if (form.bloodGroup) {
         payload.bloodGroup = form.bloodGroup;
       }
-      
-      const allergiesArray = form.allergies.split(",").map(s => s.trim()).filter(s => s.length > 0);
+
+      const allergiesArray = form.allergies
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
       if (allergiesArray.length > 0) {
         payload.allergies = allergiesArray;
       }
@@ -571,11 +600,17 @@ const EditProfile = () => {
                       />
                     </FieldIconBox>
                     <FieldContent>
-                      <FieldLabel>{isEditing ? "Date of Birth" : "Age"}</FieldLabel>
+                      <FieldLabel>
+                        {isEditing ? "Date of Birth" : "Age"}
+                      </FieldLabel>
                       <AgeInput hasValue={!!form.dateOfBirth} editable={false}>
-                        {isEditing 
-                          ? (form.dateOfBirth ? format(form.dateOfBirth, "dd MMM yyyy") : "Select Date")
-                          : (form.dateOfBirth ? `${calculateAge(form.dateOfBirth)} Years` : "Not specified")}
+                        {isEditing
+                          ? form.dateOfBirth
+                            ? format(form.dateOfBirth, "dd MMM yyyy")
+                            : "Select Date"
+                          : form.dateOfBirth
+                            ? `${calculateAge(form.dateOfBirth)} Years`
+                            : "Not specified"}
                       </AgeInput>
                     </FieldContent>
                   </FieldRow>
@@ -608,7 +643,9 @@ const EditProfile = () => {
                         <GenderChip
                           key={opt.label}
                           selected={selected}
-                          onPress={() => isEditing && updateField("gender", opt.label)}
+                          onPress={() =>
+                            isEditing && updateField("gender", opt.label)
+                          }
                           activeOpacity={isEditing ? 0.7 : 1}
                         >
                           <Ionicons
@@ -653,7 +690,7 @@ const EditProfile = () => {
                 <FieldDivider />
 
                 <EditableField
-                  label="Allergies (Comma separated)"
+                  label="Allergies"
                   value={form.allergies}
                   icon="medical-outline"
                   colors={{ bg: "#f3e8ff", icon: "#a855f7" }}
@@ -675,7 +712,9 @@ const EditProfile = () => {
               activeOpacity={0.8}
             >
               {updateProfileMutation.isPending ? (
-                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                <View
+                  style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
+                >
                   <ActivityIndicator color="#ffffff" />
                   <SaveButtonText>Saving Profile...</SaveButtonText>
                 </View>
@@ -711,7 +750,11 @@ const EditProfile = () => {
       <DatePicker
         modal
         open={showDatePicker}
-        date={form.dateOfBirth && !isNaN(form.dateOfBirth.getTime()) ? form.dateOfBirth : new Date()}
+        date={
+          form.dateOfBirth && !isNaN(form.dateOfBirth.getTime())
+            ? form.dateOfBirth
+            : new Date()
+        }
         mode="date"
         maximumDate={new Date()}
         onConfirm={(date) => {

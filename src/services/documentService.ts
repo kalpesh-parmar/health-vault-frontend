@@ -16,8 +16,14 @@ export interface UploadResponse {
   fileUrl: string;
 }
 
+export interface CreateSessionRequest {
+  title: string;
+  documentId?: string; // Optional
+}
+
 export interface ChatMessageRequest {
-  documentKey?: string;
+  sessionId: string;
+  documentId?: string;
   question: string;
 }
 
@@ -84,6 +90,12 @@ export const documentUpload = async (formData: FormData): Promise<ApiResponse<Up
   return response.data;
 };
 
+export const getChatMessages = async (id: string, params: { cursor?: string, direction?: 'before'|'after', limit?: number }): Promise<any> => {
+  const endpoint = CHAT_ENDPOINTS.GET_MESSAGES.replace("{id}", id);
+  const response = await apiClient.get(endpoint, { params });
+  return response.data;
+};
+
 export const sendChatMessage = async (
   payload: ChatMessageRequest
 ): Promise<ChatMessageResponse> => {
@@ -91,6 +103,18 @@ export const sendChatMessage = async (
     CHAT_ENDPOINTS.SEND_MESSAGE,
     payload
   );
+  return response.data;
+};
+
+export const pollNewOcrStatus = async (documentId: string): Promise<any> => {
+  const endpoint = DOCUMENT_ENDPOINTS.NEW_OCR_STATUS.replace("{documentId}", documentId);
+  const response = await apiClient.get(endpoint);
+  return response.data;
+};
+
+export const cancelOcr = async (documentId: string): Promise<any> => {
+  const endpoint = DOCUMENT_ENDPOINTS.NEW_OCR_CANCEL.replace("{documentId}", documentId);
+  const response = await apiClient.post(endpoint);
   return response.data;
 };
 

@@ -10,6 +10,9 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
@@ -22,6 +25,7 @@ import {
   LoadingScreen,
 } from "../../components/shared/DefensiveStates";
 import { listDocument, sendChatMessage } from "../../services/documentService";
+import { getUser } from "../../services/userService";
 import type { MedicalDocument } from "../../types";
 import { safeFilter, safeMap } from "../../utils/arrayUtils";
 
@@ -31,6 +35,8 @@ import { ChatInput } from "../../components/chat/ChatInput";
 import { EmptyChatState } from "../../components/chat/EmptyChatState";
 import { MessageBubble } from "../../components/chat/MessageBubble";
 import { SuggestedQuestionChip } from "../../components/chat/SuggestedQuestionChip";
+import { TopProgressBar } from "../../components/chat/TopProgressBar";
+import { getChatMessages, pollNewOcrStatus, cancelOcr } from "../../services/documentService";
 
 enum ChatMode {
   GENERAL_HEALTH = "GENERAL_HEALTH",
@@ -43,17 +49,47 @@ type ChatMessage = {
   text: string;
   mode?: ChatMode;
   emergency?: boolean;
+  documents?: { id: string; fileName: string; }[];
 };
 
 const AIChatScreen = () => {
   const navigation = useNavigation();
   const { isDark } = useAppTheme();
   const [input, setInput] = useState("");
-  const [selectedDocument, setSelectedDocument] =
-    useState<MedicalDocument | null>(null);
+  const [selectedDocuments, setSelectedDocuments] = useState<MedicalDocument[]>([]);
+  const [processingDocuments, setProcessingDocuments] = useState<MedicalDocument[]>([]);
+  const [progressState, setProgressState] = useState<Record<string, { status: "pending"|"processing"|"done"|"failed", progress: number }>>({});
+  const [isTopProgressExpanded, setIsTopProgressExpanded] = useState(false);
+  
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  // Pagination states
+  const [messagesCursor, setMessagesCursor] = useState<string | null>(null);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+
+  // Queue for delaying message send until OCR is done
+  const [queuedMessage, setQueuedMessage] = useState<{ text: string, sessionId: string, documentIds: string } | null>(null);
+
+  // Fetch user and session ID
+  useEffect(() => {
+    const fetchUserAndSession = async () => {
+      try {
+        const res = await getUser();
+        if (res?.data?.sessionId) {
+          setCurrentSessionId(res.data.sessionId);
+        }
+      } catch (err) {
+        console.log("Failed to fetch user session", err);
+      }
+    };
+    fetchUserAndSession();
+  }, []);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -94,32 +130,92 @@ const AIChatScreen = () => {
     return safeFilter(documents, (doc: MedicalDocument) => !!doc?.s3Key);
   }, [documents]);
 
-  const activeMode = selectedDocument
+  const activeMode = selectedDocuments.length > 0 || processingDocuments.length > 0
     ? ChatMode.DOCUMENT_RAG
     : ChatMode.GENERAL_HEALTH;
 
-  // Clear messages when mode changes
+  const fetchMessagesForSession = async (sessionId: string, cursor?: string) => {
+    try {
+      if (cursor) {
+        setIsLoadingMoreMessages(true);
+      } else {
+        setIsLoadingMessages(true);
+      }
+
+      const params: { cursor?: string; limit: number; direction?: 'before' | 'after' } = { limit: 20 };
+      if (cursor) {
+        params.cursor = cursor;
+        params.direction = "before";
+      }
+      const res = await getChatMessages(sessionId, params);
+      if (res?.status?.status === "SUCCESS" && res?.data) {
+        const fetchedMessages = res.data.map((msg: any) => ({
+          id: msg.id,
+          role: msg.role === "assistant" ? "ai" : "user",
+          text: msg.content,
+          mode: msg.metadata?.mode,
+          emergency: msg.metadata?.emergency,
+        }));
+        
+        if (cursor) {
+          setMessages(prev => [...fetchedMessages, ...prev]);
+        } else {
+          setMessages(fetchedMessages);
+        }
+
+        const nextCursor = res.page?.nextCursor;
+        setMessagesCursor(nextCursor || null);
+        setHasMoreMessages(!!nextCursor);
+      }
+    } catch (e) {
+      console.log("Failed to fetch messages", e);
+    } finally {
+      setIsLoadingMessages(false);
+      setIsLoadingMoreMessages(false);
+    }
+  };
+
   useEffect(() => {
-    setMessages([]);
-  }, [selectedDocument]);
+    if (currentSessionId) {
+      setMessagesCursor(null);
+      setHasMoreMessages(true);
+      fetchMessagesForSession(currentSessionId);
+    } else {
+      setMessages([]);
+    }
+  }, [currentSessionId]);
 
-  const handleSend = async (customText?: string) => {
-    const textToSubmit = (customText || input).trim();
-    if (!textToSubmit) return;
+  const loadMoreMessages = () => {
+    if (currentSessionId && hasMoreMessages && !isLoadingMoreMessages && messagesCursor) {
+      fetchMessagesForSession(currentSessionId, messagesCursor);
+    }
+  };
 
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text: textToSubmit,
-    };
+  const startPolling = (docId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await pollNewOcrStatus(docId);
+        const status = res?.data?.status || "processing";
+        const progress = res?.data?.progress || 50; // mock if API doesn't return progress
+        setProgressState(prev => ({
+          ...prev,
+          [docId]: { status: status === "done" ? "done" : status === "failed" ? "failed" : "processing", progress: status === "done" ? 100 : progress }
+        }));
+        if (status === "done" || status === "failed") {
+          clearInterval(interval);
+        }
+      } catch (e) {
+        setProgressState(prev => ({ ...prev, [docId]: { status: "failed", progress: 0 } }));
+        clearInterval(interval);
+      }
+    }, 3000);
+  };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsSending(true);
-
+  const executeSendMessage = async (sessionId: string, textToSubmit: string, documentIds: string) => {
     try {
       const response = await sendChatMessage({
-        documentKey: selectedDocument?.s3Key || undefined,
+        sessionId,
+        documentId: documentIds || undefined,
         question: textToSubmit,
       });
 
@@ -140,12 +236,86 @@ const AIChatScreen = () => {
       });
     } finally {
       setIsSending(false);
+      setProcessingDocuments([]);
+      setQueuedMessage(null);
+    }
+  };
+
+  useEffect(() => {
+    if (queuedMessage && processingDocuments.length > 0) {
+      const allDocsFinished = processingDocuments.every(doc => {
+        const s = progressState[doc.id]?.status;
+        return s === "done" || s === "failed";
+      });
+      
+      const anyFailed = processingDocuments.some(doc => progressState[doc.id]?.status === "failed");
+
+      if (allDocsFinished) {
+        if (anyFailed) {
+          Toast.show({ type: "error", text1: "OCR Failed", text2: "One or more documents failed to process." });
+          setIsSending(false);
+          setProcessingDocuments([]);
+          setQueuedMessage(null);
+        } else {
+          executeSendMessage(queuedMessage.sessionId, queuedMessage.text, queuedMessage.documentIds);
+        }
+      }
+    }
+  }, [progressState, queuedMessage, processingDocuments]);
+
+  const handleSend = async (customText?: string) => {
+    const textToSubmit = (customText || input).trim();
+    if (!textToSubmit) return;
+
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      text: textToSubmit,
+      documents: selectedDocuments.length > 0 ? selectedDocuments.map(d => ({ id: d.id, fileName: d.fileName })) : undefined,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsSending(true);
+
+    let currentDocsToProcess = [...processingDocuments];
+
+    // Move selected documents to processing state and animate up
+    if (selectedDocuments.length > 0) {
+      const newDocs = [...selectedDocuments];
+      currentDocsToProcess = [...currentDocsToProcess, ...newDocs];
+      setProcessingDocuments(currentDocsToProcess);
+      setSelectedDocuments([]);
+      
+      newDocs.forEach(doc => {
+        setProgressState(prev => ({ ...prev, [doc.id]: { status: "processing", progress: 10 } }));
+        startPolling(doc.id);
+      });
+    }
+
+    const documentIds = currentDocsToProcess.map(d => d.id).join(",");
+
+    if (currentDocsToProcess.length > 0) {
+      const allFinished = currentDocsToProcess.every(doc => {
+        const s = progressState[doc.id]?.status;
+        return s === "done" || s === "failed";
+      });
+      if (allFinished) {
+        executeSendMessage(currentSessionId!, textToSubmit, documentIds);
+      } else {
+        setQueuedMessage({ text: textToSubmit, sessionId: currentSessionId!, documentIds });
+      }
+    } else {
+      executeSendMessage(currentSessionId!, textToSubmit, "");
     }
   };
 
   const handleNewChat = () => {
     setMessages([]);
-    setSelectedDocument(null);
+    setSelectedDocuments([]);
+    setProcessingDocuments([]);
+    setProgressState({});
+    setCurrentSessionId(null);
   };
 
   const hasEmergency = useMemo(() => {
@@ -200,6 +370,22 @@ const AIChatScreen = () => {
         isDark={isDark}
       />
 
+      <TopProgressBar
+        documents={processingDocuments}
+        progressState={progressState}
+        isExpanded={isTopProgressExpanded}
+        onToggleExpand={() => setIsTopProgressExpanded(!isTopProgressExpanded)}
+        isDark={isDark}
+        onCancelDocument={async (docId) => {
+          try {
+            await cancelOcr(docId);
+            setProgressState(prev => ({ ...prev, [docId]: { status: "failed", progress: 0 } }));
+          } catch(e) {
+            console.log("Failed to cancel", e);
+          }
+        }}
+      />
+
       <View
         style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
       >
@@ -207,8 +393,8 @@ const AIChatScreen = () => {
         <DocumentSelector onPress={() => documentSheetRef.current?.present()}>
           <Ionicons name="swap-horizontal-outline" size={18} color="#0f766e" />
           <SelectorText numberOfLines={1}>
-            {selectedDocument
-              ? `Document: ${selectedDocument.fileName}`
+            {selectedDocuments.length > 0 || processingDocuments.length > 0
+              ? `Documents: ${selectedDocuments.length + processingDocuments.length} Selected`
               : "General Health Chat (No Document)"}
           </SelectorText>
           <Ionicons name="chevron-down" size={18} color="#94a3b8" />
@@ -248,16 +434,46 @@ const AIChatScreen = () => {
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              onEndReached={loadMoreMessages}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={isLoadingMoreMessages ? <ActivityIndicator size="small" color="#0f766e" style={{ margin: 10 }} /> : null}
             />
           )}
         </View>
 
         {/* Suggested Chips above input */}
-        <SuggestedQuestionChip
-          questions={suggestedQuestions}
-          onPressQuestion={handleSend}
-          isDark={isDark}
-        />
+        {messages.length === 0 && keyboardPadding === 0 && (
+          <SuggestedQuestionChip
+            questions={suggestedQuestions}
+            onPressQuestion={handleSend}
+            isDark={isDark}
+          />
+        )}
+
+        {/* Selected Documents Strip above input */}
+        {selectedDocuments.length > 0 && (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={styles.selectedDocsStrip}
+            style={{ flexGrow: 0, maxHeight: 110, marginBottom: 4 }}
+          >
+            {selectedDocuments.map(doc => (
+              <View key={doc.id} style={styles.selectedDocCard}>
+                <TouchableOpacity
+                  style={styles.selectedDocCloseBtn}
+                  onPress={() => setSelectedDocuments(prev => prev.filter(d => d.id !== doc.id))}
+                >
+                  <Ionicons name="close" size={14} color="#000" />
+                </TouchableOpacity>
+                <Ionicons name="document-text" size={32} color="#0f766e" style={{ marginTop: 8 }} />
+                <Text style={styles.selectedDocCardText} numberOfLines={2}>
+                  {doc.fileName}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Floating Input Capsule */}
         <ChatInput
@@ -281,26 +497,26 @@ const AIChatScreen = () => {
             showsVerticalScrollIndicator={false}
           >
             <BSItem
-              selected={selectedDocument === null}
+              selected={selectedDocuments.length === 0 && processingDocuments.length === 0}
               onPress={() => {
-                setSelectedDocument(null);
+                setSelectedDocuments([]);
                 documentSheetRef.current?.dismiss();
               }}
               activeOpacity={0.7}
             >
               <BSIconBadge
-                bgColor={selectedDocument === null ? "#ccfbf1" : "#f1f5f9"}
+                bgColor={selectedDocuments.length === 0 && processingDocuments.length === 0 ? "#ccfbf1" : "#f1f5f9"}
               >
                 <Ionicons
                   name="sparkles"
                   size={20}
-                  color={selectedDocument === null ? "#0f766e" : "#64748b"}
+                  color={selectedDocuments.length === 0 && processingDocuments.length === 0 ? "#0f766e" : "#64748b"}
                 />
               </BSIconBadge>
-              <BSLbl selected={selectedDocument === null}>
+              <BSLbl selected={selectedDocuments.length === 0 && processingDocuments.length === 0}>
                 General Health Chat (No Document)
               </BSLbl>
-              {selectedDocument === null && <BSCheck>✓</BSCheck>}
+              {selectedDocuments.length === 0 && processingDocuments.length === 0 && <BSCheck>✓</BSCheck>}
             </BSItem>
 
             {documentsList.length === 0 ? (
@@ -318,37 +534,54 @@ const AIChatScreen = () => {
                 </UploadButton>
               </EmptyDocumentsWrapper>
             ) : (
-              safeMap(documentsList, (doc: MedicalDocument) => (
-                <BSItem
-                  key={doc.id}
-                  selected={selectedDocument?.id === doc.id}
-                  onPress={() => {
-                    setSelectedDocument(doc);
-                    documentSheetRef.current?.dismiss();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <BSIconBadge
-                    bgColor={
-                      selectedDocument?.id === doc.id ? "#ccfbf1" : "#f1f5f9"
-                    }
-                  >
-                    <Ionicons
-                      name="document-text-outline"
-                      size={20}
-                      color={
-                        selectedDocument?.id === doc.id ? "#0f766e" : "#64748b"
+              safeMap(documentsList, (doc: MedicalDocument) => {
+                const isSelected = selectedDocuments.some(d => d.id === doc.id) || processingDocuments.some(d => d.id === doc.id);
+                return (
+                  <BSItem
+                    key={doc.id}
+                    selected={isSelected}
+                    onPress={() => {
+                      if (processingDocuments.some(d => d.id === doc.id)) {
+                        Toast.show({ type: "info", text1: "Document Processing", text2: "This document is currently being processed." });
+                        return;
                       }
-                    />
-                  </BSIconBadge>
-                  <BSLbl selected={selectedDocument?.id === doc.id}>
-                    {doc.fileName}
-                  </BSLbl>
-                  {selectedDocument?.id === doc.id && <BSCheck>✓</BSCheck>}
-                </BSItem>
-              ))
+                      if (isSelected) {
+                        setSelectedDocuments(prev => prev.filter(d => d.id !== doc.id));
+                      } else {
+                        if (selectedDocuments.length >= 5) {
+                          Toast.show({ type: "error", text1: "Limit Reached", text2: "You can only select up to 5 documents." });
+                          return;
+                        }
+                        setSelectedDocuments(prev => [...prev, doc]);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <BSIconBadge
+                      bgColor={
+                        isSelected ? "#ccfbf1" : "#f1f5f9"
+                      }
+                    >
+                      <Ionicons
+                        name="document-text-outline"
+                        size={20}
+                        color={
+                          isSelected ? "#0f766e" : "#64748b"
+                        }
+                      />
+                    </BSIconBadge>
+                    <BSLbl selected={isSelected}>
+                      {doc.fileName}
+                    </BSLbl>
+                    {isSelected ? <BSCheck>✓</BSCheck> : <View style={{ width: 15 }} />}
+                  </BSItem>
+                );
+              })
             )}
           </BSScrollView>
+          <UploadButton onPress={() => documentSheetRef.current?.dismiss()} style={{ marginTop: 12 }}>
+            <UploadButtonText>Confirm Selection</UploadButtonText>
+          </UploadButton>
         </SheetContentWrapper>
       </BottomSheet>
     </Container>
@@ -501,5 +734,49 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 10,
+  },
+  selectedDocsStrip: {
+    paddingHorizontal: 16,
+    paddingBottom: 0,
+    gap: 12,
+  },
+  selectedDocCard: {
+    width: 90,
+    height: 100,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginRight: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    position: "relative",
+  },
+  selectedDocCloseBtn: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: "#f1f5f9",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    zIndex: 10,
+  },
+  selectedDocCardText: {
+    fontSize: 10,
+    color: "#334155",
+    fontWeight: "600",
+    marginTop: 6,
+    textAlign: "center",
   },
 });

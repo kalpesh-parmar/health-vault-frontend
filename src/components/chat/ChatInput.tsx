@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, TextInput, TouchableOpacity, StyleSheet, Platform, Keyboard } from "react-native";
+import { View, TextInput, TouchableOpacity, StyleSheet, Platform, Keyboard, KeyboardEvent } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,16 +26,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const sendScale = useSharedValue(0.0);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => setKeyboardVisible(true)
+      (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height)
     );
     const hideSubscription = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardVisible(false)
+      () => setKeyboardPadding(0)
     );
 
     return () => {
@@ -71,7 +71,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           backgroundColor: cardBgColor,
           borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
           borderWidth: isDark ? 1 : 0,
-          marginBottom: keyboardVisible ? 8 : insets.bottom + 8,
+          marginBottom: keyboardPadding > 0 ? 35 : Math.max(insets.bottom, 10),
         },
       ]}
     >
@@ -114,12 +114,11 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
+    height: "auto",
     marginHorizontal: 16,
     borderRadius: 28,
     paddingHorizontal: 12,
     paddingVertical: Platform.OS === "ios" ? 8 : 4,
-    minHeight: 52,
-    maxHeight: 120,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -142,7 +141,7 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     fontSize: 15,
-    maxHeight: 100,
+    maxHeight: 130,
     paddingHorizontal: 10,
     paddingVertical: Platform.OS === "ios" ? 6 : 4,
     fontWeight: "500",

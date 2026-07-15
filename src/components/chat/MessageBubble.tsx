@@ -11,6 +11,7 @@ interface Message {
   id: string;
   role: "ai" | "user";
   text: string;
+  documents?: { id: string; fileName: string; }[];
 }
 
 interface MessageBubbleProps {
@@ -195,6 +196,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
   if (isUser) {
     return (
       <Animated.View entering={FadeInUp.springify()} style={styles.userWrapper}>
+        {message.documents && message.documents.length > 0 && (
+          <View style={styles.userDocumentsContainer}>
+            {message.documents.map((doc, idx) => (
+              <View key={doc.id || idx} style={styles.userDocumentBox}>
+                <Ionicons name="document-text" size={24} color="#5B4BFF" />
+                <Text style={styles.userDocumentText} numberOfLines={1}>{doc.fileName}</Text>
+              </View>
+            ))}
+          </View>
+        )}
         <LinearGradient
           colors={["#5B4BFF", "#7C6CFF"]}
           start={{ x: 0, y: 0 }}
@@ -250,6 +261,32 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 22,
     borderBottomLeftRadius: 22,
     borderBottomRightRadius: 4,
+  },
+  userDocumentsContainer: {
+    marginBottom: 8,
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  userDocumentBox: {
+    width: 120,
+    height: 90,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  userDocumentText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    textAlign: 'center',
   },
   aiWrapper: {
     flexDirection: "row",

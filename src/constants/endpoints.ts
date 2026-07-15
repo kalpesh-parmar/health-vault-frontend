@@ -27,6 +27,8 @@ export const DOCUMENT_ENDPOINTS = {
   DELETE_DOCUMENT: "/documents/{id}",
   UPDATE_DOCUMENT: "/documents/{id}",
   FILTER_AND_SORT: "/documents/list", // Filter and sort API.
+  NEW_OCR_STATUS: "/v1/ocr/status/{documentId}",
+  NEW_OCR_CANCEL: "/v1/ocr/cancel/{documentId}",
 } as const;
 
 export const MEDICATION_REMINDER_ENDPOINTS = {
@@ -70,5 +72,6 @@ export const FILE_ENDPOINTS = {
 } as const;
 
 export const CHAT_ENDPOINTS = {
+  GET_MESSAGES: "/chat/session/{id}/messages",
   SEND_MESSAGE: "/chat/message",
 } as const;

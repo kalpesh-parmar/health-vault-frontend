@@ -6,11 +6,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ChatHeaderProps {
   onBack: () => void;
-  onNewChat: () => void;
   isDark: boolean;
 }
 
-export const ChatHeader: React.FC<ChatHeaderProps> = ({ onBack, onNewChat, isDark }) => {
+export const ChatHeader: React.FC<ChatHeaderProps> = ({ onBack, isDark }) => {
   const insets = useSafeAreaInsets();
 
   const gradientColors = isDark
@@ -55,17 +54,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ onBack, onNewChat, isDar
             <Text style={styles.statusText}>🟢 Local AI Doctor</Text>
           </View>
         </View>
-
-        {/* Right Side: New Chat Button */}
-        <TouchableOpacity onPress={onNewChat} style={styles.newChatButton} activeOpacity={0.7}>
-          <LinearGradient
-            colors={["rgba(255,255,255,0.12)", "rgba(255,255,255,0.06)"]}
-            style={styles.newChatGradient}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#ffffff" />
-            <Text style={styles.newChatText}>New</Text>
-          </LinearGradient>
-        </TouchableOpacity>
       </View>
     </LinearGradient>
   );
@@ -98,9 +86,18 @@ const styles = StyleSheet.create({
   },
   leftContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  menuButton: {
     width: 36,
     height: 36,
     borderRadius: 18,

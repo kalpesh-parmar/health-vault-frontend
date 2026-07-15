@@ -145,6 +145,7 @@ export interface User {
   deletedAt?: string | null;
   isMobileVerified: boolean;
   isEmailVerified: boolean;
+  sessionId?: string;
 }
 
 // ─── Update User Request ────────────────────────────────────────────────

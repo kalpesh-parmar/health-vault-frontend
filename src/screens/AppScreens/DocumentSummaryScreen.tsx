@@ -20,10 +20,6 @@ import {
 } from "react-native-gesture-handler";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const CONTAINER_WIDTH = SCREEN_WIDTH * 0.9;
-const CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.7;
-const IMAGE_WIDTH = SCREEN_WIDTH * 0.7;
-const IMAGE_HEIGHT = SCREEN_WIDTH * 1.7;
 
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
@@ -57,10 +53,10 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
       if (scale.value > 1) {
-        const maxTranslateX = (IMAGE_WIDTH * scale.value - CONTAINER_WIDTH) / 2;
+        const maxTranslateX = Math.max(0, (SCREEN_WIDTH * scale.value - SCREEN_WIDTH) / 2);
         const maxTranslateY = Math.max(
           0,
-          (IMAGE_HEIGHT * scale.value - CONTAINER_HEIGHT) / 2,
+          (SCREEN_HEIGHT * scale.value - SCREEN_HEIGHT) / 2,
         );
 
         translateX.value = Math.min(
@@ -248,7 +244,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                   <Animated.Image
                     source={imageSource}
                     style={[
-                      { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, aspectRatio: 1.5, padding: 10 },
+                      { width: '100%', height: '100%' },
                       animatedStyle,
                     ]}
                     resizeMode="contain"
@@ -420,7 +416,9 @@ const PreviewThumbnailContainer = styled.TouchableOpacity`
   position: relative;
 `;
 
-const ThumbnailImage = styled.Image`
+const ThumbnailImage = styled.Image.attrs({
+  resizeMode: "contain"
+})`
   width: 100%;
   height: 100%;
 `;
@@ -464,11 +462,9 @@ const ModalBackdrop = styled.View`
 `;
 
 const ZoomContainer = styled.View`
-  width: 90%;
-  height: 70%;
-  background-color: #1e293b;
-  border-radius: 20px;
-  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  background-color: transparent;
   justify-content: center;
   align-items: center;
 `;
