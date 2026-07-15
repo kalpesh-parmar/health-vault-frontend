@@ -61,7 +61,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const cardBgColor = isDark ? "#1e293b" : "#ffffff";
   const inputTextColor = isDark ? "#ffffff" : "#1e293b";
   const placeholderColor = isDark ? "rgba(255,255,255,0.4)" : "rgba(30,41,59,0.4)";
-  const iconColor = isDark ? "rgba(255,255,255,0.6)" : "rgba(30,41,59,0.5)";
 
   return (
     <View

@@ -1,5 +1,9 @@
 import apiClient from "./apiClient";
-import { DOCUMENT_ENDPOINTS, FILE_ENDPOINTS, CHAT_ENDPOINTS } from "../constants/endpoints";
+import {
+  DOCUMENT_ENDPOINTS,
+  FILE_ENDPOINTS,
+  CHAT_ENDPOINTS,
+} from "../constants/endpoints";
 import type {
   MedicalDocument,
   PaginatedDocumentRequest,
@@ -25,6 +29,7 @@ export interface ChatMessageRequest {
   sessionId: string;
   documentId?: string;
   question: string;
+  sessionId?: string | null;
 }
 
 export interface ChatMessageResponse {
@@ -76,71 +81,89 @@ export interface AddDocumentRequest {
   embeddingsGenerated?: boolean;
 }
 
-
-export const documentUpload = async (formData: FormData): Promise<ApiResponse<UploadResponse>> => {
-  const response = await apiClient.post(
-    FILE_ENDPOINTS.UPLOAD,
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
-  );
+export const documentUpload = async (
+  formData: FormData,
+): Promise<ApiResponse<UploadResponse>> => {
+  const response = await apiClient.post(FILE_ENDPOINTS.UPLOAD, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
   return response.data;
 };
 
-export const getChatMessages = async (id: string, params: { cursor?: string, direction?: 'before'|'after', limit?: number }): Promise<any> => {
+export const getChatMessages = async (
+  id: string,
+  params: { cursor?: string; direction?: "before" | "after"; limit?: number },
+): Promise<any> => {
   const endpoint = CHAT_ENDPOINTS.GET_MESSAGES.replace("{id}", id);
   const response = await apiClient.get(endpoint, { params });
   return response.data;
 };
 
 export const sendChatMessage = async (
-  payload: ChatMessageRequest
+  payload: ChatMessageRequest,
 ): Promise<ChatMessageResponse> => {
-  const response = await apiClient.post(
-    CHAT_ENDPOINTS.SEND_MESSAGE,
-    payload
-  );
+  const response = await apiClient.post(CHAT_ENDPOINTS.SEND_MESSAGE, payload);
   return response.data;
 };
 
 export const pollNewOcrStatus = async (documentId: string): Promise<any> => {
-  const endpoint = DOCUMENT_ENDPOINTS.NEW_OCR_STATUS.replace("{documentId}", documentId);
+  const endpoint = DOCUMENT_ENDPOINTS.NEW_OCR_STATUS.replace(
+    "{documentId}",
+    documentId,
+  );
   const response = await apiClient.get(endpoint);
   return response.data;
 };
 
 export const cancelOcr = async (documentId: string): Promise<any> => {
-  const endpoint = DOCUMENT_ENDPOINTS.NEW_OCR_CANCEL.replace("{documentId}", documentId);
+  const endpoint = DOCUMENT_ENDPOINTS.NEW_OCR_CANCEL.replace(
+    "{documentId}",
+    documentId,
+  );
   const response = await apiClient.post(endpoint);
   return response.data;
 };
 
-export const runOcr = async (payload: RunOcrRequest): Promise<ApiResponse<RunOcrResponse>> => {
+export const runOcr = async (
+  payload: RunOcrRequest,
+): Promise<ApiResponse<RunOcrResponse>> => {
   const response = await apiClient.post(DOCUMENT_ENDPOINTS.RUN_OCR, payload);
   return response.data;
 };
 
 export const getOcrStatus = async (fileKey: string): Promise<any> => {
-  const endpoint = DOCUMENT_ENDPOINTS.OCR_PROGRESS.replace("{fileKey}", encodeURIComponent(fileKey));
+  const endpoint = DOCUMENT_ENDPOINTS.OCR_PROGRESS.replace(
+    "{fileKey}",
+    encodeURIComponent(fileKey),
+  );
   const response = await apiClient.get(endpoint);
   return response.data;
 };
 
-export const addDocument = async (payload: AddDocumentRequest): Promise<ApiResponse<any>> => {
+export const addDocument = async (
+  payload: AddDocumentRequest,
+): Promise<ApiResponse<any>> => {
   console.log("Document Payload :- ", payload);
-  const response = await apiClient.post(DOCUMENT_ENDPOINTS.ADD_DOCUMENT, payload);
+  const response = await apiClient.post(
+    DOCUMENT_ENDPOINTS.ADD_DOCUMENT,
+    payload,
+  );
   return response.data;
 };
 
 export const filterDocuments = async (payload: FilterDocumentsRequest) => {
-  const response = await apiClient.post(DOCUMENT_ENDPOINTS.FILTER_AND_SORT, payload);
+  const response = await apiClient.post(
+    DOCUMENT_ENDPOINTS.FILTER_AND_SORT,
+    payload,
+  );
   return response.data;
-}
+};
 
-export const listDocument = async (): Promise<ApiResponse<MedicalDocument[]>> => {
+export const listDocument = async (): Promise<
+  ApiResponse<MedicalDocument[]>
+> => {
   const response = await apiClient.get(DOCUMENT_ENDPOINTS.LIST_DOCUMENT);
   return response.data;
 };
@@ -162,13 +185,17 @@ export const documentListPaginated = async ({
       sortBy: "createdAt",
       orderBy: "desc",
     },
-  }
+  };
   const response = await apiClient.post(
-    DOCUMENT_ENDPOINTS.DOCUMENT_LIST_PAGINATED, payload);
+    DOCUMENT_ENDPOINTS.DOCUMENT_LIST_PAGINATED,
+    payload,
+  );
   return response.data;
 };
 
-export const updateDocument = async (document: Partial<MedicalDocument>): Promise<ApiResponse<void>> => {
+export const updateDocument = async (
+  document: Partial<MedicalDocument>,
+): Promise<ApiResponse<void>> => {
   const endpoint = DOCUMENT_ENDPOINTS.UPDATE_DOCUMENT.replace(
     "{id}",
     document?.id || "",
@@ -181,7 +208,9 @@ export const updateDocument = async (document: Partial<MedicalDocument>): Promis
   return response.data;
 };
 
-export const deleteDocument = async (documentId: string): Promise<ApiResponse<void>> => {
+export const deleteDocument = async (
+  documentId: string,
+): Promise<ApiResponse<void>> => {
   const endpoint = DOCUMENT_ENDPOINTS.DELETE_DOCUMENT.replace(
     "{id}",
     documentId,
@@ -191,17 +220,18 @@ export const deleteDocument = async (documentId: string): Promise<ApiResponse<vo
   return response.data;
 };
 
-export const getDocument = async (documentId: string): Promise<ApiResponse<MedicalDocument>> => {
-  const endpoint = DOCUMENT_ENDPOINTS.GET_DOCUMENT.replace(
-    "{id}",
-    documentId,
-  );
+export const getDocument = async (
+  documentId: string,
+): Promise<ApiResponse<MedicalDocument>> => {
+  const endpoint = DOCUMENT_ENDPOINTS.GET_DOCUMENT.replace("{id}", documentId);
 
   const response = await apiClient.get(endpoint);
   return response.data;
 };
 
-export const getSignedUrl = async (fileKey: string): Promise<ApiResponse<{ downloadUrl: string }>> => {
+export const getSignedUrl = async (
+  fileKey: string,
+): Promise<ApiResponse<{ downloadUrl: string }>> => {
   const response = await apiClient.get(DOCUMENT_ENDPOINTS.GET_SIGNED_URL, {
     params: {
       fileKey: fileKey,
