@@ -71,6 +71,8 @@ type ChatMessage = {
   loginSummary?: string;
   documentSummary?: string;
   loginProvider?: string;
+  documents?: { id: string; fileName: string; }[];
+  createdAt?: string | Date;
 };
 
 const I18N_CHAT_UI: Record<string, Record<string, string>> = {
@@ -271,6 +273,7 @@ const AIChatScreen = () => {
           messages: historyItems,
           resumableState,
         } = response.data?.data || {};
+        console.log("[CHAT SESSION ID] :- ", chatSessionId);
         setOnboardingSessionId(chatSessionId || null);
         if (resumableState?.preferredLanguage) {
           setPreferredLang(resumableState.preferredLanguage);
@@ -282,6 +285,7 @@ const AIChatScreen = () => {
             role: dbMsg.role === "assistant" ? "ai" : "user",
             text: dbMsg.content,
             sessionId: chatSessionId,
+            createdAt: dbMsg.createdAt,
           }));
           setOnboardingMessages(mapped);
         }
@@ -393,6 +397,7 @@ const AIChatScreen = () => {
             text: dbMsg.content,
             mode: dbMsg.metadata?.mode as ChatMode,
             emergency: !!dbMsg.metadata?.emergency,
+            createdAt: dbMsg.createdAt,
           }));
 
           setMessages(mapped);
@@ -412,56 +417,9 @@ const AIChatScreen = () => {
     initChatHistory();
   }, [documentsList]);
 
-  // Load matched session when document selection is changed manually
-  const handleDocumentModeChange = async (doc: MedicalDocument | null) => {
+  const handleDocumentModeChange = (doc: MedicalDocument | null) => {
     setSelectedDocument(doc);
     documentSheetRef.current?.dismiss();
-    setIsLoadingHistory(true);
-    try {
-      const matched = sessions.find((s: any) => {
-        if (doc) {
-          return s.documentId === doc.id;
-        } else {
-          return !s.documentId && s.metadata?.type !== "ONBOARDING";
-        }
-      });
-
-      if (matched) {
-        setActiveSessionId(matched.id);
-        const messagesRes = await apiClient.get(
-          `/chat/session/${matched.id}/messages`,
-          {
-            params: { limit: 20 },
-          },
-        );
-        const msgItems =
-          messagesRes.data?.data?.items || messagesRes.data?.items || [];
-        const newCursor =
-          messagesRes.data?.data?.nextCursor ||
-          messagesRes.data?.nextCursor ||
-          null;
-        setNextCursor(newCursor);
-
-        const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => ({
-          ...(dbMsg.metadata || {}),
-          id: dbMsg.id,
-          role: dbMsg.role === "assistant" ? "ai" : "user",
-          text: dbMsg.content,
-          mode: dbMsg.metadata?.mode as ChatMode,
-          emergency: !!dbMsg.metadata?.emergency,
-        }));
-        setMessages(mapped);
-      } else {
-        console.log("[AI_CHAT] No matching session for mode, starting clean.");
-        setActiveSessionId(null);
-        setMessages([]);
-        setNextCursor(null);
-      }
-    } catch (err) {
-      console.warn("[AI_CHAT] Failed to switch document mode session:", err);
-    } finally {
-      setIsLoadingHistory(false);
-    }
   };
 
   // Infinite scroll pagination to load older messages
@@ -486,6 +444,7 @@ const AIChatScreen = () => {
         text: dbMsg.content,
         mode: dbMsg.metadata?.mode as ChatMode,
         emergency: !!dbMsg.metadata?.emergency,
+        createdAt: dbMsg.createdAt,
       }));
 
       setMessages((prev) => [...mapped, ...prev]);
@@ -505,6 +464,10 @@ const AIChatScreen = () => {
       id: `user-${Date.now()}`,
       role: "user",
       text: textToSubmit,
+      documents: selectedDocument
+        ? [{ id: selectedDocument.id, fileName: selectedDocument.fileName }]
+        : undefined,
+      createdAt: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -515,7 +478,7 @@ const AIChatScreen = () => {
       const response = await sendChatMessage({
         documentId: selectedDocument?.s3Key || undefined,
         question: textToSubmit,
-        sessionId: activeSessionId!,
+        sessionId: onboardingSessionId!,
       });
 
       const aiMessage: ChatMessage = {
@@ -524,6 +487,7 @@ const AIChatScreen = () => {
         text: response.data?.reply || "No reply from AI",
         mode: response.data?.mode as ChatMode,
         emergency: !!response.data?.emergency,
+        createdAt: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, aiMessage]);
@@ -564,12 +528,9 @@ const AIChatScreen = () => {
   // Merge live messages and onboarding history (rendered newest-first for inverted FlatList)
   const mergedMessages = useMemo(() => {
     const liveNewestFirst = [...messages].reverse();
-    if (selectedDocument) {
-      return liveNewestFirst;
-    }
     const onboardingNewestFirst = [...onboardingMessages].reverse();
     return [...liveNewestFirst, ...onboardingNewestFirst];
-  }, [messages, onboardingMessages, selectedDocument]);
+  }, [messages, onboardingMessages]);
 
   if (isLoadingDocs) {
     return <LoadingScreen />;
@@ -647,7 +608,31 @@ const AIChatScreen = () => {
               data={mergedMessages}
               inverted
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => {
+              renderItem={({ item, index }) => {
+                const nextItem = mergedMessages[index + 1];
+                let showDateHeader = false;
+                if (!nextItem) {
+                  showDateHeader = true;
+                } else if (item.createdAt && nextItem.createdAt) {
+                  const currentDate = format(new Date(item.createdAt), "dd-MMM-yyyy");
+                  const prevDate = format(new Date(nextItem.createdAt), "dd-MMM-yyyy");
+                  if (currentDate !== prevDate) {
+                    showDateHeader = true;
+                  }
+                } else if (item.createdAt && !nextItem.createdAt) {
+                  showDateHeader = true;
+                }
+
+                const dateHeader = showDateHeader && item.createdAt ? (
+                  <View style={{ alignItems: "center", marginVertical: 16 }}>
+                    <View style={{ backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: isDark ? "#cbd5e1" : "#64748b" }}>
+                        {format(new Date(item.createdAt), "dd-MMM-yyyy")}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null;
+
                 const isHistorical = item.sessionId === onboardingSessionId;
                 const { chosenVal, chosenLabel } = isHistorical
                   ? findHistoricalUserReply(mergedMessages, item.id, true)
@@ -684,6 +669,7 @@ const AIChatScreen = () => {
                   const hasText = item.text && item.text.trim().length > 0;
                   return (
                     <View style={{ width: "100%" }}>
+                      {dateHeader}
                       {hasText && (
                         <MessageBubble message={item} isDark={isDark} />
                       )}
@@ -797,6 +783,7 @@ const AIChatScreen = () => {
                 if (isHistorical && isChipStep) {
                   return (
                     <View style={{ width: "100%" }}>
+                      {dateHeader}
                       <MessageBubble message={item} isDark={isDark} />
                       <View style={styles.optionsWrapper}>
                         <HistoricalChips
@@ -810,7 +797,12 @@ const AIChatScreen = () => {
                   );
                 }
 
-                return <MessageBubble message={item} isDark={isDark} />;
+                return (
+                  <View style={{ width: "100%" }}>
+                    {dateHeader}
+                    <MessageBubble message={item} isDark={isDark} />
+                  </View>
+                );
               }}
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"

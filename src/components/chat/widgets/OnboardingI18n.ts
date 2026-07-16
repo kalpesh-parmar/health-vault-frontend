@@ -71,7 +71,34 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.tablet": "Take {count} tablet(s) per intake",
     "dosePreview.capsule": "Take {count} capsule(s) per intake",
     "dosePreview.puff": "Take {count} puff(s) per intake",
-    "dosePreview.other": "Take {count} {unit} per intake"
+    "dosePreview.other": "Take {count} {unit} per intake",
+
+    validating: "Verifying file details...",
+    uploading: "Uploading report...",
+    queued: "Queued for processing...",
+    processing: "Analyzing report details...",
+    cancelling: "Cancelling upload...",
+    upload_cancelled: "Upload cancelled",
+    retry_count: "Retrying ({attempt}/{max})...",
+    page_progress: "Page {current} of {total}",
+    eta_hint: "Estimated time: ~45 seconds per page",
+    btn_try_again: "Try Again",
+    btn_choose_different: "Choose a different file",
+    btn_cancel: "Cancel",
+    err_network_timeout:
+      "Connection timed out. The server took too long to respond.",
+    err_server_busy: "Server is busy. Please try again in a moment.",
+    err_ocr_failed:
+      "Document analysis failed. Please verify it is a valid medical record.",
+    err_unsupported_file:
+      "Unsupported file type. Please upload a PDF or image (PNG, JPG, WEBP).",
+    err_file_too_large: "File is too large. Limit is 50MB.",
+    err_server_unreachable:
+      "AI server is unreachable. Please check your connection and try again.",
+    err_upload_failed:
+      "File upload failed. Please check your network connection.",
+    err_unexpected_error:
+      "An unexpected error occurred during processing. Please try again.",
   },
   gujarati: {
     extractedMedicationsList: "મેળવેલી દવાઓની યાદી",
@@ -145,7 +172,34 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.tablet": "ખોરાક દીઠ {count} ગોળી(ઓ) લો",
     "dosePreview.capsule": "ખોરાક દીઠ {count} કેપ્સ્યુલ લો",
     "dosePreview.puff": "ખોરાક દીઠ {count} પફ લો",
-    "dosePreview.other": "ખોરાક દીઠ {count} {unit} લો"
+    "dosePreview.other": "ખોરાક દીઠ {count} {unit} લો",
+
+    validating: "દસ્તાવેજની વિગતો ચકાસાઈ રહી છે...",
+    uploading: "મેડિકલ રિપોર્ટ અપલોડ થઈ રહ્યો છે...",
+    queued: "પ્રક્રિયા માટે કતારમાં...",
+    processing: "રિપોર્ટ વિગતોનું વિશ્લેષણ કરવામાં આવી રહ્યું છે...",
+    cancelling: "અપલોડ રદ કરી રહ્યાં છીએ...",
+    upload_cancelled: "અપલોડ રદ કરવામાં આવ્યું",
+    retry_count: "ફરી પ્રયાસ કરી રહ્યા છીએ ({attempt}/{max})...",
+    page_progress: "પૃષ્ઠ {total} માંથી {current}",
+    eta_hint: "અંદાજિત સમય: પૃષ્ઠ દીઠ ~45 સેકન્ડ",
+    btn_try_again: "ફરી પ્રયાસ કરો",
+    btn_choose_different: "બીજી ફાઈલ પસંદ કરો",
+    btn_cancel: "રદ કરો",
+    err_network_timeout:
+      "જોડાણ સમયસીમા સમાપ્ત થઈ ગઈ. સર્વરે પ્રતિસાદ આપવામાં ઘણો સમય લીધો.",
+    err_server_busy: "સર્વર વ્યસ્ત છે. કૃપા કરીને થોડીવાર પછી ફરી પ્રયાસ કરો.",
+    err_ocr_failed:
+      "દસ્તાવેજ વિશ્લેષણ નિષ્ફળ ગયું. કૃપા કરીને ચકાસો કે તે માન્ય મેડિકલ રેકોર્ડ છે.",
+    err_unsupported_file:
+      "અસમર્થિત ફાઇલ પ્રકાર. કૃપા કરીને પીડીએફ અથવા છબી (PNG, JPG, WEBP) અપલોડ કરો.",
+    err_file_too_large: "ફાઇલ ખૂબ મોટી છે. મર્યાદા 50MB છે.",
+    err_server_unreachable:
+      "AI સર્વર અગમ્ય છે. કૃપા કરીને તમારું કનેક્શન તપાસો અને ફરી પ્રયાસ કરો.",
+    err_upload_failed:
+      "ફાઇલ અપલોડ નિષ્ફળ ગઈ. કૃપા કરીને તમારું નેટવર્ક કનેક્શન તપાસો.",
+    err_unexpected_error:
+      "પ્રક્રિયા દરમિયાન એક અનપેક્ષિત ભૂલ આવી. કૃપા કરીને ફરી પ્રયાસ કરો.",
   },
   hindi: {
     extractedMedicationsList: "निकाली गई दवाओं की सूची",
@@ -219,7 +273,34 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.tablet": "प्रति खुराक {count} टैबलेट लें",
     "dosePreview.capsule": "प्रति खुराक {count} कैप्सूल लें",
     "dosePreview.puff": "प्रति खुराक {count} पफ लें",
-    "dosePreview.other": "प्रति खुराक {count} {unit} लें"
+    "dosePreview.other": "प्रति खुराक {count} {unit} लें",
+
+    validating: "दस्तावेज़ विवरण सत्यापित किया जा रहा है...",
+    uploading: "रिपोर्ट अपलोड की जा रही है...",
+    queued: "प्रसंस्करण के लिए कतारबद्ध...",
+    processing: "रिपोर्ट विवरण का विश्लेषण किया जा रहा है...",
+    cancelling: "अपलोड रद्द किया जा रहा है...",
+    upload_cancelled: "अपलोड रद्द कर दिया गया",
+    retry_count: "पुनः प्रयास कर रहे हैं ({attempt}/{max})...",
+    page_progress: "पृष्ठ {total} में से {current}",
+    eta_hint: "अनुमानित समय: लगभग 45 सेकंड प्रति पृष्ठ",
+    btn_try_again: "पुनः प्रयास करें",
+    btn_choose_different: "दूसरी फ़ाइल चुनें",
+    btn_cancel: "रद्द करें",
+    err_network_timeout:
+      "कनेक्शन का समय समाप्त हो गया। सर्वर ने प्रतिक्रिया देने में बहुत लंबा समय लिया।",
+    err_server_busy: "सर्वर व्यस्त है। कृपया कुछ क्षणों में पुनः प्रयास करें।",
+    err_ocr_failed:
+      "दस्तावेज़ विश्लेषण विफल रहा। कृपया सत्यापित करें कि यह एक वैध मेडिकल रिकॉर्ड है।",
+    err_unsupported_file:
+      "असमर्थित फ़ाइल प्रकार। कृपया पीडीएफ या छवि (PNG, JPG, WEBP) अपलोड करें।",
+    err_file_too_large: "फ़ाइल बहुत बड़ी है। सीमा 50MB है।",
+    err_server_unreachable:
+      "एआई सर्वर अनुपलब्ध है। कृपया अपना कनेक्शन जांचें और पुनः प्रयास करें।",
+    err_upload_failed:
+      "फ़ाइल अपलोड विफल रही। कृपया अपना नेटवर्क कनेक्शन जांचें।",
+    err_unexpected_error:
+      "प्रसंस्करण के दौरान एक अप्रत्याशित त्रुटि हुई। कृपया पुनः प्रयास करें।",
   },
   marathi: {
     extractedMedicationsList: "काढलेल्या औषधांची यादी",
@@ -293,7 +374,34 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.tablet": "प्रति डोस {count} गोळी घ्या",
     "dosePreview.capsule": "प्रति डोस {count} कॅप्सूल घ्या",
     "dosePreview.puff": "प्रति डोस {count} पफ घ्या",
-    "dosePreview.other": "प्रति डोस {count} {unit} घ्या"
+    "dosePreview.other": "प्रति डोस {count} {unit} घ्या",
+
+    validating: "दस्तऐवज तपशील तपासत आहे...",
+    uploading: "अहवाल अपलोड होत आहे...",
+    queued: "प्रक्रियेसाठी रांगेत...",
+    processing: "अहवाल तपशीलांचे विश्लेषण करत आहे...",
+    cancelling: "अपलोड रद्द करत आहे...",
+    upload_cancelled: "अपलोड रद्द केले",
+    retry_count: "पुन्हा प्रयत्न करत आहे ({attempt}/{max})...",
+    page_progress: "पान {total} पैकी {current}",
+    eta_hint: "अंदाजे वेळ: प्रति पृष्ठ ~४५ सेकंद",
+    btn_try_again: "पुन्हा प्रयत्न करा",
+    btn_choose_different: "वेगळी फाईल निवडा",
+    btn_cancel: "रद्द करा",
+    err_network_timeout:
+      "कनेक्शनची वेळ संपली. सर्व्हरने प्रतिसाद देण्यास खूप वेळ घेतला.",
+    err_server_busy: "सर्व्हर व्यस्त आहे. कृपया काही वेळात पुन्हा प्रयत्न करा.",
+    err_ocr_failed:
+      "दस्तऐवज विश्लेषण अयशस्वी झाले. कृपया ते वैध वैद्यकीय रेकॉर्ड असल्याची खात्री करा.",
+    err_unsupported_file:
+      "असमर्थित फाईल प्रकार. कृपया पीडीएफ किंवा प्रतिमा (PNG, JPG, WEBP) अपलोड करा.",
+    err_file_too_large: "फाईल खूप मोठी आहे. मर्यादा 50MB आहे.",
+    err_server_unreachable:
+      "AI सर्व्हर अनुपलब्ध आहे. कृपया आपले कनेक्शन तपासा आणि पुन्हा प्रयत्न करा.",
+    err_upload_failed:
+      "फाईल अपलोड अयशस्वी झाली. कृपया आपले नेटवर्क कनेक्शन तपासा.",
+    err_unexpected_error:
+      "प्रक्रियेदरम्यान अनपेक्षित त्रुटी आली. कृपया पुन्हा प्रयत्न करा.",
   },
   tamil: {
     extractedMedicationsList: "பிரித்தெடுக்கப்பட்ட மருந்துகளின் பட்டியல்",
@@ -367,6 +475,34 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.tablet": "ஒரு முறைக்கு {count} மாத்திரை(கள்) உட்கொள்ளவும்",
     "dosePreview.capsule": "ஒரு முறைக்கு {count} காப்ஸ்யூல் உட்கொள்ளவும்",
     "dosePreview.puff": "ஒரு முறைக்கு {count} பஃப்ஸ் உட்கொள்ளவும்",
-    "dosePreview.other": "ஒரு முறைக்கு {count} {unit} உட்கொள்ளவும்"
+    "dosePreview.other": "ஒரு முறைக்கு {count} {unit} உட்கொள்ளவும்",
+
+    validating: "ஆவண விவரங்கள் சரிபார்க்கப்படுகின்றன...",
+    uploading: "அறிக்கை பதிவேற்றப்படுகிறது...",
+    queued: "செயலாக்கத்திற்காக வரிசைப்படுத்தப்பட்டுள்ளது...",
+    processing: "அறிக்கை விவரங்கள் பகுப்பாய்வு செய்யப்படுகின்றன...",
+    cancelling: "பதிவேற்றம் ரத்து செய்யப்படுகிறது...",
+    upload_cancelled: "பதிவேற்றம் ரத்து செய்யப்பட்டது",
+    retry_count: "மீண்டும் முயற்சிக்கிறது ({attempt}/{max})...",
+    page_progress: "பக்கம் {total}-ல் {current}",
+    eta_hint: "மதிப்பிடப்பட்ட நேரம்: ஒரு பக்கத்திற்கு ~45 வினாடிகள்",
+    btn_try_again: "மீண்டும் முயற்சி செய்",
+    btn_choose_different: "வேறு கோப்பைத் தேர்ந்தெடுக்கவும்",
+    btn_cancel: "ரத்து செய்",
+    err_network_timeout:
+      "இணைப்பு காலாவதியானது. பதிலளிக்க சேவையகம் அதிக நேரம் எடுத்துக்கொண்டது.",
+    err_server_busy:
+      "சேவையகம் பிஸியாக உள்ளது. சற்று நேரத்தில் மீண்டும் முயற்சிக்கவும்.",
+    err_ocr_failed:
+      "ஆவண பகுப்பாய்வு தோல்வியடைந்தது. இது ஒரு செல்லுபடியாகும் மருத்துவ அறிக்கை என்பதை உறுதிப்படுத்தவும்.",
+    err_unsupported_file:
+      "ஆதரிக்கப்படாத கோப்பு வகை. பிடிஎஃப் அல்லது படம் (PNG, JPG, WEBP) பதிவேற்றவும்.",
+    err_file_too_large: "கோப்பு மிகப்பெரியது. வரம்பு 50MB ஆகும்.",
+    err_server_unreachable:
+      "AI சேவையகத்தை இணைக்க முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.",
+    err_upload_failed:
+      "கோப்பு பதிவேற்றம் தோல்வியடைந்தது. உங்கள் இணைய இணைப்பைச் சரிபார்க்கவும்.",
+    err_unexpected_error:
+      "செயலாக்கத்தின் போது எதிர்பாராத பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.",
   }
 };

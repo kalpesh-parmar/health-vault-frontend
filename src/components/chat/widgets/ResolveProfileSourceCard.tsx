@@ -430,11 +430,13 @@ export function ResolveProfileSourceCard({
               },
             ]}
             onPress={() => {
+              const userMessage = uiT("saveDetails");
+              console.log(userMessage);
               setIsEditingProfileManually(false);
               sendMessage(
                 JSON.stringify({ edited: editedProfileData }),
                 state,
-                "Saved manual changes",
+                userMessage
               );
             }}
           >
@@ -902,7 +904,7 @@ export function ResolveProfileSourceCard({
                   sendMessage(
                     JSON.stringify({ confirmed: true }),
                     state,
-                    "Confirm Details",
+                    uiT("confirmAndContinue"),
                   )
                 }
               >
@@ -997,7 +999,7 @@ export function ResolveProfileSourceCard({
                   sendMessage(
                     JSON.stringify({ source: "LOGIN" }),
                     state,
-                    "Use Social Login",
+                    uiT("useSocialLogin"),
                   )
                 }
               >
@@ -1047,7 +1049,7 @@ export function ResolveProfileSourceCard({
                   sendMessage(
                     JSON.stringify({ source: "DOCUMENT" }),
                     state,
-                    "Use Document",
+                    uiT("useDocument"),
                   )
                 }
               >

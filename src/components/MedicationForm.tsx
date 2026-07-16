@@ -409,6 +409,7 @@ const MedicationForm = ({
           <InputLabel>Medication Name</InputLabel>
           <StyledInput
             placeholder="Enter Name"
+            placeholderColor="black"
             value={name}
             onChangeText={(text: string) => {
               setName(text);
@@ -435,6 +436,7 @@ const MedicationForm = ({
           <InputLabel style={{ marginTop: 15 }}>Prescribed By</InputLabel>
           <StyledInput
             placeholder="Doctor Name"
+            placeholderColor="black"
             value={doctor}
             onChangeText={setDoctor}
           />
@@ -450,6 +452,7 @@ const MedicationForm = ({
               <InputLabel>Dose Per Intake</InputLabel>
               <StyledInput
                 placeholder="0"
+                placeholderColor="black"
                 keyboardType="numeric"
                 value={doseValue}
                 onChangeText={(val: string) => {
@@ -468,6 +471,7 @@ const MedicationForm = ({
                 editable={false}
                 value={displayDose}
                 placeholder="--"
+                placeholderColor="black"
                 style={{ backgroundColor: "#f8fafc" }}
               />
             </View>
@@ -611,6 +615,7 @@ const MedicationForm = ({
               <StyledInput
                 ref={totalPillsRef}
                 placeholder="e.g. 30"
+                placeholderColor="black"
                 keyboardType="numeric"
                 value={totalPills}
                 onChangeText={(val: string) => {
@@ -726,6 +731,7 @@ const MedicationForm = ({
           <InputLabel style={{ marginTop: 20 }}>Notes</InputLabel>
           <StyledInput
             placeholder="Special instruction.."
+            placeholderColor="black"
             multiline
             value={notes}
             onChangeText={setNotes}

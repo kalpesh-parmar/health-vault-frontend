@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { format } from "date-fns";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.75;
@@ -12,6 +13,7 @@ interface Message {
   role: "ai" | "user";
   text: string;
   documents?: { id: string; fileName: string; }[];
+  createdAt?: string | Date;
 }
 
 interface MessageBubbleProps {
@@ -21,6 +23,7 @@ interface MessageBubbleProps {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark }) => {
   const isUser = message.role === "user";
+  const timeString = message.createdAt ? format(new Date(message.createdAt), "hh:mm a") : "";
 
   const renderInlineBold = (text: string, keyPrefix: string, textColor: string) => {
     const parts = text.split(/\*\*([\s\S]*?)\*\*/g);
@@ -206,14 +209,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
             ))}
           </View>
         )}
-        <LinearGradient
-          colors={["#5B4BFF", "#7C6CFF"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.userBubble, { alignItems: 'center', justifyContent: 'center' }]}
-        >
-          {renderMarkdown(message.text, "#ffffff", true)}
-        </LinearGradient>
+        {message.text ? (
+          <LinearGradient
+            colors={["#5B4BFF", "#7C6CFF"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.userBubble, { alignItems: 'center', justifyContent: 'center' }]}
+          >
+            {renderMarkdown(message.text, "#ffffff", true)}
+            {timeString ? <Text style={styles.userTime}>{timeString}</Text> : null}
+          </LinearGradient>
+        ) : null}
       </Animated.View>
     );
   }
@@ -231,18 +237,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
           <Ionicons name="sparkles" size={14} color="#ffffff" />
         </LinearGradient>
       </View>
-      <View
-        style={[
-          styles.aiBubble,
-          {
-            backgroundColor: aiBgColor,
-            borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
-            borderWidth: isDark ? 1 : 0,
-          },
-        ]}
-      >
-        {renderMarkdown(message.text, aiTextColor, false)}
-      </View>
+      {message.text ? (
+        <View
+          style={[
+            styles.aiBubble,
+            {
+              backgroundColor: aiBgColor,
+              borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
+              borderWidth: isDark ? 1 : 0,
+            },
+          ]}
+        >
+          {renderMarkdown(message.text, aiTextColor, false)}
+          {timeString ? <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8" }]}>{timeString}</Text> : null}
+        </View>
+      ) : null}
     </Animated.View>
   );
 };
@@ -388,5 +397,16 @@ const styles = StyleSheet.create({
   tableCellText: {
     fontSize: 12,
     lineHeight: 16,
+  },
+  userTime: {
+    fontSize: 10,
+    color: "rgba(255,255,255,0.7)",
+    alignSelf: "flex-end",
+    marginTop: 4,
+  },
+  aiTime: {
+    fontSize: 10,
+    alignSelf: "flex-end",
+    marginTop: 4,
   },
 });
