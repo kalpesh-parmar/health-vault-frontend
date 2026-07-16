@@ -100,7 +100,7 @@ export function ConfirmMedicineCard({
         ]}
       >
         <Text
-          style={[styles.confirmSummaryTitle, { color: theme.colors.primary }]}
+          style={[styles.confirmSummaryTitle, { color: theme.colors.primary, fontWeight: "bold", fontSize: 16 }]}
         >
           {title}
         </Text>
@@ -150,7 +150,7 @@ export function ConfirmMedicineCard({
                       color: theme.colors.textPrimary,
                       marginTop: 2,
                       fontSize: 14,
-                      fontWeight: "500",
+                      fontWeight: "bold",
                     },
                   ]}
                 >
