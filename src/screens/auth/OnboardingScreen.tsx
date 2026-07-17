@@ -74,6 +74,7 @@ type Message = {
   medicine?: any;
   medicines?: any[];
   summary?: any;
+  createdAt?: string | Date;
 };
 
 type UserData = {
@@ -220,7 +221,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height),
+      (e: KeyboardEvent) => setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0),
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
@@ -231,6 +232,15 @@ export default function OnboardingScreen() {
       hideSub.remove();
     };
   }, []);
+
+  // Scroll to end when messages length changes
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages.length]);
 
   // Network detection check
   useEffect(() => {
@@ -436,6 +446,7 @@ export default function OnboardingScreen() {
                 id: dbMsg.id,
                 role: dbMsg.role,
                 content: dbMsg.content,
+                createdAt: dbMsg.createdAt,
               }),
             );
 
@@ -514,6 +525,7 @@ export default function OnboardingScreen() {
       loginProvider: aiRes.loginProvider,
       medicine: aiRes.medicine,
       summary: aiRes.summary,
+      createdAt: aiRes.createdAt || new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, newMsg]);
@@ -605,6 +617,7 @@ export default function OnboardingScreen() {
       role: "user",
       content: displayLabel || userText,
       rawValue: userText, // Store raw value for live matching!
+      createdAt: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -1763,12 +1776,7 @@ export default function OnboardingScreen() {
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              onContentSizeChange={() =>
-                flatListRef.current?.scrollToEnd({ animated: true })
-              }
-              onLayout={() =>
-                flatListRef.current?.scrollToEnd({ animated: true })
-              }
+
               renderItem={({ item }) => {
                 // console.log("Message Item : ", item);
                 const isAi = item.role === "assistant";
@@ -1783,10 +1791,29 @@ export default function OnboardingScreen() {
                 const isJson =
                   item.content && item.content.trim().startsWith("{");
 
+                // Check if date changed from previous message
+                const prevMsg = item.id !== messages[0]?.id ? messages[messages.findIndex(m => m.id === item.id) - 1] : null;
+                const showDateHeader = (() => {
+                  if (!item.createdAt) return false;
+                  if (!prevMsg || !prevMsg.createdAt) return true;
+                  const currentDate = format(new Date(item.createdAt), "dd-MMM-yyyy");
+                  const prevDate = format(new Date(prevMsg.createdAt), "dd-MMM-yyyy");
+                  return currentDate !== prevDate;
+                })();
+
                 return (
                   <View style={{ width: "100%" }}>
+                    {showDateHeader && item.createdAt && (
+                      <View style={{ alignItems: "center", marginVertical: 12 }}>
+                        <View style={{ backgroundColor: isDark ? "#1e293b" : "#f1f5f9", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontWeight: "600" }}>
+                            {format(new Date(item.createdAt), "dd-MMM-yyyy")}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                     {!isJson && (
-                      <MessageBubble message={mappedMsg} isDark={isDark} />
+                      <MessageBubble message={{...mappedMsg, createdAt: item.createdAt}} isDark={isDark} />
                     )}
                     {isAi && options !== null && (
                       <View

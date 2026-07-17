@@ -86,18 +86,14 @@ const OtpVerificationScreen = () => {
     );
   };
 
-  const delayAndExecute = (cb: () => void) => {
-    setTimeout(cb, 900);
-  };
-
   const triggerSuccessAnimation = (callback: () => void) => {
     setSuccess(true);
     successScale.value = withSpring(1, { damping: 12, stiffness: 100 });
-    successOpacity.value = withTiming(1, { duration: 300 }, (finished) => {
-      if (finished) {
-        runOnJS(delayAndExecute)(callback);
-      }
-    });
+    successOpacity.value = withTiming(1, { duration: 300 });
+
+    setTimeout(() => {
+      callback();
+    }, 1200);
   };
 
   const handleVerify = async () => {

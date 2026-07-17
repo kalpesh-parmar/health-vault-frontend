@@ -70,7 +70,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           backgroundColor: cardBgColor,
           borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
           borderWidth: isDark ? 1 : 0,
-          marginBottom: keyboardPadding > 0 ? (keyboardPadding - 245) : (Platform.OS === 'android' && insets.bottom < 30 ? 28 : Math.max(insets.bottom + 5, 10)),
+          marginBottom: keyboardPadding > 0 ? keyboardPadding : (Platform.OS === 'android' && insets.bottom < 30 ? 28 : Math.max(insets.bottom + 5, 10)),
         },
       ]}
     >

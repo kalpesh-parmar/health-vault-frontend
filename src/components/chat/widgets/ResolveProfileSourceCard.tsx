@@ -459,6 +459,7 @@ export function ResolveProfileSourceCard({
         <DateTimePickerModal
           isVisible={isDatePickerVisible}
           mode={datePickerMode}
+          maximumDate={new Date()}
           onConfirm={(date: Date) => {
             setDatePickerVisible(false);
             const dateStr = date.toISOString().split("T")[0]; // yyyy-MM-dd
@@ -908,8 +909,7 @@ export function ResolveProfileSourceCard({
                   )
                 }
               >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                  {isConfirmChosen && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginRight: 4 }} />}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
                   <Text
                     style={[
                       styles.bigActionButtonTextSide,
@@ -918,7 +918,6 @@ export function ResolveProfileSourceCard({
                         textAlign: "center",
                       },
                     ]}
-                    numberOfLines={1}
                   >
                     {uiT("confirmAndContinue")}
                   </Text>
@@ -949,9 +948,8 @@ export function ResolveProfileSourceCard({
                   setIsEditingProfileManually(true);
                 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                  {isEditChosen && <Ionicons name="checkmark" size={16} color={theme.colors.textPrimary} style={{ marginRight: 4 }} />}
-                  <Text style={[styles.bigActionButtonTextSide, { color: theme.colors.textPrimary, textAlign: "center" }]} numberOfLines={1}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
+                  <Text style={[styles.bigActionButtonTextSide, { color: theme.colors.textPrimary, textAlign: "center" }]}>
                     {uiT("editDetails")}
                   </Text>
                 </View>
@@ -1004,14 +1002,12 @@ export function ResolveProfileSourceCard({
                 }
               >
                 <View style={{ alignItems: "center", width: "100%" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                    {isLoginChosen && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginRight: 4 }} />}
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
                     <Text
                       style={[
                         styles.bigActionButtonTextSide,
-                        { color: (isHistorical && !isLoginChosen) ? theme.colors.textPrimary : "#ffffff" },
+                        { color: (isHistorical && !isLoginChosen) ? theme.colors.textPrimary : "#ffffff", textAlign: "center" },
                       ]}
-                      numberOfLines={1}
                     >
                       {uiT("useSocialLogin")}
                     </Text>
@@ -1054,14 +1050,12 @@ export function ResolveProfileSourceCard({
                 }
               >
                 <View style={{ alignItems: "center", width: "100%" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                    {isDocChosen && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginRight: 4 }} />}
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
                     <Text
                       style={[
                         styles.bigActionButtonTextSide,
-                        { color: (isHistorical && !isDocChosen) ? theme.colors.textPrimary : "#ffffff" },
+                        { color: (isHistorical && !isDocChosen) ? theme.colors.textPrimary : "#ffffff", textAlign: "center" },
                       ]}
-                      numberOfLines={1}
                     >
                       {uiT("useDocument")}
                     </Text>

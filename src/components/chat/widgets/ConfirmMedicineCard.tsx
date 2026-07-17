@@ -187,12 +187,11 @@ export function ConfirmMedicineCard({
           ]}
           onPress={onConfirm}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-            {isConfirmChosen && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginRight: 4 }} />}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
             <Text
               style={[
                 styles.bigActionButtonTextSide,
-                { color: (readOnly && !isConfirmChosen) ? theme.colors.textPrimary : "#ffffff" },
+                { color: (readOnly && !isConfirmChosen) ? theme.colors.textPrimary : "#ffffff", textAlign: "center" },
               ]}
             >
               {t("confirmSave")}
@@ -213,12 +212,11 @@ export function ConfirmMedicineCard({
           ]}
           onPress={onEdit}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-            {isEditChosen && <Ionicons name="checkmark" size={16} color={theme.colors.textPrimary} style={{ marginRight: 4 }} />}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
             <Text
               style={[
                 styles.bigActionButtonTextSide,
-                { color: theme.colors.textPrimary },
+                { color: theme.colors.textPrimary, textAlign: "center" },
               ]}
             >
               {t("edit")}

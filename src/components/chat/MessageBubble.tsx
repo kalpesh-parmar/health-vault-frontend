@@ -249,7 +249,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
           ]}
         >
           {renderMarkdown(message.text, aiTextColor, false)}
-          {timeString ? <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8" }]}>{timeString}</Text> : null}
+          {timeString ? (
+            <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8" }]}>
+              {timeString}
+            </Text>
+          ) : null}
         </View>
       ) : null}
     </Animated.View>

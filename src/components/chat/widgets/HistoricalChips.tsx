@@ -107,15 +107,7 @@ export function HistoricalChips({
               },
             ]}
           >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {isChosen && (
-                <Ionicons
-                  name="checkmark"
-                  size={14}
-                  color="#fff"
-                  style={{ marginRight: 4 }}
-                />
-              )}
+            <View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1, flexWrap: "wrap" }}>
               <Text style={styles.chipText}>{label}</Text>
             </View>
           </View>
