@@ -7,10 +7,10 @@ import {
   Keyboard,
   KeyboardEvent,
   Platform,
-  ScrollView,
   StyleSheet,
   View,
   Text,
+  ScrollView,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
@@ -203,7 +203,7 @@ const SUGGESTED_QUESTIONS_I18N: Record<
       "क्या कोई असामान्य मूल्य हैं?",
       "कौन सी दवाएं दी गई हैं?",
       "परीक्षण के परिणामों को सरलता से समझाएं।",
-      "इस मेडिकल रिपोर्ट का सारांश दें।",
+      "इस मेडिकल रिपोर्ट का सारांश दें.",
     ],
   },
   marathi: {
@@ -237,8 +237,8 @@ const SUGGESTED_QUESTIONS_I18N: Record<
 };
 
 const AIChatScreen = () => {
-  const navigation = useNavigation();
   const { isDark, theme } = useAppTheme();
+  const navigation = useNavigation();
 
   const t = (key: string) => {
     const lang = preferredLang || "english";
@@ -250,6 +250,22 @@ const AIChatScreen = () => {
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e: KeyboardEvent) => setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardPadding(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -301,21 +317,6 @@ const AIChatScreen = () => {
     const activeSess = sessions.find((s) => s.id === activeSessionId);
     return activeSess?.metadata?.type === "ONBOARDING";
   }, [sessions, activeSessionId]);
-
-  useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height),
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardPadding(0),
-    );
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const documentSheetRef = useRef<BottomSheetModal>(null);
 
@@ -564,7 +565,10 @@ const AIChatScreen = () => {
         style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
       >
         {/* Document Selector bar */}
-        <DocumentSelector onPress={() => documentSheetRef.current?.present()}>
+        <DocumentSelector onPress={() => {
+          documentSheetRef.current?.present();
+          Keyboard.dismiss();
+        }}>
           <Ionicons name="swap-horizontal-outline" size={18} color="#0f766e" />
           <SelectorText numberOfLines={1}>
             {selectedDocument
@@ -606,8 +610,10 @@ const AIChatScreen = () => {
           ) : (
             <FlatList
               data={mergedMessages}
+              keyExtractor={(item: any, index: number) =>
+                item.id || String(index)
+              }
               inverted
-              keyExtractor={(item) => item.id}
               renderItem={({ item, index }) => {
                 const nextItem = mergedMessages[index + 1];
                 let showDateHeader = false;

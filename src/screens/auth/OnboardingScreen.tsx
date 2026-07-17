@@ -10,15 +10,12 @@ import {
   Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
-  ScrollView,
   SafeAreaView,
   StatusBar,
   ActivityIndicator,
 } from "react-native";
-import Svg, { Circle, Path, Rect } from "react-native-svg";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Toast from "react-native-toast-message";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,7 +32,7 @@ import {
   takePhotoAsset,
   pickDocumentAsset,
 } from "../../services/mediaServices";
-import { getUser, updateUser } from "../../services/userService";
+import { getUser } from "../../services/userService";
 
 // Reusable Redesigned Components
 import { ChatInput } from "../../components/chat/ChatInput";
@@ -107,6 +104,7 @@ export default function OnboardingScreen() {
   const [editedProfileData, setEditedProfileData] = useState<any>({});
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const [actualKeyboardHeight, setActualKeyboardHeight] = useState(0);
 
   // State Machine states for OCR Redesign
   const [uploadState, setUploadState] = useState<
@@ -217,15 +215,29 @@ export default function OnboardingScreen() {
   const flatListRef = useRef<FlatList>(null);
   const uploadSheetRef = useRef<any>(null);
 
-  // Keyboard adjustments matching AIChatScreen
+  // Scroll to end when messages length changes or keyboard opens
   useEffect(() => {
+    const scrollToBottom = () => {
+      if (messages.length > 0) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    };
+
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e: KeyboardEvent) => setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0),
+      (e: KeyboardEvent) => {
+        setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0);
+        setActualKeyboardHeight(e.endCoordinates.height);
+      }
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardPadding(0),
+      () => {
+        setKeyboardPadding(0);
+        setActualKeyboardHeight(0);
+      }
     );
     return () => {
       showSub.remove();
@@ -1727,7 +1739,12 @@ export default function OnboardingScreen() {
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
       style={styles.container}
     >
-    <SafeAreaView style={{ flex: 1, paddingTop: Platform.OS === 'android' ? Math.max(insets.top, 10) : 0 }}>
+      <SafeAreaView
+        style={{
+          flex: 1,
+          paddingTop: Platform.OS === "android" ? Math.max(insets.top, 10) : 0,
+        }}
+      >
         <StatusBar
           barStyle="dark-content"
           backgroundColor="transparent"
@@ -1773,10 +1790,26 @@ export default function OnboardingScreen() {
               ref={flatListRef}
               data={messages}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[
+                styles.listContent,
+                {
+                  paddingBottom:
+                    activeAction === "ADD_MEDICINE" || activeAction === "EDIT_MEDICINE"
+                      ? Math.max(insets.bottom, 16) + 16 + actualKeyboardHeight
+                      : activeAction === "ASK_LANGUAGE" ||
+                        activeAction === "ASK_UPLOAD_OR_SKIP" ||
+                        activeAction === "ASK_GENDER" ||
+                        activeAction === "ASK_DOB" ||
+                        activeAction === "REVIEW_MEDICINES_LIST" ||
+                        activeAction === "CONFIRM_MEDICINE" ||
+                        activeAction === "MEDICINE_OPTIONS" ||
+                        activeAction === "POST_ONBOARDING"
+                      ? Math.max(insets.bottom, 16) + 16
+                      : 16,
+                },
+              ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-
               renderItem={({ item }) => {
                 // console.log("Message Item : ", item);
                 const isAi = item.role === "assistant";
@@ -1792,28 +1825,55 @@ export default function OnboardingScreen() {
                   item.content && item.content.trim().startsWith("{");
 
                 // Check if date changed from previous message
-                const prevMsg = item.id !== messages[0]?.id ? messages[messages.findIndex(m => m.id === item.id) - 1] : null;
+                const prevMsg =
+                  item.id !== messages[0]?.id
+                    ? messages[messages.findIndex((m) => m.id === item.id) - 1]
+                    : null;
                 const showDateHeader = (() => {
                   if (!item.createdAt) return false;
                   if (!prevMsg || !prevMsg.createdAt) return true;
-                  const currentDate = format(new Date(item.createdAt), "dd-MMM-yyyy");
-                  const prevDate = format(new Date(prevMsg.createdAt), "dd-MMM-yyyy");
+                  const currentDate = format(
+                    new Date(item.createdAt),
+                    "dd-MMM-yyyy",
+                  );
+                  const prevDate = format(
+                    new Date(prevMsg.createdAt),
+                    "dd-MMM-yyyy",
+                  );
                   return currentDate !== prevDate;
                 })();
 
                 return (
                   <View style={{ width: "100%" }}>
                     {showDateHeader && item.createdAt && (
-                      <View style={{ alignItems: "center", marginVertical: 12 }}>
-                        <View style={{ backgroundColor: isDark ? "#1e293b" : "#f1f5f9", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontWeight: "600" }}>
+                      <View
+                        style={{ alignItems: "center", marginVertical: 12 }}
+                      >
+                        <View
+                          style={{
+                            backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                            paddingHorizontal: 12,
+                            paddingVertical: 4,
+                            borderRadius: 12,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: theme.colors.textSecondary,
+                              fontWeight: "600",
+                            }}
+                          >
                             {format(new Date(item.createdAt), "dd-MMM-yyyy")}
                           </Text>
                         </View>
                       </View>
                     )}
                     {!isJson && (
-                      <MessageBubble message={{...mappedMsg, createdAt: item.createdAt}} isDark={isDark} />
+                      <MessageBubble
+                        message={{ ...mappedMsg, createdAt: item.createdAt }}
+                        isDark={isDark}
+                      />
                     )}
                     {isAi && options !== null && (
                       <View

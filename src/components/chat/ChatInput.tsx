@@ -31,7 +31,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height)
+      (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height + insets.bottom + 5)
     );
     const hideSubscription = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
@@ -45,8 +45,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   useEffect(() => {
-    const hasText = value.trim().length > 0;
-    sendScale.value = withSpring(hasText ? 1.0 : 0.0, { damping: 15 });
+    sendScale.value = withSpring(value.trim() ? 1.0 : 0.0, {
+      damping: 12,
+      stiffness: 150,
+    });
   }, [value]);
 
   const sendStyle = useAnimatedStyle(() => {
@@ -82,7 +84,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         value={value}
         onChangeText={onChangeText}
         multiline
-        numberOfLines={1}
+        numberOfLines={2}
         maxLength={1000}
         blurOnSubmit={false}
         disableFullscreenUI={true}

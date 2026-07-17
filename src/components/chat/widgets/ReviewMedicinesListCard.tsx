@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, LayoutAnimation, Platform, UIManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { widgetStyles as styles } from "./WidgetStyles";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
@@ -37,6 +37,13 @@ export function ReviewMedicinesListCard({
   const [checkedMeds, setCheckedMeds] = useState<string[]>(
     (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
   );
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
 
   useEffect(() => {
     setCheckedMeds(
@@ -113,7 +120,7 @@ export function ReviewMedicinesListCard({
       </Text>
 
       <View style={{ marginVertical: 12 }}>
-        {safeLocalMedicines.map((med) => {
+        {(isExpanded ? safeLocalMedicines : safeLocalMedicines.slice(0, 3)).map((med) => {
           const isChecked = checkedMeds.includes(med.id);
           return (
             <View
@@ -188,6 +195,41 @@ export function ReviewMedicinesListCard({
             </View>
           );
         })}
+        {safeLocalMedicines.length > 3 && (
+          <TouchableOpacity
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setIsExpanded(!isExpanded);
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              marginTop: 10,
+              backgroundColor: isDark ? "#334155" : "#f1f5f9",
+              borderRadius: 20,
+              alignSelf: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.primary,
+                fontWeight: "bold",
+                marginRight: 6,
+                fontSize: 13,
+              }}
+            >
+              {isExpanded ? t("hideAll") || "Hide All" : t("showAll") || "Show All"}
+            </Text>
+            <Ionicons
+              name={isExpanded ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={theme.colors.primary}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View

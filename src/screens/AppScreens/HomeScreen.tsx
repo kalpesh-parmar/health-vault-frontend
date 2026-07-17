@@ -23,7 +23,7 @@ import { queryClient } from "../../config/queryClient";
 import { getNotificationCount } from "../../services/notificationService";
 import { getUser } from "../../services/userService";
 import { getFileSource } from "../../services/fileService";
-import { ActivityIndicator, View, LayoutAnimation } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import ReminderCard from "../../components/shared/ReminderCard";
 import {
   listTodayOccurrences,
@@ -103,7 +103,7 @@ const HomeScreen = () => {
     }
   }, [data?.profileImageKey]);
 
-  const { data: notificationData, isLoading: isLoadingNotification } = useQuery(
+  const { data: notificationData } = useQuery(
     {
       queryKey: ["notificationCount"],
       queryFn: getNotificationCount,
@@ -364,7 +364,7 @@ const HomeScreen = () => {
 
         {/* --- SECTION: UPCOMING REMINDERS --- */}
         <SectionHeader style={{ marginTop: 25 }}>
-          <SectionTitle>Upcoming Reminders</SectionTitle>
+          <SectionTitle>Today's Reminders</SectionTitle>
           <ViewAllButton onPress={() => navigation.navigate("Reminders")}>
             <ViewAllText>View All</ViewAllText>
           </ViewAllButton>
@@ -390,7 +390,7 @@ const HomeScreen = () => {
               {recentTwoReminders.length === 0 && (
                 <View style={{ alignItems: "center", marginVertical: 20 }}>
                   <SectionTitle style={{ fontSize: 14, color: "#64748b" }}>
-                    No upcoming reminders today
+                    No Reminders For Today
                   </SectionTitle>
                 </View>
               )}

@@ -12,7 +12,11 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import { AppThemeProvider } from "./src/context/ThemeContext";
 import * as SecureStore from "expo-secure-store";
-import { getMessaging, getToken, onTokenRefresh } from "@react-native-firebase/messaging";
+import {
+  getMessaging,
+  getToken,
+  onTokenRefresh,
+} from "@react-native-firebase/messaging";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 Notifications.setNotificationHandler({
@@ -36,7 +40,7 @@ export default function App() {
         // FCM Token Generation for Push Notifications using Firebase Cloud Messaging.
         const fcmToken = await getToken(getMessaging());
         console.log("FCM Token:", fcmToken);
-        
+
         await SecureStore.setItemAsync("deviceToken", String(fcmToken));
 
         const { status: existingStatus } =
@@ -68,10 +72,13 @@ export default function App() {
     registerForPushNotifications();
 
     // --- FCM Token Refresh Listener ---
-    const unsubscribeFCM = onTokenRefresh(getMessaging(), (newToken: string) => {
-      console.log("FCM Token Refreshed:", newToken);
-      SecureStore.setItemAsync("deviceToken", String(newToken));
-    });
+    const unsubscribeFCM = onTokenRefresh(
+      getMessaging(),
+      (newToken: string) => {
+        console.log("FCM Token Refreshed:", newToken);
+        SecureStore.setItemAsync("deviceToken", String(newToken));
+      },
+    );
 
     return () => {
       // subscription.remove();
