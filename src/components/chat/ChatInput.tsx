@@ -3,7 +3,8 @@ import { View, TextInput, TouchableOpacity, StyleSheet, Platform, Keyboard, Keyb
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withRepeat, withTiming } from "react-native-reanimated";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 interface ChatInputProps {
   value: string;
@@ -12,7 +13,14 @@ interface ChatInputProps {
   isSending: boolean;
   isDark: boolean;
   keyboardType?: "default" | "numeric" | "email-address" | "phone-pad";
+  preferredLanguage?: string;
+  mode?: "default" | "onboarding";
 }
+
+export let activeFormDictationCallback: ((transcript: string) => void) | null = null;
+export const setActiveFormDictationCallback = (cb: ((transcript: string) => void) | null) => {
+  activeFormDictationCallback = cb;
+};
 
 const AnimatedTouch = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -23,10 +31,63 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isSending,
   isDark,
   keyboardType = "default",
+  preferredLanguage = "english",
+  mode = "default",
 }) => {
   const insets = useSafeAreaInsets();
   const sendScale = useSharedValue(0.0);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const [isListening, setIsListening] = useState(false);
+  const pulseScale = useSharedValue(1);
+
+  useSpeechRecognitionEvent("start", () => setIsListening(true));
+  useSpeechRecognitionEvent("end", () => setIsListening(false));
+  useSpeechRecognitionEvent("error", (e) => {
+    console.log("Voice Error:", e.error, e.message);
+    setIsListening(false);
+  });
+  useSpeechRecognitionEvent("result", (e) => {
+    if (e.results && e.results.length > 0) {
+      if (mode === "onboarding" && activeFormDictationCallback) {
+        activeFormDictationCallback(e.results[0].transcript);
+      } else {
+        console.log("Transcript :- ", e.results[0].transcript);
+        onChangeText(e.results[0].transcript);
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (isListening) {
+      pulseScale.value = withRepeat(
+        withTiming(1.2, { duration: 600 }),
+        -1,
+        true
+      );
+    } else {
+      pulseScale.value = withTiming(1, { duration: 300 });
+    }
+  }, [isListening]);
+
+  const toggleListening = async () => {
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+    } else {
+      try {
+        let locale = "en-US";
+        const pl = preferredLanguage.toLowerCase();
+        if (pl === "hindi" || pl === "hi") locale = "hi-IN";
+        else if (pl === "gujarati" || pl === "gu") locale = "gu-IN";
+        else if (pl === "marathi" || pl === "mr") locale = "mr-IN";
+        else if (pl === "tamil" || pl === "ta") locale = "ta-IN";
+        
+        await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        ExpoSpeechRecognitionModule.start({ lang: locale });
+      } catch (e) {
+        console.error("Voice start error:", e);
+      }
+    }
+  };
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
@@ -63,6 +124,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const cardBgColor = isDark ? "#1e293b" : "#ffffff";
   const inputTextColor = isDark ? "#ffffff" : "#1e293b";
   const placeholderColor = isDark ? "rgba(255,255,255,0.4)" : "rgba(30,41,59,0.4)";
+  const themePrimaryColor = "#5B4BFF";
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
 
   return (
     <View
@@ -79,10 +145,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* TextInput */}
       <TextInput
         style={[styles.textInput, { color: inputTextColor }]}
-        placeholder="Message Dr. Health..."
-        placeholderTextColor={placeholderColor}
+        placeholder={isListening ? "Listening..." : "Message Dr. Health..."}
+        placeholderTextColor={isListening ? themePrimaryColor : placeholderColor}
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => {
+          if (mode === "onboarding") {
+            setActiveFormDictationCallback(null);
+          }
+        }}
         multiline
         numberOfLines={2}
         maxLength={1000}
@@ -90,6 +161,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         disableFullscreenUI={true}
         keyboardType={keyboardType}
       />
+
+      {/* Mic Button */}
+      {sendScale.value === 0 && !value.trim() && (
+        <AnimatedTouch
+          onPress={toggleListening}
+          style={[styles.iconButton, pulseStyle, { backgroundColor: isListening ? themePrimaryColor : "transparent" }]}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="mic"
+            size={22}
+            color={isListening ? "#fff" : (isDark ? "#94a3b8" : "#64748b")}
+          />
+        </AnimatedTouch>
+      )}
 
       {/* Send Button */}
       <AnimatedTouch

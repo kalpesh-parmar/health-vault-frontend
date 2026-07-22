@@ -11,6 +11,7 @@ import {
   View,
   Text,
   ScrollView,
+  StatusBar,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
@@ -71,7 +72,7 @@ type ChatMessage = {
   loginSummary?: string;
   documentSummary?: string;
   loginProvider?: string;
-  documents?: { id: string; fileName: string; }[];
+  documents?: { id: string; fileName: string }[];
   createdAt?: string | Date;
 };
 
@@ -254,11 +255,12 @@ const AIChatScreen = () => {
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e: KeyboardEvent) => setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0)
+      (e: KeyboardEvent) =>
+        setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0),
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardPadding(0)
+      () => setKeyboardPadding(0),
     );
     return () => {
       showSub.remove();
@@ -554,6 +556,7 @@ const AIChatScreen = () => {
     <Container
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
     >
+      <StatusBar barStyle={"dark-content"} />
       {/* Sticky Premium AI Header */}
       <ChatHeader
         onBack={() => navigation.goBack()}
@@ -565,10 +568,12 @@ const AIChatScreen = () => {
         style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
       >
         {/* Document Selector bar */}
-        <DocumentSelector onPress={() => {
-          documentSheetRef.current?.present();
-          Keyboard.dismiss();
-        }}>
+        <DocumentSelector
+          onPress={() => {
+            documentSheetRef.current?.present();
+            Keyboard.dismiss();
+          }}
+        >
           <Ionicons name="swap-horizontal-outline" size={18} color="#0f766e" />
           <SelectorText numberOfLines={1}>
             {selectedDocument
@@ -620,8 +625,14 @@ const AIChatScreen = () => {
                 if (!nextItem) {
                   showDateHeader = true;
                 } else if (item.createdAt && nextItem.createdAt) {
-                  const currentDate = format(new Date(item.createdAt), "dd-MMM-yyyy");
-                  const prevDate = format(new Date(nextItem.createdAt), "dd-MMM-yyyy");
+                  const currentDate = format(
+                    new Date(item.createdAt),
+                    "dd-MMM-yyyy",
+                  );
+                  const prevDate = format(
+                    new Date(nextItem.createdAt),
+                    "dd-MMM-yyyy",
+                  );
                   if (currentDate !== prevDate) {
                     showDateHeader = true;
                   }
@@ -629,15 +640,31 @@ const AIChatScreen = () => {
                   showDateHeader = true;
                 }
 
-                const dateHeader = showDateHeader && item.createdAt ? (
-                  <View style={{ alignItems: "center", marginVertical: 16 }}>
-                    <View style={{ backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: isDark ? "#cbd5e1" : "#64748b" }}>
-                        {format(new Date(item.createdAt), "dd-MMM-yyyy")}
-                      </Text>
+                const dateHeader =
+                  showDateHeader && item.createdAt ? (
+                    <View style={{ alignItems: "center", marginVertical: 16 }}>
+                      <View
+                        style={{
+                          backgroundColor: isDark
+                            ? "rgba(255,255,255,0.1)"
+                            : "#e2e8f0",
+                          paddingHorizontal: 12,
+                          paddingVertical: 4,
+                          borderRadius: 12,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "600",
+                            color: isDark ? "#cbd5e1" : "#64748b",
+                          }}
+                        >
+                          {format(new Date(item.createdAt), "dd-MMM-yyyy")}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                ) : null;
+                  ) : null;
 
                 const isHistorical = item.sessionId === onboardingSessionId;
                 const { chosenVal, chosenLabel } = isHistorical
@@ -880,6 +907,7 @@ const AIChatScreen = () => {
               onSend={() => handleSend()}
               isSending={isSending}
               isDark={isDark}
+              preferredLanguage={preferredLang}
             />
           </>
         )}

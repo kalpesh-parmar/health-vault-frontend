@@ -3,7 +3,7 @@ import styled from "styled-components/native";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
-import { BackHandler } from "react-native";
+import { BackHandler, Keyboard } from "react-native";
 
 const BottomSheet = forwardRef(({ children }: any, ref: any) => {
   const { theme } = useAppTheme();
@@ -15,7 +15,7 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        pressBehavior="collapse"
+        pressBehavior="close"
       />
     ),
     [],
@@ -57,6 +57,7 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
         backgroundColor: theme.colors.bottomSheetBorder,
         borderRadius: 20,
       }}
+      
     >
       <BottomSheetView style={{ flex: 1 }}>
         <CloseIconWrapper>
@@ -75,8 +76,7 @@ export default BottomSheet;
 
 const CloseIconWrapper = styled.View`
   position: absolute;
-  top: 20px;
-  right: 20px;
+  right: 25px;
   z-index: 10;
 `;
 

@@ -165,19 +165,6 @@ export function ReviewMedicinesListCard({
                   >
                     {med.subtitle}
                   </Text>
-                  {med.needsReview &&
-                    Object.values(med.needsReview).some((v) => v === true) && (
-                      <Text
-                        style={{
-                          color: "#d97706",
-                          fontSize: 11,
-                          fontWeight: "600",
-                          marginTop: 2,
-                        }}
-                      >
-                        ⚠️ {t("review")}
-                      </Text>
-                    )}
                 </View>
               </TouchableOpacity>
               {!readOnly && (

@@ -143,8 +143,19 @@ const EditableField = ({
           />
         </FieldIconBox>
         <FieldContent>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
-            <FieldLabel style={[{ marginBottom: 0 }, isFocused ? { color: colors.icon } : {}]}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 4,
+            }}
+          >
+            <FieldLabel
+              style={[
+                { marginBottom: 0 },
+                isFocused ? { color: colors.icon } : {},
+              ]}
+            >
               {label}
             </FieldLabel>
             {isVerified && (
@@ -348,7 +359,7 @@ const EditProfile = () => {
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
-    const nameReg = /^[A-Za-z\s]+$/;
+    const nameReg = /^[A-Za-z\u0A80-\u0AFF\u0900-\u097F\u0B80-\u0BFF\s]+$/u;
 
     if (!form.firstName.trim()) newErrors.firstName = "First name is required";
     else if (form.firstName.trim().length < 2)
@@ -503,7 +514,10 @@ const EditProfile = () => {
                 </AvatarRing>
                 {isEditing && (
                   <AvatarEditBadge
-                    onPress={() => refRBSheet.current?.present()}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      refRBSheet.current?.present();
+                    }}
                   >
                     <Ionicons name="camera" size={16} color="#fff" />
                   </AvatarEditBadge>
@@ -728,6 +742,7 @@ const EditProfile = () => {
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
+          isProfilePicture={true}
           onGalleryPick={() => {
             handleGalleryPick(() => refRBSheet.current?.dismiss(), "Profile");
           }}
@@ -973,7 +988,7 @@ const SaveButton = styled.TouchableOpacity`
   align-items: center;
   justify-content: center;
   margin-horizontal: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 50px;
   shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.3;
   shadow-radius: 10px;

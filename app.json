@@ -77,6 +77,13 @@
           "displayName": "Health Vault"
         }
       ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Health Vault to access your microphone to transcribe speech to text.",
+          "speechRecognitionPermission": "Allow Health Vault to securely recognize and transcribe your voice."
+        }
+      ],
       "@react-native-google-signin/google-signin",
       "expo-web-browser"
     ]

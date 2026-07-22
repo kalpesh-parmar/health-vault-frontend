@@ -5,6 +5,7 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { widgetStyles as styles } from "./WidgetStyles";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 import { parseChosenJson } from "./MedicineHelpers";
+import { setActiveFormDictationCallback } from "../ChatInput";
 
 export interface ResolveProfileSourceCardProps {
   activeMsg: any;
@@ -297,7 +298,7 @@ export function ResolveProfileSourceCard({
                 nationalNumber = phoneStr.slice(2);
               }
 
-              const setPhoneNumber = (val: string) => {
+              const setPhoneNumber = (val: string | any) => {
                 const clean = val.replace(/\D/g, "");
                 setEditedProfileData((prev: any) => ({ ...prev, phoneNumber: countryCode + clean }));
               };
@@ -357,6 +358,11 @@ export function ResolveProfileSourceCard({
                       ]}
                       value={nationalNumber}
                       onChangeText={setPhoneNumber}
+                      onFocus={() => {
+                        setActiveFormDictationCallback((transcript: any) => {
+                          setPhoneNumber((prev: any) => (prev ? prev + " " + transcript : transcript));
+                        });
+                      }}
                       placeholder="98765 43210"
                       placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                       keyboardType="phone-pad"
@@ -409,11 +415,20 @@ export function ResolveProfileSourceCard({
                       [field.key]: val,
                     }))
                   }
+                  onFocus={() => {
+                    setActiveFormDictationCallback((transcript) => {
+                      setEditedProfileData((prev: any) => ({
+                        ...prev,
+                        [field.key]: prev[field.key] ? prev[field.key] + " " + transcript : transcript,
+                      }));
+                    });
+                  }}
                   placeholder={field.label}
                   placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                   keyboardType={
                     field.key === "email" ? "email-address" : "default"
                   }
+                  autoCapitalize={field.key === "email" ? "none" : "sentences"}
                 />
               </View>
             );

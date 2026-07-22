@@ -19,6 +19,7 @@ import {
 } from "@react-native-firebase/messaging";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+// Setting up the notification handler for notifications.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -81,7 +82,6 @@ export default function App() {
     );
 
     return () => {
-      // subscription.remove();
       unsubscribeFCM();
     };
   }, []);

@@ -6,6 +6,7 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { widgetStyles as styles } from "./WidgetStyles";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 import { MedicineIcon, DoseVisual, parseChosenJson } from "./MedicineHelpers";
+import { setActiveFormDictationCallback } from "../ChatInput";
 
 export interface AddMedicineCardProps {
   med: any;
@@ -523,6 +524,12 @@ export function AddMedicineCard({
           ]}
           value={String(formVal)}
           onChangeText={(val) => setFormVal(parseFloat(val) || 0)}
+          onFocus={() => {
+            setActiveFormDictationCallback((transcript) => {
+              const num = parseFloat(transcript.replace(/\D/g, ""));
+              if (!isNaN(num)) setFormVal(num);
+            });
+          }}
           keyboardType="numeric"
           placeholder="1"
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
@@ -878,6 +885,11 @@ export function AddMedicineCard({
           ]}
           value={formName}
           onChangeText={setFormName}
+          onFocus={() => {
+            setActiveFormDictationCallback((transcript) => {
+              setFormName((prev: string) => (prev ? prev + " " + transcript : transcript));
+            });
+          }}
           placeholder={t("placeholder.paracetamol")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
         />
@@ -1243,6 +1255,12 @@ export function AddMedicineCard({
             ]}
             value={formQty}
             onChangeText={setFormQty}
+            onFocus={() => {
+              setActiveFormDictationCallback((transcript) => {
+                const num = parseFloat(transcript.replace(/\D/g, ""));
+                if (!isNaN(num)) setFormQty(num.toString());
+              });
+            }}
             keyboardType="numeric"
             placeholder={preferredLang === "gujarati" ? "દા.ત. 30" : "e.g. 30"}
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
@@ -1349,6 +1367,11 @@ export function AddMedicineCard({
           ]}
           value={formPrescribed}
           onChangeText={setFormPrescribed}
+          onFocus={() => {
+            setActiveFormDictationCallback((transcript: string) => {
+              setFormPrescribed((prev: string) => (prev ? prev + " " + transcript : transcript));
+            });
+          }}
           placeholder={t("prescribedBy")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
         />
@@ -1374,6 +1397,11 @@ export function AddMedicineCard({
           ]}
           value={formNotes}
           onChangeText={setFormNotes}
+          onFocus={() => {
+            setActiveFormDictationCallback((transcript) => {
+              setFormNotes((prev: any) => (prev ? prev + " " + transcript : transcript));
+            });
+          }}
           placeholder={t("placeholder.notes")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           multiline

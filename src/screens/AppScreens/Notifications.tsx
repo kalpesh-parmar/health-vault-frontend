@@ -5,11 +5,20 @@ import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
-import { useMutation, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { listNotifications, markAllAsRead, markAsRead } from "../../services/notificationService";
+import {
+  useMutation,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  listNotifications,
+  markAllAsRead,
+  markAsRead,
+} from "../../services/notificationService";
 import { useAuth } from "../../context/ContextAPI";
 import FilterTabs from "../../components/shared/FilterTabs";
 import { useAppTheme } from "../../context/ThemeContext";
+import { format } from "date-fns";
 
 type NotificationType = "alert" | "info" | "success" | "promo" | "reminder";
 
@@ -18,7 +27,8 @@ interface Notification {
   type: NotificationType;
   title: string;
   body: string;
-  time: string;
+  data: any;
+  createdAt: string;
   isRead: boolean;
   avatar?: string;
 }
@@ -69,7 +79,7 @@ export default function NotificationScreen() {
       if (userId) {
         refetch();
       }
-    }, [userId, refetch])
+    }, [userId, refetch]),
   );
 
   const notifications = data?.pages.flatMap((page) => page.data || []) || [];
@@ -124,18 +134,18 @@ export default function NotificationScreen() {
                 isRead={item.isRead}
                 style={{ flex: 1, marginRight: 8 }}
               >
-                {item.title}
+                {item?.data?.medicineName || item?.title}
               </CardTitle>
               {!item.isRead && <UnreadDot />}
             </View>
 
-            <CardMessage numberOfLines={2}>
-              {item.body}
-            </CardMessage>
+            <CardMessage numberOfLines={2}>{item.body}</CardMessage>
 
             <CardMeta>
               <Ionicons name="time-outline" size={11} color="#9E9E9E" />
-              <CardTime>{item.time}</CardTime>
+              <CardTime>
+                {format(new Date(item.createdAt), "MMM d, yyyy HH:mm")}
+              </CardTime>
             </CardMeta>
           </CardContent>
         </CardWrapper>
@@ -145,7 +155,11 @@ export default function NotificationScreen() {
 
   return (
     <Container>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="rgba(0,0,0,0.2)" />
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        translucent
+        backgroundColor="rgba(0,0,0,0.2)"
+      />
       <ScreenHeader
         title="Notifications"
         showBack
@@ -164,7 +178,11 @@ export default function NotificationScreen() {
         />
       </View>
       {isPending && !isFetchingNextPage ? (
-        <ActivityIndicator size="large" color="#000" style={{ marginTop: 50 }} />
+        <ActivityIndicator
+          size="large"
+          color="#000"
+          style={{ marginTop: 50 }}
+        />
       ) : notifications.length === 0 ? (
         <EmptyWrapper>
           <EmptyIcon>

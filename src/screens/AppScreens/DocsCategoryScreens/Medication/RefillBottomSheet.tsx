@@ -288,6 +288,7 @@ const ActionRow = styled.View`
   flex-direction: row;
   justify-content: space-between;
   gap: 16px;
+  padding-bottom: 35px;
 `;
 
 const CancelButton = styled.TouchableOpacity<{ isDark: boolean }>`

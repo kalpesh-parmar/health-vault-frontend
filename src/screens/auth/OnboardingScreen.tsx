@@ -192,12 +192,6 @@ export default function OnboardingScreen() {
     } as UserData,
   });
 
-  const uiT = (key: string) => {
-    const lang = state.preferredLanguage || "english";
-    const dict = ONBOARDING_I18N[lang] || ONBOARDING_I18N.english;
-    return dict[key] || ONBOARDING_I18N.english[key] || key;
-  };
-
   // Local medicines state for UI checkbox tracking and local edits
   const [localMedicines, setLocalMedicines] = useState<any[]>([]);
   const [activeMedicineToEdit, setActiveMedicineToEdit] = useState<any>(null);
@@ -217,14 +211,6 @@ export default function OnboardingScreen() {
 
   // Scroll to end when messages length changes or keyboard opens
   useEffect(() => {
-    const scrollToBottom = () => {
-      if (messages.length > 0) {
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    };
-
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e: KeyboardEvent) => {
@@ -500,7 +486,6 @@ export default function OnboardingScreen() {
         timeout: 90000,
       });
       const resData = response.data?.data;
-      console.log("AI Response :- ", resData);
 
       if (resData) {
         processAssistantResponse(resData, currentState);
@@ -2325,11 +2310,13 @@ export default function OnboardingScreen() {
                 onSend={handleSend}
                 isSending={loading}
                 isDark={isDark}
+                mode="onboarding"
                 keyboardType={
                   activeAction === "ASK_MEDICINE_QUANTITY"
                     ? "numeric"
                     : "default"
                 }
+                preferredLanguage={state.preferredLanguage!}
               />
             )}
         </View>

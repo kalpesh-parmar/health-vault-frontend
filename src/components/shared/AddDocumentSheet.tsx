@@ -1,25 +1,26 @@
 import React from "react";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
-import { useAppTheme } from "../../context/ThemeContext";
 
 interface AddDocumentSheetProps {
+  isProfilePicture?: boolean;
   onGalleryPick: () => void;
   onCameraOpen: () => void;
   onDocumentPick: () => void;
 }
 
 const AddDocumentSheet = ({
+  isProfilePicture = false,
   onGalleryPick,
   onCameraOpen,
   onDocumentPick,
 }: AddDocumentSheetProps) => {
-  const { isDark } = useAppTheme();
-
   return (
     <SheetContentWrapper>
       <HeaderSection>
-        <SheetTitle>Upload Document</SheetTitle>
+        <SheetTitle>
+          {isProfilePicture ? "Upload Profile Picture" : "Upload Document"}
+        </SheetTitle>
         <SheetSubtitle>Choose an option to upload</SheetSubtitle>
       </HeaderSection>
 
@@ -56,7 +57,8 @@ const AddDocumentSheet = ({
         </OptionRow>
 
         {/* PDF Option */}
-        <OptionRow onPress={onDocumentPick} isFirst>
+        {isProfilePicture && (
+          <OptionRow onPress={onDocumentPick} isFirst>
           <IconContainer bgColor="#f5f3ff">
             <MaterialCommunityIcons
               name="file-outline"
@@ -70,6 +72,7 @@ const AddDocumentSheet = ({
           </TextContent>
           <Feather name="chevron-right" size={20} color="#94a3b8" />
         </OptionRow>
+        )}
       </OptionsContainer>
     </SheetContentWrapper>
   );

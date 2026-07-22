@@ -601,30 +601,11 @@ const SummaryCardLabel = styled.Text`
   font-weight: 500;
 `;
 
-const SummaryValueGroup = styled.View`
-  flex-direction: row;
-  align-items: baseline;
-  margin-top: 6px;
-`;
-
 const SummaryPrimaryValue = styled.Text`
   font-size: 20px;
   font-weight: 700;
   color: #1e293b;
   margin-top: 4px;
-`;
-
-const SummaryUnitValue = styled.Text`
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 600;
-  margin-left: 4px;
-`;
-
-const SummaryTargetValue = styled.Text`
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 2px;
 `;
 
 /* Actions Layout Row Updates */
