@@ -15,6 +15,7 @@ interface ChatInputProps {
   keyboardType?: "default" | "numeric" | "email-address" | "phone-pad";
   preferredLanguage?: string;
   mode?: "default" | "onboarding";
+  onAttachPress?: () => void;
 }
 
 export let activeFormDictationCallback: ((transcript: string) => void) | null = null;
@@ -33,6 +34,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   keyboardType = "default",
   preferredLanguage = "english",
   mode = "default",
+  onAttachPress,
 }) => {
   const insets = useSafeAreaInsets();
   const sendScale = useSharedValue(0.0);
@@ -142,6 +144,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         },
       ]}
     >
+      {/* Attachment Button */}
+      {onAttachPress && (
+        <TouchableOpacity
+          onPress={onAttachPress}
+          style={styles.iconButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="attach"
+            size={24}
+            color={isDark ? "#94a3b8" : "#64748b"}
+          />
+        </TouchableOpacity>
+      )}
+
       {/* TextInput */}
       <TextInput
         style={[styles.textInput, { color: inputTextColor }]}

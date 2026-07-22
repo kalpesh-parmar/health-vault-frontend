@@ -5,6 +5,7 @@ import {
   FlatList,
   StatusBar,
   ListRenderItem,
+  Modal,
 } from "react-native";
 import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,6 +26,11 @@ import FilterBottomSheet, {
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import Toast from "react-native-toast-message";
+import { useMultipleUpload } from "../../hooks/useMultipleUpload";
+import OCRProgressPanel from "../../components/chat/widgets/OCRProgressPanel";
 import { safeArray } from "../../utils/arrayUtils";
 import {
   documentListPaginated,
@@ -96,15 +102,140 @@ const DocumentList = () => {
   );
 
   const {
-    handleGalleryPick,
     handleOpenCamera,
     isCameraVisible,
     setIsCameraVisible,
     isCapturing,
     isProcessing,
     takePicture,
-    handleDocumentPick,
   } = useDocumentMedia();
+
+  const {
+    uploadingDocs,
+    isProgressExpanded,
+    setIsProgressExpanded,
+    uploadMultipleDocs,
+    cancelUpload,
+  } = useMultipleUpload();
+
+  const handleDocumentPickMultiple = async () => {
+    refRBSheet.current?.dismiss();
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      if (result.assets.length > 1) {
+        if (result.assets.length > 5) {
+          Toast.show({
+            type: "error",
+            text1: "Limit Exceeded",
+            text2: "You can upload a maximum of 5 documents.",
+          });
+          return;
+        }
+
+        const maxSize = 100 * 1024 * 1024;
+        for (const asset of result.assets) {
+          if (asset.size && asset.size > maxSize) {
+            Toast.show({
+              type: "error",
+              text1: "File Too Large",
+              text2: `${asset.name} exceeds the 100MB size limit.`,
+            });
+            return;
+          }
+        }
+
+        uploadMultipleDocs(result.assets);
+      } else {
+        const file = result.assets[0];
+        const fileNameWithoutExt = file.name ? file.name.replace(/\.[^/.]+$/, "") : "Document";
+        navigation.navigate("SaveDocument", {
+          images: file.uri,
+          fileName: fileNameWithoutExt,
+        });
+      }
+    } catch (err) {
+      console.error("Document pick multiple error: ", err);
+    }
+  };
+
+  const handleGalleryPickMultiple = async () => {
+    refRBSheet.current?.dismiss();
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Toast.show({
+          type: "error",
+          text1: "Permission Denied",
+          text2: "Please grant gallery permission in settings.",
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+        allowsMultipleSelection: true,
+        selectionLimit: 5,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      if (result.assets.length > 1) {
+        if (result.assets.length > 5) {
+          Toast.show({
+            type: "error",
+            text1: "Limit Exceeded",
+            text2: "You can upload a maximum of 5 documents.",
+          });
+          return;
+        }
+
+        const files = result.assets.map((asset, index) => {
+          const fileUri = asset.uri;
+          const uriParts = fileUri.split("/");
+          const fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
+          return {
+            uri: fileUri,
+            name: fileName,
+            type: asset.mimeType || "image/jpeg",
+            size: (asset as any).fileSize || 0,
+          };
+        });
+
+        const maxSize = 100 * 1024 * 1024;
+        for (const file of files) {
+          if (file.size && file.size > maxSize) {
+            Toast.show({
+              type: "error",
+              text1: "File Too Large",
+              text2: `${file.name} exceeds the 100MB size limit.`,
+            });
+            return;
+          }
+        }
+
+        uploadMultipleDocs(files);
+      } else {
+        const file = result.assets[0];
+        navigation.navigate("ImagePreview", {
+          images: file.uri,
+        });
+      }
+    } catch (err) {
+      console.error("Gallery pick multiple error: ", err);
+    }
+  };
 
   // Fetch filtered documents when a filter/sort option is applied from FilterBottomSheet
   const { data: filteredDocuments, isLoading: isLoadingFiltered } = useQuery({
@@ -253,7 +384,25 @@ const DocumentList = () => {
         cameraRef={cameraRef}
       />
 
-      {(isCapturing || isProcessing) && <Loader visible={isCapturing || isProcessing} currentStage={isProcessing ? "VALIDATING" : undefined} />}
+      {(isCapturing || isProcessing) && uploadingDocs.length === 0 && (
+        <Loader visible={isCapturing || isProcessing} currentStage={isProcessing ? "VALIDATING" : undefined} />
+      )}
+
+      {/* Loading Screen Modal for Multiple Document Uploads */}
+      {uploadingDocs.length > 0 && (
+        <Modal transparent visible={uploadingDocs.length > 0} animationType="fade">
+          <ModalContainer>
+            <OCRProgressPanel
+              uploadingDocs={uploadingDocs}
+              isExpanded={isProgressExpanded}
+              setIsExpanded={setIsProgressExpanded}
+              onDismiss={cancelUpload}
+              isDark={isDark}
+              isModal={true}
+            />
+          </ModalContainer>
+        </Modal>
+      )}
 
       <HeaderWrapper edges={["top"]}>
         <HeaderMain>
@@ -334,15 +483,11 @@ const DocumentList = () => {
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
-          onGalleryPick={() =>
-            handleGalleryPick(() => refRBSheet.current?.dismiss())
-          }
+          onGalleryPick={handleGalleryPickMultiple}
           onCameraOpen={() =>
             handleOpenCamera(() => refRBSheet.current?.dismiss())
           }
-          onDocumentPick={() =>
-            handleDocumentPick(() => refRBSheet.current?.dismiss())
-          }
+          onDocumentPick={handleDocumentPickMultiple}
         />
       </BottomSheet>
 
@@ -458,4 +603,11 @@ const ContentContainer = styled.View`
   background-color: white;
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
+`;
+
+const ModalContainer = styled.View`
+  flex: 1;
+  background-color: rgba(0, 0, 0, 0.45);
+  justify-content: center;
+  align-items: center;
 `;

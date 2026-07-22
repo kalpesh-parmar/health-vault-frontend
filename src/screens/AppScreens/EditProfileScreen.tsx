@@ -418,7 +418,7 @@ const EditProfile = () => {
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
-        mobile: form.mobile.startsWith("+") ? form.mobile.slice(3) : "",
+        mobile: form.mobile.startsWith("+") ? form.mobile.slice(3) : form.mobile,
         gender: form.gender,
       };
 

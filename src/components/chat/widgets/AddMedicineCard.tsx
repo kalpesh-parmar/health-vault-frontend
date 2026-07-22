@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, ScrollView, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
@@ -887,7 +893,9 @@ export function AddMedicineCard({
           onChangeText={setFormName}
           onFocus={() => {
             setActiveFormDictationCallback((transcript) => {
-              setFormName((prev: string) => (prev ? prev + " " + transcript : transcript));
+              setFormName((prev: string) =>
+                prev ? prev + " " + transcript : transcript,
+              );
             });
           }}
           placeholder={t("placeholder.paracetamol")}
@@ -1135,7 +1143,9 @@ export function AddMedicineCard({
               { color: theme.colors.textSecondary, marginBottom: 0 },
             ]}
           >
-            {preferredLang === "gujarati" ? "ભોજન સાથેનો સમય" : "Food Frequency"}
+            {preferredLang === "gujarati"
+              ? "ભોજન સાથેનો સમય"
+              : "Food Frequency"}
           </Text>
         </View>
         <View style={styles.chipRow}>
@@ -1235,38 +1245,52 @@ export function AddMedicineCard({
         </TouchableOpacity>
       </View>
 
-      {formRefill && (
-        <View style={styles.inputGroup}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
-            <Ionicons name="cube-outline" size={14} color={theme.colors.textSecondary} style={{ marginRight: 6 }} />
-            <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
-              {t("totalQuantity")}
-            </Text>
-          </View>
-          <TextInput
-            editable={!readOnly}
-            style={[
-              styles.textInput,
-              {
-                color: theme.colors.textPrimary,
-                borderColor: isDark ? "#475569" : "#cbd5e1",
-                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
-              },
-            ]}
-            value={formQty}
-            onChangeText={setFormQty}
-            onFocus={() => {
-              setActiveFormDictationCallback((transcript) => {
-                const num = parseFloat(transcript.replace(/\D/g, ""));
-                if (!isNaN(num)) setFormQty(num.toString());
-              });
-            }}
-            keyboardType="numeric"
-            placeholder={preferredLang === "gujarati" ? "દા.ત. 30" : "e.g. 30"}
-            placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+      <View style={styles.inputGroup}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 6,
+          }}
+        >
+          <Ionicons
+            name="cube-outline"
+            size={14}
+            color={theme.colors.textSecondary}
+            style={{ marginRight: 6 }}
           />
+          <Text
+            style={[
+              styles.inputLabel,
+              { color: theme.colors.textSecondary, marginBottom: 0 },
+            ]}
+          >
+            {t("totalQuantity")}
+          </Text>
         </View>
-      )}
+        <TextInput
+          editable={!readOnly}
+          style={[
+            styles.textInput,
+            {
+              color: theme.colors.textPrimary,
+              borderColor: isDark ? "#475569" : "#cbd5e1",
+              backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+            },
+          ]}
+          value={formQty}
+          onChangeText={setFormQty}
+          onFocus={() => {
+            setActiveFormDictationCallback((transcript) => {
+              const num = parseFloat(transcript.replace(/\D/g, ""));
+              if (!isNaN(num)) setFormQty(num.toString());
+            });
+          }}
+          keyboardType="numeric"
+          placeholder={preferredLang === "gujarati" ? "દા.ત. 30" : "e.g. 30"}
+          placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+        />
+      </View>
 
       {/* Start Date */}
       <View style={styles.inputGroup}>
@@ -1369,7 +1393,9 @@ export function AddMedicineCard({
           onChangeText={setFormPrescribed}
           onFocus={() => {
             setActiveFormDictationCallback((transcript: string) => {
-              setFormPrescribed((prev: string) => (prev ? prev + " " + transcript : transcript));
+              setFormPrescribed((prev: string) =>
+                prev ? prev + " " + transcript : transcript,
+              );
             });
           }}
           placeholder={t("prescribedBy")}
@@ -1378,9 +1404,25 @@ export function AddMedicineCard({
       </View>
 
       <View style={styles.inputGroup}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
-          <Ionicons name="document-text-outline" size={14} color={theme.colors.textSecondary} style={{ marginRight: 6 }} />
-          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 6,
+          }}
+        >
+          <Ionicons
+            name="document-text-outline"
+            size={14}
+            color={theme.colors.textSecondary}
+            style={{ marginRight: 6 }}
+          />
+          <Text
+            style={[
+              styles.inputLabel,
+              { color: theme.colors.textSecondary, marginBottom: 0 },
+            ]}
+          >
             {t("notes")}
           </Text>
         </View>
@@ -1399,7 +1441,9 @@ export function AddMedicineCard({
           onChangeText={setFormNotes}
           onFocus={() => {
             setActiveFormDictationCallback((transcript) => {
-              setFormNotes((prev: any) => (prev ? prev + " " + transcript : transcript));
+              setFormNotes((prev: any) =>
+                prev ? prev + " " + transcript : transcript,
+              );
             });
           }}
           placeholder={t("placeholder.notes")}
@@ -1421,7 +1465,10 @@ export function AddMedicineCard({
       {(() => {
         const parsed = parseChosenJson(chosenVal);
         const isSaved = readOnly && parsed?.medicine !== undefined;
-        const isCancelled = readOnly && (chosenVal === "cancel" || (chosenLabel && String(chosenLabel).toLowerCase() === "cancel"));
+        const isCancelled =
+          readOnly &&
+          (chosenVal === "cancel" ||
+            (chosenLabel && String(chosenLabel).toLowerCase() === "cancel"));
         const saveOpacity = readOnly ? (isSaved ? 1 : 0.55) : 1;
         const cancelOpacity = readOnly ? (isCancelled ? 1 : 0.55) : 1;
 
@@ -1454,9 +1501,34 @@ export function AddMedicineCard({
               ]}
               onPress={handleSave}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                {isSaved && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginRight: 4 }} />}
-                <Text style={[styles.bigActionButtonTextSide, { color: selectedSlots.length !== N ? (isDark ? "#94a3b8" : "#64748b") : "#ffffff" }]}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {isSaved && (
+                  <Ionicons
+                    name="checkmark"
+                    size={16}
+                    color="#fff"
+                    style={{ marginRight: 4 }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.bigActionButtonTextSide,
+                    {
+                      color:
+                        selectedSlots.length !== N
+                          ? isDark
+                            ? "#94a3b8"
+                            : "#64748b"
+                          : "#ffffff",
+                    },
+                  ]}
+                >
                   {t("saveMedicine")}
                 </Text>
               </View>
@@ -1471,14 +1543,36 @@ export function AddMedicineCard({
                     flex: 0.4,
                     opacity: cancelOpacity,
                     borderWidth: isCancelled ? 2 : 0,
-                    borderColor: isCancelled ? (isDark ? "#ffffff" : "#475569") : "transparent",
+                    borderColor: isCancelled
+                      ? isDark
+                        ? "#ffffff"
+                        : "#475569"
+                      : "transparent",
                   },
                 ]}
                 onPress={onCancel}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                  {isCancelled && <Ionicons name="checkmark" size={16} color={theme.colors.textPrimary} style={{ marginRight: 4 }} />}
-                  <Text style={[styles.bigActionButtonTextSide, { color: theme.colors.textPrimary }]}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {isCancelled && (
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color={theme.colors.textPrimary}
+                      style={{ marginRight: 4 }}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.bigActionButtonTextSide,
+                      { color: theme.colors.textPrimary },
+                    ]}
+                  >
                     {t("cancel")}
                   </Text>
                 </View>

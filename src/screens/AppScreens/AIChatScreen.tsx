@@ -30,6 +30,11 @@ import { safeFilter, safeMap } from "../../utils/arrayUtils";
 import apiClient from "../../services/apiClient";
 import { ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
+import OCRProgressPanel from "../../components/chat/widgets/OCRProgressPanel";
+import { useMultipleUpload } from "../../hooks/useMultipleUpload";
 
 // Reusable Redesigned Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
@@ -321,6 +326,176 @@ const AIChatScreen = () => {
   }, [sessions, activeSessionId]);
 
   const documentSheetRef = useRef<BottomSheetModal>(null);
+  const uploadSheetRef = useRef<BottomSheetModal>(null);
+
+  const {
+    uploadingDocs,
+    isProgressExpanded,
+    setIsProgressExpanded,
+    uploadMultipleDocs,
+    cancelUpload,
+    setUploadingDocs,
+  } = useMultipleUpload(() => {
+    refetchDocs();
+  });
+
+  const handleDocumentPickMultiple = async () => {
+    uploadSheetRef.current?.dismiss();
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      if (result.assets.length > 5) {
+        Toast.show({
+          type: "error",
+          text1: "Limit Exceeded",
+          text2: "You can upload a maximum of 5 documents.",
+        });
+        return;
+      }
+
+      const maxSize = 100 * 1024 * 1024;
+      for (const asset of result.assets) {
+        if (asset.size && asset.size > maxSize) {
+          Toast.show({
+            type: "error",
+            text1: "File Too Large",
+            text2: `${asset.name} exceeds the 100MB size limit.`,
+          });
+          return;
+        }
+      }
+
+      uploadMultipleDocs(result.assets);
+    } catch (err) {
+      console.error("Error picking documents: ", err);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to pick documents.",
+      });
+    }
+  };
+
+  const handleGalleryPickMultiple = async () => {
+    uploadSheetRef.current?.dismiss();
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Toast.show({
+          type: "error",
+          text1: "Permission Denied",
+          text2: "Please grant gallery permission in settings.",
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+        allowsMultipleSelection: true,
+        selectionLimit: 5,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      if (result.assets.length > 5) {
+        Toast.show({
+          type: "error",
+          text1: "Limit Exceeded",
+          text2: "You can upload a maximum of 5 documents.",
+        });
+        return;
+      }
+
+      const files = result.assets.map((asset, index) => {
+        const fileUri = asset.uri;
+        const uriParts = fileUri.split("/");
+        const fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
+        return {
+          uri: fileUri,
+          name: fileName,
+          type: asset.mimeType || "image/jpeg",
+          size: (asset as any).fileSize || 0,
+        };
+      });
+
+      const maxSize = 100 * 1024 * 1024;
+      for (const file of files) {
+        if (file.size && file.size > maxSize) {
+          Toast.show({
+            type: "error",
+            text1: "File Too Large",
+            text2: `${file.name} exceeds the 100MB size limit.`,
+          });
+          return;
+        }
+      }
+
+      uploadMultipleDocs(files);
+    } catch (err) {
+      console.error("Error picking images: ", err);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to pick images.",
+      });
+    }
+  };
+
+  const handleCameraOpenMultiple = async () => {
+    uploadSheetRef.current?.dismiss();
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Toast.show({
+          type: "error",
+          text1: "Permission Denied",
+          text2: "Please grant camera permission in settings.",
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const fileUri = asset.uri;
+      const uriParts = fileUri.split("/");
+      const fileName = asset.fileName || uriParts[uriParts.length - 1] || "camera_capture.jpg";
+
+      const file = {
+        uri: fileUri,
+        name: fileName,
+        type: asset.mimeType || "image/jpeg",
+        size: (asset as any).fileSize || 0,
+      };
+
+      uploadMultipleDocs([file]);
+    } catch (err) {
+      console.error("Error launching camera: ", err);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to capture photo.",
+      });
+    }
+  };
 
   // Fetch all documents
   const {
@@ -567,21 +742,15 @@ const AIChatScreen = () => {
       <View
         style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
       >
-        {/* Document Selector bar */}
-        <DocumentSelector
-          onPress={() => {
-            documentSheetRef.current?.present();
-            Keyboard.dismiss();
-          }}
-        >
-          <Ionicons name="swap-horizontal-outline" size={18} color="#0f766e" />
-          <SelectorText numberOfLines={1}>
-            {selectedDocument
-              ? `${t("documentPrefix")}${selectedDocument.fileName}`
-              : t("generalHealthChatNoDoc")}
-          </SelectorText>
-          <Ionicons name="chevron-down" size={18} color="#94a3b8" />
-        </DocumentSelector>
+        {uploadingDocs.length > 0 && (
+          <OCRProgressPanel
+            uploadingDocs={uploadingDocs}
+            isExpanded={isProgressExpanded}
+            setIsExpanded={setIsProgressExpanded}
+            onDismiss={cancelUpload}
+            isDark={isDark}
+          />
+        )}
 
         {/* Emergency Card Display */}
         {hasEmergency && (
@@ -908,6 +1077,10 @@ const AIChatScreen = () => {
               isSending={isSending}
               isDark={isDark}
               preferredLanguage={preferredLang}
+              onAttachPress={() => {
+                documentSheetRef.current?.present();
+                Keyboard.dismiss();
+              }}
             />
           </>
         )}
@@ -948,7 +1121,9 @@ const AIChatScreen = () => {
                 <UploadButton
                   onPress={() => {
                     documentSheetRef.current?.dismiss();
-                    (navigation as any).navigate("Home");
+                    setTimeout(() => {
+                      uploadSheetRef.current?.present();
+                    }, 300);
                   }}
                 >
                   <UploadButtonText>
@@ -957,32 +1132,47 @@ const AIChatScreen = () => {
                 </UploadButton>
               </EmptyDocumentsWrapper>
             ) : (
-              safeMap(documentsList, (doc: MedicalDocument) => (
-                <BSItem
-                  key={doc.id}
-                  selected={selectedDocument?.id === doc.id}
-                  onPress={() => handleDocumentModeChange(doc)}
-                  activeOpacity={0.7}
-                >
-                  <BSIconBadge
-                    bgColor={
-                      selectedDocument?.id === doc.id ? "#ccfbf1" : "#f1f5f9"
-                    }
+              <>
+                {safeMap(documentsList, (doc: MedicalDocument) => (
+                  <BSItem
+                    key={doc.id}
+                    selected={selectedDocument?.id === doc.id}
+                    onPress={() => handleDocumentModeChange(doc)}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons
-                      name="document-text-outline"
-                      size={20}
-                      color={
-                        selectedDocument?.id === doc.id ? "#0f766e" : "#64748b"
+                    <BSIconBadge
+                      bgColor={
+                        selectedDocument?.id === doc.id ? "#ccfbf1" : "#f1f5f9"
                       }
-                    />
-                  </BSIconBadge>
-                  <BSLbl selected={selectedDocument?.id === doc.id}>
-                    {doc.fileName}
-                  </BSLbl>
-                  {selectedDocument?.id === doc.id && <BSCheck>✓</BSCheck>}
-                </BSItem>
-              ))
+                    >
+                      <Ionicons
+                        name="document-text-outline"
+                        size={20}
+                        color={
+                          selectedDocument?.id === doc.id ? "#0f766e" : "#64748b"
+                        }
+                      />
+                    </BSIconBadge>
+                    <BSLbl selected={selectedDocument?.id === doc.id}>
+                      {doc.fileName}
+                    </BSLbl>
+                    {selectedDocument?.id === doc.id && <BSCheck>✓</BSCheck>}
+                  </BSItem>
+                ))}
+                <UploadButton
+                  style={{ marginTop: 12 }}
+                  onPress={() => {
+                    documentSheetRef.current?.dismiss();
+                    setTimeout(() => {
+                      uploadSheetRef.current?.present();
+                    }, 300);
+                  }}
+                >
+                  <UploadButtonText>
+                    {t("uploadMedicalReport")}
+                  </UploadButtonText>
+                </UploadButton>
+              </>
             )}
 
             {/* Recent Conversations / Session Switcher */}
@@ -1090,6 +1280,15 @@ const AIChatScreen = () => {
             )}
           </BSScrollView>
         </SheetContentWrapper>
+      </BottomSheet>
+
+      {/* Upload Selector Bottom Sheet */}
+      <BottomSheet ref={uploadSheetRef} enablePanDownToClose={true}>
+        <AddDocumentSheet
+          onGalleryPick={handleGalleryPickMultiple}
+          onCameraOpen={handleCameraOpenMultiple}
+          onDocumentPick={handleDocumentPickMultiple}
+        />
       </BottomSheet>
     </Container>
   );
