@@ -1608,18 +1608,30 @@ export default function OnboardingScreen() {
                   : "Yes, Correct";
         sendMessage(JSON.stringify({ confirmed: true }), state, displayLabel);
       };
-      const handleEdit = () => {
-        const displayLabel =
-          preferredLang === "gujarati" || preferredLang === "gu"
-            ? "સુધારો"
-            : preferredLang === "hindi" || preferredLang === "hi"
-              ? "संपादित करें"
-              : preferredLang === "marathi" || preferredLang === "mr"
-                ? "संपादित करा"
-                : preferredLang === "tamil" || preferredLang === "ta"
-                  ? "திருத்து"
-                  : "Edit";
-        sendMessage(JSON.stringify({ edit: true }), state, displayLabel);
+      const handleEdit = (med?: any) => {
+        if (med) {
+          setActiveMedicineToEdit(med);
+          const newMsg: Message = {
+            id: `ai-${Date.now()}`,
+            role: "assistant",
+            content: "Please edit the medication details below:",
+            action: "EDIT_MEDICINE",
+            medicine: med,
+          };
+          setMessages((prev) => [...prev, newMsg]);
+        } else {
+          const displayLabel =
+            preferredLang === "gujarati" || preferredLang === "gu"
+              ? "સુધારો"
+              : preferredLang === "hindi" || preferredLang === "hi"
+                ? "संपादित करें"
+                : preferredLang === "marathi" || preferredLang === "mr"
+                  ? "संपादित करा"
+                  : preferredLang === "tamil" || preferredLang === "ta"
+                    ? "திருத்து"
+                    : "Edit";
+          sendMessage(JSON.stringify({ edit: true }), state, displayLabel);
+        }
       };
 
       return (
