@@ -10,6 +10,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { queryClient } from "../config/queryClient";
 import { refreshAuthToken } from "../services/auth.service";
+import { registerForceLogoutHandler, resetForceLogout } from "../services/apiClient";
 
 interface AuthContextType {
   userId: string | null;
@@ -111,7 +112,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    const { registerForceLogoutHandler } = require("../services/apiClient");
     registerForceLogoutHandler(() => {
       setIsAuthenticated(false);
       setAccessToken(null);
@@ -123,7 +123,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (data: { accessToken: string; refreshToken: string; userId: string; createdAt?: string }) => {
     try {
-      const { resetForceLogout } = require("../services/apiClient");
       resetForceLogout();
 
       await SecureStore.setItemAsync("userId", String(data.userId));
