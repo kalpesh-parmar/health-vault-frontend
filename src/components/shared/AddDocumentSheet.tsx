@@ -57,7 +57,7 @@ const AddDocumentSheet = ({
         </OptionRow>
 
         {/* PDF Option */}
-        {isProfilePicture && (
+        {!isProfilePicture && (
           <OptionRow onPress={onDocumentPick} isFirst>
           <IconContainer bgColor="#f5f3ff">
             <MaterialCommunityIcons

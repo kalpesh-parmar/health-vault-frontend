@@ -66,14 +66,24 @@ export const useMultipleUpload = (onSuccessGlobal?: () => void) => {
 
     const runPoll = async () => {
       if (!isPollingRef.current) return;
+      const endpoint = DOCUMENT_ENDPOINTS.OCR_STATUS.replace(
+        "{documentId}",
+        initialDocs[0]?.id,
+      );
 
       try {
-        const response = await apiClient.get(DOCUMENT_ENDPOINTS.OCR_STATUS);
+        const response = await apiClient.get(endpoint, {
+          params: {
+            documentId: initialDocs[0]?.id,
+          },
+        });
         const apiDocs =
           response.data?.data ||
           response.data?.items ||
           response.data ||
           [];
+
+        console.log("API Docs :- ", apiDocs);
 
         let allFinished = true;
 
@@ -84,9 +94,7 @@ export const useMultipleUpload = (onSuccessGlobal?: () => void) => {
           }
 
           const next = prev.map((doc) => {
-            const matched = apiDocs.find(
-              (d: any) => d.id === doc.id || d.documentId === doc.id,
-            );
+            const matched = apiDocs.find((d: any) => d.documentId === doc.id);
             if (matched) {
               const progress = mapStatusToProgress(matched);
               const status = matched.status || matched.stage || doc.status;

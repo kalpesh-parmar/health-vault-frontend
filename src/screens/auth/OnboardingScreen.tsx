@@ -486,6 +486,7 @@ export default function OnboardingScreen() {
         timeout: 90000,
       });
       const resData = response.data?.data;
+      console.log("Onboarding Chat Response :- ", resData);
 
       if (resData) {
         processAssistantResponse(resData, currentState);

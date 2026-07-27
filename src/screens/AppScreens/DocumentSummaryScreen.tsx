@@ -174,9 +174,9 @@ const SummaryScreen = ({ route, navigation }: any) => {
             <SectionTitle>AI Summary</SectionTitle>
           </SectionHeader>
           <HighlightCard isDark={isDark}>
-            <SummaryContainer>
+            <SummaryContainer vertical>
               <DescriptionText isDark={isDark}>
-                {document?.AISummary ||
+                {document?.summaryInPreferredLanguage ||
                   "AI is processing this document to generate a summary."}
               </DescriptionText>
             </SummaryContainer>
@@ -389,7 +389,7 @@ const HighlightCard = styled.View<{ isDark: boolean }>`
   border-radius: 16px;
   overflow: hidden;
 `;
-const SummaryContainer = styled.View<{ isDark: boolean }>`
+const SummaryContainer = styled.ScrollView<{ isDark: boolean }>`
   flex-direction: row;
   padding: 7px;
   padding-left: 0px;
@@ -397,7 +397,8 @@ const SummaryContainer = styled.View<{ isDark: boolean }>`
 
 const DescriptionText = styled.Text<{ isDark: boolean }>`
   font-size: 14px;
-  color: ${({ isDark }: {isDark: boolean}) => (isDark ? "#cbd5e1" : "#334155")};
+  color: ${({ isDark }: { isDark: boolean }) =>
+    isDark ? "#cbd5e1" : "#334155"};
   font-weight: 500;
   line-height: 22px;
   flex: 1;

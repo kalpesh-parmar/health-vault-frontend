@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { Keyboard, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface DocumentPreviewProps {
   fileName: string;
@@ -19,13 +21,40 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onRemove,
 }) => {
   const { isDark } = useAppTheme();
+  const [padding, setPadding] = useState(0);
+  const insets = useSafeAreaInsets();
 
   const formattedSize = typeof fileSize === "number"
     ? `${(fileSize / (1024 * 1024)).toFixed(2)} MB`
     : fileSize;
 
+  useEffect(() => {
+    const bottomPadding = () => {
+      // We have to use insets for finding perfect padding for bottom so that the navigation mode doesn't overlap the bottom content.
+      const showSubscription = Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+        (e) => {
+          const padding = e.endCoordinates.height + insets.bottom + 5;
+          setPadding(padding);
+        }
+      );
+      const hideSubscription = Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+        () => {
+          setPadding(0);
+        }
+      );
+
+      return () => {
+        showSubscription.remove();
+        hideSubscription.remove();
+      };
+    }
+    bottomPadding();
+  }, []);
+  
   return (
-    <Container>
+    <Container style={{ paddingBottom: padding }}>
       <Card>
         {fileType === "image" ? (
           <ImagePreview source={{ uri }} />
@@ -51,7 +80,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 export default DocumentPreview;
 
 const Container = styled.View`
-  margin: 12px 16px;
+  margin: 12px 16px; 
 `;
 
 const Card = styled.View`

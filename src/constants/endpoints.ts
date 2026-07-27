@@ -30,7 +30,7 @@ export const DOCUMENT_ENDPOINTS = {
   NEW_OCR_STATUS: "/v1/ocr/status/{documentId}",
   NEW_OCR_CANCEL: "/v1/ocr/cancel/{documentId}",
   OCR_EXTRACT: "/v1/ocr/extract",
-  OCR_STATUS: "/v1/ocr/status",
+  OCR_STATUS: "/v1/ocr/status/{documentId}",
 } as const;
 
 export const MEDICATION_REMINDER_ENDPOINTS = {
