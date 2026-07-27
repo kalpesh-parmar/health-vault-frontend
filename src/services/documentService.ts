@@ -80,6 +80,58 @@ export interface AddDocumentRequest {
   embeddingsGenerated?: boolean;
 }
 
+export interface BatchUploadItem {
+  id: string;
+  userId?: string;
+  documentType?: string;
+  fileName: string;
+  filePath?: string;
+  s3Key?: string;
+  fileType: string;
+  fileSize: number;
+  ocrStatus: string;
+  jobId: string;
+  fileKey: string;
+  signedUrl: string;
+  fileUrl?: string;
+}
+
+export interface OcrJobStatus {
+  id: string;
+  fileKey: string;
+  userId: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
+  stage?: string;
+  percentage?: number;
+  currentStep?: string;
+  completedSteps?: number;
+  pendingSteps?: number;
+  message?: string | null;
+  metadata?: {
+    confidence?: number | null;
+    pageCount?: number;
+    processingSeconds?: number | null;
+    skippedPages?: (number | { pageNumber: number; reason?: string })[];
+    skipped_pages?: (number | { pageNumber: number; reason?: string })[];
+    [key: string]: any;
+  };
+  error?: string | null;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface OcrJobResult {
+  jobId: string;
+  fileKey: string;
+  status: string;
+  extractedStructuredData: any;
+  summaries: {
+    summaryEnglish: string;
+    summaryInPreferredLanguage: string;
+  };
+  graphs: any[];
+}
+
 export const documentUpload = async (
   formData: FormData,
 ): Promise<ApiResponse<UploadResponse>> => {
@@ -89,6 +141,59 @@ export const documentUpload = async (
     },
   });
   return response.data;
+};
+
+export const uploadPatientDocuments = async (
+  patientId: string,
+  files: Array<{ uri: string; name: string; type: string }>,
+  onUploadProgress?: (progressEvent: any) => void,
+): Promise<ApiResponse<BatchUploadItem[]>> => {
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append("files", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+  });
+
+  const endpoint = DOCUMENT_ENDPOINTS.PATIENT_DOCUMENTS_UPLOAD(patientId);
+  const response = await apiClient.post(endpoint, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+    onUploadProgress,
+  });
+  return response.data;
+};
+
+export const startOcrJob = async (
+  jobId: string,
+): Promise<ApiResponse<{ jobId: string; fileKey: string; status: string; stage?: string }>> => {
+  const endpoint = DOCUMENT_ENDPOINTS.OCR_JOB_START(jobId);
+  const response = await apiClient.post(endpoint);
+  return response.data;
+};
+
+export const getOcrJob = async (
+  jobId: string,
+): Promise<ApiResponse<OcrJobStatus>> => {
+  const endpoint = DOCUMENT_ENDPOINTS.OCR_JOB_STATUS(jobId);
+  const response = await apiClient.get(endpoint);
+  return response.data;
+};
+
+export const getOcrJobResult = async (
+  jobId: string,
+): Promise<ApiResponse<OcrJobResult>> => {
+  const endpoint = DOCUMENT_ENDPOINTS.OCR_JOB_RESULT(jobId);
+  try {
+    const response = await apiClient.get(endpoint);
+    return response.data;
+  } catch (error: any) {
+    // Re-throw structured error for 409 (Not ready) or 400 (Failed)
+    throw error;
+  }
 };
 
 export const getChatMessages = async (

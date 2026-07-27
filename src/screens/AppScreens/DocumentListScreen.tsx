@@ -334,6 +334,10 @@ const DocumentList = () => {
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
+          onMultiUploadPick={() => {
+            refRBSheet.current?.dismiss();
+            navigation.navigate("MultiUpload");
+          }}
           onGalleryPick={() =>
             handleGalleryPick(() => refRBSheet.current?.dismiss())
           }

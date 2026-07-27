@@ -8,6 +8,8 @@ import NotificationScreen from "../../screens/AppScreens/Notifications";
 import AIChatScreen from "../../screens/AppScreens/AIChatScreen";
 import MedicationStack from "./MedicationStack";
 import ReminderScreen from "../../screens/AppScreens/Reminders/ReminderScreen";
+import MultiUploadScreen from "../../screens/AppScreens/MultiUploadScreen";
+import DocumentProcessingScreen from "../../screens/AppScreens/DocumentProcessingScreen";
 import UploadSuccessScreen from "../../components/shared/UploadSuccessfullScreen";
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -23,6 +25,8 @@ const HomeStack = () => {
       <Stack.Screen name="MedicationStack" component={MedicationStack} />
       <Stack.Screen name="ImagePreview" component={ImagePreview} />
       <Stack.Screen name="SaveDocument" component={SaveDocumentScreen} />
+      <Stack.Screen name="MultiUpload" component={MultiUploadScreen} />
+      <Stack.Screen name="DocumentProcessing" component={DocumentProcessingScreen} />
       <Stack.Screen name="Notifications" component={NotificationScreen} />
       <Stack.Screen name="AIChat" component={AIChatScreen} />
       <Stack.Screen name="Reminders" component={ReminderScreen} />
