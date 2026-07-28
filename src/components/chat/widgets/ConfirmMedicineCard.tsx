@@ -79,7 +79,20 @@ export function ConfirmMedicineCard({
     const title = med.title || med.name || med.medicationName || "";
     let subtitle = med.subtitle || med.category || med.medicationType || "";
     let type = med.type || med.medicationType || "";
-    let dosage = med.dosage || med.dose || med.dosePerIntake || "";
+    const rawDosage = med.dosage || med.dose || med.dosePerIntake || "";
+    let dosage = "";
+    if (rawDosage && typeof rawDosage === "object") {
+      if (rawDosage.count !== undefined) {
+        const typeStr = (type || "tablet").toLowerCase();
+        dosage = `${rawDosage.count} ${typeStr}(s)`;
+      } else if (rawDosage.value !== undefined) {
+        dosage = `${rawDosage.value} ${rawDosage.unit || ""}`.trim();
+      } else {
+        dosage = JSON.stringify(rawDosage);
+      }
+    } else {
+      dosage = String(rawDosage);
+    }
     let frequency = med.frequency || "";
     let schedule = med.schedule || med.medicationSchedule || med.times || "";
     let prescribedBy = med.prescribedBy || med.prescribed_by || "";
@@ -195,7 +208,9 @@ export function ConfirmMedicineCard({
         styles.medConfirmCard,
         {
           backgroundColor: isDark ? "#1e293b" : "#ffffff",
-          borderColor: isDark ? "#334155" : "#e2e8f0",
+          borderColor: "transparent",
+          borderWidth: 0,
+          borderRadius: 16,
           opacity: readOnly ? 1 : 1,
         },
       ]}
@@ -215,13 +230,8 @@ export function ConfirmMedicineCard({
               borderColor: isDark ? "#2d3748" : "#f1f5f9",
               borderWidth: 1,
               borderRadius: 16,
-              padding: 16,
+              padding: 20,
               marginBottom: 12,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 1,
             }}
           >
             {/* Header Row */}
@@ -250,7 +260,7 @@ export function ConfirmMedicineCard({
               </View>
               {!readOnly && (
                 <TouchableOpacity
-                  onPress={() => onEdit(med.original)}
+                  onPress={() => onEdit(med.original || med)}
                   style={{
                     padding: 8,
                     borderRadius: 20,
@@ -265,7 +275,7 @@ export function ConfirmMedicineCard({
             </View>
 
             {/* Grid details */}
-            <View style={{ flexDirection: "row", marginTop: 4 }}>
+            <View style={{ flexDirection: "row", marginTop: 4, padding: 15 }}>
               {/* Column 1 */}
               <View style={{ flex: 1, marginRight: 8 }}>
                 {/* Type */}
@@ -346,7 +356,6 @@ export function ConfirmMedicineCard({
                   backgroundColor: isDark ? "#1c2431" : "#f5f3ff",
                   borderLeftWidth: 4,
                   borderLeftColor: "#10b981",
-                  borderRadius: 8,
                   paddingVertical: 8,
                   paddingHorizontal: 12,
                   marginTop: 12,

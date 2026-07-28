@@ -44,13 +44,13 @@ export function AddMedicineCard({
   chosenLabel,
 }: AddMedicineCardProps) {
   const [formName, setFormName] = useState(
-    med.name || med.medicationName || "",
+    med.name || med.medicationName || med.title || "",
   );
   const [formType, setFormType] = useState(
     med.type || med.medicationType || "TABLET",
   );
   const [formFreq, setFormFreq] = useState(med.frequency || "ONCE");
-  const [formNotes, setFormNotes] = useState(med.notes || "");
+  const [formNotes, setFormNotes] = useState(med.notes || med.instructions || "");
   const [formPrescribed, setFormPrescribed] = useState(
     med.prescribedBy || med.prescribed_by || "",
   );
@@ -63,7 +63,7 @@ export function AddMedicineCard({
       : String(med.totalQuantity ?? "1"),
   );
   const [formFoodFreq, setFormFoodFreq] = useState(
-    med.foodContext || med.medicationSchedule?.foodContext || "AFTER_FOOD",
+    med.foodContext || med.medicationSchedule?.foodContext || med.foodFrequency || "AFTER_FOOD",
   );
   const [startDate, setStartDate] = useState<Date | null>(
     med.startDate ? new Date(med.startDate) : new Date(),
@@ -78,6 +78,34 @@ export function AddMedicineCard({
     if (med.dose.count !== undefined) initialCount = med.dose.count;
     if (med.dose.value !== undefined) initialVal = med.dose.value;
     if (med.dose.unit !== undefined) initialUnit = med.dose.unit;
+  } else {
+    const rawDosage = med.dosage || med.dosePerIntake;
+    if (rawDosage) {
+      const match = String(rawDosage).match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+      if (match) {
+        const numericVal = parseFloat(match[1]);
+        const unitVal = match[2].trim().toLowerCase();
+        if (!isNaN(numericVal)) {
+          initialCount = numericVal;
+          initialVal = numericVal;
+        }
+        if (unitVal) {
+          if (unitVal.startsWith("tab")) {
+            initialUnit = "tablet";
+          } else if (unitVal.startsWith("cap")) {
+            initialUnit = "capsule";
+          } else {
+            initialUnit = unitVal;
+          }
+        }
+      } else {
+        const numericVal = parseFloat(rawDosage);
+        if (!isNaN(numericVal)) {
+          initialCount = numericVal;
+          initialVal = numericVal;
+        }
+      }
+    }
   }
 
   const [formCount, setFormCount] = useState(initialCount);
@@ -87,6 +115,12 @@ export function AddMedicineCard({
 
   // Time slots selection
   const [timeSlots, setTimeSlots] = useState<string[]>(() => {
+    if (Array.isArray(med.medicationSchedule)) {
+      return med.medicationSchedule;
+    }
+    if (Array.isArray(med.times)) {
+      return med.times;
+    }
     const schedule = med.medicationSchedule || {};
     const times = schedule.times || schedule.reminderTimes;
     if (Array.isArray(times) && times.length > 0) {

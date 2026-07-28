@@ -34,6 +34,7 @@ export function ResolveProfileSourceCard({
   const fields = activeMsg?.fields || [];
   const loginSummary = activeMsg?.loginSummary || "";
   const documentSummary = activeMsg?.documentSummary || "";
+  const parsed = parseChosenJson(chosenVal);
 
   // Local state for manual profile editing
   const [isEditingProfileManually, setIsEditingProfileManually] = useState(false);
@@ -446,8 +447,7 @@ export function ResolveProfileSourceCard({
             ]}
             onPress={() => {
               const userMessage = uiT("saveDetails");
-              console.log(userMessage);
-              setIsEditingProfileManually(false);
+              // setIsEditingProfileManually(false);
               sendMessage(
                 JSON.stringify({ edited: editedProfileData }),
                 state,
@@ -520,7 +520,7 @@ export function ResolveProfileSourceCard({
       </View>
 
       {/* VS Card Columns or CONFIRM layout */}
-      {mode === "CONFIRM" ? (
+      {mode === "CONFIRM" || parsed?.edited !== undefined ? (
         <View style={[styles.vsColumn, { borderColor: isDark ? "#475569" : "#cbd5e1", width: "100%", marginBottom: 12, borderWidth: 1, borderRadius: 8, overflow: "hidden" }]}>
           <View style={[styles.columnHeader, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
             <Ionicons name="person-circle-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
@@ -530,7 +530,9 @@ export function ResolveProfileSourceCard({
           </View>
           <View style={styles.columnBody}>
             {fields.map((field: any) => {
-              const val = field.value;
+              const val = (parsed?.edited && parsed.edited[field.key] !== undefined)
+                ? parsed.edited[field.key]
+                : field.value;
               return (
                 <View key={field.key} style={styles.fieldRow}>
                   <View
@@ -876,7 +878,6 @@ export function ResolveProfileSourceCard({
 
       {/* Large Action Buttons Side-by-Side */}
       {(() => {
-        const parsed = parseChosenJson(chosenVal);
         if (mode === "CONFIRM") {
           const isConfirmChosen = isHistorical && (
             parsed?.confirmed === true ||

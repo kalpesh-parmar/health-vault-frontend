@@ -6,9 +6,11 @@ import {
   StatusBar,
   ListRenderItem,
   Modal,
+  View,
+  Alert,
 } from "react-native";
 import styled from "styled-components/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
@@ -25,7 +27,7 @@ import FilterBottomSheet, {
 } from "../../components/shared/FilterBottomSheet";
 
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import Toast from "react-native-toast-message";
@@ -36,20 +38,25 @@ import {
   documentListPaginated,
   filterDocuments,
   listDocument,
+  deleteDocument,
+  getSignedUrl,
 } from "../../services/documentService";
 import { useAuth } from "../../context/ContextAPI";
 import DocumentCard from "../../components/Documents/DocumentCard";
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import { useAppNavigation } from "../../types/navigation";
 import { useAppTheme } from "../../context/ThemeContext";
 import { MedicalDocument } from "../../types";
 import ErrorBoundary from "../../components/shared/ErrorBoundary";
+import { downloadSingleDocument, shareSingleDocument } from "../../utils/fileOperations";
 
 const CATEGORIES = [
   { key: "All", value: "All" },
-  { key: "Family", value: "family" },
-  { key: "Medical Documents", value: "medical_document" },
-  { key: "Insurance", value: "insurance" },
-  { key: "Other", value: "other" },
+  { key: "Medical Documents", value: "Medical Documents" },
+  { key: "Lab Reports", value: "Medical Report" },
+  { key: "Prescriptions", value: "Prescription" },
+  { key: "Insurance", value: "Insurance" },
+  { key: "Other", value: "Other" },
 ];
 
 const SORT_OPTIONS = [
@@ -91,15 +98,31 @@ const DocumentList = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isFilterApplied, setIsFilterApplied] = useState(false);
 
-  // Focus hook to reset filters when screen gains focus (so it does not persist across navigations)
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteIds, setDeleteIds] = useState("");
+
+  // Focus hook to reset filters and selections when screen gains focus
   useFocusEffect(
     useCallback(() => {
       setActiveTab("All");
       setSortOption("date_desc");
       setSearchQuery("");
       setIsFilterApplied(false);
+      setSelectedDocIds([]);
     }, []),
   );
+
+  const handleFeatureComingSoon = useCallback(() => {
+    Toast.show({
+      type: "info",
+      text1: "Coming Soon",
+      text2: "This feature will be implemented soon.",
+      position: "bottom",
+    });
+  }, []);
 
   const {
     handleOpenCamera,
@@ -156,7 +179,9 @@ const DocumentList = () => {
         uploadMultipleDocs(result.assets);
       } else {
         const file = result.assets[0];
-        const fileNameWithoutExt = file.name ? file.name.replace(/\.[^/.]+$/, "") : "Document";
+        const fileNameWithoutExt = file.name
+          ? file.name.replace(/\.[^/.]+$/, "")
+          : "Document";
         navigation.navigate("SaveDocument", {
           images: file.uri,
           fileName: fileNameWithoutExt,
@@ -170,7 +195,8 @@ const DocumentList = () => {
   const handleGalleryPickMultiple = async () => {
     refRBSheet.current?.dismiss();
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         Toast.show({
           type: "error",
@@ -204,7 +230,10 @@ const DocumentList = () => {
         const files = result.assets.map((asset, index) => {
           const fileUri = asset.uri;
           const uriParts = fileUri.split("/");
-          const fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
+          const fileName =
+            asset.fileName ||
+            uriParts[uriParts.length - 1] ||
+            `image_${index + 1}.jpg`;
           return {
             uri: fileUri,
             name: fileName,
@@ -351,10 +380,82 @@ const DocumentList = () => {
     searchQuery,
   ]);
 
+  const handleSelectDocument = useCallback((id: string) => {
+    setSelectedDocIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  }, []);
+
+  const isSelectionMode = selectedDocIds.length > 0;
+
   const renderItem: ListRenderItem<MedicalDocument> = useCallback(
-    ({ item }) => <DocumentCard document={item} />,
-    [],
+    ({ item }) => {
+      const isSelected = selectedDocIds.includes(item.id);
+      return (
+        <DocumentCard
+          document={item}
+          selected={isSelected}
+          onSelect={handleSelectDocument}
+          isSelectionMode={isSelectionMode}
+        />
+      );
+    },
+    [selectedDocIds, handleSelectDocument, isSelectionMode],
   );
+
+  const handleBulkDownload = useCallback(async () => {
+    if (selectedDocIds.length === 0) return;
+    try {
+      for (const id of selectedDocIds) {
+        const doc = documents.find((d: MedicalDocument) => d.id === id);
+        if (doc && doc.s3Key) {
+          const res = await getSignedUrl(doc.s3Key);
+          if (res.data?.downloadUrl) {
+            await downloadSingleDocument(res.data.downloadUrl, doc.fileName);
+          }
+        }
+      }
+      setSelectedDocIds([]);
+    } catch (e) {
+      Toast.show({
+        type: "error",
+        text1: "Download Failed",
+        text2: "An error occurred during bulk download",
+      });
+    }
+  }, [selectedDocIds, documents]);
+
+  const handleBulkShare = useCallback(async () => {
+    if (selectedDocIds.length === 0) return;
+    try {
+      for (const id of selectedDocIds) {
+        const doc = documents.find((d: MedicalDocument) => d.id === id);
+        if (doc && doc.s3Key) {
+          const res = await getSignedUrl(doc.s3Key);
+          if (res.data?.downloadUrl) {
+            await shareSingleDocument(res.data.downloadUrl, doc.fileName);
+          }
+        }
+      }
+      setSelectedDocIds([]);
+    } catch (e) {
+      Toast.show({
+        type: "error",
+        text1: "Share Failed",
+        text2: "An error occurred during sharing",
+      });
+    }
+  }, [selectedDocIds, documents]);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedDocIds.length === 0) return;
+    setDeleteIds(selectedDocIds.join(","));
+    setShowDeleteModal(true);
+  }, [selectedDocIds]);
 
   const gradientColors = useMemo(
     () =>
@@ -385,12 +486,19 @@ const DocumentList = () => {
       />
 
       {(isCapturing || isProcessing) && uploadingDocs.length === 0 && (
-        <Loader visible={isCapturing || isProcessing} currentStage={isProcessing ? "VALIDATING" : undefined} />
+        <Loader
+          visible={isCapturing || isProcessing}
+          currentStage={isProcessing ? "VALIDATING" : undefined}
+        />
       )}
 
       {/* Loading Screen Modal for Multiple Document Uploads */}
       {uploadingDocs.length > 0 && (
-        <Modal transparent visible={uploadingDocs.length > 0} animationType="fade">
+        <Modal
+          transparent
+          visible={uploadingDocs.length > 0}
+          animationType="fade"
+        >
           <ModalContainer>
             <OCRProgressPanel
               uploadingDocs={uploadingDocs}
@@ -420,13 +528,40 @@ const DocumentList = () => {
           </RightActions>
         </HeaderMain>
 
-        <SearchBarWrapper>
-          <SearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search documents..."
-          />
-        </SearchBarWrapper>
+        <View style={{ height: 1, backgroundColor: "white", marginTop: 10 }} />
+
+        <FamilySection>
+          <FamilyHeader>
+            <FamilyTitle>Family Members</FamilyTitle>
+            <ManageButton onPress={handleFeatureComingSoon}>
+              <ManageText>Manage</ManageText>
+            </ManageButton>
+          </FamilyHeader>
+          <FamilyScroll>
+            <MemberItem activeOpacity={0.8}>
+              <SelectedOuterCircle>
+                <AvatarImage
+                  source={{
+                    uri: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80",
+                  }}
+                />
+              </SelectedOuterCircle>
+              <MemberName active>Me (You)</MemberName>
+            </MemberItem>
+            <MemberItem activeOpacity={0.7} onPress={handleFeatureComingSoon}>
+              <AddCircle>
+                <Ionicons
+                  name="add"
+                  size={30}
+                  color={isDark ? "#9ca3af" : "#6b7280"}
+                />
+              </AddCircle>
+              <MemberName>Add</MemberName>
+            </MemberItem>
+          </FamilyScroll>
+        </FamilySection>
+
+        <View style={{ height: 1, backgroundColor: "white", marginTop: 10 }} />
       </HeaderWrapper>
 
       <ContentContainer>
@@ -479,10 +614,46 @@ const DocumentList = () => {
             ) : null
           }
         />
+
+        {isSelectionMode && (
+          <SelectionBottomBar isDark={isDark} insets={insets}>
+            <SelectionText isDark={isDark}>
+              {selectedDocIds.length} selected
+            </SelectionText>
+            <BarActionsContainer>
+              <BarActionButton onPress={handleBulkDownload}>
+                <Ionicons name="download-outline" size={22} color={isDark ? "#cbd5e1" : "#1e293b"} />
+                <BarActionLabel isDark={isDark}>Download</BarActionLabel>
+              </BarActionButton>
+              <BarActionButton onPress={handleBulkShare}>
+                <Ionicons name="share-social-outline" size={22} color={isDark ? "#cbd5e1" : "#1e293b"} />
+                <BarActionLabel isDark={isDark}>Share</BarActionLabel>
+              </BarActionButton>
+              <BarActionButton onPress={handleBulkDelete}>
+                <Ionicons name="trash-outline" size={22} color="#ef4444" />
+                <BarActionLabel style={{ color: "#ef4444" }}>Delete</BarActionLabel>
+              </BarActionButton>
+            </BarActionsContainer>
+          </SelectionBottomBar>
+        )}
       </ContentContainer>
+
+      <ConfirmationModal
+        showModal={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedDocIds([]);
+        }}
+        mode="Delete Document"
+        documentId={deleteIds}
+      />
 
       <BottomSheet ref={refRBSheet}>
         <AddDocumentSheet
+          onMultiUploadPick={() => {
+            refRBSheet.current?.dismiss();
+            navigation.navigate("MultiUpload");
+          }}
           onGalleryPick={handleGalleryPickMultiple}
           onCameraOpen={() =>
             handleOpenCamera(() => refRBSheet.current?.dismiss())
@@ -600,9 +771,88 @@ const IconButton = styled.TouchableOpacity`
 
 const ContentContainer = styled.View`
   flex: 1;
-  background-color: white;
+  background-color: ${(props: any) => props.theme.colors.surface};
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
+`;
+
+const FamilySection = styled.View`
+  padding-top: 16px;
+  padding-bottom: 8px;
+`;
+
+const FamilyHeader = styled.View`
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding-horizontal: 20px;
+  margin-bottom: 12px;
+`;
+
+const FamilyTitle = styled.Text`
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+`;
+
+const ManageButton = styled.TouchableOpacity`
+  padding: 4px;
+`;
+
+const ManageText = styled.Text`
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+`;
+
+const FamilyScroll = styled.ScrollView.attrs({
+  horizontal: true,
+  showsHorizontalScrollIndicator: false,
+  contentContainerStyle: {
+    paddingHorizontal: 20,
+    paddingRight: 40,
+  },
+})`
+  flex-direction: row;
+`;
+
+const MemberItem = styled.TouchableOpacity`
+  align-items: center;
+  margin-right: 18px;
+`;
+
+const SelectedOuterCircle = styled.View`
+  width: 66px;
+  height: 66px;
+  borderRadius: 33px;
+  borderWidth: 2px;
+  borderColor: #10b981;
+  justify-content: center;
+  align-items: center;
+`;
+
+const AvatarImage = styled.Image`
+  width: 56px;
+  height: 56px;
+  borderRadius: 28px;
+`;
+
+const AddCircle = styled.View`
+  width: 66px;
+  height: 66px;
+  borderRadius: 33px;
+  borderWidth: 1px;
+  borderColor: white;
+  backgroundColor: white;
+  justify-content: center;
+  align-items: center;
+`;
+
+const MemberName = styled.Text<{ active?: boolean }>`
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 8px;
+  color: white;
 `;
 
 const ModalContainer = styled.View`
@@ -610,4 +860,50 @@ const ModalContainer = styled.View`
   background-color: rgba(0, 0, 0, 0.45);
   justify-content: center;
   align-items: center;
+`;
+
+const SelectionBottomBar = styled.View<{ isDark: boolean; insets: any }>`
+  position: absolute;
+  bottom: ${(props: { isDark: boolean; insets: any }) => Math.max(16, props.insets.bottom + 12)}px;
+  left: 20px;
+  right: 20px;
+  background-color: ${(props: { isDark: boolean; insets: any }) => props.isDark ? "#1e293b" : "#ffffff"};
+  border-radius: 20px;
+  padding-vertical: 14px;
+  padding-horizontal: 20px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  border-width: 1px;
+  border-color: ${(props: { isDark: boolean; insets: any }) => props.isDark ? "#334155" : "#e2e8f0"};
+  
+  elevation: 8;
+  shadow-color: #000;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.15;
+  shadow-radius: 12px;
+`;
+
+const SelectionText = styled.Text<{ isDark: boolean }>`
+  font-size: 15px;
+  font-weight: 700;
+  color: ${(props: { isDark: boolean }) => props.isDark ? "#f8fafc" : "#1e293b"};
+`;
+
+const BarActionsContainer = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+`;
+
+const BarActionButton = styled.TouchableOpacity`
+  align-items: center;
+  justify-content: center;
+`;
+
+const BarActionLabel = styled.Text<{ isDark: boolean }>`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${(props: { isDark: boolean }) => props.isDark ? "#cbd5e1" : "#475569"};
+  margin-top: 4px;
 `;

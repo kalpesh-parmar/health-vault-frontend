@@ -17,6 +17,10 @@ export const PATIENT_ENDPOINTS = {
 
 export const DOCUMENT_ENDPOINTS = {
   UPLOAD_DOCUMENT: "/documents/upload",
+  PATIENT_DOCUMENTS_UPLOAD: (patientId: string) => `/patient/${patientId}/documents/upload`,
+  OCR_JOB_START: (jobId: string) => `/ocr/jobs/${jobId}/start`,
+  OCR_JOB_STATUS: (jobId: string) => `/ocr/jobs/${jobId}`,
+  OCR_JOB_RESULT: (jobId: string) => `/ocr/jobs/${jobId}/result`,
   RUN_OCR: "/documents/run-ocr",
   OCR_PROGRESS: "/documents/run-ocr-status/{fileKey}",
   ADD_DOCUMENT: "/documents/add",

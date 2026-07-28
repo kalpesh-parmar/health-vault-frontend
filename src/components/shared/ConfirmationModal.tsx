@@ -73,7 +73,14 @@ const ConfirmationModal = ({
   });
 
   const { mutateAsync: deleteDocumentMutation, isPending: isDeletingDoc } = useMutation({
-    mutationFn: deleteDocument,
+    mutationFn: async (idString: string) => {
+      const ids = idString.split(",");
+      for (const id of ids) {
+        if (id) {
+          await deleteDocument(id);
+        }
+      }
+    },
     onSuccess: async (result) => {
       queryClient.invalidateQueries({
         queryKey: ["documents"],

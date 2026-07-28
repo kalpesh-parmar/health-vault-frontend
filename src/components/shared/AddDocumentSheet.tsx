@@ -7,6 +7,7 @@ interface AddDocumentSheetProps {
   onGalleryPick: () => void;
   onCameraOpen: () => void;
   onDocumentPick: () => void;
+  onMultiUploadPick?: () => void;
 }
 
 const AddDocumentSheet = ({
@@ -14,6 +15,7 @@ const AddDocumentSheet = ({
   onGalleryPick,
   onCameraOpen,
   onDocumentPick,
+  onMultiUploadPick,
 }: AddDocumentSheetProps) => {
   return (
     <SheetContentWrapper>
@@ -25,7 +27,24 @@ const AddDocumentSheet = ({
       </HeaderSection>
 
       <OptionsContainer>
-        <OptionRow onPress={onCameraOpen} isFirst>
+        {onMultiUploadPick && !isProfilePicture && (
+          <OptionRow onPress={onMultiUploadPick} isFirst>
+            <IconContainer bgColor="#ccfbf1">
+              <MaterialCommunityIcons
+                name="file-multiple-outline"
+                size={26}
+                color="#0d9488"
+              />
+            </IconContainer>
+            <TextContent>
+              <OptionTitle>Batch Multi-Upload</OptionTitle>
+              <OptionDesc>Upload up to 5 documents with AI OCR</OptionDesc>
+            </TextContent>
+            <Feather name="chevron-right" size={20} color="#94a3b8" />
+          </OptionRow>
+        )}
+
+        <OptionRow onPress={onCameraOpen} isFirst={!onMultiUploadPick || isProfilePicture}>
           <IconContainer bgColor="#f5f3ff">
             <MaterialCommunityIcons
               name="camera-outline"

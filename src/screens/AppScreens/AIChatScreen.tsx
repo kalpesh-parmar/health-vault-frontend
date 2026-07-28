@@ -17,6 +17,7 @@ import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
 import { format } from "date-fns";
+import { formatUTCDateTime } from "../../utils/dateFormatter";
 
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import BottomSheet from "../../components/shared/BottomSheet";
@@ -242,9 +243,11 @@ const SUGGESTED_QUESTIONS_I18N: Record<
   },
 };
 
-const AIChatScreen = () => {
+
+
+const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
 
   const t = (key: string) => {
     const lang = preferredLang || "english";
@@ -256,6 +259,15 @@ const AIChatScreen = () => {
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    if (route?.params?.document) {
+      setSelectedDocument(route.params.document);
+    }
+    if (route?.params?.initialQuestion) {
+      setInput(route.params.initialQuestion);
+    }
+  }, [route?.params]);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -794,12 +806,12 @@ const AIChatScreen = () => {
                 if (!nextItem) {
                   showDateHeader = true;
                 } else if (item.createdAt && nextItem.createdAt) {
-                  const currentDate = format(
-                    new Date(item.createdAt),
+                  const currentDate = formatUTCDateTime(
+                    item.createdAt,
                     "dd-MMM-yyyy",
                   );
-                  const prevDate = format(
-                    new Date(nextItem.createdAt),
+                  const prevDate = formatUTCDateTime(
+                    nextItem.createdAt,
                     "dd-MMM-yyyy",
                   );
                   if (currentDate !== prevDate) {
@@ -829,7 +841,7 @@ const AIChatScreen = () => {
                             color: isDark ? "#cbd5e1" : "#64748b",
                           }}
                         >
-                          {format(new Date(item.createdAt), "dd-MMM-yyyy")}
+                          {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy")}
                         </Text>
                       </View>
                     </View>
@@ -955,7 +967,7 @@ const AIChatScreen = () => {
                   if (item.action === "CONFIRM_MEDICINE") {
                     return renderAssistantPrompt(
                       <ConfirmMedicineCard
-                        summary={item.summary || {}}
+                        summary={item.medicines || item.summary || {}}
                         preferredLang={preferredLang}
                         isDark={isDark}
                         theme={theme}

@@ -16,6 +16,24 @@ import { AppStackParamList } from "../navigation/types";
 import * as DocumentPicker from "expo-document-picker";
 import { isValidMedicalDocument } from "../utils/documentValidator";
 
+export interface PickedFile {
+  uri: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+const ALLOWED_MIMES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/tiff",
+];
+
+const MAX_FILE_SIZE_BYTES = 150 * 1024 * 1024; // 150MB
+
 export const useDocumentMedia = () => {
   const [selectedImages, setSelectedImages] = useState<string>("");
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
@@ -27,6 +45,95 @@ export const useDocumentMedia = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+
+  const validateFile = (file: { name: string; mimeType?: string; size?: number }) => {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const mime = file.mimeType?.toLowerCase() || "";
+    const isAllowedExt = ["pdf", "png", "jpeg", "jpg", "webp", "tiff"].includes(ext || "");
+    const isAllowedMime = ALLOWED_MIMES.some((m) => mime.includes(m.split("/")[1]));
+
+    if (!isAllowedExt && !isAllowedMime) {
+      return `File "${file.name}" has invalid format. Only PDF, PNG, JPEG, WEBP, and TIFF files are supported.`;
+    }
+
+    if (file.size && file.size > MAX_FILE_SIZE_BYTES) {
+      return `File "${file.name}" exceeds the maximum size limit of 150MB.`;
+    }
+
+    return null;
+  };
+
+  const handleMultiDocumentPick = useCallback(
+    async (existingCount = 0): Promise<PickedFile[]> => {
+      try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ALLOWED_MIMES,
+          multiple: true,
+          copyToCacheDirectory: true,
+        });
+
+        if (result.canceled || !result.assets || result.assets.length === 0) {
+          return [];
+        }
+
+        if (existingCount + result.assets.length > 5) {
+          Toast.show({
+            type: "error",
+            text1: "Limit Exceeded",
+            text2: "You can upload a maximum of 5 files at a time.",
+          });
+          return [];
+        }
+
+        const validFiles: PickedFile[] = [];
+
+        for (const file of result.assets) {
+          const errorMsg = validateFile({
+            name: file.name,
+            mimeType: file.mimeType,
+            size: file.size,
+          });
+
+          if (errorMsg) {
+            Toast.show({
+              type: "error",
+              text1: "Invalid File",
+              text2: errorMsg,
+            });
+            return [];
+          }
+
+          let mimeType = file.mimeType || "application/octet-stream";
+          if (!file.mimeType || file.mimeType === "application/octet-stream") {
+            const ext = file.name.split(".").pop()?.toLowerCase();
+            if (ext === "pdf") mimeType = "application/pdf";
+            else if (ext === "png") mimeType = "image/png";
+            else if (ext === "jpg" || ext === "jpeg") mimeType = "image/jpeg";
+            else if (ext === "webp") mimeType = "image/webp";
+            else if (ext === "tiff") mimeType = "image/tiff";
+          }
+
+          validFiles.push({
+            uri: file.uri,
+            name: file.name,
+            type: mimeType,
+            size: file.size || 0,
+          });
+        }
+
+        return validFiles;
+      } catch (error) {
+        console.error("Multi document pick error:", error);
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: "Failed to pick documents.",
+        });
+        return [];
+      }
+    },
+    [],
+  );
 
   const handleGalleryPick = useCallback(async (
     onClose?: () => void,
@@ -216,5 +323,6 @@ export const useDocumentMedia = () => {
     takePicture,
     handleRetake,
     handleDocumentPick,
+    handleMultiDocumentPick,
   };
 };

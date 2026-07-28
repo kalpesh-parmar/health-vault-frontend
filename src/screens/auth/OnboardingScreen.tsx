@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { formatUTCDateTime } from "../../utils/dateFormatter";
 import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList,
@@ -33,6 +34,11 @@ import {
   pickDocumentAsset,
 } from "../../services/mediaServices";
 import { getUser } from "../../services/userService";
+import {
+  uploadPatientDocuments,
+  startOcrJob,
+  getOcrJob,
+} from "../../services/documentService";
 
 // Reusable Redesigned Components
 import { ChatInput } from "../../components/chat/ChatInput";
@@ -216,14 +222,14 @@ export default function OnboardingScreen() {
       (e: KeyboardEvent) => {
         setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0);
         setActualKeyboardHeight(e.endCoordinates.height);
-      }
+      },
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => {
         setKeyboardPadding(0);
         setActualKeyboardHeight(0);
-      }
+      },
     );
     return () => {
       showSub.remove();
@@ -271,81 +277,76 @@ export default function OnboardingScreen() {
   useEffect(() => {
     const resumePendingJob = async () => {
       try {
+        const pendingJobId = await AsyncStorage.getItem(
+          "onboarding_pending_job_id",
+        );
         const pendingDocId = await AsyncStorage.getItem(
           "onboarding_pending_document_id",
         );
         if (
-          pendingDocId &&
-          pendingDocId !== "null" &&
-          pendingDocId !== "undefined" &&
-          pendingDocId.trim() !== ""
+          pendingJobId &&
+          pendingJobId !== "null" &&
+          pendingJobId !== "undefined" &&
+          pendingJobId.trim() !== ""
         ) {
           const uuidRegex =
             /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-          if (!uuidRegex.test(pendingDocId)) {
+          if (!uuidRegex.test(pendingJobId)) {
             console.log(
-              "[ONBOARDING] Invalid document ID format in storage, clearing:",
-              pendingDocId,
+              "[ONBOARDING] Invalid job ID format in storage, clearing:",
+              pendingJobId,
             );
+            await AsyncStorage.removeItem("onboarding_pending_job_id");
             await AsyncStorage.removeItem("onboarding_pending_document_id");
             return;
           }
           console.log(
-            "[ONBOARDING] Resuming pending document ID on startup:",
-            pendingDocId,
+            "[ONBOARDING] Resuming pending job ID on startup:",
+            pendingJobId,
           );
           try {
-            // Query the latest status
-            const statusRes = await apiClient.get(
-              `/v1/ocr/status/${pendingDocId}`,
-            );
-            const resData = statusRes.data?.data;
+            const jobRes = await getOcrJob(pendingJobId);
+            const jobData = jobRes?.data || (jobRes as any);
 
-            if (resData) {
-              if (resData.status === "done") {
+            if (jobData) {
+              if (jobData.status === "COMPLETED") {
+                await AsyncStorage.removeItem("onboarding_pending_job_id");
                 await AsyncStorage.removeItem("onboarding_pending_document_id");
                 setUploadState("success");
-                await handleSuccessfulOcr(
-                  resData,
-                  resData.document?.fileName || "report.pdf",
+                setTimeout(() => {
+                  setUploadState("idle");
+                }, 3000);
+                await handleCompletedJob(
+                  pendingDocId || pendingJobId,
+                  "report.pdf",
                 );
-              } else if (resData.status === "failed") {
-                await AsyncStorage.removeItem("onboarding_pending_document_id");
-                setUploadState("failed");
-                setActiveErrorCode(resData.errorCode || "OCR_FAILED");
-                setActiveErrorDetails(resData.errorMessage || null);
-              } else if (resData.status === "cancelled") {
+              } else if (
+                jobData.status === "FAILED" ||
+                jobData.status === "CANCELLED"
+              ) {
+                await AsyncStorage.removeItem("onboarding_pending_job_id");
                 await AsyncStorage.removeItem("onboarding_pending_document_id");
                 setUploadState("idle");
+                Toast.show({
+                  type: "error",
+                  text1: "Analysis Failed",
+                  text2: jobData.error || "Document analysis failed.",
+                });
               } else {
-                // It is processing or queued
-                const createdTime = resData.createdAt
-                  ? new Date(resData.createdAt).getTime()
-                  : Date.now();
-                const initialElapsed = Math.max(0, Date.now() - createdTime);
-                setPollElapsedTime(initialElapsed);
-                setPollCurrentPage(resData.currentPage || 1);
-                setPollTotalPages(resData.totalPages || 1);
-                setUploadState(resData.status);
+                // QUEUED or RUNNING
+                setUploadState("processing");
+                startJobPolling(pendingJobId, pendingDocId || pendingJobId);
               }
             }
           } catch (err: any) {
             console.warn(
-              "[ONBOARDING] Failed to query pending document status on server:",
+              "[ONBOARDING] Failed to query pending job status on server:",
               err.message,
             );
             if (err?.response?.status === 404) {
-              console.log(
-                "[ONBOARDING] Document not found on server (404), clearing storage ID:",
-                pendingDocId,
-              );
+              await AsyncStorage.removeItem("onboarding_pending_job_id");
               await AsyncStorage.removeItem("onboarding_pending_document_id");
             }
-          }
-        } else {
-          // If stored ID is "null" or empty, remove it to keep storage clean
-          if (pendingDocId) {
-            await AsyncStorage.removeItem("onboarding_pending_document_id");
           }
         }
       } catch (err) {
@@ -522,6 +523,7 @@ export default function OnboardingScreen() {
       explainer: aiRes.explainer,
       loginProvider: aiRes.loginProvider,
       medicine: aiRes.medicine,
+      medicines: aiRes.medicines,
       summary: aiRes.summary,
       createdAt: aiRes.createdAt || new Date().toISOString(),
     };
@@ -583,7 +585,7 @@ export default function OnboardingScreen() {
           aiRes.medicinesConfirmed !== undefined
             ? aiRes.medicinesConfirmed
             : finalState.medicinesConfirmed,
-        medicinesToAdd: aiRes.medicinesToAdd || finalState.medicinesToAdd,
+        medicinesToAdd: aiRes.medicinesToAdd || aiRes.medicines || finalState.medicinesToAdd,
         currentMedicineIndex:
           aiRes.currentMedicineIndex !== undefined
             ? aiRes.currentMedicineIndex
@@ -804,10 +806,7 @@ export default function OnboardingScreen() {
 
   const uploadAbortControllerRef = useRef<AbortController | null>(null);
 
-  const startPolling = async (
-    documentId: string,
-    currentVersionToken: string,
-  ) => {
+  const startJobPolling = async (jobId: string, documentId: string) => {
     pollActiveRef.current = true;
     cancelRequestedRef.current = false;
     setUploadState("queued");
@@ -822,86 +821,84 @@ export default function OnboardingScreen() {
     const runPoll = async () => {
       if (!pollActiveRef.current) return;
 
-      // If user requested cancel
       if (cancelRequestedRef.current) {
         pollActiveRef.current = false;
         await handleCancelJob(documentId);
         return;
       }
 
-      // If offline, pause polling
       if (isOfflineRef.current) {
-        setTimeout(runPoll, 3000);
+        setTimeout(runPoll, 2500);
         return;
       }
 
       try {
-        const statusRes = await apiClient.get(`/v1/ocr/status/${documentId}`);
-        const resData = statusRes.data?.data;
-        console.log("[ONBOARDING] Poll OCR Status:", resData?.status);
+        const jobRes = await getOcrJob(jobId);
+        const jobData = jobRes?.data || (jobRes as any);
+        console.log(
+          "[ONBOARDING] Poll OCR Job Status:",
+          jobData?.status,
+          jobData?.stage,
+        );
 
-        // Reset retry count on successful poll
         autoRetryAttempts = 0;
 
-        if (resData?.status === "done") {
+        if (jobData?.status === "COMPLETED") {
           pollActiveRef.current = false;
+          await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("success");
-          await handleSuccessfulOcr(
-            resData,
+          setTimeout(() => {
+            setUploadState("idle");
+          }, 3000);
+          await handleCompletedJob(
+            documentId,
             selectedFileRef.current?.name || "report.pdf",
           );
           return;
-        } else if (resData?.status === "failed") {
+        } else if (
+          jobData?.status === "FAILED" ||
+          jobData?.status === "CANCELLED"
+        ) {
           pollActiveRef.current = false;
+          await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
-          setUploadState("failed");
-          setActiveErrorCode(resData.errorCode || "OCR_FAILED");
-          setActiveErrorDetails(resData.errorMessage || null);
-          return;
-        } else if (resData?.status === "cancelled") {
-          pollActiveRef.current = false;
-          await AsyncStorage.removeItem("onboarding_pending_document_id");
-          setUploadState("cancelled");
-          Toast.show({ type: "info", text1: "Upload cancelled" });
+          setUploadState("idle");
+          Toast.show({
+            type: "error",
+            text1: "Analysis Failed",
+            text2: jobData.error || "Document analysis failed.",
+          });
           return;
         }
 
-        // It is processing/queued
+        // Processing or queued
         setUploadState("processing");
-        setPollCurrentPage(resData?.currentPage || 1);
-        setPollTotalPages(resData?.totalPages || 1);
+        if (typeof jobData?.percentage === "number") {
+          setUploadPercent(jobData.percentage);
+        }
 
-        const totalPages = resData?.totalPages || 1;
-        const pageCeiling = Math.max(120000, totalPages * 45000 + 30000);
-
-        localElapsedTime += 3000;
+        localElapsedTime += 2500;
         setPollElapsedTime(localElapsedTime);
 
-        if (localElapsedTime >= pageCeiling) {
-          console.warn(
-            "[ONBOARDING] Polling ceiling exceeded:",
-            localElapsedTime,
-            "ms",
-          );
+        if (localElapsedTime >= 180000) {
+          console.warn("[ONBOARDING] Polling timeout reached (180s)");
           pollActiveRef.current = false;
           setUploadState("timed_out");
           setActiveErrorCode("NETWORK_TIMEOUT");
           return;
         }
       } catch (error: any) {
-        console.error("[ONBOARDING] Status poll error:", error);
+        console.error("[ONBOARDING] Job status poll error:", error);
 
         autoRetryAttempts++;
         if (autoRetryAttempts <= maxStatusRetries) {
           const backoffDelay = Math.pow(2, autoRetryAttempts) * 1000;
-          console.log(
-            `[ONBOARDING] Status query failed. Auto-retrying status check (${autoRetryAttempts}/${maxStatusRetries}) in ${backoffDelay}ms...`,
-          );
           setTimeout(runPoll, backoffDelay);
           return;
         } else {
           pollActiveRef.current = false;
+          await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("failed");
           setActiveErrorCode("SERVER_UNREACHABLE");
@@ -909,7 +906,7 @@ export default function OnboardingScreen() {
         }
       }
 
-      setTimeout(runPoll, 3000);
+      setTimeout(runPoll, 2500);
     };
 
     setTimeout(runPoll, 1000);
@@ -917,10 +914,10 @@ export default function OnboardingScreen() {
 
   const handleCancelJob = async (documentId: string) => {
     try {
+      await AsyncStorage.removeItem("onboarding_pending_job_id");
       await AsyncStorage.removeItem("onboarding_pending_document_id");
-      await apiClient.post(`/v1/ocr/cancel/${documentId}`);
     } catch (err) {
-      console.warn("[ONBOARDING] Failed to notify cancel to backend:", err);
+      console.warn("[ONBOARDING] Failed to clear storage on cancel:", err);
     }
     setUploadState("cancelled");
     Toast.show({ type: "info", text1: "Upload cancelled" });
@@ -952,72 +949,17 @@ export default function OnboardingScreen() {
     }
   };
 
-  const handleSuccessfulOcr = async (pollResult: any, fileName: string) => {
-    const docData = pollResult.document || {};
-    const extractedText = docData.ocrExtractedText || "";
-    const structured = pollResult.structuredData || {};
-
-    console.log("[ONBOARDING] Extracted Structured Data:", structured);
-
-    const parsedAllergies = Array.isArray(structured.allergies)
-      ? structured.allergies
-      : [];
-
-    let firstName = structured.firstName || "";
-    let lastName = structured.lastName || "";
-    if (!firstName && !lastName && structured.patientName) {
-      const parts = structured.patientName.trim().split(/\s+/);
-      if (parts.length > 0) {
-        firstName = parts[0];
-        lastName = parts.slice(1).join(" ");
-      }
-    }
-
-    const updatedUserData = {
-      ...state.existingUserData,
-      firstName: firstName || state.existingUserData.firstName || "",
-      lastName: lastName || state.existingUserData.lastName || "",
-      dateOfBirth:
-        structured.dateOfBirth ||
-        structured.reportDate ||
-        state.existingUserData.dateOfBirth ||
-        "",
-      gender: structured.gender || state.existingUserData.gender || "",
-      bloodGroup:
-        structured.bloodGroup || state.existingUserData.bloodGroup || "",
-      allergies:
-        parsedAllergies.length > 0
-          ? parsedAllergies
-          : state.existingUserData.allergies || [],
-      email: structured.email || state.existingUserData.email || "",
-      phoneNumber:
-        structured.phoneNumber || state.existingUserData.phoneNumber || "",
-    };
-
+  const handleCompletedJob = async (documentId: string, fileName: string) => {
     const newState = {
       ...state,
       flowMode: "UPLOAD",
       uploadedMedicalDocument: true,
       documentUploaded: true,
-      documentText: extractedText,
-      documentExtracted: true,
-      documentData: {
-        firstName: firstName || null,
-        lastName: lastName || null,
-        dateOfBirth: structured.dateOfBirth || structured.reportDate || null,
-        gender: structured.gender || null,
-        email: structured.email || null,
-        phoneNumber: structured.phoneNumber || null,
-        medications: structured.medications || [],
-      },
-      documentId: docData.id || null,
-      existingUserData: updatedUserData,
+      documentId: documentId,
     };
 
     setState(newState);
     setUploadProgress(null);
-
-    // Reset selected states
     setSelectedFile(null);
     setInput("");
 
@@ -1027,7 +969,6 @@ export default function OnboardingScreen() {
       "Document Uploaded: " + fileName,
     );
 
-    // Clear the success message after a short delay
     setTimeout(() => {
       setUploadState("idle");
     }, 2500);
@@ -1042,6 +983,14 @@ export default function OnboardingScreen() {
       return;
     }
 
+    if (fileToUpload.size && fileToUpload.size > 18 * 1024 * 1024) {
+      Toast.show({
+        type: "info",
+        text1: "Large File Notice",
+        text2: "Files over 18MB may take slightly longer to process.",
+      });
+    }
+
     isUploadingRef.current = true;
     isUploadCancelledRef.current = false;
     setLoading(true);
@@ -1050,132 +999,60 @@ export default function OnboardingScreen() {
     setActiveErrorDetails(null);
     setUploadPercent(0);
 
-    // Generate or reuse idempotencyKey and versionToken
-    let activeIdempotencyKey = idempotencyKey;
-    if (!activeIdempotencyKey) {
-      activeIdempotencyKey =
-        Math.random().toString(36).substring(2, 15) + Date.now();
-      setIdempotencyKey(activeIdempotencyKey);
-    }
-    const activeVersionToken =
-      Math.random().toString(36).substring(2, 15) + Date.now();
-    setVersionToken(activeVersionToken);
-
-    console.log(
-      "[ONBOARDING] Upload Started. Idempotency Key:",
-      activeIdempotencyKey,
-      "Version Token:",
-      activeVersionToken,
-    );
-
-    const maxUploadRetries = 3;
-    let uploadAttempts = 0;
-
-    const performUpload = async (): Promise<string> => {
-      uploadAttempts++;
-      try {
-        const formData = new FormData();
-        formData.append("file", {
-          uri: fileToUpload.uri,
-          name: fileToUpload.name,
-          type: fileToUpload.type,
-        } as any);
-        formData.append("idempotencyKey", activeIdempotencyKey);
-        formData.append("versionToken", activeVersionToken);
-
-        setUploadState("uploading");
-        setAutoRetryCount(uploadAttempts - 1);
-
-        const controller = new AbortController();
-        uploadAbortControllerRef.current = controller;
-
-        const response = await apiClient.post("/v1/ocr/extract", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-          timeout: 90000, // 90s timeout for upload phase
-          signal: controller.signal,
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total,
-              );
-              setUploadPercent(percentCompleted);
-            }
-          },
-        });
-
-        const docId =
-          response.data?.data?.document?.id ||
-          response.data?.data?.documents?.[0]?.id;
-        if (!docId) {
-          throw new Error(
-            "Failed to start processing: no document ID returned.",
-          );
-        }
-        return docId;
-      } catch (err: any) {
-        console.warn(
-          `[ONBOARDING] Upload attempt ${uploadAttempts} failed:`,
-          err.message,
-        );
-
-        // Auto-retry transient errors
-        const isTransient =
-          !err.response ||
-          err.response.status >= 500 ||
-          err.code === "ECONNABORTED";
-        if (isTransient && uploadAttempts <= maxUploadRetries) {
-          const backoffDelay = Math.pow(2, uploadAttempts) * 1000;
-          console.log(`[ONBOARDING] Retrying upload in ${backoffDelay}ms...`);
-          await new Promise((r) => setTimeout(r, backoffDelay));
-          return performUpload();
-        }
-        throw err;
-      }
-    };
-
-    try {
-      const docId = await performUpload();
-      console.log("[ONBOARDING] Upload Success, docId:", docId);
-
-      // Persist documentId for crash recovery
-      await AsyncStorage.setItem("onboarding_pending_document_id", docId);
-
-      // Start status polling
-      startPolling(docId, activeVersionToken);
-
-      if (isUploadCancelledRef.current) throw new Error("UPLOAD_CANCELLED");
-    } catch (error: any) {
-      console.error(
-        "[ONBOARDING] Document upload failed after retries:",
-        error,
-      );
-      setUploadState("failed");
+    const patientId = userData?.id;
+    if (!patientId) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Patient profile missing. Please log in again.",
+      });
       isUploadingRef.current = false;
       setLoading(false);
+      return;
+    }
 
-      // Classify error
-      let errCode = "UPLOAD_FAILED";
-      let errMsg = error.message || "";
-      if (error.response) {
-        const backendErr = error.response.data?.error;
-        if (backendErr?.code === "INVALID_MEDICAL_DOCUMENT") {
-          setValidationDialogVisible(true);
-          setUploadState("idle");
-          return;
-        }
-        if (backendErr?.code) {
-          errCode = backendErr.code;
-        } else if (error.response.status === 413) {
-          errCode = "FILE_TOO_LARGE";
-        } else if (error.response.status === 415) {
-          errCode = "UNSUPPORTED_FILE";
-        }
-      } else if (errMsg.includes("timeout") || error.code === "ECONNABORTED") {
-        errCode = "NETWORK_TIMEOUT";
+    try {
+      setUploadState("uploading");
+      const uploadRes = await uploadPatientDocuments(patientId, [fileToUpload]);
+      const createdItem = uploadRes.data?.[0];
+
+      if (!createdItem || !createdItem.jobId) {
+        throw new Error("Upload failed: No job ID returned from server.");
       }
 
-      setActiveErrorCode(errCode);
-      setActiveErrorDetails(errMsg);
+      const jobId = createdItem.jobId;
+      const docId = createdItem.id;
+
+      console.log(
+        "[ONBOARDING] File uploaded successfully. JobId:",
+        jobId,
+        "DocId:",
+        docId,
+      );
+
+      // Start the OCR job explicitly (Required for QUEUED jobs)
+      await startOcrJob(jobId);
+      console.log("[ONBOARDING] OCR Job Started:", jobId);
+
+      await AsyncStorage.setItem("onboarding_pending_job_id", jobId);
+      await AsyncStorage.setItem("onboarding_pending_document_id", docId);
+
+      startJobPolling(jobId, docId);
+    } catch (error: any) {
+      console.error("[ONBOARDING] Document upload sequence failed:", error);
+      setUploadState("idle");
+      let errMsg = error.message || "Document upload sequence failed.";
+
+      if (error.response) {
+        const backendErr = error.response.data?.error;
+        if (backendErr?.message) errMsg = backendErr.message;
+      }
+
+      Toast.show({
+        type: "error",
+        text1: "Upload Failed",
+        text2: errMsg,
+      });
     } finally {
       isUploadingRef.current = false;
       setLoading(false);
@@ -1480,24 +1357,49 @@ export default function OnboardingScreen() {
 
       const handleSave = (updatedMed: any) => {
         if (isEditingLocal) {
-          setLocalMedicines((prev) =>
-            prev.map((m) =>
-              (m.client_med_id || m.id) === (med.client_med_id || med.id)
-                ? {
-                    ...m,
-                    ...updatedMed,
-                    subtitle:
-                      updatedMed.type === "TABLET" ||
-                      updatedMed.type === "CAPSULE"
-                        ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
-                        : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
-                  }
-                : m,
-            ),
+          const updatedMeds = localMedicines.map((m) =>
+            (m.client_med_id || m.id) === (med.client_med_id || med.id)
+              ? {
+                  ...m,
+                  ...updatedMed,
+                  subtitle:
+                    updatedMed.type === "TABLET" ||
+                    updatedMed.type === "CAPSULE"
+                      ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
+                      : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
+                }
+              : m,
           );
+          setLocalMedicines(updatedMeds);
+          setState((prev) => ({
+            ...prev,
+            medicinesToAdd: updatedMeds,
+          }));
 
           setActiveMedicineToEdit(null);
-          setMessages((prev) => prev.filter((m) => m.id !== activeMsg.id));
+          setMessages((prev) =>
+            prev
+              .map((msg) => {
+                if (msg.action === "CONFIRM_MEDICINE") {
+                  return {
+                    ...msg,
+                    summary: {
+                      ...msg.summary,
+                      medicines: updatedMeds,
+                    },
+                    medicines: updatedMeds,
+                  };
+                }
+                if (msg.action === "REVIEW_MEDICINES_LIST") {
+                  return {
+                    ...msg,
+                    medicines: updatedMeds,
+                  };
+                }
+                return msg;
+              })
+              .filter((m) => m.id !== activeMsg.id),
+          );
         } else {
           setCurrentClientMedId(null);
           const displayLabel =
@@ -1551,6 +1453,19 @@ export default function OnboardingScreen() {
 
     if (activeMsg.action === "REVIEW_MEDICINES_LIST") {
       const handleConfirm = (checkedMeds: string[]) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === activeMsg.id
+              ? {
+                  ...msg,
+                  medicines: (msg.medicines || localMedicines || []).map((m) => ({
+                    ...m,
+                    selected: checkedMeds.includes(m.id),
+                  })),
+                }
+              : msg,
+          ),
+        );
         sendMessage(
           JSON.stringify({ selected: checkedMeds }),
           state,
@@ -1607,7 +1522,21 @@ export default function OnboardingScreen() {
                 : preferredLang === "tamil" || preferredLang === "ta"
                   ? "ஆம், சரியானது"
                   : "Yes, Correct";
-        sendMessage(JSON.stringify({ confirmed: true }), state, displayLabel);
+
+        const updatedState = {
+          ...state,
+          medicinesToAdd: localMedicines,
+        };
+
+        sendMessage(
+          JSON.stringify({
+            confirmed: true,
+            medicines: localMedicines,
+            medications: localMedicines,
+          }),
+          updatedState,
+          displayLabel,
+        );
       };
       const handleEdit = (med?: any) => {
         if (med) {
@@ -1635,15 +1564,23 @@ export default function OnboardingScreen() {
         }
       };
 
+      const isEditStepActive =
+        messages[messages.length - 1]?.action === "EDIT_MEDICINE";
+      const isCardReadOnly = isHistorical && !isEditStepActive;
+
       return (
         <ConfirmMedicineCard
-          summary={activeMsg.summary || {}}
+          summary={
+            isCardReadOnly
+              ? (activeMsg.medicines || activeMsg.summary || {})
+              : { medicines: localMedicines }
+          }
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
           onConfirm={handleConfirm}
           onEdit={handleEdit}
-          readOnly={isHistorical}
+          readOnly={isCardReadOnly}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />
@@ -1792,18 +1729,19 @@ export default function OnboardingScreen() {
                 styles.listContent,
                 {
                   paddingBottom:
-                    activeAction === "ADD_MEDICINE" || activeAction === "EDIT_MEDICINE"
+                    activeAction === "ADD_MEDICINE" ||
+                    activeAction === "EDIT_MEDICINE"
                       ? Math.max(insets.bottom, 16) + 16 + actualKeyboardHeight
                       : activeAction === "ASK_LANGUAGE" ||
-                        activeAction === "ASK_UPLOAD_OR_SKIP" ||
-                        activeAction === "ASK_GENDER" ||
-                        activeAction === "ASK_DOB" ||
-                        activeAction === "REVIEW_MEDICINES_LIST" ||
-                        activeAction === "CONFIRM_MEDICINE" ||
-                        activeAction === "MEDICINE_OPTIONS" ||
-                        activeAction === "POST_ONBOARDING"
-                      ? Math.max(insets.bottom, 16) + 16
-                      : 16,
+                          activeAction === "ASK_UPLOAD_OR_SKIP" ||
+                          activeAction === "ASK_GENDER" ||
+                          activeAction === "ASK_DOB" ||
+                          activeAction === "REVIEW_MEDICINES_LIST" ||
+                          activeAction === "CONFIRM_MEDICINE" ||
+                          activeAction === "MEDICINE_OPTIONS" ||
+                          activeAction === "POST_ONBOARDING"
+                        ? Math.max(insets.bottom, 16) + 16
+                        : 16,
                 },
               ]}
               keyboardShouldPersistTaps="handled"
@@ -1830,12 +1768,12 @@ export default function OnboardingScreen() {
                 const showDateHeader = (() => {
                   if (!item.createdAt) return false;
                   if (!prevMsg || !prevMsg.createdAt) return true;
-                  const currentDate = format(
-                    new Date(item.createdAt),
+                  const currentDate = formatUTCDateTime(
+                    item.createdAt,
                     "dd-MMM-yyyy",
                   );
-                  const prevDate = format(
-                    new Date(prevMsg.createdAt),
+                  const prevDate = formatUTCDateTime(
+                    prevMsg.createdAt,
                     "dd-MMM-yyyy",
                   );
                   return currentDate !== prevDate;
@@ -1862,7 +1800,7 @@ export default function OnboardingScreen() {
                               fontWeight: "600",
                             }}
                           >
-                            {format(new Date(item.createdAt), "dd-MMM-yyyy")}
+                            {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy")}
                           </Text>
                         </View>
                       </View>
@@ -1877,7 +1815,7 @@ export default function OnboardingScreen() {
                       <View
                         style={[
                           styles.optionsWrapper,
-                          { opacity: isLast ? 1 : 0.5 },
+                          { opacity: 1 },
                         ]}
                         pointerEvents={isLast ? "auto" : "none"}
                       >

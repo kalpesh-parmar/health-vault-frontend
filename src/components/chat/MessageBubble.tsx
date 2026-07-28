@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInUp } from "react-native-reanimated";
-import { format } from "date-fns";
+import { formatUTCDateTime } from "../../utils/dateFormatter";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.75;
@@ -23,7 +23,7 @@ interface MessageBubbleProps {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark }) => {
   const isUser = message.role === "user";
-  const timeString = message.createdAt ? format(new Date(message.createdAt), "hh:mm a") : "";
+  const timeString = message.createdAt ? formatUTCDateTime(message.createdAt, "hh:mm a") : "";
 
   const renderInlineBold = (text: string, keyPrefix: string, textColor: string) => {
     const parts = text.split(/\*\*([\s\S]*?)\*\*/g);

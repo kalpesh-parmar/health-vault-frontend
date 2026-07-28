@@ -34,9 +34,15 @@ export function ReviewMedicinesListCard({
   chosenVal,
   chosenLabel,
 }: ReviewMedicinesListCardProps) {
+  // checkedMeds: holds the IDs of checked/selected medications
   const [checkedMeds, setCheckedMeds] = useState<string[]>(
     (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
   );
+
+  // expandedMedId: holds the ID of the single expanded medicine card (accordion design)
+  const [expandedMedId, setExpandedMedId] = useState<string | null>(null);
+
+  // isExpanded: Controls whether the list shows first 3 medicines or all medicines
   const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
@@ -45,12 +51,14 @@ export function ReviewMedicinesListCard({
     }
   }, []);
 
+  // Sync checkedMeds if localMedicines changes from parent component
   useEffect(() => {
     setCheckedMeds(
       (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
     );
   }, [localMedicines]);
 
+  // Toggle medicine checkbox state
   const toggleCheck = (id: string) => {
     if (checkedMeds.includes(id)) {
       setCheckedMeds((prev) => prev.filter((m) => m !== id));
@@ -65,10 +73,72 @@ export function ReviewMedicinesListCard({
     }
   };
 
+  // Toggle single medicine expansion (accordion transition)
+  const toggleExpandPill = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (expandedMedId === id) {
+      setExpandedMedId(null);
+    } else {
+      setExpandedMedId(id);
+    }
+  };
+
+  // Helper to format dosage info safely
+  const getDosageString = (med: any) => {
+    const rawDosage = med.dosage || med.dose || med.dosePerIntake || "";
+    let dosage = "";
+    if (rawDosage && typeof rawDosage === "object") {
+      if (rawDosage.count !== undefined) {
+        const typeStr = (med.type || "tablet").toLowerCase();
+        dosage = `${rawDosage.count} ${typeStr}(s)`;
+      } else if (rawDosage.value !== undefined) {
+        dosage = `${rawDosage.value} ${rawDosage.unit || ""}`.trim();
+      } else {
+        dosage = JSON.stringify(rawDosage);
+      }
+    } else if (rawDosage) {
+      dosage = String(rawDosage);
+    } else {
+      dosage = "1 tablet(s)";
+    }
+    return dosage;
+  };
+
+  // Helper to format scheduling info safely
+  const getTimeString = (med: any) => {
+    const time = med.schedule || med.medicationSchedule || med.times || "";
+    if (!time) return "None";
+    
+    // If it's a string, return directly
+    if (typeof time === "string") return time;
+    
+    // If it's an array, join it
+    if (Array.isArray(time)) {
+      return time.join(", ");
+    }
+    
+    // If it's an object, check for times or reminderTimes inside it
+    if (typeof time === "object" && time !== null) {
+      const timesList = time.times || time.reminderTimes || [];
+      if (Array.isArray(timesList) && timesList.length > 0) {
+        return timesList.join(", ");
+      }
+      
+      // Otherwise, format entries as key: value
+      return Object.entries(time)
+        .filter(([_, v]) => typeof v === "string" || typeof v === "number")
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ") || "None";
+    }
+    
+    return "None";
+  };
+
   const handleConfirm = () => {
     onConfirm(checkedMeds);
   };
 
+  // Translation helper
   const t = (key: string) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
@@ -120,68 +190,185 @@ export function ReviewMedicinesListCard({
       </Text>
 
       <View style={{ marginVertical: 12 }}>
+        {/* Render medicine list - display first 3 items or all if isExpanded is active */}
         {(isExpanded ? safeLocalMedicines : safeLocalMedicines.slice(0, 3)).map((med) => {
           const isChecked = checkedMeds.includes(med.id);
+          const isPillExpanded = expandedMedId === med.id;
+          const dosageStr = getDosageString(med);
+          const timeStr = getTimeString(med);
+
           return (
             <View
               key={med.id}
-              style={[
-                styles.medListItemRow,
-                { borderBottomColor: isDark ? "#334155" : "#f1f5f9" },
-              ]}
+              style={{
+                backgroundColor: "#f8fafc",
+                borderColor: "#e2e8f0",
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 12,
+                marginBottom: 10,
+                elevation: 1,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 2,
+              }}
             >
+              {/* Primary Header Row inside medicine pill */}
               <TouchableOpacity
-                disabled={readOnly}
-                style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
-                onPress={() => toggleCheck(med.id)}
+                activeOpacity={0.8}
+                onPress={() => toggleExpandPill(med.id)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
               >
-                <Ionicons
-                  name={isChecked ? "checkbox" : "square-outline"}
-                  size={20}
-                  color={
-                    isChecked
-                      ? theme.colors.primary
-                      : theme.colors.textSecondary
-                  }
-                  style={{ marginRight: 10 }}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[
-                      styles.medListItemName,
-                      {
-                        color: theme.colors.textPrimary,
-                        textDecorationLine: isChecked ? "none" : "line-through",
-                      },
-                    ]}
+                {/* Left side: Checkbox + Middle Information */}
+                <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+                  {/* Checkbox Selector */}
+                  <TouchableOpacity
+                    disabled={readOnly}
+                    onPress={() => toggleCheck(med.id)}
+                    style={{ padding: 4, marginRight: 8 }}
                   >
-                    {med.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.medListItemSubtitle,
-                      { color: theme.colors.textSecondary },
-                    ]}
+                    <Ionicons
+                      name={isChecked ? "checkbox" : "square-outline"}
+                      size={22}
+                      color={isChecked ? theme.colors.primary : "#64748b"}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Middle Area: Name/Type and Collapsed Info */}
+                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+                    {/* Primary Info: Name & Type */}
+                    <View style={{ flex: 1.2, paddingRight: 8 }}>
+                      <Text
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "bold",
+                          color: "#1e293b",
+                          textDecorationLine: isChecked ? "none" : "line-through",
+                        }}
+                      >
+                        {med.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: "#64748b", marginTop: 2, fontWeight: "500" }}>
+                        {med.type || "Tablet"}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Right side: Action Buttons */}
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  {!readOnly && (
+                    <TouchableOpacity
+                      onPress={() => onEdit(med)}
+                      style={{ padding: 8, marginRight: 2 }}
+                    >
+                      <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => toggleExpandPill(med.id)}
+                    style={{ padding: 8 }}
                   >
-                    {med.subtitle}
-                  </Text>
+                    <Ionicons
+                      name={isPillExpanded ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color="#64748b"
+                    />
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
-              {!readOnly && (
-                <TouchableOpacity
-                  style={styles.pencilIconButton}
-                  onPress={() => onEdit(med)}
+
+              {/* Detailed Grid Panel (Shown only when expanded) */}
+              {isPillExpanded && (
+                <View
+                  style={{
+                    marginTop: 12,
+                    paddingTop: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: "#e2e8f0",
+                  }}
                 >
-                  <Ionicons
-                    name="pencil"
-                    size={16}
-                    color={theme.colors.primary}
-                  />
-                </TouchableOpacity>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 12 }}>
+                    {/* Dose */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="disc-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Dose</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{dosageStr}</Text>
+                      </View>
+                    </View>
+
+                    {/* Frequency */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="alarm-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Frequency</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.frequency}</Text>
+                      </View>
+                    </View>
+
+                    {/* Time / Schedule */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="time-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Time</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{timeStr}</Text>
+                      </View>
+                    </View>
+
+                    {/* Total Quantity */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="calculator-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Total Quantity</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.total_quantity || "None"}</Text>
+                      </View>
+                    </View>
+
+                    {/* Prescribed By */}
+                    {(med.prescribedBy || med.prescribed_by) ? (
+                      <View style={{ width: "100%", flexDirection: "row", alignItems: "center", marginTop: 4 }}>
+                        <Ionicons name="person-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Prescribed By</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.prescribedBy || med.prescribed_by}</Text>
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Notes / Special Instructions */}
+                  {med.notes ? (
+                    <View
+                      style={{
+                        marginTop: 12,
+                        padding: 10,
+                        backgroundColor: "#f1f5f9",
+                        borderRadius: 8,
+                        borderLeftWidth: 3,
+                        borderLeftColor: "#10b981",
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: "#334155", lineHeight: 15 }}>
+                        <Text style={{ fontWeight: "bold", color: "#1e293b" }}>Notes: </Text>
+                        {med.notes}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
               )}
             </View>
           );
         })}
+
+        {/* Show All / Hide All Button for medication items > 3 */}
         {safeLocalMedicines.length > 3 && (
           <TouchableOpacity
             onPress={() => {
