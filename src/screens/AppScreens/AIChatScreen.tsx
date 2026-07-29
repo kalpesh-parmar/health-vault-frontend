@@ -36,6 +36,7 @@ import * as DocumentPicker from "expo-document-picker";
 import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
 import OCRProgressPanel from "../../components/chat/widgets/OCRProgressPanel";
 import { useMultipleUpload } from "../../hooks/useMultipleUpload";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 // Reusable Redesigned Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
@@ -339,6 +340,7 @@ const AIChatScreen = ({ route }: any) => {
 
   const documentSheetRef = useRef<BottomSheetModal>(null);
   const uploadSheetRef = useRef<BottomSheetModal>(null);
+  const bottomPadding = useBottomBarPadding(40, 20);
 
   const {
     uploadingDocs,
@@ -385,7 +387,19 @@ const AIChatScreen = ({ route }: any) => {
         }
       }
 
-      uploadMultipleDocs(result.assets);
+      const files = result.assets.map((asset) => ({
+        uri: asset.uri,
+        name: asset.name,
+        type: asset.mimeType || "application/octet-stream",
+        size: asset.size || 0,
+      }));
+      navigation.navigate("Home" as any, {
+        screen: "MultiUpload",
+        params: {
+          initialFiles: files,
+          fromScreen: "AIChat",
+        },
+      });
     } catch (err) {
       console.error("Error picking documents: ", err);
       Toast.show({
@@ -453,7 +467,13 @@ const AIChatScreen = ({ route }: any) => {
         }
       }
 
-      uploadMultipleDocs(files);
+      navigation.navigate("Home" as any, {
+        screen: "MultiUpload",
+        params: {
+          initialFiles: files,
+          fromScreen: "AIChat",
+        },
+      });
     } catch (err) {
       console.error("Error picking images: ", err);
       Toast.show({
@@ -498,7 +518,13 @@ const AIChatScreen = ({ route }: any) => {
         size: (asset as any).fileSize || 0,
       };
 
-      uploadMultipleDocs([file]);
+      navigation.navigate("Home" as any, {
+        screen: "MultiUpload",
+        params: {
+          initialFiles: [file],
+          fromScreen: "AIChat",
+        },
+      });
     } catch (err) {
       console.error("Error launching camera: ", err);
       Toast.show({
@@ -1100,7 +1126,7 @@ const AIChatScreen = ({ route }: any) => {
 
       {/* Document Selector Bottom Sheet */}
       <BottomSheet ref={documentSheetRef} enablePanDownToClose={true}>
-        <SheetContentWrapper>
+        <SheetContentWrapper bottomPadding={bottomPadding}>
           <BSTitle>{t("selectModeOrReport")}</BSTitle>
           <BSSub>{t("chooseGeneralOrDiscuss")}</BSSub>
           <BSScrollView
@@ -1130,18 +1156,6 @@ const AIChatScreen = ({ route }: any) => {
             {documentsList.length === 0 ? (
               <EmptyDocumentsWrapper>
                 <EmptyTitle>{t("noReportsUploaded")}</EmptyTitle>
-                <UploadButton
-                  onPress={() => {
-                    documentSheetRef.current?.dismiss();
-                    setTimeout(() => {
-                      uploadSheetRef.current?.present();
-                    }, 300);
-                  }}
-                >
-                  <UploadButtonText>
-                    {t("uploadMedicalReport")}
-                  </UploadButtonText>
-                </UploadButton>
               </EmptyDocumentsWrapper>
             ) : (
               <>
@@ -1171,19 +1185,6 @@ const AIChatScreen = ({ route }: any) => {
                     {selectedDocument?.id === doc.id && <BSCheck>✓</BSCheck>}
                   </BSItem>
                 ))}
-                <UploadButton
-                  style={{ marginTop: 12 }}
-                  onPress={() => {
-                    documentSheetRef.current?.dismiss();
-                    setTimeout(() => {
-                      uploadSheetRef.current?.present();
-                    }, 300);
-                  }}
-                >
-                  <UploadButtonText>
-                    {t("uploadMedicalReport")}
-                  </UploadButtonText>
-                </UploadButton>
               </>
             )}
 
@@ -1291,15 +1292,36 @@ const AIChatScreen = ({ route }: any) => {
               </>
             )}
           </BSScrollView>
+          <UploadButton
+            style={{ marginTop: 16 }}
+            onPress={() => {
+              documentSheetRef.current?.dismiss();
+              setTimeout(() => {
+                uploadSheetRef.current?.present();
+              }, 300);
+            }}
+          >
+            <UploadButtonText>
+              {t("uploadMedicalReport")}
+            </UploadButtonText>
+          </UploadButton>
         </SheetContentWrapper>
       </BottomSheet>
 
-      {/* Upload Selector Bottom Sheet */}
       <BottomSheet ref={uploadSheetRef} enablePanDownToClose={true}>
         <AddDocumentSheet
           onGalleryPick={handleGalleryPickMultiple}
           onCameraOpen={handleCameraOpenMultiple}
           onDocumentPick={handleDocumentPickMultiple}
+          onMultiUploadPick={() => {
+            uploadSheetRef.current?.dismiss();
+            navigation.navigate("Home" as any, {
+              screen: "MultiUpload",
+              params: {
+                fromScreen: "AIChat",
+              },
+            });
+          }}
         />
       </BottomSheet>
     </Container>
@@ -1380,9 +1402,9 @@ const EmergencyText = styled.Text`
   font-weight: 600;
 `;
 
-const SheetContentWrapper = styled.View`
+const SheetContentWrapper = styled.View<{ bottomPadding: number }>`
   padding: 20px;
-  padding-bottom: 40px;
+  padding-bottom: ${(props: any) => props.bottomPadding}px;
   width: 100%;
 `;
 
@@ -1401,7 +1423,7 @@ const BSSub = styled.Text`
 
 const BSScrollView = styled(ScrollView)`
   width: 100%;
-  max-height: 350px;
+  max-height: 280px;
 `;
 
 const BSItem = styled.TouchableOpacity<{ selected: boolean }>`

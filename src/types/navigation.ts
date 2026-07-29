@@ -55,7 +55,10 @@ export type AppStackParamList = {
   Notifications: undefined;
   AIChat: undefined;
   Reminders: undefined;
-  MultiUpload: undefined;
+  MultiUpload: {
+    initialFiles?: any[];
+    fromScreen?: string;
+  } | undefined;
   DocumentProcessing: {
     jobIds: string[];
     filesInfo?: { jobId: string; fileName: string; fileKey: string }[];

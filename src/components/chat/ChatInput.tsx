@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withRepeat, withTiming } from "react-native-reanimated";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 interface ChatInputProps {
@@ -37,6 +38,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onAttachPress,
 }) => {
   const insets = useSafeAreaInsets();
+  const bottomPadding = useBottomBarPadding(0, 5);
   const sendScale = useSharedValue(0.0);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
   const [isListening, setIsListening] = useState(false);
@@ -140,7 +142,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           backgroundColor: cardBgColor,
           borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
           borderWidth: isDark ? 1 : 0,
-          marginBottom: keyboardPadding > 0 ? keyboardPadding : (Platform.OS === 'android' && insets.bottom < 30 ? 28 : Math.max(insets.bottom + 5, 10)),
+          marginBottom: keyboardPadding > 0 ? keyboardPadding : bottomPadding,
         },
       ]}
     >

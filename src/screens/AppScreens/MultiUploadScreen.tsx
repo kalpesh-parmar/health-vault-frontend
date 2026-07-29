@@ -1,10 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import {
   ScrollView,
   StatusBar,
-  TouchableOpacity,
-  Text,
-  View,
   ActivityIndicator,
 } from "react-native";
 import styled from "styled-components/native";
@@ -12,20 +9,48 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
+import BottomSheet from "../../components/shared/BottomSheet";
+import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 
 import { useAppNavigation } from "../../types/navigation";
+import { useRoute } from "@react-navigation/native";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/ContextAPI";
 import { useDocumentMedia, PickedFile } from "../../hooks/useDocumentMedia";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { uploadPatientDocuments, startOcrJob } from "../../services/documentService";
+
+interface SelectedFile extends PickedFile {
+  originalName: string;
+}
 
 export const MultiUploadScreen = () => {
   const navigation = useAppNavigation();
   const { isDark, theme } = useAppTheme();
   const { userId } = useAuth();
   const { handleMultiDocumentPick } = useDocumentMedia();
+  const bottomPadding = useBottomBarPadding(16, 12);
+  const editSheetRef = useRef<BottomSheetModal>(null);
+  const route = useRoute<any>();
+  const { initialFiles = [], fromScreen } = route.params || {};
 
-  const [selectedFiles, setSelectedFiles] = useState<PickedFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>(
+    initialFiles.map((file: any) => ({
+      ...file,
+      originalName: file.originalName || file.name,
+    }))
+  );
+
+  React.useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      setSelectedFiles(
+        initialFiles.map((file: any) => ({
+          ...file,
+          originalName: file.originalName || file.name,
+        }))
+      );
+    }
+  }, [initialFiles]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentActionText, setCurrentActionText] = useState("");
@@ -57,12 +82,75 @@ export const MultiUploadScreen = () => {
     }
     const newFiles = await handleMultiDocumentPick(selectedFiles.length);
     if (newFiles.length > 0) {
-      setSelectedFiles((prev) => [...prev, ...newFiles]);
+      setSelectedFiles((prev) => [
+        ...prev,
+        ...newFiles.map((file) => ({
+          ...file,
+          originalName: file.name,
+        })),
+      ]);
     }
   };
 
   const handleRemoveFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const getFileNameAndExtension = (fileName: string) => {
+    const parts = fileName.split(".");
+    if (parts.length > 1) {
+      const ext = parts.pop() || "";
+      const name = parts.join(".");
+      return { name, ext };
+    }
+    return { name: fileName, ext: "" };
+  };
+
+  const handleUpdateFileName = (index: number, newTitle: string) => {
+    setSelectedFiles((prev) =>
+      prev.map((file, i) => {
+        if (i === index) {
+          const { ext } = getFileNameAndExtension(file.originalName);
+          const nameWithExt = ext ? `${newTitle.trim()}.${ext}` : newTitle.trim();
+          return {
+            ...file,
+            name: nameWithExt,
+          };
+        }
+        return file;
+      })
+    );
+  };
+
+  const handleStartUploadPress = () => {
+    if (selectedFiles.length === 0) {
+      Toast.show({
+        type: "error",
+        text1: "No Files Selected",
+        text2: "Please select at least one document to upload.",
+      });
+      return;
+    }
+    editSheetRef.current?.present();
+  };
+
+  const handleConfirmAndStartUpload = () => {
+    const hasEmpty = selectedFiles.some((file) => {
+      const { name } = getFileNameAndExtension(file.name);
+      return !name.trim();
+    });
+
+    if (hasEmpty) {
+      Toast.show({
+        type: "error",
+        text1: "Invalid Name",
+        text2: "Document names cannot be empty.",
+      });
+      return;
+    }
+
+    editSheetRef.current?.dismiss();
+    handleStartUpload();
   };
 
   const handleStartUpload = async () => {
@@ -113,6 +201,8 @@ export const MultiUploadScreen = () => {
 
       for (const item of items) {
         if (item.jobId) {
+          const matchedFile = selectedFiles.find((f) => f.name === item.fileName) || selectedFiles[jobList.length];
+          const finalName = matchedFile ? matchedFile.name : item.fileName;
           try {
             await startOcrJob(item.jobId);
           } catch (err: any) {
@@ -120,7 +210,7 @@ export const MultiUploadScreen = () => {
           }
           jobList.push({
             jobId: item.jobId,
-            fileName: item.fileName,
+            fileName: finalName,
             fileKey: item.fileKey,
           });
         }
@@ -137,6 +227,7 @@ export const MultiUploadScreen = () => {
       navigation.navigate("DocumentProcessing" as any, {
         jobIds,
         filesInfo: jobList,
+        fromScreen,
       });
     } catch (error: any) {
       console.error("[MultiUpload] Upload failed:", error);
@@ -171,7 +262,7 @@ export const MultiUploadScreen = () => {
 
       <ContentContainer>
         <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 90 + bottomPadding }}
           keyboardShouldPersistTaps="handled"
         >
           <SectionTitle>Select Documents (Max 5)</SectionTitle>
@@ -199,15 +290,23 @@ export const MultiUploadScreen = () => {
 
                     <FileInfo>
                       <FileName numberOfLines={1}>{file.name}</FileName>
+                      <OriginalFileName numberOfLines={1}>
+                        Original: {file.originalName}
+                      </OriginalFileName>
                       <FileMeta>
                         {formatFileSize(file.size)} • {file.type.split("/")[1]?.toUpperCase() || "FILE"}
                       </FileMeta>
                     </FileInfo>
 
                     {!isUploading && (
-                      <RemoveButton onPress={() => handleRemoveFile(index)}>
-                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                      </RemoveButton>
+                      <ActionButtonsRow>
+                        <EditButton onPress={() => editSheetRef.current?.present()}>
+                          <Ionicons name="pencil-outline" size={20} color="#0d9488" />
+                        </EditButton>
+                        <RemoveButton onPress={() => handleRemoveFile(index)}>
+                          <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                        </RemoveButton>
+                      </ActionButtonsRow>
                     )}
                   </FileCard>
                 );
@@ -243,9 +342,9 @@ export const MultiUploadScreen = () => {
           )}
         </ScrollView>
 
-        <FooterContainer>
+        <FooterContainer bottomPadding={bottomPadding}>
           <SubmitButton
-            onPress={handleStartUpload}
+            onPress={handleStartUploadPress}
             disabled={isUploading || selectedFiles.length === 0}
             activeOpacity={0.8}
             style={{
@@ -266,6 +365,41 @@ export const MultiUploadScreen = () => {
           </SubmitButton>
         </FooterContainer>
       </ContentContainer>
+
+      <BottomSheet ref={editSheetRef}>
+        <SheetContentWrapper>
+          <BSTitle>Confirm & Edit Names</BSTitle>
+          <BSSub>Set custom names for your documents before starting the OCR process.</BSSub>
+          <BSScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 60 }}>
+            {selectedFiles.map((file, index) => {
+              const { ext } = getFileNameAndExtension(file.originalName);
+              const currentTitlePart = getFileNameAndExtension(file.name).name;
+              return (
+                <EditItemRow key={index}>
+                  <OriginalNameLabel numberOfLines={1}>
+                    Original: {file.originalName}
+                  </OriginalNameLabel>
+                  <InputContainer>
+                    <NameInput
+                      value={currentTitlePart}
+                      placeholder="Enter document name"
+                      onChangeText={(text: string) => handleUpdateFileName(index, text)}
+                    />
+                    {ext ? <ExtensionLabel>.{ext}</ExtensionLabel> : null}
+                  </InputContainer>
+                </EditItemRow>
+              );
+            })}
+          </BSScrollView>
+          <StartProcessingButton
+            bottomPadding={bottomPadding}
+            onPress={handleConfirmAndStartUpload}
+            activeOpacity={0.8}
+          >
+            <StartProcessingButtonText>Start Processing</StartProcessingButtonText>
+          </StartProcessingButton>
+        </SheetContentWrapper>
+      </BottomSheet>
     </Container>
   );
 };
@@ -411,6 +545,104 @@ const RemoveButton = styled.TouchableOpacity`
   padding: 8px;
 `;
 
+const OriginalFileName = styled.Text`
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
+  margin-bottom: 2px;
+`;
+
+const ActionButtonsRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+`;
+
+const EditButton = styled.TouchableOpacity`
+  padding: 8px;
+`;
+
+const SheetContentWrapper = styled.View`
+  padding: 20px;
+  width: 100%;
+`;
+
+const BSTitle = styled.Text`
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 4px;
+`;
+
+const BSSub = styled.Text`
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 16px;
+`;
+
+const BSScrollView = styled(BottomSheetScrollView)`
+  width: 100%;
+  max-height: 300px;
+  margin-bottom: 16px;
+`;
+
+const EditItemRow = styled.View`
+  margin-bottom: 14px;
+`;
+
+const OriginalNameLabel = styled.Text`
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+`;
+
+const InputContainer = styled.View`
+  flex-direction: row;
+  align-items: center;
+  border-width: 1.5px;
+  border-color: #cbd5e1;
+  border-radius: 12px;
+  padding-horizontal: 12px;
+  height: 48px;
+  background-color: #f8fafc;
+`;
+
+const NameInput = styled.TextInput`
+  flex: 1;
+  font-size: 14px;
+  color: #0f172a;
+  font-weight: 600;
+  padding: 0;
+  margin: 0;
+`;
+
+const ExtensionLabel = styled.Text`
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
+  margin-left: 4px;
+`;
+
+const StartProcessingButton = styled.TouchableOpacity<{ bottomPadding: number }>`
+  background-color: #0d9488;
+  border-radius: 14px;
+  height: 50px;
+  align-items: center;
+  justify-content: center;
+  elevation: 3;
+  shadow-color: #0d9488;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.2;
+  shadow-radius: 8px;
+  margin-bottom: ${(props: any) => props.bottomPadding + 20}px;
+`;
+
+const StartProcessingButtonText = styled.Text`
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+`;
+
 const AddMoreButton = styled.TouchableOpacity`
   flex-direction: row;
   align-items: center;
@@ -481,13 +713,13 @@ const RowCenter = styled.View`
   align-items: center;
 `;
 
-const FooterContainer = styled.View`
+const FooterContainer = styled.View<{ bottomPadding: number }>`
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   background-color: #ffffff;
-  padding: 16px 20px 30px 20px;
+  padding: 16px 20px ${(props: any) => props.bottomPadding}px 20px;
   border-top-width: 1px;
   border-top-color: #e2e8f0;
 `;

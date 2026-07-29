@@ -1380,16 +1380,16 @@ export default function OnboardingScreen() {
           setMessages((prev) =>
             prev
               .map((msg) => {
-                if (msg.action === "CONFIRM_MEDICINE") {
-                  return {
-                    ...msg,
-                    summary: {
-                      ...msg.summary,
-                      medicines: updatedMeds,
-                    },
-                    medicines: updatedMeds,
-                  };
-                }
+                // if (msg.action === "CONFIRM_MEDICINE") {
+                //   return {
+                //     ...msg,
+                //     summary: {
+                //       ...msg.summary,
+                //       medicines: updatedMeds,
+                //     },
+                //     medicines: updatedMeds,
+                //   };
+                // }
                 if (msg.action === "REVIEW_MEDICINES_LIST") {
                   return {
                     ...msg,
@@ -1510,84 +1510,84 @@ export default function OnboardingScreen() {
       );
     }
 
-    if (activeMsg.action === "CONFIRM_MEDICINE") {
-      const handleConfirm = () => {
-        const displayLabel =
-          preferredLang === "gujarati" || preferredLang === "gu"
-            ? "હા, યોગ્ય છે"
-            : preferredLang === "hindi" || preferredLang === "hi"
-              ? "हाँ, सही है"
-              : preferredLang === "marathi" || preferredLang === "mr"
-                ? "होय, योग्य आहे"
-                : preferredLang === "tamil" || preferredLang === "ta"
-                  ? "ஆம், சரியானது"
-                  : "Yes, Correct";
+    // if (activeMsg.action === "CONFIRM_MEDICINE") {
+    //   const handleConfirm = () => {
+    //     const displayLabel =
+    //       preferredLang === "gujarati" || preferredLang === "gu"
+    //         ? "હા, યોગ્ય છે"
+    //         : preferredLang === "hindi" || preferredLang === "hi"
+    //           ? "हाँ, सही है"
+    //           : preferredLang === "marathi" || preferredLang === "mr"
+    //             ? "होय, योग्य आहे"
+    //             : preferredLang === "tamil" || preferredLang === "ta"
+    //               ? "ஆம், சரியானது"
+    //               : "Yes, Correct";
 
-        const updatedState = {
-          ...state,
-          medicinesToAdd: localMedicines,
-        };
+    //     const updatedState = {
+    //       ...state,
+    //       medicinesToAdd: localMedicines,
+    //     };
 
-        sendMessage(
-          JSON.stringify({
-            confirmed: true,
-            medicines: localMedicines,
-            medications: localMedicines,
-          }),
-          updatedState,
-          displayLabel,
-        );
-      };
-      const handleEdit = (med?: any) => {
-        if (med) {
-          setActiveMedicineToEdit(med);
-          const newMsg: Message = {
-            id: `ai-${Date.now()}`,
-            role: "assistant",
-            content: "Please edit the medication details below:",
-            action: "EDIT_MEDICINE",
-            medicine: med,
-          };
-          setMessages((prev) => [...prev, newMsg]);
-        } else {
-          const displayLabel =
-            preferredLang === "gujarati" || preferredLang === "gu"
-              ? "સુધારો"
-              : preferredLang === "hindi" || preferredLang === "hi"
-                ? "संपादित करें"
-                : preferredLang === "marathi" || preferredLang === "mr"
-                  ? "संपादित करा"
-                  : preferredLang === "tamil" || preferredLang === "ta"
-                    ? "திருத்து"
-                    : "Edit";
-          sendMessage(JSON.stringify({ edit: true }), state, displayLabel);
-        }
-      };
+    //     sendMessage(
+    //       JSON.stringify({
+    //         confirmed: true,
+    //         medicines: localMedicines,
+    //         medications: localMedicines,
+    //       }),
+    //       updatedState,
+    //       displayLabel,
+    //     );
+    //   };
+    //   const handleEdit = (med?: any) => {
+    //     if (med) {
+    //       setActiveMedicineToEdit(med);
+    //       const newMsg: Message = {
+    //         id: `ai-${Date.now()}`,
+    //         role: "assistant",
+    //         content: "Please edit the medication details below:",
+    //         action: "EDIT_MEDICINE",
+    //         medicine: med,
+    //       };
+    //       setMessages((prev) => [...prev, newMsg]);
+    //     } else {
+    //       const displayLabel =
+    //         preferredLang === "gujarati" || preferredLang === "gu"
+    //           ? "સુધારો"
+    //           : preferredLang === "hindi" || preferredLang === "hi"
+    //             ? "संपादित करें"
+    //             : preferredLang === "marathi" || preferredLang === "mr"
+    //               ? "संपादित करा"
+    //               : preferredLang === "tamil" || preferredLang === "ta"
+    //                 ? "திருத்து"
+    //                 : "Edit";
+    //       sendMessage(JSON.stringify({ edit: true }), state, displayLabel);
+    //     }
+    //   };
 
-      const isEditStepActive =
-        messages[messages.length - 1]?.action === "EDIT_MEDICINE";
-      const isCardReadOnly = isHistorical && !isEditStepActive;
+    //   const isEditStepActive =
+    //     messages[messages.length - 1]?.action === "EDIT_MEDICINE";
+    //   const isCardReadOnly = isHistorical && !isEditStepActive;
 
-      return (
-        <ConfirmMedicineCard
-          summary={
-            isCardReadOnly
-              ? (activeMsg.medicines || activeMsg.summary || {})
-              : { medicines: localMedicines }
-          }
-          preferredLang={preferredLang}
-          isDark={isDark}
-          theme={theme}
-          onConfirm={handleConfirm}
-          onEdit={handleEdit}
-          readOnly={isCardReadOnly}
-          chosenVal={chosenVal}
-          chosenLabel={chosenLabel}
-        />
-      );
-    }
+    //   return (
+    //     <ConfirmMedicineCard
+    //       summary={
+    //         isCardReadOnly
+    //           ? (activeMsg.medicines || activeMsg.summary || {})
+    //           : { medicines: localMedicines }
+    //       }
+    //       preferredLang={preferredLang}
+    //       isDark={isDark}
+    //       theme={theme}
+    //       onConfirm={handleConfirm}
+    //       onEdit={handleEdit}
+    //       readOnly={isCardReadOnly}
+    //       chosenVal={chosenVal}
+    //       chosenLabel={chosenLabel}
+    //     />
+    //   );
+    // }
 
-    if (activeMsg.action === "MEDICINE_OPTIONS") {
+    if (activeMsg.action === "MEDICINE_OPTIONS" || activeMsg.action === "CONFIRM_MEDICINE") {
       return (
         <MedicineOptionsPanel
           optionsList={activeMsg.options || []}

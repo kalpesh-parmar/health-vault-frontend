@@ -12,6 +12,7 @@ import { useSaveDocument } from "../../hooks/useSaveDocument";
 import ModernLoader from "../../components/shared/Loader";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 type categoryItems = {
   label: string;
@@ -87,6 +88,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
   const imageUri = route?.params?.images;
   const fileNameParam = route?.params?.fileName;
   const { isDark } = useAppTheme();
+  const bottomPadding = useBottomBarPadding(16, 12);
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [docName, setDocName] = useState(fileNameParam || "");
   const [category, setCategory] = useState("");
@@ -178,7 +180,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
         </Header>
 
         <Body showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <BodyPadding style={{ paddingBottom: keyboardPadding + 120 }}>
+          <BodyPadding style={{ paddingBottom: keyboardPadding + 90 + bottomPadding }}>
             <MainCard>
               <Section>
                 <SectionTitleRow>
@@ -260,7 +262,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
           </BodyPadding>
         </Body>
 
-        <BottomBar>
+        <BottomBar bottomPadding={bottomPadding}>
           <DualButtons
             secondaryBtnText="Discard"
             secondaryBtnColor={`${({ isDark, theme }: any) => (isDark ? theme.colors.error : theme.colors.error)}`}
@@ -516,9 +518,9 @@ const ThumbPHTxt = styled.Text`
   font-weight: 500;
 `;
 
-const BottomBar = styled.View`
+const BottomBar = styled.View<{ bottomPadding: number }>`
   background-color: ${({ theme }: any) => theme.colors.surface};
-  padding: 14px 20px ${Platform.OS === "ios" ? "30px" : "18px"} 20px;
+  padding: 14px 20px ${(props: any) => props.bottomPadding}px 20px;
   border-top-width: 1px;
   border-top-color: ${({ theme }: any) => theme.colors.border};
   shadow-color: ${({ theme }: any) => theme.colors.primary};

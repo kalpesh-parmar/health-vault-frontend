@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import styled from "styled-components/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
@@ -39,7 +40,6 @@ import {
   filterDocuments,
   listDocument,
   deleteDocument,
-  getSignedUrl,
 } from "../../services/documentService";
 import { useAuth } from "../../context/ContextAPI";
 import DocumentCard from "../../components/Documents/DocumentCard";
@@ -48,7 +48,6 @@ import { useAppNavigation } from "../../types/navigation";
 import { useAppTheme } from "../../context/ThemeContext";
 import { MedicalDocument } from "../../types";
 import ErrorBoundary from "../../components/shared/ErrorBoundary";
-import { downloadSingleDocument, shareSingleDocument } from "../../utils/fileOperations";
 
 const CATEGORIES = [
   { key: "All", value: "All" },
@@ -100,6 +99,7 @@ const DocumentList = () => {
 
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
+  const bottomPadding = useBottomBarPadding();
   const queryClient = useQueryClient();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteIds, setDeleteIds] = useState("");
@@ -407,49 +407,25 @@ const DocumentList = () => {
     [selectedDocIds, handleSelectDocument, isSelectionMode],
   );
 
-  const handleBulkDownload = useCallback(async () => {
+  const handleBulkDownload = useCallback(() => {
     if (selectedDocIds.length === 0) return;
-    try {
-      for (const id of selectedDocIds) {
-        const doc = documents.find((d: MedicalDocument) => d.id === id);
-        if (doc && doc.s3Key) {
-          const res = await getSignedUrl(doc.s3Key);
-          if (res.data?.downloadUrl) {
-            await downloadSingleDocument(res.data.downloadUrl, doc.fileName);
-          }
-        }
-      }
-      setSelectedDocIds([]);
-    } catch (e) {
-      Toast.show({
-        type: "error",
-        text1: "Download Failed",
-        text2: "An error occurred during bulk download",
-      });
-    }
-  }, [selectedDocIds, documents]);
+    Toast.show({
+      type: "info",
+      position: "top",
+      text1: "Feature will be implemented soon.",
+    });
+    setSelectedDocIds([]);
+  }, [selectedDocIds]);
 
-  const handleBulkShare = useCallback(async () => {
+  const handleBulkShare = useCallback(() => {
     if (selectedDocIds.length === 0) return;
-    try {
-      for (const id of selectedDocIds) {
-        const doc = documents.find((d: MedicalDocument) => d.id === id);
-        if (doc && doc.s3Key) {
-          const res = await getSignedUrl(doc.s3Key);
-          if (res.data?.downloadUrl) {
-            await shareSingleDocument(res.data.downloadUrl, doc.fileName);
-          }
-        }
-      }
-      setSelectedDocIds([]);
-    } catch (e) {
-      Toast.show({
-        type: "error",
-        text1: "Share Failed",
-        text2: "An error occurred during sharing",
-      });
-    }
-  }, [selectedDocIds, documents]);
+    Toast.show({
+      type: "info",
+      position: "top",
+      text1: "Feature will be implemented soon.",
+    });
+    setSelectedDocIds([]);
+  }, [selectedDocIds]);
 
   const handleBulkDelete = useCallback(() => {
     if (selectedDocIds.length === 0) return;
@@ -499,7 +475,7 @@ const DocumentList = () => {
           visible={uploadingDocs.length > 0}
           animationType="fade"
         >
-          <ModalContainer>
+          <ModalContainer bottomPadding={bottomPadding}>
             <OCRProgressPanel
               uploadingDocs={uploadingDocs}
               isExpanded={isProgressExpanded}
@@ -855,11 +831,12 @@ const MemberName = styled.Text<{ active?: boolean }>`
   color: white;
 `;
 
-const ModalContainer = styled.View`
+const ModalContainer = styled.View<{ bottomPadding: number }>`
   flex: 1;
   background-color: rgba(0, 0, 0, 0.45);
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
+  padding-bottom: ${(props: any) => props.bottomPadding + 20}px;
 `;
 
 const SelectionBottomBar = styled.View<{ isDark: boolean; insets: any }>`

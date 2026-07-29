@@ -7,6 +7,7 @@ import {
   View,
   ActivityIndicator,
   Modal,
+  BackHandler,
 } from "react-native";
 import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,6 +20,7 @@ import { useAppNavigation } from "../../types/navigation";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/ContextAPI";
 import { queryClient } from "../../config/queryClient";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { useOcrJobPolling, JobState } from "../../hooks/useOcrJobPolling";
 import { getOcrJobResult, OcrJobResult } from "../../services/documentService";
 
@@ -27,6 +29,7 @@ type DocumentProcessingRouteProp = RouteProp<
     DocumentProcessing: {
       jobIds: string[];
       filesInfo?: { jobId: string; fileName: string; fileKey: string }[];
+      fromScreen?: string;
     };
   },
   "DocumentProcessing"
@@ -37,8 +40,9 @@ export const DocumentProcessingScreen = () => {
   const route = useRoute<DocumentProcessingRouteProp>();
   const { isDark } = useAppTheme();
   const { userId } = useAuth();
+  const bottomPadding = useBottomBarPadding(20);
 
-  const { jobIds = [], filesInfo = [] } = route.params || {};
+  const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
 
   const {
     jobList,
@@ -49,6 +53,35 @@ export const DocumentProcessingScreen = () => {
     queuedCount,
     runningCount,
   } = useOcrJobPolling(jobIds);
+
+  useEffect(() => {
+    if (isAllTerminal && fromScreen === "AIChat") {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: "Home" as any },
+          { name: "AIChat" as any }
+        ]
+      });
+    }
+  }, [isAllTerminal, fromScreen, navigation]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (fromScreen === "AIChat") {
+        navigation.navigate("Home" as any);
+        return true;
+      }
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+
+    return () => subscription.remove();
+  }, [fromScreen, navigation]);
 
   const [selectedResult, setSelectedResult] = useState<{
     fileName: string;
@@ -275,7 +308,7 @@ export const DocumentProcessingScreen = () => {
       {/* Result Modal / Bottom Sheet */}
       <Modal visible={Boolean(selectedResult)} animationType="slide" transparent>
         <ModalOverlay>
-          <ModalContentCard>
+          <ModalContentCard bottomPadding={bottomPadding}>
             <ModalHeader>
               <ModalTitle numberOfLines={1}>{selectedResult?.fileName}</ModalTitle>
               <CloseModalButton onPress={() => setSelectedResult(null)}>
@@ -653,12 +686,12 @@ const ModalOverlay = styled.View`
   justify-content: flex-end;
 `;
 
-const ModalContentCard = styled.View`
+const ModalContentCard = styled.View<{ bottomPadding: number }>`
   background-color: #ffffff;
   border-top-left-radius: 24px;
   border-top-right-radius: 24px;
   max-height: 80%;
-  padding-bottom: 20px;
+  padding-bottom: ${(props: any) => props.bottomPadding}px;
 `;
 
 const ModalHeader = styled.View`

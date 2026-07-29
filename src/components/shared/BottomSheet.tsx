@@ -45,6 +45,9 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
       enablePanDownToClose={true}
       onChange={setSheetIndex}
       backdropComponent={renderBackdrop}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
       backgroundStyle={{
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,

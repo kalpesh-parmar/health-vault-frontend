@@ -80,7 +80,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 export default DocumentPreview;
 
 const Container = styled.View`
-  margin: 12px 16px; 
+  margin: 0px 16px 20px 16px; 
 `;
 
 const Card = styled.View`

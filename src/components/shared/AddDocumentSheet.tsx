@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components/native";
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 interface AddDocumentSheetProps {
   isProfilePicture?: boolean;
@@ -17,8 +18,9 @@ const AddDocumentSheet = ({
   onDocumentPick,
   onMultiUploadPick,
 }: AddDocumentSheetProps) => {
+  const bottomPadding = useBottomBarPadding(40, 20);
   return (
-    <SheetContentWrapper>
+    <SheetContentWrapper bottomPadding={bottomPadding}>
       <HeaderSection>
         <SheetTitle>
           {isProfilePicture ? "Upload Profile Picture" : "Upload Document"}
@@ -99,8 +101,8 @@ const AddDocumentSheet = ({
 
 export default AddDocumentSheet;
 
-const SheetContentWrapper = styled.View`
-  padding: 12px 20px 40px;
+const SheetContentWrapper = styled.View<{ bottomPadding: number }>`
+  padding: 12px 20px ${(props: any) => props.bottomPadding}px;
   border-top-left-radius: 30px;
   border-top-right-radius: 30px;
 `;

@@ -10,8 +10,7 @@ import type { MedicalDocument } from "../../types";
 import { useAppTheme } from "../../context/ThemeContext";
 import { getFileExtension } from "../../utils/fileUtils";
 import Toast from "react-native-toast-message";
-import { getSignedUrl } from "../../services/documentService";
-import { downloadSingleDocument, shareSingleDocument } from "../../utils/fileOperations";
+import { formatUTCDateTime } from "../../utils/dateFormatter";
 
 interface Props {
   document: MedicalDocument;
@@ -69,54 +68,24 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
     navigation.navigate("EditDocument", { document });
   }, [navigation, document]);
 
-  const handleDownload = useCallback(async (e: GestureResponderEvent) => {
+  const handleDownload = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
-    if (document.s3Key) {
-      try {
-        const res = await getSignedUrl(document.s3Key);
-        if (res.data?.downloadUrl) {
-          await downloadSingleDocument(res.data.downloadUrl, document.fileName);
-        }
-      } catch (error) {
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: "Failed to download document.",
-        });
-      }
-    } else {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "No download link available for this document.",
-      });
-    }
-  }, [document]);
+    Toast.show({
+      type: "info",
+      position: "top",
+      text1: "Feature will be implemented soon.",
+    });
+  }, []);
 
-  const handleShare = useCallback(async (e: GestureResponderEvent) => {
+  const handleShare = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
     setMenuVisible(false);
-    if (document.s3Key) {
-      try {
-        const res = await getSignedUrl(document.s3Key);
-        if (res.data?.downloadUrl) {
-          await shareSingleDocument(res.data.downloadUrl, document.fileName);
-        }
-      } catch (error) {
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: "Failed to share document.",
-        });
-      }
-    } else {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "No share link available for this document.",
-      });
-    }
-  }, [document]);
+    Toast.show({
+      type: "info",
+      position: "top",
+      text1: "Feature will be implemented soon.",
+    });
+  }, []);
 
   const handleCheckboxPress = useCallback(
     (e: GestureResponderEvent) => {
@@ -147,27 +116,11 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
   );
 
   const formattedDate = useMemo(() => {
-    try {
-      return new Date(document.createdAt).toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    } catch (e) {
-      return "Unknown Date";
-    }
+    return formatUTCDateTime(document.createdAt, "dd-MMM-yyyy");
   }, [document.createdAt]);
 
   const formattedTime = useMemo(() => {
-    try {
-      return new Date(document.createdAt).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
-    } catch (e) {
-      return "";
-    }
+    return formatUTCDateTime(document.createdAt, "hh:mm a");
   }, [document.createdAt]);
 
   const metaText = useMemo(() => {
@@ -201,7 +154,7 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
         onPress={handleNavigateToSummary}
         isDark={isDark}
       >
-        <CheckboxContainer onPress={handleCheckboxPress}>
+        {/* <CheckboxContainer onPress={handleCheckboxPress}>
           {selected ? (
             <CheckBoxFilled>
               <Ionicons name="checkmark" size={14} color="white" />
@@ -209,7 +162,7 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
           ) : (
             <CheckBoxOutline isDark={isDark} />
           )}
-        </CheckboxContainer>
+        </CheckboxContainer> */}
 
         <IconContainer style={{ backgroundColor: fileStyle.bgColor }}>
           <MaterialCommunityIcons name="file-document-outline" size={24} color={fileStyle.iconColor} />

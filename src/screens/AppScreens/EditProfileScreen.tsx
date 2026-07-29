@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../components/shared/Header";
 import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { getUser, updateUser } from "../../services/userService";
 import {
   uploadFileToS3,
@@ -208,6 +209,7 @@ const EditableField = ({
 
 const EditProfile = () => {
   const { theme, isDark } = useAppTheme();
+  const bottomPadding = useBottomBarPadding(16, 12);
   const iconColors = getIconColors(isDark);
   const refRBSheet = useRef<BottomSheetModal>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -721,6 +723,7 @@ const EditProfile = () => {
 
           {isEditing && (
             <SaveButton
+              bottomPadding={bottomPadding}
               onPress={() => updateProfileMutation.mutate()}
               disabled={updateProfileMutation.isPending}
               activeOpacity={0.8}
@@ -981,14 +984,14 @@ const GenderChipText = styled.Text<{ selected: boolean }>`
     selected ? theme.colors.surface : theme.colors.textMuted};
 `;
 
-const SaveButton = styled.TouchableOpacity`
+const SaveButton = styled.TouchableOpacity<{ bottomPadding: number }>`
   background-color: ${({ theme }: any) => theme.colors.primary};
   padding: 16px;
   border-radius: 16px;
   align-items: center;
   justify-content: center;
   margin-horizontal: 20px;
-  margin-bottom: 50px;
+  margin-bottom: ${(props: any) => props.bottomPadding}px;
   shadow-color: ${({ theme }: any) => theme.colors.primary};
   shadow-opacity: 0.3;
   shadow-radius: 10px;
