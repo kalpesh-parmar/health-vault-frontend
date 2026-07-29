@@ -518,7 +518,35 @@ export default function OnboardingScreen() {
       createdAt: aiRes.createdAt || new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, newMsg]);
+    if (aiRes.action === "RESOLVE_PROFILE_SOURCE") {
+      setMessages((prev) => {
+        const existingIndex = prev.findIndex(
+          (m) => m.action === "RESOLVE_PROFILE_SOURCE",
+        );
+        if (existingIndex !== -1) {
+          const updated = [...prev];
+          const existingMsg = updated[existingIndex];
+          updated[existingIndex] = {
+            ...existingMsg,
+            content: newMsg.content,
+            options: newMsg.options,
+            fields: newMsg.fields,
+            loginSummary: newMsg.loginSummary,
+            documentSummary: newMsg.documentSummary,
+            mode: newMsg.mode,
+            title: newMsg.title,
+            subtitle: newMsg.subtitle,
+            explainer: newMsg.explainer,
+            loginProvider: newMsg.loginProvider,
+            createdAt: newMsg.createdAt,
+          };
+          return updated;
+        }
+        return [...prev, newMsg];
+      });
+    } else {
+      setMessages((prev) => [...prev, newMsg]);
+    }
 
     let updatedUserData = { ...currentState.existingUserData };
 
@@ -602,15 +630,29 @@ export default function OnboardingScreen() {
   ) => {
     if (!userText.trim()) return;
 
-    const userMsg: Message = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: displayLabel || userText,
-      rawValue: userText, // Store raw value for live matching!
-      createdAt: new Date().toISOString(),
-    };
+    let isEditSave = false;
+    try {
+      if (userText.startsWith("{") && userText.includes('"edited"')) {
+        const parsed = JSON.parse(userText);
+        if (parsed && parsed.edited) {
+          isEditSave = true;
+        }
+      }
+    } catch {
+      // ignore non-json
+    }
 
-    setMessages((prev) => [...prev, userMsg]);
+    if (!isEditSave) {
+      const userMsg: Message = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: displayLabel || userText,
+        rawValue: userText, // Store raw value for live matching!
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, userMsg]);
+    }
     setInput("");
     setLoading(true);
 

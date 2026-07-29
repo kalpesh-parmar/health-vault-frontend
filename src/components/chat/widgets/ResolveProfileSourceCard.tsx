@@ -6,6 +6,7 @@ import { widgetStyles as styles } from "./WidgetStyles";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 import { parseChosenJson } from "./MedicineHelpers";
 import { setActiveFormDictationCallback } from "../ChatInput";
+import { formatLocalDateToYMD, parseYMDToLocalDate } from "../../../utils/dateUtils";
 
 export interface ResolveProfileSourceCardProps {
   activeMsg: any;
@@ -45,6 +46,24 @@ export function ResolveProfileSourceCard({
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
     return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
+  };
+
+  const normalizeGenderFrontend = (rawVal: string | null | undefined): string => {
+    if (!rawVal || typeof rawVal !== "string") return "";
+    const cleaned = rawVal.trim().toLowerCase();
+    if (!cleaned) return "";
+
+    if (cleaned === "male" || cleaned === "m") return "male";
+    if (cleaned === "female" || cleaned === "f") return "female";
+    if (cleaned === "other") return "other";
+
+    for (const langDict of Object.values(I18N_ONBOARDING_UI)) {
+      if (langDict.male && langDict.male.trim().toLowerCase() === cleaned) return "male";
+      if (langDict.female && langDict.female.trim().toLowerCase() === cleaned) return "female";
+      if (langDict.other && langDict.other.trim().toLowerCase() === cleaned) return "other";
+    }
+
+    return cleaned;
   };
 
 
@@ -448,8 +467,12 @@ export function ResolveProfileSourceCard({
               const userMessage = uiT("saveDetails");
               console.log(userMessage);
               setIsEditingProfileManually(false);
+              const dataToSend = { ...editedProfileData };
+              if (dataToSend.gender) {
+                dataToSend.gender = normalizeGenderFrontend(dataToSend.gender);
+              }
               sendMessage(
-                JSON.stringify({ edited: editedProfileData }),
+                JSON.stringify({ edited: dataToSend }),
                 state,
                 userMessage
               );
@@ -474,10 +497,15 @@ export function ResolveProfileSourceCard({
         <DateTimePickerModal
           isVisible={isDatePickerVisible}
           mode={datePickerMode}
+          date={
+            editedProfileData.dateOfBirth
+              ? parseYMDToLocalDate(editedProfileData.dateOfBirth)
+              : new Date()
+          }
           maximumDate={new Date()}
           onConfirm={(date: Date) => {
             setDatePickerVisible(false);
-            const dateStr = date.toISOString().split("T")[0]; // yyyy-MM-dd
+            const dateStr = formatLocalDateToYMD(date);
             setEditedProfileData((prev: any) => ({
               ...prev,
               dateOfBirth: dateStr,
@@ -577,7 +605,8 @@ export function ResolveProfileSourceCard({
                         onPress={() => {
                           const initData: any = {};
                           fields.forEach((f: any) => {
-                            initData[f.key] = f.value || "";
+                            const rawVal = f.value || "";
+                            initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
                           });
                           setEditedProfileData(initData);
                           setIsEditingProfileManually(true);
@@ -648,7 +677,7 @@ export function ResolveProfileSourceCard({
             </View>
             <View style={styles.columnBody}>
               {fields.map((field: any) => {
-                const val = field.loginValue;
+                const val = field.loginValue || (field.isMismatch ? null : field.value);
                 return (
                   <View key={field.key} style={styles.fieldRow}>
                     <View
@@ -770,7 +799,7 @@ export function ResolveProfileSourceCard({
             </View>
             <View style={styles.columnBody}>
               {fields.map((field: any) => {
-                const val = field.documentValue;
+                const val = field.documentValue || (field.isMismatch ? null : field.value);
                 return (
                   <View key={field.key} style={styles.fieldRow}>
                     <View
@@ -957,7 +986,8 @@ export function ResolveProfileSourceCard({
                 onPress={() => {
                   const initData: any = {};
                   fields.forEach((f: any) => {
-                    initData[f.key] = f.value || "";
+                    const rawVal = f.value || "";
+                    initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
                   });
                   setEditedProfileData(initData);
                   setIsEditingProfileManually(true);
@@ -1100,7 +1130,8 @@ export function ResolveProfileSourceCard({
           onPress={() => {
             const initData: any = {};
             fields.forEach((f: any) => {
-              initData[f.key] = f.loginValue || f.documentValue || "";
+              const rawVal = f.loginValue || f.documentValue || f.value || "";
+              initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
             });
             setEditedProfileData(initData);
             setIsEditingProfileManually(true);

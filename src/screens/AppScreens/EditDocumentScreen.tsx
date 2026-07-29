@@ -19,6 +19,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { Keyboard } from "react-native";
 import { queryClient } from "../../config/queryClient";
 import Loader from "../../components/shared/Loader";
+import { formatLocalDateToYMD } from "../../utils/dateUtils";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -275,7 +276,7 @@ const EditScreen = ({ route }: any) => {
                 if (!document?.createdAt) return "—";
                 try {
                   const d = new Date(document.createdAt);
-                  return isNaN(d.getTime()) ? "—" : d.toISOString().split("T")[0];
+                  return isNaN(d.getTime()) ? "—" : formatLocalDateToYMD(d);
                 } catch {
                   return "—";
                 }
