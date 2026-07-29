@@ -1,0 +1,112 @@
+{
+    "name": "Health Vault",
+    "slug": "health-vault",
+    "version": "1.0.0",
+    "facebookAppId": "27183483314606544",
+    "facebookDisplayName": "Health Vault",
+    "facebookScheme": "fb27183483314606544",
+    "orientation": "portrait",
+    "icon": "./assets/AppIcon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "health-vault",
+    "newArchEnabled": true,
+    "owner": "dharmik-bapodara",
+    "splash": {
+        "backgroundColor": "#030a16"
+    },
+    "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.anonymous.DocumentsVaultApp",
+        "infoPlist": {
+            "SKAdNetworkItems": [
+                {
+                    "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork"
+                },
+                {
+                    "SKAdNetworkIdentifier": "n38lu8286q.skadnetwork"
+                }
+            ]
+        }
+    },
+    "extra": {
+        "eas": {
+            "projectId": "b062fe9d-eb5f-437f-adf2-d5d6f4038b83"
+        }
+    },
+    "android": {
+        "package": "com.anonymous.DocumentsVaultApp",
+        "googleServicesFile": "./android/app/google-services.json",
+        "adaptiveIcon": {
+            "foregroundImage": "./assets/AppIconForeground.png",
+            "backgroundColor": "#030a16"
+        },
+        "edgeToEdgeEnabled": true,
+        "predictiveBackGestureEnabled": false,
+        "permissions": [
+            "android.permission.health.READ_STEPS",
+            "android.permission.health.READ_DISTANCE",
+            "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+            "android.permission.health.READ_HEART_RATE",
+            "android.permission.health.READ_RESTING_HEART_RATE",
+            "android.permission.health.READ_SLEEP",
+            "android.permission.health.READ_OXYGEN_SATURATION",
+            "android.permission.CAMERA",
+            "android.permission.RECORD_AUDIO",
+            "android.permission.INTERNET"
+        ]
+    },
+    "web": {
+        "favicon": "./assets/AppIconForeground.png"
+    },
+    "plugins": [
+        "@react-native-firebase/app",
+        "@react-native-firebase/auth",
+        "@react-native-firebase/messaging",
+        [
+            "expo-camera",
+            {
+                "cameraPermission": "Allow HealthVault to access your camera to scan medical documents."
+            }
+        ],
+        [
+            "expo-image-picker",
+            {
+                "photosPermission": "Allow HealthVault to access your photos so you can upload medical records from your gallery."
+            }
+        ],
+        "expo-secure-store",
+        "expo-font",
+        "@react-native-community/datetimepicker",
+        "expo-mail-composer",
+        "expo-notifications",
+        [
+            "expo-build-properties",
+            {
+                "android": {
+                    "compileSdkVersion": 35,
+                    "targetSdkVersion": 35,
+                    "buildToolsVersion": "35.0.0",
+                    "minSdkVersion": 26,
+                    "usesCleartextTraffic": true
+                }
+            }
+        ],
+        "react-native-health-connect",
+        "expo-background-task",
+        [
+            "react-native-fbsdk-next",
+            {
+                "appID": "27183483314606544",
+                "clientToken": "518ba4bcb7695b7058da506d3f56e30a",
+                "displayName": "Health Vault"
+            }
+        ],
+        "@react-native-google-signin/google-signin",
+        "expo-web-browser"
+    ],
+    "sdkVersion": "54.0.0",
+    "platforms": [
+        "ios",
+        "android"
+    ]
+}

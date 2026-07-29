@@ -18,6 +18,7 @@ import {
   onTokenRefresh,
 } from "@react-native-firebase/messaging";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { registerWearableBackgroundSync } from "./src/services/wearable/backgroundSyncTask";
 
 // Setting up the notification handler for notifications.
 Notifications.setNotificationHandler({
@@ -84,6 +85,13 @@ export default function App() {
     return () => {
       unsubscribeFCM();
     };
+  }, []);
+
+  useEffect(() => {
+    // Register the periodic background wearable sync (Android WorkManager /
+    // iOS BGTaskScheduler). Idempotent; safe to call on every app start.
+    // Best-effort: never block startup if registration is unavailable.
+    registerWearableBackgroundSync().catch(() => {});
   }, []);
 
   return (

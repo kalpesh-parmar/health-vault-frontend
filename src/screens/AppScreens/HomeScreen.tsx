@@ -246,6 +246,8 @@ const HomeScreen = () => {
       </HeaderGradient>
 
       <FixedOverviewCard
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate("HealthDashboard")}
         style={{
           shadowColor: "#000",
           shadowOffset: { width: 0, height: 4 },
@@ -514,7 +516,7 @@ const SubGreetingText = styled.Text`
 `;
 
 /* Overlapping Health Overview Card Container absolute position configurations */
-const FixedOverviewCard = styled.View`
+const FixedOverviewCard = styled.TouchableOpacity`
   position: absolute;
   top: 160px;
   left: 20px;

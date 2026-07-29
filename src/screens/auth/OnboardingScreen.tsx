@@ -55,6 +55,7 @@ import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOpti
 import { ResolveProfileSourceCard } from "../../components/chat/widgets/ResolveProfileSourceCard";
 import { I18N_ONBOARDING_UI as ONBOARDING_I18N } from "../../components/chat/widgets/OnboardingI18n";
 import { AskUploadOrSkipCard } from "../../components/chat/widgets/AskUploadOrSkipCard";
+import { ConnectWearableCard } from "../../components/chat/widgets/ConnectWearableCard";
 import { findHistoricalUserReply } from "../../components/chat/widgets/HistoricalChips";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -1221,6 +1222,22 @@ export default function OnboardingScreen() {
           setState={setState}
           sendMessage={sendMessage}
           handleDocumentUpload={handleDocumentUpload}
+          isHistorical={isHistorical}
+          chosenVal={chosenVal}
+          chosenLabel={chosenLabel}
+        />
+      );
+    }
+
+    if (activeMsg.action === "ASK_WEARABLE_SYNC") {
+      return (
+        <ConnectWearableCard
+          activeMsg={activeMsg}
+          preferredLang={preferredLang}
+          theme={theme}
+          state={state}
+          setState={setState}
+          sendMessage={sendMessage}
           isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}

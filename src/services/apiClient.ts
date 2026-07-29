@@ -441,7 +441,10 @@ apiClient.interceptors.response.use(
       }
     }
 
-    return Promise.reject(new Error(message));
+    const errObj = new Error(message);
+    (errObj as any).response = error.response;
+    (errObj as any).status = error.response?.status;
+    return Promise.reject(errObj);
   }
 );
 

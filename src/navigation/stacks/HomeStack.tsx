@@ -6,6 +6,15 @@ import ImagePreview from "../../screens/AppScreens/ImagePreviewScreen";
 import DocumentStack from "./DocumentStack";
 import NotificationScreen from "../../screens/AppScreens/Notifications";
 import AIChatScreen from "../../screens/AppScreens/AIChatScreen";
+import HealthDashboardScreen from "../../screens/AppScreens/HealthDashboardScreen";
+import WearableSettingsScreen from "../../screens/AppScreens/WearableSettingsScreen";
+import HealthConnectCompatibilityScreen from "../../screens/AppScreens/HealthConnectCompatibilityScreen";
+import HealthConnectInstallScreen from "../../screens/AppScreens/HealthConnectInstallScreen";
+import HealthConnectPermissionsScreen from "../../screens/AppScreens/HealthConnectPermissionsScreen";
+import HealthConnectSourcesScreen from "../../screens/AppScreens/HealthConnectSourcesScreen";
+import HealthConnectHelpScreen from "../../screens/AppScreens/HealthConnectHelpScreen";
+import HealthConnectSuccessScreen from "../../screens/AppScreens/HealthConnectSuccessScreen";
+import HealthConnectPermissionDetailsScreen from "../../screens/AppScreens/HealthConnectPermissionDetailsScreen";
 import MedicationStack from "./MedicationStack";
 import ReminderScreen from "../../screens/AppScreens/Reminders/ReminderScreen";
 import MultiUploadScreen from "../../screens/AppScreens/MultiUploadScreen";
@@ -29,6 +38,15 @@ const HomeStack = () => {
       <Stack.Screen name="DocumentProcessing" component={DocumentProcessingScreen} />
       <Stack.Screen name="Notifications" component={NotificationScreen} />
       <Stack.Screen name="AIChat" component={AIChatScreen} />
+      <Stack.Screen name="HealthDashboard" component={HealthDashboardScreen} />
+      <Stack.Screen name="WearableSettings" component={WearableSettingsScreen} />
+      <Stack.Screen name="HealthConnectCompatibility" component={HealthConnectCompatibilityScreen} />
+      <Stack.Screen name="HealthConnectInstall" component={HealthConnectInstallScreen} />
+      <Stack.Screen name="HealthConnectPermissions" component={HealthConnectPermissionsScreen} />
+      <Stack.Screen name="HealthConnectSources" component={HealthConnectSourcesScreen} />
+      <Stack.Screen name="HealthConnectHelp" component={HealthConnectHelpScreen} />
+      <Stack.Screen name="HealthConnectSuccess" component={HealthConnectSuccessScreen} />
+      <Stack.Screen name="HealthConnectPermissionDetails" component={HealthConnectPermissionDetailsScreen} />
       <Stack.Screen name="Reminders" component={ReminderScreen} />
       <Stack.Screen name="UploadSuccess" component={UploadSuccessScreen} />
     </Stack.Navigator>

@@ -54,6 +54,18 @@ export type AppStackParamList = {
   DocumentStack: NavigatorScreenParams<DocumentsStackParamList>;
   Notifications: undefined;
   AIChat: undefined;
+  HealthDashboard: undefined;
+  WearableSettings: undefined;
+  HealthConnectWizard: {
+    initialStep?: number;
+  } | undefined;
+  HealthConnectCompatibility: undefined;
+  HealthConnectInstall: undefined;
+  HealthConnectPermissions: undefined;
+  HealthConnectSources: undefined;
+  HealthConnectHelp: undefined;
+  HealthConnectSuccess: undefined;
+  HealthConnectPermissionDetails: undefined;
   Reminders: undefined;
   MultiUpload: undefined;
   DocumentProcessing: {

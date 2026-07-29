@@ -11,6 +11,7 @@ import { auth } from "../firebase/config";
 import { queryClient } from "../config/queryClient";
 import { refreshAuthToken } from "../services/auth.service";
 import { registerForceLogoutHandler, resetForceLogout } from "../services/apiClient";
+import { clearWearableSession } from "../services/wearable/wearableSyncService";
 
 interface AuthContextType {
   userId: string | null;
@@ -165,6 +166,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await SecureStore.deleteItemAsync("accessToken");
       await SecureStore.deleteItemAsync("userId");
       await SecureStore.deleteItemAsync("refreshDate");
+      await clearWearableSession();
       
       setIsAuthenticated(false);
       setAccessToken(null);
