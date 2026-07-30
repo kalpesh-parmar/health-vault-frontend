@@ -308,6 +308,7 @@ export const updateDocument = async (
   const response = await apiClient.put(endpoint, {
     title: document.fileName,
     notes: document.notes,
+    category: document.category || document.documentType,
   });
   return response.data;
 };

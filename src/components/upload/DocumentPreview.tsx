@@ -4,7 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 import { Keyboard, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 interface DocumentPreviewProps {
   fileName: string;
   fileSize?: string | number;
@@ -80,7 +79,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 export default DocumentPreview;
 
 const Container = styled.View`
-  margin: 0px 16px 20px 16px; 
+  margin: 0px 16px 70px 16px; 
 `;
 
 const Card = styled.View`

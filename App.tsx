@@ -18,6 +18,8 @@ import {
   onTokenRefresh,
 } from "@react-native-firebase/messaging";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { DocumentUploadProvider } from "./src/context/DocumentUploadContext";
+import { DocumentUploadProgressOverlay } from "./src/components/document-upload/DocumentUploadProgressOverlay";
 
 // Setting up the notification handler for notifications.
 Notifications.setNotificationHandler({
@@ -93,12 +95,15 @@ export default function App() {
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <BottomSheetModalProvider>
-                <RootNavigator />
-                <Toast
-                  config={toastConfig}
-                  topOffset={60}
-                  visibilityTime={4000}
-                />
+                <DocumentUploadProvider>
+                  <RootNavigator />
+                  <DocumentUploadProgressOverlay />
+                  <Toast
+                    config={toastConfig}
+                    topOffset={60}
+                    visibilityTime={4000}
+                  />
+                </DocumentUploadProvider>
               </BottomSheetModalProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>

@@ -12,6 +12,7 @@ import {
   Text,
   ScrollView,
   StatusBar,
+  BackHandler,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
@@ -21,6 +22,7 @@ import { formatUTCDateTime } from "../../utils/dateFormatter";
 
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import BottomSheet from "../../components/shared/BottomSheet";
+import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
 import {
   ErrorScreen,
   LoadingScreen,
@@ -33,9 +35,6 @@ import { ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
-import OCRProgressPanel from "../../components/chat/widgets/OCRProgressPanel";
-import { useMultipleUpload } from "../../hooks/useMultipleUpload";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 // Reusable Redesigned Components
@@ -271,6 +270,20 @@ const AIChatScreen = ({ route }: any) => {
   }, [route?.params]);
 
   useEffect(() => {
+    const onBackPress = () => {
+      navigation.navigate("Home");
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+
+    return () => subscription.remove();
+  }, [navigation]);
+
+  useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e: KeyboardEvent) =>
@@ -341,199 +354,6 @@ const AIChatScreen = ({ route }: any) => {
   const documentSheetRef = useRef<BottomSheetModal>(null);
   const uploadSheetRef = useRef<BottomSheetModal>(null);
   const bottomPadding = useBottomBarPadding(40, 20);
-
-  const {
-    uploadingDocs,
-    isProgressExpanded,
-    setIsProgressExpanded,
-    uploadMultipleDocs,
-    cancelUpload,
-    setUploadingDocs,
-  } = useMultipleUpload(() => {
-    refetchDocs();
-  });
-
-  const handleDocumentPickMultiple = async () => {
-    uploadSheetRef.current?.dismiss();
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf", "image/*"],
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      if (result.assets.length > 5) {
-        Toast.show({
-          type: "error",
-          text1: "Limit Exceeded",
-          text2: "You can upload a maximum of 5 documents.",
-        });
-        return;
-      }
-
-      const maxSize = 100 * 1024 * 1024;
-      for (const asset of result.assets) {
-        if (asset.size && asset.size > maxSize) {
-          Toast.show({
-            type: "error",
-            text1: "File Too Large",
-            text2: `${asset.name} exceeds the 100MB size limit.`,
-          });
-          return;
-        }
-      }
-
-      const files = result.assets.map((asset) => ({
-        uri: asset.uri,
-        name: asset.name,
-        type: asset.mimeType || "application/octet-stream",
-        size: asset.size || 0,
-      }));
-      navigation.navigate("Home" as any, {
-        screen: "MultiUpload",
-        params: {
-          initialFiles: files,
-          fromScreen: "AIChat",
-        },
-      });
-    } catch (err) {
-      console.error("Error picking documents: ", err);
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to pick documents.",
-      });
-    }
-  };
-
-  const handleGalleryPickMultiple = async () => {
-    uploadSheetRef.current?.dismiss();
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Toast.show({
-          type: "error",
-          text1: "Permission Denied",
-          text2: "Please grant gallery permission in settings.",
-        });
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 1,
-        allowsMultipleSelection: true,
-        selectionLimit: 5,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      if (result.assets.length > 5) {
-        Toast.show({
-          type: "error",
-          text1: "Limit Exceeded",
-          text2: "You can upload a maximum of 5 documents.",
-        });
-        return;
-      }
-
-      const files = result.assets.map((asset, index) => {
-        const fileUri = asset.uri;
-        const uriParts = fileUri.split("/");
-        const fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
-        return {
-          uri: fileUri,
-          name: fileName,
-          type: asset.mimeType || "image/jpeg",
-          size: (asset as any).fileSize || 0,
-        };
-      });
-
-      const maxSize = 100 * 1024 * 1024;
-      for (const file of files) {
-        if (file.size && file.size > maxSize) {
-          Toast.show({
-            type: "error",
-            text1: "File Too Large",
-            text2: `${file.name} exceeds the 100MB size limit.`,
-          });
-          return;
-        }
-      }
-
-      navigation.navigate("Home" as any, {
-        screen: "MultiUpload",
-        params: {
-          initialFiles: files,
-          fromScreen: "AIChat",
-        },
-      });
-    } catch (err) {
-      console.error("Error picking images: ", err);
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to pick images.",
-      });
-    }
-  };
-
-  const handleCameraOpenMultiple = async () => {
-    uploadSheetRef.current?.dismiss();
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Toast.show({
-          type: "error",
-          text1: "Permission Denied",
-          text2: "Please grant camera permission in settings.",
-        });
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images"],
-        quality: 1,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      const fileUri = asset.uri;
-      const uriParts = fileUri.split("/");
-      const fileName = asset.fileName || uriParts[uriParts.length - 1] || "camera_capture.jpg";
-
-      const file = {
-        uri: fileUri,
-        name: fileName,
-        type: asset.mimeType || "image/jpeg",
-        size: (asset as any).fileSize || 0,
-      };
-
-      navigation.navigate("Home" as any, {
-        screen: "MultiUpload",
-        params: {
-          initialFiles: [file],
-          fromScreen: "AIChat",
-        },
-      });
-    } catch (err) {
-      console.error("Error launching camera: ", err);
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to capture photo.",
-      });
-    }
-  };
 
   // Fetch all documents
   const {
@@ -772,7 +592,7 @@ const AIChatScreen = ({ route }: any) => {
       <StatusBar barStyle={"dark-content"} />
       {/* Sticky Premium AI Header */}
       <ChatHeader
-        onBack={() => navigation.goBack()}
+        onBack={() => navigation.navigate("Home")}
         isDark={isDark}
         theme={theme}
       />
@@ -780,16 +600,6 @@ const AIChatScreen = ({ route }: any) => {
       <View
         style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
       >
-        {uploadingDocs.length > 0 && (
-          <OCRProgressPanel
-            uploadingDocs={uploadingDocs}
-            isExpanded={isProgressExpanded}
-            setIsExpanded={setIsProgressExpanded}
-            onDismiss={cancelUpload}
-            isDark={isDark}
-          />
-        )}
-
         {/* Emergency Card Display */}
         {hasEmergency && (
           <EmergencyCard>
@@ -835,10 +645,12 @@ const AIChatScreen = ({ route }: any) => {
                   const currentDate = formatUTCDateTime(
                     item.createdAt,
                     "dd-MMM-yyyy",
+                    true
                   );
                   const prevDate = formatUTCDateTime(
                     nextItem.createdAt,
                     "dd-MMM-yyyy",
+                    true
                   );
                   if (currentDate !== prevDate) {
                     showDateHeader = true;
@@ -867,7 +679,7 @@ const AIChatScreen = ({ route }: any) => {
                             color: isDark ? "#cbd5e1" : "#64748b",
                           }}
                         >
-                          {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy")}
+                          {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true)}
                         </Text>
                       </View>
                     </View>
@@ -1308,22 +1120,7 @@ const AIChatScreen = ({ route }: any) => {
         </SheetContentWrapper>
       </BottomSheet>
 
-      <BottomSheet ref={uploadSheetRef} enablePanDownToClose={true}>
-        <AddDocumentSheet
-          onGalleryPick={handleGalleryPickMultiple}
-          onCameraOpen={handleCameraOpenMultiple}
-          onDocumentPick={handleDocumentPickMultiple}
-          onMultiUploadPick={() => {
-            uploadSheetRef.current?.dismiss();
-            navigation.navigate("Home" as any, {
-              screen: "MultiUpload",
-              params: {
-                fromScreen: "AIChat",
-              },
-            });
-          }}
-        />
-      </BottomSheet>
+      <DocumentUploadBottomSheet ref={uploadSheetRef} fromScreen="AIChat" />
     </Container>
   );
 };

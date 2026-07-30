@@ -78,10 +78,7 @@ export const useMultipleUpload = (onSuccessGlobal?: () => void) => {
           },
         });
         const apiDocs =
-          response.data?.data ||
-          response.data?.items ||
-          response.data ||
-          [];
+          response.data?.data || response.data?.items || response.data || [];
 
         console.log("API Docs :- ", apiDocs);
 
@@ -131,32 +128,21 @@ export const useMultipleUpload = (onSuccessGlobal?: () => void) => {
 
             onSuccessGlobal?.();
 
-            const hasFailures = next.some(
-              (d) => d.status === "failed" || d.progress < 0,
-            );
-            if (hasFailures) {
-              Toast.show({
-                type: "error",
-                text1: "Processing Finished with Errors",
-                text2: "Some documents failed to process.",
+            Toast.show({
+              type: "success",
+              text1: "Processing Complete",
+              text2: "Documents processed successfully.",
+            });
+            // Auto-dismiss list after 4 seconds
+            setTimeout(() => {
+              setUploadingDocs((current) => {
+                const stillHasFailures = current.some(
+                  (d) => d.status === "failed" || d.progress < 0,
+                );
+                if (stillHasFailures) return current;
+                return [];
               });
-            } else {
-              Toast.show({
-                type: "success",
-                text1: "Processing Complete",
-                text2: "All documents processed successfully.",
-              });
-              // Auto-dismiss list after 4 seconds
-              setTimeout(() => {
-                setUploadingDocs((current) => {
-                  const stillHasFailures = current.some(
-                    (d) => d.status === "failed" || d.progress < 0,
-                  );
-                  if (stillHasFailures) return current;
-                  return [];
-                });
-              }, 2000);
-            }
+            }, 2000);
           }
 
           return next;

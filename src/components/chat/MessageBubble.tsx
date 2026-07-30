@@ -23,7 +23,7 @@ interface MessageBubbleProps {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark }) => {
   const isUser = message.role === "user";
-  const timeString = message.createdAt ? formatUTCDateTime(message.createdAt, "hh:mm a") : "";
+  const timeString = message.createdAt ? formatUTCDateTime(message.createdAt, "hh:mm a", true) : "";
 
   const renderInlineBold = (text: string, keyPrefix: string, textColor: string) => {
     const parts = text.split(/\*\*([\s\S]*?)\*\*/g);

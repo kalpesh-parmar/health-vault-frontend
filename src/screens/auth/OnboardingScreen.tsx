@@ -1813,10 +1813,12 @@ export default function OnboardingScreen() {
                   const currentDate = formatUTCDateTime(
                     item.createdAt,
                     "dd-MMM-yyyy",
+                    true
                   );
                   const prevDate = formatUTCDateTime(
                     prevMsg.createdAt,
                     "dd-MMM-yyyy",
+                    true
                   );
                   return currentDate !== prevDate;
                 })();
@@ -1842,7 +1844,7 @@ export default function OnboardingScreen() {
                               fontWeight: "600",
                             }}
                           >
-                            {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy")}
+                            {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true)}
                           </Text>
                         </View>
                       </View>

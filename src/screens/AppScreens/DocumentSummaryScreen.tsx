@@ -22,6 +22,7 @@ import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import { useAppTheme } from "../../context/ThemeContext";
+import { formatUTCDateTime } from "../../utils/dateFormatter";
 import { getFileSource } from "../../services/fileService";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import { getFileExtension } from "../../utils/fileUtils";
@@ -188,18 +189,11 @@ const SummaryScreen = ({ route, navigation }: any) => {
   };
 
   const formattedDate = document?.createdAt
-    ? new Date(document.createdAt).toLocaleDateString("en-US", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
+    ? formatUTCDateTime(document.createdAt, "dd-MMM-yyyy")
     : "N/A";
 
   const formattedTime = document?.createdAt
-    ? new Date(document.createdAt).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? formatUTCDateTime(document.createdAt, "hh:mm a")
     : "N/A";
 
   const formattedSize = document?.fileSize

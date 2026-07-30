@@ -8,6 +8,7 @@ import {
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Reminder } from "../../types";
+import { formatUTCDateTime } from "../../utils/dateFormatter";
 import Animated, {
   ZoomIn,
   ZoomOut,
@@ -78,12 +79,7 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       const utcTime = medDate.getTime() + medDate.getTimezoneOffset() * 60000;
       const istTime = new Date(utcTime + 330 * 60000);
 
-      let h = istTime.getHours();
-      const m = istTime.getMinutes();
-      const ampm = h >= 12 ? "PM" : "AM";
-      h = h % 12;
-      h = h ? h : 12;
-      formattedTime = `${h < 10 ? "0" + h : h}:${m < 10 ? "0" + m : m} ${ampm} IST`;
+      formattedTime = formatUTCDateTime(medDate, "hh:mm a", true) + " IST";
 
       const now = new Date();
       const nowUtc = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -107,10 +103,7 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       } else if (medDateOnly.getTime() === tomorrow.getTime()) {
         dateLabel = "Tomorrow";
       } else {
-        dateLabel = istTime.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
+        dateLabel = formatUTCDateTime(medDate, "dd-MMM-yyyy", true);
       }
     } else {
       formattedTime = item.actualMedicationTime;
@@ -161,21 +154,9 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
   if (item.completedAt) {
     const d = parseSafeDate(item.completedAt);
     if (!isNaN(d.getTime())) {
-      const utcTime = d.getTime() + d.getTimezoneOffset() * 60000;
-      const istTime = new Date(utcTime + 330 * 60000);
-      let h = istTime.getHours();
-      const m = istTime.getMinutes();
-      const ampm = h >= 12 ? "PM" : "AM";
-      h = h % 12;
-      h = h ? h : 12;
-      const timeStr = `${h < 10 ? "0" + h : h}:${m < 10 ? "0" + m : m} ${ampm}`;
-      
-      const day = istTime.getDate().toString().padStart(2, "0");
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const month = monthNames[istTime.getMonth()];
-      const year = istTime.getFullYear();
-      
-      completedAt = `${day} ${month} ${year}, ${timeStr}`;
+      const dateStr = formatUTCDateTime(d, "dd-MMM-yyyy", true);
+      const timeStr = formatUTCDateTime(d, "hh:mm a", true);
+      completedAt = `${dateStr}, ${timeStr}`;
     }
   }
 
@@ -253,11 +234,7 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
     const adjustedTime = new Date(time.getTime() - 5 * 60 * 1000);
     if (now.getTime() < adjustedTime.getTime()) {
       isActionAllowed = false;
-      availableAtTimeStr = adjustedTime.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
+      availableAtTimeStr = formatUTCDateTime(adjustedTime, "hh:mm a", true);
     }
   }
 

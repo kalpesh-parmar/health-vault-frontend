@@ -10,15 +10,12 @@ import {
 import Animated, { FadeInRight } from "react-native-reanimated";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
-import { useDocumentMedia } from "../../hooks/useDocumentMedia";
-import * as ImagePicker from "expo-image-picker";
-import * as DocumentPicker from "expo-document-picker";
+
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../navigation/types";
 import { useAppTheme } from "../../context/ThemeContext";
 import Toast from "react-native-toast-message";
-import BottomSheet from "../../components/shared/BottomSheet";
-import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
+import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
 import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -63,17 +60,6 @@ const HomeScreen = () => {
   const refRBSheet = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
 
-  const {
-    isCameraVisible,
-    setIsCameraVisible,
-    isCapturing,
-    isProcessing,
-    handleGalleryPick,
-    handleOpenCamera,
-    takePicture,
-    handleDocumentPick,
-  } = useDocumentMedia();
-
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark } = useAppTheme();
@@ -81,171 +67,6 @@ const HomeScreen = () => {
   const handleOpenDrawer = useCallback(() => {
     navigation.dispatch(DrawerActions.openDrawer());
   }, [navigation]);
-
-  const handleDocumentPickMultiple = async () => {
-    refRBSheet.current?.dismiss();
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf", "image/*"],
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      if (result.assets.length > 5) {
-        Toast.show({
-          type: "error",
-          text1: "Limit Exceeded",
-          text2: "You can upload a maximum of 5 documents.",
-        });
-        return;
-      }
-
-      const maxSize = 100 * 1024 * 1024;
-      for (const asset of result.assets) {
-        if (asset.size && asset.size > maxSize) {
-          Toast.show({
-            type: "error",
-            text1: "File Too Large",
-            text2: `${asset.name} exceeds the 100MB size limit.`,
-          });
-          return;
-        }
-      }
-
-      const files = result.assets.map((asset: any) => ({
-        uri: asset.uri,
-        name: asset.name,
-        type: asset.mimeType || "application/octet-stream",
-        size: asset.size || 0,
-      }));
-
-      navigation.navigate("MultiUpload" as any, { initialFiles: files });
-    } catch (err) {
-      console.error("Error picking documents: ", err);
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to pick documents.",
-      });
-    }
-  };
-
-  const handleGalleryPickMultiple = async () => {
-    refRBSheet.current?.dismiss();
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Toast.show({
-          type: "error",
-          text1: "Permission Denied",
-          text2: "Please grant gallery permission in settings.",
-        });
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 1,
-        allowsMultipleSelection: true,
-        selectionLimit: 5,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      if (result.assets.length > 5) {
-        Toast.show({
-          type: "error",
-          text1: "Limit Exceeded",
-          text2: "You can upload a maximum of 5 documents.",
-        });
-        return;
-      }
-
-      const files = result.assets.map((asset: any, index: number) => {
-        const fileUri = asset.uri;
-        const uriParts = fileUri.split("/");
-        const fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
-        return {
-          uri: fileUri,
-          name: fileName,
-          type: asset.mimeType || "image/jpeg",
-          size: (asset as any).fileSize || 0,
-        };
-      });
-
-      const maxSize = 100 * 1024 * 1024;
-      for (const file of files) {
-        if (file.size && file.size > maxSize) {
-          Toast.show({
-            type: "error",
-            text1: "File Too Large",
-            text2: `${file.name} exceeds the 100MB size limit.`,
-          });
-          return;
-        }
-      }
-
-      navigation.navigate("MultiUpload" as any, { initialFiles: files });
-    } catch (err) {
-      console.error("Error picking images: ", err);
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to pick images.",
-      });
-    }
-  };
-
-  const handleCameraOpenMultiple = async () => {
-    refRBSheet.current?.dismiss();
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Toast.show({
-          type: "error",
-          text1: "Permission Denied",
-          text2: "Please grant camera permission in settings.",
-        });
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images"],
-        quality: 1,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      const fileUri = asset.uri;
-      const uriParts = fileUri.split("/");
-      const fileName = asset.fileName || uriParts[uriParts.length - 1] || "camera_capture.jpg";
-
-      const file = {
-        uri: fileUri,
-        name: fileName,
-        type: asset.mimeType || "image/jpeg",
-        size: (asset as any).fileSize || 0,
-      };
-
-      navigation.navigate("MultiUpload" as any, { initialFiles: [file] });
-    } catch (err) {
-      console.error("Error launching camera: ", err);
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to capture photo.",
-      });
-    }
-  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["profile"],
@@ -356,15 +177,7 @@ const HomeScreen = () => {
     <Container isDark={isDark}>
       <StatusBar style="light" />
 
-      <CameraModal
-        visible={isCameraVisible}
-        onClose={() => setIsCameraVisible(false)}
-        onCapture={() => takePicture(cameraRef)}
-        isCapturing={isCapturing}
-        cameraRef={cameraRef}
-      />
 
-      {(isCapturing || isProcessing) && <Loader visible={isCapturing || isProcessing} currentStage={isProcessing ? "VALIDATING" : undefined} />}
 
       {/* --- BACKGROUND HEADER REGION --- */}
       <HeaderGradient
@@ -569,17 +382,7 @@ const HomeScreen = () => {
         <BottomSpacing />
       </ScrollContent>
 
-      <BottomSheet ref={refRBSheet}>
-        <AddDocumentSheet
-          onGalleryPick={handleGalleryPickMultiple}
-          onCameraOpen={handleCameraOpenMultiple}
-          onDocumentPick={handleDocumentPickMultiple}
-          onMultiUploadPick={() => {
-            refRBSheet.current?.dismiss();
-            navigation.navigate("MultiUpload" as any);
-          }}
-        />
-      </BottomSheet>
+      <DocumentUploadBottomSheet ref={refRBSheet} />
     </Container>
   );
 };

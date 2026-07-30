@@ -1,7 +1,8 @@
 import type { MedicalDocument } from "../types";
+import { formatUTCDateTime } from "./dateFormatter";
 
 export const generateProfessionalEmail = (doc: MedicalDocument) => {
-  const dateStr = new Date(doc.createdAt).toLocaleDateString();
+  const dateStr = formatUTCDateTime(doc.createdAt, "dd-MMM-yyyy");
 
   return `
 Dear Health Professional / Recipient,

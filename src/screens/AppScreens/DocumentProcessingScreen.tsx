@@ -23,6 +23,7 @@ import { queryClient } from "../../config/queryClient";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { useOcrJobPolling, JobState } from "../../hooks/useOcrJobPolling";
 import { getOcrJobResult, OcrJobResult } from "../../services/documentService";
+import { useDocumentUpload } from "../../context/DocumentUploadContext";
 
 type DocumentProcessingRouteProp = RouteProp<
   {
@@ -41,6 +42,7 @@ export const DocumentProcessingScreen = () => {
   const { isDark } = useAppTheme();
   const { userId } = useAuth();
   const bottomPadding = useBottomBarPadding(20);
+  const { startBackgroundOcr } = useDocumentUpload();
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
 
@@ -53,6 +55,18 @@ export const DocumentProcessingScreen = () => {
     queuedCount,
     runningCount,
   } = useOcrJobPolling(jobIds);
+
+  const handleBackAction = () => {
+    startBackgroundOcr(jobIds, filesInfo);
+    if (fromScreen && fromScreen !== "MultiUpload") {
+      navigation.navigate(fromScreen as any);
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Home" as any }],
+      });
+    }
+  };
 
   useEffect(() => {
     if (isAllTerminal && fromScreen === "AIChat") {
@@ -68,11 +82,8 @@ export const DocumentProcessingScreen = () => {
 
   useEffect(() => {
     const onBackPress = () => {
-      if (fromScreen === "AIChat") {
-        navigation.navigate("Home" as any);
-        return true;
-      }
-      return false;
+      handleBackAction();
+      return true;
     };
 
     const subscription = BackHandler.addEventListener(
@@ -81,7 +92,7 @@ export const DocumentProcessingScreen = () => {
     );
 
     return () => subscription.remove();
-  }, [fromScreen, navigation]);
+  }, [fromScreen, navigation, jobIds, filesInfo]);
 
   const [selectedResult, setSelectedResult] = useState<{
     fileName: string;
@@ -151,7 +162,7 @@ export const DocumentProcessingScreen = () => {
 
       <HeaderWrapper edges={["top"]}>
         <HeaderMain>
-          <BackButton onPress={() => navigation.navigate("Home" as any)}>
+          <BackButton onPress={handleBackAction}>
             <Ionicons name="close" size={26} color="white" />
           </BackButton>
           <HeaderTitle>Document Processing</HeaderTitle>
