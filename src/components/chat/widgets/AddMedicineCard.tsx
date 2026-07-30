@@ -130,7 +130,7 @@ export function AddMedicineCard({
     if (formFreq === "TWICE") return ["08:00", "20:00"];
     return ["08:00", "14:00", "20:00"];
   });
-
+ 
   const [selectedSlots, setSelectedSlots] = useState<string[]>(timeSlots);
   const [isCustomMode, setIsCustomMode] = useState<boolean>(() => {
     return timeSlots.some(
@@ -1149,7 +1149,7 @@ export function AddMedicineCard({
                   },
                 ]}
               >
-                {f}
+                {t("frequency." + f)}
               </Text>
             </TouchableOpacity>
           ))}

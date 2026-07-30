@@ -91,6 +91,17 @@ type UserData = {
   phoneNumber?: string;
 };
 
+const getNormalizedLang = (lang: string | null | undefined): string => {
+  if (!lang) return "english";
+  const l = lang.toLowerCase();
+  if (l === "en" || l === "english") return "english";
+  if (l === "gu" || l === "gujarati") return "gujarati";
+  if (l === "hi" || l === "hindi") return "hindi";
+  if (l === "mr" || l === "marathi") return "marathi";
+  if (l === "ta" || l === "tamil") return "tamil";
+  return l;
+};
+
 export default function OnboardingScreen() {
   const { theme, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -626,6 +637,7 @@ export default function OnboardingScreen() {
       };
     }
 
+    finalState.preferredLanguage = getNormalizedLang(finalState.preferredLanguage);
     setState(finalState);
 
     if (finalState.documentExtracted) {
@@ -1212,7 +1224,7 @@ export default function OnboardingScreen() {
                   },
                 ]}
                 onPress={() => {
-                  const newState = { ...state, preferredLanguage: opt.value };
+                  const newState = { ...state, preferredLanguage: getNormalizedLang(opt.value) };
                   setState(newState);
                   sendMessage(opt.value, newState, opt.label);
                 }}

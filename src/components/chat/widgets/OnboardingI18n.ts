@@ -72,6 +72,9 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.capsule": "Take {count} capsule(s) per intake",
     "dosePreview.puff": "Take {count} puff(s) per intake",
     "dosePreview.other": "Take {count} {unit} per intake",
+    "frequency.ONCE": "Once",
+    "frequency.TWICE": "Twice",
+    "frequency.THRICE": "Thrice",
 
     validating: "Verifying file details...",
     uploading: "Uploading report...",
@@ -174,6 +177,9 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.capsule": "ખોરાક દીઠ {count} કેપ્સ્યુલ લો",
     "dosePreview.puff": "ખોરાક દીઠ {count} પફ લો",
     "dosePreview.other": "ખોરાક દીઠ {count} {unit} લો",
+    "frequency.ONCE": "એક વાર",
+    "frequency.TWICE": "બે વાર",
+    "frequency.THRICE": "ત્રણ વાર",
 
     validating: "દસ્તાવેજની વિગતો ચકાસાઈ રહી છે...",
     uploading: "મેડિકલ રિપોર્ટ અપલોડ થઈ રહ્યો છે...",
@@ -276,6 +282,9 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.capsule": "प्रति खुराक {count} कैप्सूल लें",
     "dosePreview.puff": "प्रति खुराक {count} पफ लें",
     "dosePreview.other": "प्रति खुराक {count} {unit} लें",
+    "frequency.ONCE": "एक बार",
+    "frequency.TWICE": "दो बार",
+    "frequency.THRICE": "तीन बार",
 
     validating: "दस्तावेज़ विवरण सत्यापित किया जा रहा है...",
     uploading: "रिपोर्ट अपलोड की जा रही है...",
@@ -378,6 +387,9 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.capsule": "प्रति डोस {count} कॅप्सूल घ्या",
     "dosePreview.puff": "प्रति डोस {count} पफ घ्या",
     "dosePreview.other": "प्रति डोस {count} {unit} घ्या",
+    "frequency.ONCE": "एकदा",
+    "frequency.TWICE": "दोनदा",
+    "frequency.THRICE": "तीनदा",
 
     validating: "दस्तऐवज तपशील तपासत आहे...",
     uploading: "अहवाल अपलोड होत आहे...",
@@ -480,6 +492,9 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     "dosePreview.capsule": "ஒரு முறைக்கு {count} காப்ஸ்யூல் உட்கொள்ளவும்",
     "dosePreview.puff": "ஒரு முறைக்கு {count} பஃப்ஸ் உட்கொள்ளவும்",
     "dosePreview.other": "ஒரு முறைக்கு {count} {unit} உட்கொள்ளவும்",
+    "frequency.ONCE": "ஒரு முறை",
+    "frequency.TWICE": "இரு முறை",
+    "frequency.THRICE": "மூன்று முறை",
 
     validating: "ஆவண விவரங்கள் சரிபார்க்கப்படுகின்றன...",
     uploading: "அறிக்கை பதிவேற்றப்படுகிறது...",
