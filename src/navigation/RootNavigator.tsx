@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import CustomDrawerNavigator from "./CustomDrawerNavigator";
 import { useAuth } from "../context/ContextAPI";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import AuthNavigator from "./AuthNavigator";
 import ModernLoader from "../components/shared/Loader";
 import AnimatedSplashScreen from "../components/shared/AnimatedSplashScreen";
 import { useQuery } from "@tanstack/react-query";
 import { getUser } from "../services/userService";
 import OnboardingScreen from "../screens/auth/OnboardingScreen";
+
+export const navigationRef = createNavigationContainerRef<any>();
 
 const RootNavigator = () => {
   const authContext = useAuth();
@@ -34,7 +36,7 @@ const RootNavigator = () => {
   };
   
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       {isSplashVisible ? (
         <AnimatedSplashScreen onAnimationEnd={() => setIsSplashVisible(false)} />
       ) : authContext.isLoading ? (

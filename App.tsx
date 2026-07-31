@@ -19,8 +19,6 @@ import {
 } from "@react-native-firebase/messaging";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DocumentUploadProvider } from "./src/context/DocumentUploadContext";
-import { DocumentUploadProgressOverlay } from "./src/components/document-upload/DocumentUploadProgressOverlay";
-
 // Setting up the notification handler for notifications.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -97,7 +95,6 @@ export default function App() {
               <BottomSheetModalProvider>
                 <DocumentUploadProvider>
                   <RootNavigator />
-                  <DocumentUploadProgressOverlay />
                   <Toast
                     config={toastConfig}
                     topOffset={60}

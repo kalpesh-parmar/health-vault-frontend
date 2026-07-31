@@ -57,7 +57,9 @@ export const DocumentProcessingScreen = () => {
   } = useOcrJobPolling(jobIds);
 
   const handleBackAction = () => {
-    startBackgroundOcr(jobIds, filesInfo);
+    if (!isAllTerminal) {
+      startBackgroundOcr(jobIds, filesInfo);
+    }
     if (fromScreen && fromScreen !== "MultiUpload") {
       navigation.navigate(fromScreen as any);
     } else {
@@ -266,29 +268,6 @@ export const DocumentProcessingScreen = () => {
                     <RejectionReasonText>
                       This file was detected as a non-medical record and could not be processed.
                     </RejectionReasonText>
-                    <RejectionActionsRow>
-                      <RejectionButton
-                        bgColor="#fee2e2"
-                        onPress={() => {
-                          Toast.show({
-                            type: "info",
-                            text1: "Removed",
-                            text2: "Item removed from session queue.",
-                          });
-                        }}
-                      >
-                        <RejectionButtonText textColor="#b91c1c">Remove</RejectionButtonText>
-                      </RejectionButton>
-
-                      <RejectionButton
-                        bgColor="#ccfbf1"
-                        onPress={() => {
-                          navigation.navigate("MultiUpload" as any);
-                        }}
-                      >
-                        <RejectionButtonText textColor="#0f766e">Re-upload</RejectionButtonText>
-                      </RejectionButton>
-                    </RejectionActionsRow>
                   </RejectionContainer>
                 )}
 
@@ -313,6 +292,11 @@ export const DocumentProcessingScreen = () => {
               </DoneButton>
             </DoneBanner>
           )}
+
+          <BackgroundButton onPress={handleBackAction} activeOpacity={0.8}>
+            <Ionicons name="arrow-back-outline" size={16} color="white" style={{ marginRight: 8 }} />
+            <BackgroundButtonText>Move to Background</BackgroundButtonText>
+          </BackgroundButton>
         </ScrollView>
       </ContentContainer>
 
@@ -774,5 +758,28 @@ const ModalFooterButton = styled.TouchableOpacity`
 const ModalFooterButtonText = styled.Text`
   color: #ffffff;
   font-size: 14px;
+  font-weight: 700;
+`;
+
+const BackgroundButton = styled.TouchableOpacity`
+  background-color: #6366f1;
+  padding-vertical: 12px;
+  padding-horizontal: 24px;
+  border-radius: 24px;
+  margin-top: 15px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  elevation: 2;
+  shadow-color: #000;
+  shadow-offset: 0px 2px;
+  shadow-opacity: 0.15;
+  shadow-radius: 3px;
+`;
+
+const BackgroundButtonText = styled.Text`
+  color: white;
+  font-size: 15px;
   font-weight: 700;
 `;

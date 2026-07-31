@@ -27,6 +27,10 @@ import { getFileSource } from "../../services/fileService";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import { getFileExtension } from "../../utils/fileUtils";
 import ErrorBoundary from "../../components/shared/ErrorBoundary";
+import { EditDocumentBottomSheet, formatDocumentType } from "../../components/shared/EditDocumentBottomSheet";
+import { ShareDocumentSheet } from "../../components/shared/ShareDocumentSheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { getSharedLinks, revokeShareLink, ShareLinkResponse } from "../../services/documentService";
 import {
   Gesture,
   GestureDetector,
@@ -38,6 +42,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const SummaryScreen = ({ route, navigation }: any) => {
   const { document } = route.params;
+  const [localDoc, setLocalDoc] = useState(document);
   const [imageSource, setImageSource] = useState<any>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
@@ -45,7 +50,46 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const { isDark, theme } = useAppTheme();
 
   const scrollViewRef = useRef<ScrollView>(null);
+  const editSheetRef = useRef<BottomSheetModal>(null);
+  const shareSheetRef = useRef<BottomSheetModal>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  const [sharedLinks, setSharedLinks] = useState<ShareLinkResponse[]>([]);
+
+  /*
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getSharedLinks(localDoc.id);
+        if (res.status.success && res.data) {
+          setSharedLinks(res.data);
+        }
+      } catch (error) {
+        console.log("Failed to load shared links:", error);
+      }
+    })();
+  }, [localDoc.id]);
+
+  const handleRevokeLink = async (token: string) => {
+    try {
+      const res = await revokeShareLink(localDoc.id, token);
+      if (res.status.success) {
+        Toast.show({
+          type: "success",
+          text1: "Link Revoked",
+          text2: "Share link revoked successfully.",
+        });
+        setSharedLinks((prev) => prev.filter((item) => item.shareToken !== token));
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: "error",
+        text1: "Revocation Failed",
+        text2: error.message || "Failed to revoke share link.",
+      });
+    }
+  };
+  */
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -131,22 +175,22 @@ const SummaryScreen = ({ route, navigation }: any) => {
   useEffect(() => {
     (async () => {
       try {
-        const response = await getFileSource(document?.s3Key);
+        const response = await getFileSource(localDoc?.s3Key);
         setImageSource(
           response ||
-            (document.imageUri ? { uri: document.imageUri } : null),
+            (localDoc.imageUri ? { uri: localDoc.imageUri } : null),
         );
       } catch (e) {
         console.log("Failed to load document image URL", e);
       }
     })();
-  }, []);
+  }, [localDoc?.s3Key, localDoc?.imageUri]);
 
   const handleShare = async () => {
     if (imageSource?.uri) {
       try {
         await Share.share({
-          message: `Check out this medical document: ${document?.fileName}\nURL: ${imageSource.uri}`,
+          message: `Check out this medical document: ${localDoc?.fileName}\nURL: ${imageSource.uri}`,
           url: imageSource.uri,
         });
       } catch (error) {
@@ -183,23 +227,23 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const handleAskQuestion = (question: string) => {
     if (!question.trim()) return;
     navigation.navigate("AIChatScreen", {
-      document: document,
+      document: localDoc,
       initialQuestion: question.trim(),
     });
   };
 
-  const formattedDate = document?.createdAt
-    ? formatUTCDateTime(document.createdAt, "dd-MMM-yyyy")
+  const formattedDate = localDoc?.createdAt
+    ? formatUTCDateTime(localDoc.createdAt, "dd-MMM-yyyy")
     : "N/A";
 
-  const formattedTime = document?.createdAt
-    ? formatUTCDateTime(document.createdAt, "hh:mm a")
+  const formattedTime = localDoc?.createdAt
+    ? formatUTCDateTime(localDoc.createdAt, "hh:mm a")
     : "N/A";
 
-  const formattedSize = document?.fileSize
-    ? document.fileSize >= 1024 * 1024
-      ? (document.fileSize / (1024 * 1024)).toFixed(1) + " MB"
-      : (document.fileSize / 1024).toFixed(1) + " KB"
+  const formattedSize = localDoc?.fileSize
+    ? localDoc.fileSize >= 1024 * 1024
+      ? (localDoc.fileSize / (1024 * 1024)).toFixed(1) + " MB"
+      : (localDoc.fileSize / 1024).toFixed(1) + " KB"
     : "N/A";
 
   return (
@@ -209,7 +253,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
         showModal={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         mode="Delete Document"
-        documentId={document?.id}
+        documentId={localDoc?.id}
       />
 
       <Header>
@@ -220,6 +264,22 @@ const SummaryScreen = ({ route, navigation }: any) => {
             color={theme.colors.textPrimary}
           />
         </TouchableOpacity>
+        <HeaderRight>
+          <HeaderIconButton onPress={() => shareSheetRef.current?.present()}>
+            <Ionicons
+              name="share-outline"
+              size={22}
+              color={theme.colors.textPrimary}
+            />
+          </HeaderIconButton>
+          <HeaderIconButton onPress={() => editSheetRef.current?.present()}>
+            <Ionicons
+              name="create-outline"
+              size={22}
+              color={theme.colors.textPrimary}
+            />
+          </HeaderIconButton>
+        </HeaderRight>
       </Header>
 
       <ScrollView
@@ -232,19 +292,19 @@ const SummaryScreen = ({ route, navigation }: any) => {
           <DocIconBox>
             <MaterialCommunityIcons
               name={
-                getFileExtension(document?.fileName) === "pdf"
+                getFileExtension(localDoc?.fileName) === "pdf"
                   ? "file-pdf-box"
                   : "file-image-outline"
               }
               size={34}
               color={
-                getFileExtension(document?.fileName) === "pdf"
+                getFileExtension(localDoc?.fileName) === "pdf"
                   ? "#ef4444"
                   : "#3b82f6"
               }
             />
             <DocIconLabel>
-              {String(getFileExtension(document?.fileName)).toUpperCase()}
+              {String(getFileExtension(localDoc?.fileName)).toUpperCase()}
             </DocIconLabel>
           </DocIconBox>
           <View style={{ flex: 1, marginLeft: 14 }}>
@@ -256,10 +316,10 @@ const SummaryScreen = ({ route, navigation }: any) => {
               }}
               numberOfLines={1}
             >
-              {document?.fileName}
+              {localDoc?.fileName}
             </Text>
             <Badge>
-              <BadgeText>{document?.documentType || "Other"}</BadgeText>
+              <BadgeText>{formatDocumentType(localDoc?.documentType)}</BadgeText>
             </Badge>
             <Text
               style={{
@@ -279,7 +339,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
           <DetailRow>
             <DetailKey>Document Type</DetailKey>
-            <DetailValue>{document?.documentType || "Other"}</DetailValue>
+            <DetailValue>{formatDocumentType(localDoc?.documentType)}</DetailValue>
           </DetailRow>
 
           <DetailRow>
@@ -302,7 +362,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
           <DetailRow>
             <DetailKey>Notes</DetailKey>
             <DetailValue>
-              {document?.notes || "No notes available"}
+              {localDoc?.notes || "No notes available"}
             </DetailValue>
           </DetailRow>
 
@@ -312,12 +372,12 @@ const SummaryScreen = ({ route, navigation }: any) => {
               <TagContainer>
                 <TagPill>
                   <TagText>
-                    {document?.documentType || "Health Document"}
+                    {localDoc?.documentType || "Health Document"}
                   </TagText>
                 </TagPill>
                 <TagPill>
                   <TagText>
-                    {new Date(document?.createdAt).getFullYear().toString()}
+                    {new Date(localDoc?.createdAt).getFullYear().toString()}
                   </TagText>
                 </TagPill>
               </TagContainer>
@@ -334,7 +394,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
               }}
               numberOfLines={2}
             >
-              {document?.fileName}
+              {localDoc?.fileName}
             </DetailValue>
           </DetailRow>
         </Card>
@@ -374,12 +434,39 @@ const SummaryScreen = ({ route, navigation }: any) => {
                 <GreenButtonText>View Fullscreen</GreenButtonText>
                 <Ionicons name="expand" size={14} color="white" />
               </GreenButton>
-              <CircleIconButton activeOpacity={0.7} onPress={handleShare}>
-                <Ionicons name="share-outline" size={16} color="#10b981" />
-              </CircleIconButton>
             </ActionRow>
           </ThumbnailContainer>
         </Card>
+
+        {/* Shared Links Card
+        {sharedLinks.length > 0 && (
+          <Card>
+            <CardTitle>Shared Links</CardTitle>
+            {sharedLinks.map((link) => {
+              const expiryDate = new Date(link.expiresAt);
+              const isExpired = expiryDate.getTime() < Date.now();
+              return (
+                <SharedLinkRow key={link.shareToken}>
+                  <View style={{ flex: 1, paddingVertical: 4 }}>
+                    <LinkText numberOfLines={1}>
+                      {link.shareUrl}
+                    </LinkText>
+                    <ExpiryText isExpired={isExpired}>
+                      {isExpired ? "Expired" : "Expires"}: {formatUTCDateTime(link.expiresAt, "dd-MMM-yyyy hh:mm a")}
+                    </ExpiryText>
+                  </View>
+                  <RevokeButton
+                    onPress={() => handleRevokeLink(link.shareToken)}
+                    activeOpacity={0.7}
+                  >
+                    <RevokeButtonText>Revoke</RevokeButtonText>
+                  </RevokeButton>
+                </SharedLinkRow>
+              );
+            })}
+          </Card>
+        )}
+        */}
 
         {/* Questions You Can Ask Card */}
         <Card style={{ marginBottom: 30 }}>
@@ -486,6 +573,28 @@ const SummaryScreen = ({ route, navigation }: any) => {
           </ModalBackdrop>
         </GestureHandlerRootView>
       </Modal>
+
+      <EditDocumentBottomSheet
+        ref={editSheetRef}
+        document={localDoc}
+        onSuccess={(updatedDoc) => {
+          setLocalDoc(updatedDoc);
+        }}
+        onClose={() => {
+          editSheetRef.current?.dismiss();
+        }}
+      />
+
+      <ShareDocumentSheet
+        ref={shareSheetRef}
+        document={localDoc}
+        onLinkCreated={(newLink) => {
+          setSharedLinks((prev) => [newLink, ...prev]);
+        }}
+        onClose={() => {
+          shareSheetRef.current?.dismiss();
+        }}
+      />
     </Container>
   );
 };
@@ -746,4 +855,47 @@ const CloseButton = styled.TouchableOpacity`
   position: absolute;
   top: 60px;
   z-index: 100;
+`;
+
+const HeaderRight = styled.View`
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+`;
+
+const HeaderIconButton = styled.TouchableOpacity`
+  padding: 4px;
+`;
+
+const SharedLinkRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-vertical: 8px;
+`;
+
+const LinkText = styled.Text`
+  font-size: 13px;
+  font-family: monospace;
+  color: ${(props: any) => props.theme.colors.textSecondary};
+`;
+
+const ExpiryText = styled.Text<{ isExpired: boolean }>`
+  font-size: 11px;
+  color: ${({ isExpired }: { isExpired: boolean }) => (isExpired ? "#ef4444" : "#64748b")};
+  margin-top: 4px;
+`;
+
+const RevokeButton = styled.TouchableOpacity`
+  padding-horizontal: 12px;
+  padding-vertical: 6px;
+  border-radius: 6px;
+  background-color: #fee2e2;
+  margin-left: 10px;
+`;
+
+const RevokeButtonText = styled.Text`
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 700;
 `;

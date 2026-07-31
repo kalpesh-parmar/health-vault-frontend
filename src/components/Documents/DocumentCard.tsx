@@ -11,12 +11,15 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { getFileExtension } from "../../utils/fileUtils";
 import Toast from "react-native-toast-message";
 import { formatUTCDateTime } from "../../utils/dateFormatter";
+import { formatDocumentType } from "../shared/EditDocumentBottomSheet";
 
 interface Props {
   document: MedicalDocument;
   selected?: boolean;
   onSelect?: (id: string) => void;
   isSelectionMode?: boolean;
+  onEdit?: (document: MedicalDocument) => void;
+  onShare?: (document: MedicalDocument) => void;
 }
 
 const getFileStyle = (ext: string, isDark: boolean) => {
@@ -42,7 +45,7 @@ const getFileStyle = (ext: string, isDark: boolean) => {
   };
 };
 
-const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMode = false }: Props) => {
+const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMode = false, onEdit, onShare }: Props) => {
   const navigation = useNavigation<NativeStackNavigationProp<DocumentsStackParamList>>();
   const { isDark } = useAppTheme();
 
@@ -63,10 +66,14 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
     navigation.navigate("DocumentSummary", { document } );
   }, [navigation, document]);
 
-  const handleNavigateToEdit = useCallback(() => {
+  const handleEditPress = useCallback(() => {
     setMenuVisible(false);
-    navigation.navigate("EditDocument", { document });
-  }, [navigation, document]);
+    if (onEdit) {
+      onEdit(document);
+    } else {
+      navigation.navigate("EditDocument", { document });
+    }
+  }, [navigation, document, onEdit]);
 
   const handleDownload = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
@@ -80,12 +87,16 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
   const handleShare = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
     setMenuVisible(false);
-    Toast.show({
-      type: "info",
-      position: "top",
-      text1: "Feature will be implemented soon.",
-    });
-  }, []);
+    if (onShare) {
+      onShare(document);
+    } else {
+      Toast.show({
+        type: "info",
+        position: "top",
+        text1: "Feature will be implemented soon.",
+      });
+    }
+  }, [document, onShare]);
 
   const handleCheckboxPress = useCallback(
     (e: GestureResponderEvent) => {
@@ -134,7 +145,7 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
         : (document.fileSize / 1024).toFixed(1) + " KB"
       : docSize;
     parts.push(sizeStr);
-    return parts.join("  •  ");
+    return parts.join(" • ");
   }, [formattedDate, formattedTime, document?.fileSize, docSize]);
 
   const ext = getFileExtension(document?.fileName) || "doc";
@@ -176,13 +187,15 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
             <DocTitle numberOfLines={1} style={{ color: isDark ? "#f8fafc" : "#1e293b", flexShrink: 1 }}>
               {document?.fileName || "Medical Report"}
             </DocTitle>
-            {document?.category ? (
+            {document?.category || document?.documentType ? (
               <CategoryBadge isDark={isDark}>
-                <CategoryText isDark={isDark}>{document.category}</CategoryText>
+                <CategoryText isDark={isDark}>
+                  {formatDocumentType(document.category || document.documentType)}
+                </CategoryText>
               </CategoryBadge>
             ) : null}
           </View>
-          <DocMeta>{metaText}</DocMeta>
+          <DocMeta numberOfLines={1}>{metaText}</DocMeta>
           {document?.notes ? (
             <DocNotes numberOfLines={1}>
               <Text style={{ fontWeight: "bold", color: isDark ? "#cbd5e1" : "#475569" }}>Notes: </Text>
@@ -192,9 +205,6 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
         </DocInfo>
 
         <RightButtonsContainer>
-          <RightIconButton onPress={handleDownload}>
-            <Ionicons name="download-outline" size={20} color={isDark ? "#cbd5e1" : "#64748b"} />
-          </RightIconButton>
           <View ref={moreButtonRef} collapsable={false}>
             <RightIconButton onPress={handleMorePress}>
               <Ionicons name="ellipsis-vertical" size={20} color={isDark ? "#cbd5e1" : "#64748b"} />
@@ -206,9 +216,17 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
       <Modal visible={menuVisible} transparent animationType="fade">
         <Overlay onPress={() => setMenuVisible(false)} />
         <MenuContainer style={{ top: menuPosition.y, left: menuPosition.x }}>
-          <MenuItem onPress={handleNavigateToEdit}>
+          <MenuItem onPress={handleEditPress}>
             <Ionicons name="create-outline" size={18} color="#3b82f6" />
             <MenuText>Edit</MenuText>
+          </MenuItem>
+          <Divider />
+          <MenuItem onPress={(e: GestureResponderEvent) => {
+            setMenuVisible(false);
+            handleDownload(e);
+          }}>
+            <Ionicons name="download-outline" size={18} color="#64748b" />
+            <MenuText>Download</MenuText>
           </MenuItem>
           <Divider />
           <MenuItem onPress={handleShare}>
@@ -303,9 +321,9 @@ const CategoryText = styled.Text<{ isDark: boolean }>`
 `;
 
 const DocMeta = styled.Text`
-  font-size: 12px;
+  font-size: 10px;
   color: #94a3b8;
-  margin-top: 6px;
+  margin-top: 4px;
 `;
 
 const DocNotes = styled.Text`

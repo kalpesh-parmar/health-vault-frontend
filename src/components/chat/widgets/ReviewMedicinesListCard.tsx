@@ -5,6 +5,27 @@ import { widgetStyles as styles } from "./WidgetStyles";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 import { parseChosenJson } from "./MedicineHelpers";
 
+const formatFoodContext = (val: any): string => {
+  if (!val) return "None";
+  const str = String(val).replace(/_/g, " ").toLowerCase();
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+const formatStartDate = (val: any): string => {
+  if (!val) return "None";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch {
+    return String(val);
+  }
+};
+
 export interface ReviewMedicinesListCardProps {
   localMedicines: any[];
   setLocalMedicines: React.Dispatch<React.SetStateAction<any[]>>;
@@ -167,7 +188,6 @@ export function ReviewMedicinesListCard({
 
   return (
     <View
-      pointerEvents={readOnly ? "none" : "auto"}
       style={[
         styles.medListCard,
         {
@@ -296,10 +316,28 @@ export function ReviewMedicinesListCard({
                   }}
                 >
                   <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 12 }}>
+                    {/* Medicine Name */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="medical-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Medicine Name</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }} numberOfLines={2}>{med.name || "None"}</Text>
+                      </View>
+                    </View>
+
+                    {/* Type */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="layers-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Type</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.type || "Tablet"}</Text>
+                      </View>
+                    </View>
+
                     {/* Dose */}
                     <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="disc-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Dose</Text>
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{dosageStr}</Text>
                       </View>
@@ -308,17 +346,17 @@ export function ReviewMedicinesListCard({
                     {/* Frequency */}
                     <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="alarm-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Frequency</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.frequency}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.frequency || "None"}</Text>
                       </View>
                     </View>
 
                     {/* Time / Schedule */}
                     <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="time-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Time</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Schedule</Text>
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{timeStr}</Text>
                       </View>
                     </View>
@@ -326,42 +364,71 @@ export function ReviewMedicinesListCard({
                     {/* Total Quantity */}
                     <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="calculator-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Total Quantity</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.total_quantity || "None"}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.total_quantity !== undefined ? med.total_quantity : (med.totalQuantity || "None")}</Text>
+                      </View>
+                    </View>
+
+                    {/* Refill Alert */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="notifications-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Refill Alert</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
+                          {(med.refill_alert || med.refillAlert) ? "Enabled" : "Disabled"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Food Context */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="restaurant-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Food Context</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
+                          {formatFoodContext(med.foodContext || med.medicationSchedule?.foodContext || med.foodFrequency)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Start Date */}
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="calendar-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Start Date</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
+                          {formatStartDate(med.startDate)}
+                        </Text>
                       </View>
                     </View>
 
                     {/* Prescribed By */}
-                    {(med.prescribedBy || med.prescribed_by) ? (
-                      <View style={{ width: "100%", flexDirection: "row", alignItems: "center", marginTop: 4 }}>
-                        <Ionicons name="person-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                        <View>
-                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Prescribed By</Text>
-                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.prescribedBy || med.prescribed_by}</Text>
-                        </View>
+                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="person-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Prescribed By</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }} numberOfLines={1}>{med.prescribedBy || med.prescribed_by || "None"}</Text>
                       </View>
-                    ) : null}
+                    </View>
                   </View>
 
                   {/* Notes / Special Instructions */}
-                  {med.notes ? (
-                    <View
-                      style={{
-                        marginTop: 12,
-                        padding: 10,
-                        backgroundColor: "#f1f5f9",
-                        borderRadius: 8,
-                        borderLeftWidth: 3,
-                        borderLeftColor: "#10b981",
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, color: "#334155", lineHeight: 15 }}>
-                        <Text style={{ fontWeight: "bold", color: "#1e293b" }}>Notes: </Text>
-                        {med.notes}
-                      </Text>
-                    </View>
-                  ) : null}
+                  <View
+                    style={{
+                      marginTop: 12,
+                      padding: 10,
+                      backgroundColor: "#f1f5f9",
+                      borderRadius: 8,
+                      borderLeftWidth: 3,
+                      borderLeftColor: "#10b981",
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: "#334155", lineHeight: 15 }}>
+                      <Text style={{ fontWeight: "bold", color: "#1e293b" }}>Notes: </Text>
+                      {med.notes || "None"}
+                    </Text>
+                  </View>
                 </View>
               )}
             </View>

@@ -17,6 +17,8 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 
 import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
+import { EditDocumentBottomSheet } from "../../components/shared/EditDocumentBottomSheet";
+import { ShareDocumentSheet } from "../../components/shared/ShareDocumentSheet";
 import { EmptyDocuments } from "../../components/shared/DefensiveStates";
 import CameraModal from "../../components/shared/CameraModal";
 import Loader from "../../components/shared/Loader";
@@ -84,8 +86,13 @@ const DocumentList = () => {
   const { isDark } = useAppTheme();
   const refRBSheet = useRef<BottomSheetModal>(null);
   const filterSheetRef = useRef<BottomSheetModal>(null);
+  const editSheetRef = useRef<BottomSheetModal>(null);
+  const shareSheetRef = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
   const { userId } = useAuth();
+
+  const [selectedEditDoc, setSelectedEditDoc] = useState<MedicalDocument | null>(null);
+  const [selectedShareDoc, setSelectedShareDoc] = useState<MedicalDocument | null>(null);
   const [activeTab, setActiveTab] = useState<string>("All");
   const [sortOption, setSortOption] = useState<string>("date_desc");
   const [searchQuery, setSearchQuery] = useState("");
@@ -255,6 +262,14 @@ const DocumentList = () => {
           selected={isSelected}
           onSelect={handleSelectDocument}
           isSelectionMode={isSelectionMode}
+          onEdit={(doc) => {
+            setSelectedEditDoc(doc);
+            editSheetRef.current?.present();
+          }}
+          onShare={(doc) => {
+            setSelectedShareDoc(doc);
+            shareSheetRef.current?.present();
+          }}
         />
       );
     },
@@ -446,6 +461,27 @@ const DocumentList = () => {
       />
 
       <DocumentUploadBottomSheet ref={refRBSheet} />
+
+      <EditDocumentBottomSheet
+        ref={editSheetRef}
+        document={selectedEditDoc}
+        onSuccess={() => {
+          setSelectedEditDoc(null);
+        }}
+        onClose={() => {
+          editSheetRef.current?.dismiss();
+          setSelectedEditDoc(null);
+        }}
+      />
+
+      <ShareDocumentSheet
+        ref={shareSheetRef}
+        document={selectedShareDoc}
+        onClose={() => {
+          shareSheetRef.current?.dismiss();
+          setSelectedShareDoc(null);
+        }}
+      />
 
       <FilterBottomSheet
         ref={filterSheetRef}

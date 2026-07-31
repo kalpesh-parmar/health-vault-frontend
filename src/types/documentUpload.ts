@@ -27,6 +27,8 @@ export const DOCUMENT_TYPE_OPTIONS = [
   "Surgery Report",
   "Vaccination Record",
   "Medical Certificate",
+  "Medical Document",
+  "Medication",
   "Other Medical Document",
 ] as const;
 

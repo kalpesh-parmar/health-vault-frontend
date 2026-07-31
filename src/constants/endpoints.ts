@@ -29,7 +29,10 @@ export const DOCUMENT_ENDPOINTS = {
   GET_DOCUMENT: "/documents/{id}",
   GET_SIGNED_URL: "/documents/download-url",
   DELETE_DOCUMENT: "/documents/{id}",
-  UPDATE_DOCUMENT: "/documents/{id}",
+  UPDATE_DOCUMENT: "/documents/update/{id}",
+  SHARE_DOCUMENT: "/documents/{id}/share",
+  REVOKE_SHARE_LINK: "/documents/{id}/share/revoke",
+  GET_SHARED_LINKS: "/documents/{id}/shares",
   FILTER_AND_SORT: "/documents/list", // Filter and sort API.
   NEW_OCR_STATUS: "/v1/ocr/status/{documentId}",
   NEW_OCR_CANCEL: "/v1/ocr/cancel/{documentId}",

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Keyboard,
 } from "react-native";
 import styled from "styled-components/native";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
@@ -24,6 +25,74 @@ import CameraModal from "../shared/CameraModal";
 import { capturePhoto } from "../../services/cameraServices";
 import { SelectedDocument, DOCUMENT_TYPE_OPTIONS } from "../../types/documentUpload";
 
+interface EditFileCardProps {
+  file: SelectedDocument;
+  isDark: boolean;
+  onCancel: () => void;
+  onSave: (newName: string) => void;
+}
+
+const EditFileCard = ({ file, isDark, onCancel, onSave }: EditFileCardProps) => {
+  const [editName, setEditName] = useState(file.displayName);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  const handleSave = () => {
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      setNameError("Document name cannot be empty.");
+      return;
+    }
+    onSave(trimmed);
+  };
+
+  return (
+    <EditFormCard isDark={isDark}>
+      <LabelText>Original File Name</LabelText>
+      <OriginalNameText isDark={isDark} numberOfLines={1}>
+        {file.originalName}
+      </OriginalNameText>
+
+      <LabelText style={{ marginTop: 12 }}>Document Name</LabelText>
+      <InputWrapper style={{ borderColor: nameError ? "#ef4444" : "#cbd5e1" }}>
+        <NameInput
+          value={editName}
+          onChangeText={(text: string) => {
+            const hasSpaces = /\s/.test(text);
+            const sanitized = text.replace(/\s/g, "");
+            setEditName(sanitized);
+            if (hasSpaces) {
+              setNameError("Spaces are not allowed in document name.");
+            } else if (!sanitized) {
+              setNameError("Document name cannot be empty.");
+            } else {
+              setNameError(null);
+            }
+          }}
+          placeholder="Enter document name"
+          placeholderTextColor="#94a3b8"
+          isDark={isDark}
+        />
+      </InputWrapper>
+      {nameError ? (
+        <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4, fontWeight: "500" }}>
+          {nameError}
+        </Text>
+      ) : null}
+
+      <ActionButtonsRow>
+        <CancelEditBtn onPress={onCancel}>
+          <CancelEditBtnText>Cancel</CancelEditBtnText>
+        </CancelEditBtn>
+
+        <SaveEditBtn onPress={handleSave}>
+          <Ionicons name="save-outline" size={16} color="white" style={{ marginRight: 6 }} />
+          <SaveEditBtnText>Save</SaveEditBtnText>
+        </SaveEditBtn>
+      </ActionButtonsRow>
+    </EditFormCard>
+  );
+};
+
 interface DocumentUploadBottomSheetProps {
   fromScreen?: string;
 }
@@ -32,8 +101,34 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
   const { theme, isDark } = useAppTheme();
   const { userId } = useAuth();
   const navigation = useNavigation<any>();
-  const bottomPadding = useBottomBarPadding(40, 20);
   const cameraRef = useRef<any>(null);
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const bottomPadding = useBottomBarPadding(40, 30);
+  const totalBottomPadding = keyboardHeight > 0
+    ? keyboardHeight + 20
+    : bottomPadding;
 
   const {
     selectedFiles,
@@ -52,9 +147,6 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
 
   // Editing file states
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editType, setEditType] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -192,22 +284,12 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
 
   const startEditing = (file: SelectedDocument) => {
     setEditingId(file.id);
-    setEditName(file.displayName);
-    setEditType(file.documentType);
-    setIsDropdownOpen(false);
   };
 
-  const saveEditing = () => {
-    if (!editName.trim()) {
-      Toast.show({
-        type: "error",
-        text1: "Required Field",
-        text2: "Document name cannot be empty.",
-      });
-      return;
-    }
-    if (editingId) {
-      updateSelectedFile(editingId, editName.trim(), editType);
+  const saveEditing = (fileId: string, newName: string) => {
+    const file = selectedFiles.find((f) => f.id === fileId);
+    if (file) {
+      updateSelectedFile(fileId, newName, file.documentType);
       setEditingId(null);
     }
   };
@@ -288,7 +370,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
       >
         <BottomSheetScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPadding }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: totalBottomPadding }}
         >
           <HeaderSection>
             <SheetTitle isDark={isDark}>Add Document</SheetTitle>
@@ -329,59 +411,13 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
 
                 if (isEditing) {
                   return (
-                    <EditFormCard key={file.id} isDark={isDark}>
-                      <LabelText>Original File Name</LabelText>
-                      <OriginalNameText isDark={isDark} numberOfLines={1}>
-                        {file.originalName}
-                      </OriginalNameText>
-
-                      <LabelText style={{ marginTop: 12 }}>Document Name</LabelText>
-                      <InputWrapper>
-                        <NameInput
-                          value={editName}
-                          onChangeText={setEditName}
-                          placeholder="Enter document name"
-                          placeholderTextColor="#94a3b8"
-                          isDark={isDark}
-                        />
-                      </InputWrapper>
-
-                      <LabelText style={{ marginTop: 12 }}>Document Type</LabelText>
-                      <DropdownSelector onPress={() => setIsDropdownOpen(!isDropdownOpen)} isDark={isDark}>
-                        <DropdownSelectorText isDark={isDark}>{editType}</DropdownSelectorText>
-                        <Feather name={isDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={isDark ? "#cbd5e1" : "#475569"} />
-                      </DropdownSelector>
-
-                      {isDropdownOpen && (
-                        <DropdownList isDark={isDark}>
-                          {DOCUMENT_TYPE_OPTIONS.map((opt) => (
-                            <DropdownItem
-                              key={opt}
-                              onPress={() => {
-                                setEditType(opt);
-                                setIsDropdownOpen(false);
-                              }}
-                              isDark={isDark}
-                            >
-                              <DropdownItemText isDark={isDark} active={editType === opt}>
-                                {opt}
-                              </DropdownItemText>
-                            </DropdownItem>
-                          ))}
-                        </DropdownList>
-                      )}
-
-                      <ActionButtonsRow>
-                        <CancelEditBtn onPress={() => setEditingId(null)}>
-                          <CancelEditBtnText>Cancel</CancelEditBtnText>
-                        </CancelEditBtn>
-
-                        <SaveEditBtn onPress={saveEditing}>
-                          <Ionicons name="save-outline" size={16} color="white" style={{ marginRight: 6 }} />
-                          <SaveEditBtnText>Save</SaveEditBtnText>
-                        </SaveEditBtn>
-                      </ActionButtonsRow>
-                    </EditFormCard>
+                    <EditFileCard
+                      key={file.id}
+                      file={file}
+                      isDark={isDark}
+                      onCancel={() => setEditingId(null)}
+                      onSave={(newName) => saveEditing(file.id, newName)}
+                    />
                   );
                 }
 

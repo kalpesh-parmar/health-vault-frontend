@@ -4,7 +4,7 @@ import apiClient from "../services/apiClient";
 import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
 import { SelectedDocument } from "../types/documentUpload";
 import { queryClient } from "../config/queryClient";
-import { uploadPatientDocuments, startOcrJob, getOcrJob, cancelOcr } from "../services/documentService";
+import { uploadPatientDocuments, startOcrJob, getOcrJob, cancelOcr, getOcrJobResult } from "../services/documentService";
 
 export interface UploadingDoc {
   id: string;
@@ -31,6 +31,16 @@ interface DocumentUploadContextType {
   setUploadingDocs: React.Dispatch<React.SetStateAction<UploadingDoc[]>>;
   startBackgroundOcr: (jobIds: string[], filesInfo: any[]) => void;
   cancelAllProcessing: () => Promise<void>;
+  completedBatch: {
+    jobIds: string[];
+    filesInfo: { jobId: string; fileName: string; fileKey: string }[];
+    completedCount: number;
+    failedCount: number;
+    medicineCount: number;
+  } | null;
+  clearCompletedBatch: () => void;
+  isPillHidden: boolean;
+  setIsPillHidden: (val: boolean) => void;
 }
 
 const DocumentUploadContext = createContext<DocumentUploadContextType | undefined>(undefined);
@@ -94,6 +104,19 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const [uploadingDocs, setUploadingDocs] = useState<UploadingDoc[]>([]);
   const [isProgressExpanded, setIsProgressExpanded] = useState(false);
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
+  const [completedBatch, setCompletedBatch] = useState<{
+    jobIds: string[];
+    filesInfo: { jobId: string; fileName: string; fileKey: string }[];
+    completedCount: number;
+    failedCount: number;
+    medicineCount: number;
+  } | null>(null);
+  const [isPillHidden, setIsPillHidden] = useState(false);
+
+  const clearCompletedBatch = useCallback(() => {
+    setCompletedBatch(null);
+  }, []);
+
   const isPollingRef = useRef(false);
 
   useEffect(() => {
@@ -154,6 +177,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         );
 
         let allFinished = true;
+        let computedNext: UploadingDoc[] = [];
 
         setUploadingDocs((prev) => {
           if (prev.length === 0) {
@@ -199,45 +223,86 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             return doc;
           });
 
-          if (allFinished) {
-            isPollingRef.current = false;
-            setIsUploading(false);
-            setIsProgressExpanded(false); // collapse animately on finish
-
-            queryClient.invalidateQueries({ queryKey: ["documents"] });
-            queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
-            queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
-
-            const hasFailures = next.some(
-              (d) => d.status === "FAILED" || d.status === "failed" || d.progress < 0
-            );
-            if (hasFailures) {
-              Toast.show({
-                type: "error",
-                text1: "Processing Finished with Errors",
-                text2: "Some documents failed to process.",
-              });
-            } else {
-              Toast.show({
-                type: "success",
-                text1: "Processing Complete",
-                text2: "All documents processed successfully.",
-              });
-              // Auto-dismiss list after 2 seconds
-              setTimeout(() => {
-                setUploadingDocs((current) => {
-                  const stillHasFailures = current.some(
-                    (d) => d.status === "FAILED" || d.status === "failed" || d.progress < 0
-                  );
-                  if (stillHasFailures) return current;
-                  return [];
-                });
-              }, 2000);
-            }
-          }
-
+          computedNext = next;
           return next;
         });
+
+        if (computedNext.length > 0 && allFinished) {
+          isPollingRef.current = false;
+          setIsUploading(false);
+          setIsProgressExpanded(false); // collapse animately on finish
+
+          queryClient.invalidateQueries({ queryKey: ["documents"] });
+          queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
+          queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
+
+          const hasFailures = computedNext.some(
+            (d) => d.status === "FAILED" || d.status === "failed" || d.progress < 0
+          );
+          if (hasFailures) {
+            Toast.show({
+              type: "error",
+              text1: "Processing Finished with Errors",
+              text2: "Some documents failed to process.",
+            });
+            setUploadingDocs([]);
+          } else {
+            (async () => {
+              let medicineCount = 0;
+              const completedCount = computedNext.filter(
+                (d) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
+              ).length;
+              const failedCount = computedNext.filter(
+                (d) => d.status === "FAILED" || d.status === "failed" || d.progress < 0
+              ).length;
+
+              await Promise.all(
+                computedNext.map(async (doc) => {
+                  if (doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success") {
+                    try {
+                      const res = await getOcrJobResult(doc.id);
+                      const data = res?.data || res;
+                      const meds = data?.extractedStructuredData?.medications || data?.extractedStructuredData?.medicines;
+                      if (Array.isArray(meds)) {
+                        medicineCount += meds.length;
+                      }
+                    } catch (e) {
+                      console.log("Failed to fetch medicine count for job", doc.id, e);
+                    }
+                  }
+                })
+              );
+
+              setCompletedBatch({
+                jobIds: computedNext.map((d) => d.id),
+                filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
+                completedCount,
+                failedCount,
+                medicineCount,
+              });
+
+              setUploadingDocs([]);
+
+              Toast.show({
+                type: "success",
+                text1: "Analysis Complete!",
+                text2: `We found ${medicineCount} medicine${medicineCount === 1 ? "" : "s"} in your documents.`,
+                props: {
+                  buttonText: "Review Now",
+                  onPressButton: () => {
+                    const { navigationRef } = require("../navigation/RootNavigator");
+                    if (navigationRef.isReady()) {
+                      navigationRef.navigate("DocumentProcessing", {
+                        jobIds: computedNext.map((d) => d.id),
+                        filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
+                      });
+                    }
+                  },
+                },
+              });
+            })();
+          }
+        }
       } catch (err) {
         console.warn("[Polling OCR Status Error]", err);
       }
@@ -254,6 +319,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     if (selectedFiles.length === 0) return;
     setIsUploading(true);
     setUploadingDocs([]);
+    setIsPillHidden(false);
+    setCompletedBatch(null);
 
     try {
       // 1. Upload patient documents
@@ -331,6 +398,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       };
     });
     setUploadingDocs(docs);
+    setIsPillHidden(false);
+    setCompletedBatch(null);
     setIsProgressExpanded(false); // starts collapsed
     startPolling(docs);
   }, [startPolling]);
@@ -373,6 +442,10 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         setUploadingDocs,
         startBackgroundOcr,
         cancelAllProcessing,
+        completedBatch,
+        clearCompletedBatch,
+        isPillHidden,
+        setIsPillHidden,
       }}
     >
       {children}

@@ -730,7 +730,7 @@ const AIChatScreen = ({ route }: any) => {
                   );
                 };
 
-                if (isHistorical && isComplexStep) {
+                if (isComplexStep) {
                   if (item.action === "RESOLVE_PROFILE_SOURCE") {
                     return renderAssistantPrompt(
                       <ResolveProfileSourceCard
