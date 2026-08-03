@@ -316,6 +316,36 @@ apiClient.interceptors.response.use(
       pendingRequestControllers.delete(config.abortController);
     }
 
+    // Decode document names inside all response payloads to show spaces instead of %20
+    if (response.data) {
+      const decodeNames = (obj: any): any => {
+        if (!obj || typeof obj !== "object") return obj;
+        if (Array.isArray(obj)) {
+          return obj.map(decodeNames);
+        }
+        
+        const res: any = {};
+        for (const key of Object.keys(obj)) {
+          let value = obj[key];
+          if (typeof value === "string") {
+            if ((key === "fileName" || key === "name" || key === "originalFileName" || key === "originalName" || key === "fileKey" || key === "displayName" || key === "documentName") && value.includes("%20")) {
+              try {
+                value = decodeURIComponent(value).replace(/%20/g, " ");
+              } catch (e) {
+                value = value.replace(/%20/g, " ");
+              }
+            }
+          } else if (typeof value === "object") {
+            value = decodeNames(value);
+          }
+          res[key] = value;
+        }
+        return res;
+      };
+      
+      response.data = decodeNames(response.data);
+    }
+
     const enabled = ENABLE_API_LOGS;
     if (enabled && config && config.metadata) {
       const duration = Date.now() - config.metadata.startTime;

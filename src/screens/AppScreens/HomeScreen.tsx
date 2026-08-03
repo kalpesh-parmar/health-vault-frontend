@@ -468,7 +468,7 @@ const HomeScreen = () => {
                 </View>
                 <ReviewNowBtn
                   onPress={() => {
-                    navigation.navigate("DocumentProcessing", {
+                    navigation.navigate("ReviewMedicines", {
                       jobIds: completedBatch.jobIds,
                       filesInfo: completedBatch.filesInfo,
                     });

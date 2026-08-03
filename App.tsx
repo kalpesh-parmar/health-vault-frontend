@@ -19,6 +19,7 @@ import {
 } from "@react-native-firebase/messaging";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DocumentUploadProvider } from "./src/context/DocumentUploadContext";
+import { MedicationReviewProvider } from "./src/context/MedicationReviewContext";
 // Setting up the notification handler for notifications.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -94,7 +95,9 @@ export default function App() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <BottomSheetModalProvider>
                 <DocumentUploadProvider>
-                  <RootNavigator />
+                  <MedicationReviewProvider>
+                    <RootNavigator />
+                  </MedicationReviewProvider>
                   <Toast
                     config={toastConfig}
                     topOffset={60}

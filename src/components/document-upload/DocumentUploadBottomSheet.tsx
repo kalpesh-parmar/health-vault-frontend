@@ -1,16 +1,13 @@
-import React, { useRef, useState, useCallback, useEffect } from "react";
+import React, { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
   Platform,
   ActivityIndicator,
   Keyboard,
 } from "react-native";
 import styled from "styled-components/native";
-import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView } from "@gorhom/bottom-sheet";
 import { MaterialCommunityIcons, Feather, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -57,12 +54,8 @@ const EditFileCard = ({ file, isDark, onCancel, onSave }: EditFileCardProps) => 
         <NameInput
           value={editName}
           onChangeText={(text: string) => {
-            const hasSpaces = /\s/.test(text);
-            const sanitized = text.replace(/\s/g, "");
-            setEditName(sanitized);
-            if (hasSpaces) {
-              setNameError("Spaces are not allowed in document name.");
-            } else if (!sanitized) {
+            setEditName(text);
+            if (!text.trim()) {
               setNameError("Document name cannot be empty.");
             } else {
               setNameError(null);
@@ -104,6 +97,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
   const cameraRef = useRef<any>(null);
 
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // In v5, dynamic sizing is handled natively by enableDynamicSizing={true} prop
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -127,7 +121,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
 
   const bottomPadding = useBottomBarPadding(40, 30);
   const totalBottomPadding = keyboardHeight > 0
-    ? keyboardHeight + 20
+    ? keyboardHeight + 140
     : bottomPadding;
 
   const {
@@ -172,15 +166,22 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
         return;
       }
 
-      const files = result.assets.map((asset) => ({
-        id: Math.random().toString(36).substring(7),
-        uri: asset.uri,
-        originalName: asset.name,
-        displayName: asset.name.replace(/\.[^/.]+$/, ""),
-        documentType: "Other Medical Document",
-        mimeType: asset.mimeType || "application/octet-stream",
-        size: asset.size || 0,
-      }));
+      const files = result.assets.map((asset) => {
+        let decName = asset.name;
+        try {
+          decName = decodeURIComponent(asset.name);
+        } catch (e) {}
+
+        return {
+          id: Math.random().toString(36).substring(7),
+          uri: asset.uri,
+          originalName: decName,
+          displayName: decName.replace(/\.[^/.]+$/, ""),
+          documentType: "Other Medical Document",
+          mimeType: asset.mimeType || "application/octet-stream",
+          size: asset.size || 0,
+        };
+      });
 
       addSelectedFiles(files);
     } catch (err) {
@@ -219,7 +220,11 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
       const files = result.assets.map((asset, index) => {
         const fileUri = asset.uri;
         const uriParts = fileUri.split("/");
-        const fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
+        let fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
+        try {
+          fileName = decodeURIComponent(fileName);
+        } catch (e) {}
+
         return {
           id: Math.random().toString(36).substring(7),
           uri: fileUri,
@@ -313,7 +318,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
     }, 2000);
 
     try {
-      await startUpload(userId, (jobIds, filesInfo) => {
+      await startUpload(userId, fromScreen, (jobIds, filesInfo) => {
         clearInterval(intervalId);
         ref.current?.dismiss();
         if (fromScreen === "AIChat" || fromScreen === "AIChatScreen") {
@@ -352,7 +357,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
           }
         }}
         backdropComponent={renderBackdrop}
-        keyboardBehavior="interactive"
+        enableDynamicSizing={true}
+        keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
         backgroundStyle={{
@@ -368,32 +374,34 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
           borderRadius: 20,
         }}
       >
-        <BottomSheetScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: totalBottomPadding }}
-        >
+        <BottomSheetView style={{ maxHeight: 750 }}>
+          <BottomSheetScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: totalBottomPadding }}
+          >
+          {/* Header Section & Upload Options */}
           <HeaderSection>
             <SheetTitle isDark={isDark}>Add Document</SheetTitle>
             <SheetSubtitle>Select documents and edit metadata before starting processing.</SheetSubtitle>
           </HeaderSection>
 
-          {/* Document selection options */}
-          <OptionsRow>
-            <OptionItem onPress={handleOpenCamera}>
+          {/* Document selection options - Disabled when uploading */}
+          <OptionsRow style={{ opacity: isUploading ? 0.5 : 1 }}>
+            <OptionItem onPress={handleOpenCamera} disabled={isUploading}>
               <IconCircle bgColor="#f5f3ff">
                 <MaterialCommunityIcons name="camera-outline" size={24} color="#7c3aed" />
               </IconCircle>
               <OptionLabel isDark={isDark}>Camera</OptionLabel>
             </OptionItem>
 
-            <OptionItem onPress={handleGalleryPickMultiple}>
+            <OptionItem onPress={handleGalleryPickMultiple} disabled={isUploading}>
               <IconCircle bgColor="#fff1f2">
                 <MaterialCommunityIcons name="image-outline" size={24} color="#f43f5e" />
               </IconCircle>
               <OptionLabel isDark={isDark}>Gallery</OptionLabel>
             </OptionItem>
 
-            <OptionItem onPress={handleDocumentPickMultiple}>
+            <OptionItem onPress={handleDocumentPickMultiple} disabled={isUploading}>
               <IconCircle bgColor="#f0fdfa">
                 <MaterialCommunityIcons name="file-document-outline" size={24} color="#0d9488" />
               </IconCircle>
@@ -438,14 +446,17 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
                       </DocMetaText>
                     </DocInfoArea>
 
-                    <RowActions>
-                      <IconButton onPress={() => startEditing(file)}>
-                        <Feather name="edit-2" size={18} color="#64748b" />
-                      </IconButton>
-                      <IconButton onPress={() => removeSelectedFile(file.id)} style={{ marginLeft: 8 }}>
-                        <Feather name="trash-2" size={18} color="#ef4444" />
-                      </IconButton>
-                    </RowActions>
+                    {/* Row actions are hidden when uploading to prevent manipulation */}
+                    {!isUploading && (
+                      <RowActions>
+                        <IconButton onPress={() => startEditing(file)}>
+                          <Feather name="edit-2" size={18} color="#64748b" />
+                        </IconButton>
+                        <IconButton onPress={() => removeSelectedFile(file.id)} style={{ marginLeft: 8 }}>
+                          <Feather name="trash-2" size={18} color="#ef4444" />
+                        </IconButton>
+                      </RowActions>
+                    )}
                   </DocRowCard>
                 );
               })}
@@ -470,7 +481,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
               )}
             </UploadButton>
           )}
-        </BottomSheetScrollView>
+          </BottomSheetScrollView>
+        </BottomSheetView>
       </BottomSheetModal>
 
       <CameraModal

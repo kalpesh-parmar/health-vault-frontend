@@ -12,6 +12,12 @@ import MultiUploadScreen from "../../screens/AppScreens/MultiUploadScreen";
 import DocumentProcessingScreen from "../../screens/AppScreens/DocumentProcessingScreen";
 import UploadSuccessScreen from "../../components/shared/UploadSuccessfullScreen";
 
+import ReviewMedicinesScreen from "../../screens/AppScreens/MedicationReview/ReviewMedicinesScreen";
+import MedicineDetailsScreen from "../../screens/AppScreens/MedicationReview/MedicineDetailsScreen";
+import ReviewAllMedicinesScreen from "../../screens/AppScreens/MedicationReview/ReviewAllMedicinesScreen";
+import ConfirmMedicinesScreen from "../../screens/AppScreens/MedicationReview/ConfirmMedicinesScreen";
+import MedicinesSuccessScreen from "../../screens/AppScreens/MedicationReview/MedicinesSuccessScreen";
+
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
 const HomeStack = () => {
@@ -27,6 +33,11 @@ const HomeStack = () => {
       <Stack.Screen name="SaveDocument" component={SaveDocumentScreen} />
       <Stack.Screen name="MultiUpload" component={MultiUploadScreen} />
       <Stack.Screen name="DocumentProcessing" component={DocumentProcessingScreen} />
+      <Stack.Screen name="ReviewMedicines" component={ReviewMedicinesScreen} />
+      <Stack.Screen name="MedicineDetails" component={MedicineDetailsScreen} />
+      <Stack.Screen name="ReviewAllMedicines" component={ReviewAllMedicinesScreen} />
+      <Stack.Screen name="ConfirmMedicines" component={ConfirmMedicinesScreen} />
+      <Stack.Screen name="MedicinesSuccess" component={MedicinesSuccessScreen} />
       <Stack.Screen name="Notifications" component={NotificationScreen} />
       <Stack.Screen name="AIChat" component={AIChatScreen} />
       <Stack.Screen name="Reminders" component={ReminderScreen} />

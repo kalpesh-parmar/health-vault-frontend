@@ -22,7 +22,6 @@ import {
 import { safeArray } from "../../../../utils/arrayUtils";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
-import { TimeText } from "../../../../components/MedicationForm";
 import Toast from "react-native-toast-message";
 import { EmptyMedications } from "../../../../components/shared/DefensiveStates";
 import FilterTabs from "../../../../components/shared/FilterTabs";
@@ -600,6 +599,12 @@ const MedTime = styled.Text`
   color: #64748b;
   font-weight: 500;
   margin-top: 2px;
+`;
+
+const TimeText = styled.Text`
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f766e;
 `;
 
 const MedTypeLabel = styled.Text`

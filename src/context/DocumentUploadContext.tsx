@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import Toast from "react-native-toast-message";
-import apiClient from "../services/apiClient";
-import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
 import { SelectedDocument } from "../types/documentUpload";
 import { queryClient } from "../config/queryClient";
 import { uploadPatientDocuments, startOcrJob, getOcrJob, cancelOcr, getOcrJobResult } from "../services/documentService";
@@ -24,12 +22,12 @@ interface DocumentUploadContextType {
   removeSelectedFile: (id: string) => void;
   updateSelectedFile: (id: string, displayName: string, documentType: string) => void;
   clearSelectedFiles: () => void;
-  startUpload: (userId: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => Promise<void>;
+  startUpload: (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => Promise<void>;
   cancelUpload: () => void;
   isBottomSheetVisible: boolean;
   setIsBottomSheetVisible: (val: boolean) => void;
   setUploadingDocs: React.Dispatch<React.SetStateAction<UploadingDoc[]>>;
-  startBackgroundOcr: (jobIds: string[], filesInfo: any[]) => void;
+  startBackgroundOcr: (jobIds: string[], filesInfo: any[], fromScreen?: string) => void;
   cancelAllProcessing: () => Promise<void>;
   completedBatch: {
     jobIds: string[];
@@ -37,6 +35,7 @@ interface DocumentUploadContextType {
     completedCount: number;
     failedCount: number;
     medicineCount: number;
+    fromScreen?: string;
   } | null;
   clearCompletedBatch: () => void;
   isPillHidden: boolean;
@@ -104,12 +103,14 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const [uploadingDocs, setUploadingDocs] = useState<UploadingDoc[]>([]);
   const [isProgressExpanded, setIsProgressExpanded] = useState(false);
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
+  const [activeUploadFromScreen, setActiveUploadFromScreen] = useState<string>("Home");
   const [completedBatch, setCompletedBatch] = useState<{
     jobIds: string[];
     filesInfo: { jobId: string; fileName: string; fileKey: string }[];
     completedCount: number;
     failedCount: number;
     medicineCount: number;
+    fromScreen?: string;
   } | null>(null);
   const [isPillHidden, setIsPillHidden] = useState(false);
 
@@ -275,10 +276,11 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
               setCompletedBatch({
                 jobIds: computedNext.map((d) => d.id),
-                filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
+                filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name.replace(/%20/g, " "), fileKey: "" })),
                 completedCount,
                 failedCount,
                 medicineCount,
+                fromScreen: activeUploadFromScreen,
               });
 
               setUploadingDocs([]);
@@ -292,9 +294,10 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   onPressButton: () => {
                     const { navigationRef } = require("../navigation/RootNavigator");
                     if (navigationRef.isReady()) {
-                      navigationRef.navigate("DocumentProcessing", {
+                      navigationRef.navigate("ReviewMedicines", {
                         jobIds: computedNext.map((d) => d.id),
-                        filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
+                        filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name.replace(/%20/g, " "), fileKey: "" })),
+                        fromScreen: activeUploadFromScreen,
                       });
                     }
                   },
@@ -313,14 +316,17 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     };
 
     setTimeout(runPoll, 3000);
-  }, []);
+  }, [activeUploadFromScreen]);
 
-  const startUpload = useCallback(async (userId: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
+  const startUpload = useCallback(async (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
     if (selectedFiles.length === 0) return;
     setIsUploading(true);
     setUploadingDocs([]);
     setIsPillHidden(false);
     setCompletedBatch(null);
+    if (fromScreen) {
+      setActiveUploadFromScreen(fromScreen);
+    }
 
     try {
       // 1. Upload patient documents
@@ -350,9 +356,15 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             try {
               await startOcrJob(doc.jobId);
               jobIds.push(doc.jobId);
+              let finalFileName = doc.fileName || doc.originalFileName || "Document";
+              try {
+                finalFileName = decodeURIComponent(finalFileName).replace(/%20/g, " ");
+              } catch (e) {
+                finalFileName = finalFileName.replace(/%20/g, " ");
+              }
               filesInfo.push({
                 jobId: doc.jobId,
-                fileName: doc.fileName || doc.originalFileName || "Document",
+                fileName: finalFileName,
                 fileKey: doc.fileKey || doc.s3Key || "",
               });
             } catch (jobErr) {
@@ -386,12 +398,21 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     setUploadingDocs([]);
   }, []);
 
-  const startBackgroundOcr = useCallback((jobIds: string[], filesInfo: any[]) => {
+  const startBackgroundOcr = useCallback((jobIds: string[], filesInfo: any[], fromScreen?: string) => {
+    if (fromScreen) {
+      setActiveUploadFromScreen(fromScreen);
+    }
     const docs = jobIds.map((jobId) => {
       const file = filesInfo?.find((f) => f.jobId === jobId);
+      let finalBackgroundName = file?.fileName || `Document ${jobId.slice(0, 8)}`;
+      try {
+        finalBackgroundName = decodeURIComponent(finalBackgroundName).replace(/%20/g, " ");
+      } catch (e) {
+        finalBackgroundName = finalBackgroundName.replace(/%20/g, " ");
+      }
       return {
         id: jobId,
-        name: file?.fileName || `Document ${jobId.slice(0, 8)}`,
+        name: finalBackgroundName,
         progress: 15,
         status: "QUEUED",
         reason: null,
@@ -400,28 +421,44 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     setUploadingDocs(docs);
     setIsPillHidden(false);
     setCompletedBatch(null);
-    setIsProgressExpanded(false); // starts collapsed
+
     startPolling(docs);
   }, [startPolling]);
 
   const cancelAllProcessing = useCallback(async () => {
-    isPollingRef.current = false;
-    setIsUploading(false);
-    
-    const docsToCancel = [...uploadingDocs];
-    setUploadingDocs([]); // dismiss overlay immediately
-
-    // Execute cancel API calls in parallel
-    await Promise.all(
-      docsToCancel.map(async (doc) => {
-        try {
-          await cancelOcr(doc.id);
-        } catch (err) {
-          console.warn(`[Cancel OCR Error] Failed for job ${doc.id}:`, err);
-        }
-      })
+    const runningJobs = uploadingDocs.filter(
+      (d) =>
+        d.status !== "COMPLETED" &&
+        d.status !== "FAILED" &&
+        d.status !== "CANCELLED"
     );
-  }, [uploadingDocs]);
+
+    if (runningJobs.length === 0) {
+      cancelUpload();
+      return;
+    }
+
+    try {
+      await Promise.all(
+        runningJobs.map(async (job) => {
+          try {
+            await cancelOcr(job.id);
+          } catch (e) {
+            console.warn(`Failed to cancel job ${job.id}:`, e);
+          }
+        })
+      );
+      Toast.show({
+        type: "info",
+        text1: "Upload Cancelled",
+        text2: "Document processing has been stopped.",
+      });
+    } catch (err) {
+      console.error("[Cancel OCR Error]", err);
+    } finally {
+      cancelUpload();
+    }
+  }, [uploadingDocs, cancelUpload]);
 
   return (
     <DocumentUploadContext.Provider

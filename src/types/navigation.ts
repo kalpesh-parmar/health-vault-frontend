@@ -63,6 +63,18 @@ export type AppStackParamList = {
     jobIds: string[];
     filesInfo?: { jobId: string; fileName: string; fileKey: string }[];
   };
+  ReviewMedicines: {
+    jobIds: string[];
+    filesInfo?: { jobId: string; fileName: string; fileKey: string }[];
+  };
+  MedicineDetails: {
+    medicineId: string;
+  };
+  ReviewAllMedicines: undefined;
+  ConfirmMedicines: undefined;
+  MedicinesSuccess: {
+    count: number;
+  };
   UploadSuccess: {
     documentName: string;
     fileSize: string;
