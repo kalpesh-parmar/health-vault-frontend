@@ -3,6 +3,7 @@ import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import BottomSheet from "../shared/BottomSheet";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 interface UploadBottomSheetProps {
   onTakePhoto: () => void;
@@ -13,6 +14,7 @@ interface UploadBottomSheetProps {
 export const UploadBottomSheet = forwardRef<any, UploadBottomSheetProps>(
   ({ onTakePhoto, onChooseGallery, onChooseDocument }, ref) => {
     const { isDark } = useAppTheme();
+    const bottomPadding = useBottomBarPadding(32, 16);
 
     const handleOptionPress = (callback: () => void) => {
       if (ref && "current" in ref && ref.current) {
@@ -23,7 +25,7 @@ export const UploadBottomSheet = forwardRef<any, UploadBottomSheetProps>(
 
     return (
       <BottomSheet ref={ref}>
-        <SheetContentWrapper>
+        <SheetContentWrapper bottomPadding={bottomPadding}>
           <HeaderSection>
             <SheetTitle>Upload Medical Document</SheetTitle>
             <SheetSubtitle>Please select a source to upload your file</SheetSubtitle>
@@ -78,8 +80,8 @@ export const UploadBottomSheet = forwardRef<any, UploadBottomSheetProps>(
 
 export default UploadBottomSheet;
 
-const SheetContentWrapper = styled.View`
-  padding: 12px 20px 40px;
+const SheetContentWrapper = styled.View<{ bottomPadding: number }>`
+  padding: 12px 20px ${(props: any) => props.bottomPadding}px;
 `;
 
 const HeaderSection = styled.View`

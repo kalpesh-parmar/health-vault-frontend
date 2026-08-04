@@ -10,6 +10,7 @@ export interface UploadingDoc {
   progress: number;
   status: string;
   reason?: string | null;
+  medicineCount?: number;
 }
 
 interface DocumentUploadContextType {
@@ -169,7 +170,20 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             try {
               const response = await getOcrJob(doc.id);
               const data = response?.data || response;
-              return { id: doc.id, success: true, data };
+              let medicineCount: number | undefined;
+              if (data.status === "COMPLETED") {
+                try {
+                  const res = await getOcrJobResult(doc.id);
+                  const resData = res?.data || res;
+                  const meds = resData?.extractedStructuredData?.medications || resData?.extractedStructuredData?.medicines;
+                  if (Array.isArray(meds)) {
+                    medicineCount = meds.length;
+                  }
+                } catch (e) {
+                  console.log("Failed to fetch medicine count during polling for", doc.id, e);
+                }
+              }
+              return { id: doc.id, success: true, data, medicineCount };
             } catch (err) {
               console.warn(`[Background Polling] Failed to fetch status for ${doc.id}:`, err);
               return { id: doc.id, success: false, error: err };
@@ -206,7 +220,13 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                 allFinished = false;
               }
               const reason = matched.error || matched.message || null;
-              return { ...doc, progress, status, reason };
+              return {
+                ...doc,
+                progress,
+                status,
+                reason,
+                medicineCount: result.medicineCount !== undefined ? result.medicineCount : doc.medicineCount
+              };
             }
 
             const isDone =

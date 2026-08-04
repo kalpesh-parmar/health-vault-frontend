@@ -58,18 +58,20 @@ export const ReviewAllMedicinesScreen: React.FC = () => {
       />
 
       <ScrollWrapper contentContainerStyle={{ padding: 20, paddingBottom: bottomPadding + 80 }}>
-        {documents.map((doc) => (
-          <DocumentMedicineCard key={doc.id} document={doc}>
-            {doc.medicines.map((med) => (
-              <ExtractedMedicineCard
-                key={med.id}
-                medicine={med}
-                onPress={() => navigation.navigate("MedicineDetails" as any, { medicineId: med.id })}
-                onToggle={() => toggleMedicineSelection(med.id)}
-              />
-            ))}
-          </DocumentMedicineCard>
-        ))}
+        {documents
+          .filter((doc) => doc.medicines.length > 0)
+          .map((doc) => (
+            <DocumentMedicineCard key={doc.id} document={doc}>
+              {doc.medicines.map((med) => (
+                <ExtractedMedicineCard
+                  key={med.id}
+                  medicine={med}
+                  onPress={() => navigation.navigate("MedicineDetails" as any, { medicineId: med.id })}
+                  onToggle={() => toggleMedicineSelection(med.id)}
+                />
+              ))}
+            </DocumentMedicineCard>
+          ))}
       </ScrollWrapper>
 
       <StickyFooter isDark={isDark} style={{ paddingBottom: bottomPadding }}>

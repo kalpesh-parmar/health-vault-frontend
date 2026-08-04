@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import BottomSheet from "../../../../components/shared/BottomSheet";
 import { useAppTheme } from "../../../../context/ThemeContext";
 import { AddOrEditMedication } from "../../../../types";
+import { useBottomBarPadding } from "../../../../hooks/useBottomBarPadding";
 
 interface RefillBottomSheetProps {
   medication: AddOrEditMedication | null;
@@ -17,6 +18,7 @@ export const RefillBottomSheet = forwardRef<any, RefillBottomSheetProps>(
     const { isDark } = useAppTheme();
     const [pillsToAdd, setPillsToAdd] = useState("");
     const [keyboardPadding, setKeyboardPadding] = useState(0);
+    const bottomPadding = useBottomBarPadding(24, 12);
 
     useEffect(() => {
       const showSub = Keyboard.addListener(
@@ -121,7 +123,7 @@ export const RefillBottomSheet = forwardRef<any, RefillBottomSheetProps>(
                 </InfoBoxText>
               </InfoBox>
 
-              <ActionRow>
+              <ActionRow bottomPadding={bottomPadding}>
                 <CancelButton onPress={onCancel} activeOpacity={0.8} isDark={isDark}>
                   <CancelButtonText isDark={isDark}>Cancel</CancelButtonText>
                 </CancelButton>
@@ -284,11 +286,11 @@ const InfoBoxText = styled.Text<{ isDark: boolean }>`
   margin-left: 10px;
 `;
 
-const ActionRow = styled.View`
+const ActionRow = styled.View<{ bottomPadding: number }>`
   flex-direction: row;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 35px;
+  padding-bottom: ${(props: any) => props.bottomPadding}px;
 `;
 
 const CancelButton = styled.TouchableOpacity<{ isDark: boolean }>`

@@ -13,7 +13,7 @@ import styled from "styled-components/native";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { getFileSource } from "../../services/fileService";
@@ -31,7 +31,7 @@ interface ShareDocumentSheetProps {
 export const ShareDocumentSheet = forwardRef<any, ShareDocumentSheetProps>(
   ({ document, onLinkCreated, onClose }, ref: any) => {
     const { theme, isDark } = useAppTheme();
-    const insets = useSafeAreaInsets();
+    const bottomPadding = useBottomBarPadding(24, 8);
 
     const [isPreparing, setIsPreparing] = useState(false);
     const [preparingText, setPreparingText] = useState("");
@@ -200,8 +200,7 @@ export const ShareDocumentSheet = forwardRef<any, ShareDocumentSheetProps>(
       []
     );
 
-    const baseBottomPadding = Math.max(insets.bottom, 16) + 8;
-    const totalBottomPadding = keyboardHeight > 0 ? keyboardHeight + 16 : baseBottomPadding;
+    const totalBottomPadding = keyboardHeight > 0 ? keyboardHeight + 16 : bottomPadding;
 
     if (!document) {
       return (
@@ -209,6 +208,7 @@ export const ShareDocumentSheet = forwardRef<any, ShareDocumentSheetProps>(
           ref={ref}
           enablePanDownToClose={true}
           backdropComponent={renderBackdrop}
+          enableDynamicSizing={true}
           backgroundStyle={{
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
@@ -245,6 +245,7 @@ export const ShareDocumentSheet = forwardRef<any, ShareDocumentSheetProps>(
         ref={ref}
         enablePanDownToClose={true}
         backdropComponent={renderBackdrop}
+        enableDynamicSizing={true}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"

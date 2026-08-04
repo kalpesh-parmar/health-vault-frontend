@@ -89,6 +89,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
   const fileNameParam = route?.params?.fileName;
   const { isDark } = useAppTheme();
   const bottomPadding = useBottomBarPadding(16, 12);
+  const sheetBottomPadding = useBottomBarPadding(24, 12);
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [docName, setDocName] = useState(fileNameParam || "");
   const [category, setCategory] = useState("");
@@ -276,7 +277,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
         </BottomBar>
 
         <BottomSheet ref={bottomSheetRef} enablePanDownToClose={true}>
-          <SheetContentWrapper>
+          <SheetContentWrapper bottomPadding={sheetBottomPadding}>
             <BSTitle>Select Category</BSTitle>
             <BSSub>Choose the type of medical document</BSSub>
             {CATEGORIES.map((item, idx) => (
@@ -530,9 +531,8 @@ const BottomBar = styled.View<{ bottomPadding: number }>`
   elevation: 8;
 `;
 
-const SheetContentWrapper = styled.View`
-  padding: 25px 20px;
-  padding-bottom: 50px;
+const SheetContentWrapper = styled.View<{ bottomPadding: number }>`
+  padding: 25px 20px ${(props: any) => props.bottomPadding}px;
   align-items: center;
 `;
 

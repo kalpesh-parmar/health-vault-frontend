@@ -4,6 +4,7 @@ import styled from "styled-components/native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import BottomSheet from "./BottomSheet";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 interface FilterBottomSheetProps {
   title: string;
@@ -16,6 +17,7 @@ interface FilterBottomSheetProps {
 export const FilterBottomSheet = forwardRef<any, FilterBottomSheetProps>(
   ({ title, subtitle, onApply, onReset, children }, ref) => {
     const { isDark } = useAppTheme();
+    const bottomPadding = useBottomBarPadding(24, 12);
 
     return (
       <BottomSheet ref={ref}>
@@ -29,7 +31,7 @@ export const FilterBottomSheet = forwardRef<any, FilterBottomSheetProps>(
             {children}
           </ScrollContent>
 
-          <ActionRow>
+          <ActionRow bottomPadding={bottomPadding}>
             <ResetButton onPress={onReset} activeOpacity={0.8} isDark={isDark}>
               <ResetButtonText isDark={isDark}>Reset</ResetButtonText>
             </ResetButton>
@@ -234,10 +236,11 @@ const CheckCircle = styled.View`
   align-items: center;
 `;
 
-const ActionRow = styled.View`
+const ActionRow = styled.View<{ bottomPadding: number }>`
   flex-direction: row;
   justify-content: space-between;
   gap: 16px;
+  padding-bottom: ${(props: any) => props.bottomPadding}px;
 `;
 
 const ResetButton = styled.TouchableOpacity<{ isDark: boolean }>`

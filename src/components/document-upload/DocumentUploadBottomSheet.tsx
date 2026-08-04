@@ -5,9 +5,14 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  useWindowDimensions,
+  ScrollView,
+  Modal,
+  Image,
+  KeyboardAvoidingView,
 } from "react-native";
 import styled from "styled-components/native";
-import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { MaterialCommunityIcons, Feather, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -20,21 +25,92 @@ import { useNavigation } from "@react-navigation/native";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import CameraModal from "../shared/CameraModal";
 import { capturePhoto } from "../../services/cameraServices";
-import { SelectedDocument, DOCUMENT_TYPE_OPTIONS } from "../../types/documentUpload";
+import { SelectedDocument } from "../../types/documentUpload";
 
-interface EditFileCardProps {
+interface DocumentRowItemProps {
   file: SelectedDocument;
+  isUploading: boolean;
   isDark: boolean;
-  onCancel: () => void;
+  onStartEdit: () => void;
+  onRemove: () => void;
+}
+
+const DocumentRowItem = ({
+  file,
+  isUploading,
+  isDark,
+  onStartEdit,
+  onRemove,
+}: DocumentRowItemProps) => {
+  const isPdf = file.mimeType === "application/pdf" || file.originalName.toLowerCase().endsWith(".pdf");
+
+  return (
+    <DocRowCard isDark={isDark}>
+      <MaterialCommunityIcons
+        name={isPdf ? "file-pdf-box" : "image"}
+        size={28}
+        color={isPdf ? "#ef4444" : "#3b82f6"}
+        style={{ marginRight: 12 }}
+      />
+      <DocInfoArea style={{ flex: 1 }}>
+        <DocDisplayName isDark={isDark} numberOfLines={1}>
+          {file.displayName}
+        </DocDisplayName>
+        <DocMetaText>
+          Type: {file.documentType}
+        </DocMetaText>
+      </DocInfoArea>
+
+      {!isUploading && (
+        <RowActions>
+          <IconButton onPress={onStartEdit}>
+            <Feather name="edit-2" size={18} color="#64748b" />
+          </IconButton>
+          <IconButton onPress={onRemove} style={{ marginLeft: 8 }}>
+            <Feather name="trash-2" size={18} color="#ef4444" />
+          </IconButton>
+        </RowActions>
+      )}
+    </DocRowCard>
+  );
+};
+
+interface EditDocumentModalProps {
+  file: SelectedDocument | null;
+  isDark: boolean;
+  onClose: () => void;
   onSave: (newName: string) => void;
 }
 
-const EditFileCard = ({ file, isDark, onCancel, onSave }: EditFileCardProps) => {
-  const [editName, setEditName] = useState(file.displayName);
+const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalProps) => {
+  if (!file) return null;
+
+  const { theme } = useAppTheme();
+  const [tempName, setTempName] = useState(file.displayName);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardHeight(0)
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const isPdf = file.mimeType === "application/pdf" || file.originalName.toLowerCase().endsWith(".pdf");
+  const fileExtension = file.originalName.split(".").pop() || "jpg";
 
   const handleSave = () => {
-    const trimmed = editName.trim();
+    const trimmed = tempName.trim();
     if (!trimmed) {
       setNameError("Document name cannot be empty.");
       return;
@@ -43,46 +119,99 @@ const EditFileCard = ({ file, isDark, onCancel, onSave }: EditFileCardProps) => 
   };
 
   return (
-    <EditFormCard isDark={isDark}>
-      <LabelText>Original File Name</LabelText>
-      <OriginalNameText isDark={isDark} numberOfLines={1}>
-        {file.originalName}
-      </OriginalNameText>
+    <Modal
+      visible={file !== null}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <ModalBackdrop onPress={onClose}>
+        <ModalPressableContainer onPress={Keyboard.dismiss}>
+          <ModalCard isDark={isDark}>
+            {/* Header Section */}
+            <ModalHeaderRow>
+              <ModalTitleSection>
+                <ModalTitleText isDark={isDark}>Edit Document</ModalTitleText>
+                <ModalSubtitleText>
+                  Review the document and update the name if needed.
+                </ModalSubtitleText>
+              </ModalTitleSection>
+              <ModalCloseButton onPress={onClose}>
+                <Ionicons name="close" size={20} color={isDark ? "#cbd5e1" : "#64748b"} />
+              </ModalCloseButton>
+            </ModalHeaderRow>
 
-      <LabelText style={{ marginTop: 12 }}>Document Name</LabelText>
-      <InputWrapper style={{ borderColor: nameError ? "#ef4444" : "#cbd5e1" }}>
-        <NameInput
-          value={editName}
-          onChangeText={(text: string) => {
-            setEditName(text);
-            if (!text.trim()) {
-              setNameError("Document name cannot be empty.");
-            } else {
-              setNameError(null);
-            }
-          }}
-          placeholder="Enter document name"
-          placeholderTextColor="#94a3b8"
-          isDark={isDark}
-        />
-      </InputWrapper>
-      {nameError ? (
-        <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4, fontWeight: "500" }}>
-          {nameError}
-        </Text>
-      ) : null}
+            {/* Scrollable Form Content */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={{ flexShrink: 1 }}
+            >
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom: keyboardHeight > 0 ? keyboardHeight + 10 : 20,
+                }}
+              >
+                {/* Document Preview */}
+                <PreviewLabel>Document Preview</PreviewLabel>
+                <PreviewWrapper isDark={isDark}>
+                  {isPdf ? (
+                    <PdfPreviewWrapper>
+                      <MaterialCommunityIcons name="file-pdf-box" size={56} color="#ef4444" />
+                      <PdfPreviewText isDark={isDark}>PDF Document</PdfPreviewText>
+                    </PdfPreviewWrapper>
+                  ) : (
+                    <Image
+                      source={{ uri: file.uri }}
+                      style={{ width: "100%", height: 180, borderRadius: 12 }}
+                      resizeMode="contain"
+                    />
+                  )}
+                </PreviewWrapper>
 
-      <ActionButtonsRow>
-        <CancelEditBtn onPress={onCancel}>
-          <CancelEditBtnText>Cancel</CancelEditBtnText>
-        </CancelEditBtn>
+                {/* Original File Name (Show in a line) */}
+                <FieldLabelText style={{ marginTop: 16 }}>Original File Name</FieldLabelText>
+                <OriginalNameTextLine isDark={isDark} numberOfLines={1}>
+                  {file.originalName}
+                </OriginalNameTextLine>
 
-        <SaveEditBtn onPress={handleSave}>
-          <Ionicons name="save-outline" size={16} color="white" style={{ marginRight: 6 }} />
-          <SaveEditBtnText>Save</SaveEditBtnText>
-        </SaveEditBtn>
-      </ActionButtonsRow>
-    </EditFormCard>
+                {/* Editable Document Name */}
+                <FieldLabelText style={{ marginTop: 16 }}>Document Name *</FieldLabelText>
+                <ModalInputWrapper
+                  isDark={isDark}
+                  style={{ borderColor: nameError ? "#ef4444" : isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1" }}
+                >
+                  <ModalNameInput
+                    value={tempName}
+                    onChangeText={(text: string) => {
+                      setTempName(text);
+                      if (text.trim()) setNameError(null);
+                    }}
+                    placeholder="Enter document name"
+                    placeholderTextColor="#94a3b8"
+                    isDark={isDark}
+                  />
+                  <ModalExtensionText isDark={isDark}>.{fileExtension}</ModalExtensionText>
+                </ModalInputWrapper>
+                {nameError && <ErrorText>{nameError}</ErrorText>}
+              </ScrollView>
+            </KeyboardAvoidingView>
+
+            {/* Action Buttons */}
+            <ModalFooterButtons>
+              <DiscardButton onPress={onClose}>
+                <DiscardButtonText>Discard</DiscardButtonText>
+              </DiscardButton>
+
+              <SaveButton onPress={handleSave}>
+                <SaveButtonText>Save</SaveButtonText>
+              </SaveButton>
+            </ModalFooterButtons>
+          </ModalCard>
+        </ModalPressableContainer>
+      </ModalBackdrop>
+    </Modal>
   );
 };
 
@@ -120,9 +249,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
   }, []);
 
   const bottomPadding = useBottomBarPadding(40, 30);
-  const totalBottomPadding = keyboardHeight > 0
-    ? keyboardHeight + 140
-    : bottomPadding;
+  const totalBottomPadding = keyboardHeight > 0 ? keyboardHeight + 80 : bottomPadding;
 
   const {
     selectedFiles,
@@ -365,7 +492,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           backgroundColor: theme.colors.surface,
-          paddingBottom: 15,
+          paddingBottom: bottomPadding,
         }}
         handleIndicatorStyle={{
           width: 40,
@@ -374,18 +501,14 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
           borderRadius: 20,
         }}
       >
-        <BottomSheetView style={{ maxHeight: 750 }}>
-          <BottomSheetScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: totalBottomPadding }}
-          >
-          {/* Header Section & Upload Options */}
+        <BottomSheetView style={{ paddingHorizontal: 20, paddingBottom: bottomPadding }}>
+          {/* Header Section & Upload Options - FIXED */}
           <HeaderSection>
             <SheetTitle isDark={isDark}>Add Document</SheetTitle>
             <SheetSubtitle>Select documents and edit metadata before starting processing.</SheetSubtitle>
           </HeaderSection>
 
-          {/* Document selection options - Disabled when uploading */}
+          {/* Document selection options - FIXED */}
           <OptionsRow style={{ opacity: isUploading ? 0.5 : 1 }}>
             <OptionItem onPress={handleOpenCamera} disabled={isUploading}>
               <IconCircle bgColor="#f5f3ff">
@@ -409,61 +532,32 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
             </OptionItem>
           </OptionsRow>
 
-          {/* Selected documents list */}
+          {/* Selected documents list - SCROLLABLE */}
           {selectedFiles.length > 0 && (
             <SelectedSection>
               <SectionTitle isDark={isDark}>Selected Documents ({selectedFiles.length})</SectionTitle>
-              {selectedFiles.map((file) => {
-                const isEditing = editingId === file.id;
-                const isPdf = file.mimeType === "application/pdf" || file.originalName.toLowerCase().endsWith(".pdf");
-
-                if (isEditing) {
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                style={{ maxHeight: 350 }}
+                contentContainerStyle={{ paddingBottom: totalBottomPadding }}
+              >
+                {selectedFiles.map((file) => {
                   return (
-                    <EditFileCard
+                    <DocumentRowItem
                       key={file.id}
                       file={file}
+                      isUploading={isUploading}
                       isDark={isDark}
-                      onCancel={() => setEditingId(null)}
-                      onSave={(newName) => saveEditing(file.id, newName)}
+                      onStartEdit={() => startEditing(file)}
+                      onRemove={() => removeSelectedFile(file.id)}
                     />
                   );
-                }
-
-                return (
-                  <DocRowCard key={file.id} isDark={isDark}>
-                    <MaterialCommunityIcons
-                      name={isPdf ? "file-pdf-box" : "image"}
-                      size={28}
-                      color={isPdf ? "#ef4444" : "#3b82f6"}
-                      style={{ marginRight: 12 }}
-                    />
-                    <DocInfoArea>
-                      <DocDisplayName isDark={isDark} numberOfLines={1}>
-                        {file.displayName}
-                      </DocDisplayName>
-                      <DocMetaText>
-                        Type: {file.documentType}
-                      </DocMetaText>
-                    </DocInfoArea>
-
-                    {/* Row actions are hidden when uploading to prevent manipulation */}
-                    {!isUploading && (
-                      <RowActions>
-                        <IconButton onPress={() => startEditing(file)}>
-                          <Feather name="edit-2" size={18} color="#64748b" />
-                        </IconButton>
-                        <IconButton onPress={() => removeSelectedFile(file.id)} style={{ marginLeft: 8 }}>
-                          <Feather name="trash-2" size={18} color="#ef4444" />
-                        </IconButton>
-                      </RowActions>
-                    )}
-                  </DocRowCard>
-                );
-              })}
+                })}
+              </ScrollView>
             </SelectedSection>
           )}
 
-          {/* Bottom actions */}
+          {/* Bottom actions - FIXED */}
           {selectedFiles.length > 0 && (
             <UploadButton
               onPress={handleUpload}
@@ -481,7 +575,6 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
               )}
             </UploadButton>
           )}
-          </BottomSheetScrollView>
         </BottomSheetView>
       </BottomSheetModal>
 
@@ -492,6 +585,15 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
         isCapturing={isCapturing}
         cameraRef={cameraRef}
       />
+
+      {editingId !== null && (
+        <EditDocumentModal
+          file={selectedFiles.find((f) => f.id === editingId) || null}
+          isDark={isDark}
+          onClose={() => setEditingId(null)}
+          onSave={(newName) => saveEditing(editingId, newName)}
+        />
+      )}
     </>
   );
 });
@@ -611,16 +713,98 @@ const UploadButtonText = styled.Text`
   font-weight: 700;
 `;
 
-const EditFormCard = styled.View<{ isDark: boolean }>`
-  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#1e293b" : "#ffffff")};
-  border-width: 1.5px;
-  border-color: #0d9488;
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 10px;
+const ModalBackdrop = styled.Pressable`
+  flex: 1;
+  background-color: rgba(0, 0, 0, 0.6);
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
 `;
 
-const LabelText = styled.Text`
+const ModalPressableContainer = styled.Pressable`
+  width: 100%;
+  max-width: 400px;
+  justify-content: center;
+  align-items: center;
+`;
+
+const ModalCard = styled.View<{ isDark: boolean }>`
+  width: 100%;
+  max-height: 98%;
+  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#1e293b" : "#ffffff")};
+  border-radius: 24px;
+  padding: 24px;
+  shadow-color: #000;
+  shadow-offset: 0px 10px;
+  shadow-opacity: 0.25;
+  shadow-radius: 15px;
+  elevation: 10;
+`;
+
+const ModalHeaderRow = styled.View`
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+`;
+
+const ModalTitleSection = styled.View`
+  flex: 1;
+  margin-right: 12px;
+`;
+
+const ModalTitleText = styled.Text<{ isDark: boolean }>`
+  font-size: 20px;
+  font-weight: 800;
+  color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#f8fafc" : "#1e293b")};
+`;
+
+const ModalSubtitleText = styled.Text`
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 4px;
+  line-height: 18px;
+`;
+
+const ModalCloseButton = styled.TouchableOpacity`
+  padding: 4px;
+  background-color: rgba(0,0,0,0.02);
+  border-radius: 20px;
+`;
+
+const PreviewLabel = styled.Text`
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+`;
+
+const PreviewWrapper = styled.View<{ isDark: boolean }>`
+  width: 100%;
+  height: 160px;
+  border-radius: 12px;
+  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#0f172a" : "#f1f5f9")};
+  overflow: hidden;
+  justify-content: center;
+  align-items: center;
+  border-width: 1px;
+  border-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "rgba(255,255,255,0.06)" : "#e2e8f0")};
+`;
+
+const PdfPreviewWrapper = styled.View`
+  align-items: center;
+  justify-content: center;
+`;
+
+const PdfPreviewText = styled.Text<{ isDark: boolean }>`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#cbd5e1" : "#475569")};
+  margin-top: 8px;
+`;
+
+const FieldLabelText = styled.Text`
   font-size: 11px;
   font-weight: 700;
   color: #64748b;
@@ -628,97 +812,81 @@ const LabelText = styled.Text`
   margin-bottom: 6px;
 `;
 
-const OriginalNameText = styled.Text<{ isDark: boolean }>`
-  font-size: 13px;
-  color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#94a3b8" : "#475569")};
-  font-style: italic;
-`;
-
-const InputWrapper = styled.View`
-  height: 48px;
-  border-width: 1px;
-  border-color: #cbd5e1;
-  border-radius: 10px;
-  padding-horizontal: 12px;
-  justify-content: center;
-`;
-
-const NameInput = styled.TextInput<{ isDark: boolean }>`
+const OriginalNameTextLine = styled.Text<{ isDark: boolean }>`
   font-size: 14px;
-  color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#cbd5e1" : "#1e293b")};
+  color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#cbd5e1" : "#475569")};
+  font-weight: 500;
+  margin-bottom: 4px;
 `;
 
-const DropdownSelector = styled.TouchableOpacity<{ isDark: boolean }>`
-  height: 48px;
-  border-width: 1px;
-  border-color: #cbd5e1;
-  border-radius: 10px;
-  padding-horizontal: 12px;
+const ModalInputWrapper = styled.View<{ isDark: boolean }>`
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#1e293b" : "#ffffff")};
+  border-width: 1px;
+  border-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1")};
+  border-radius: 12px;
+  padding-horizontal: 14px;
+  height: 48px;
+  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#0f172a" : "#ffffff")};
 `;
 
-const DropdownSelectorText = styled.Text<{ isDark: boolean }>`
+const ModalNameInput = styled.TextInput<{ isDark: boolean }>`
   font-size: 14px;
   color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#cbd5e1" : "#1e293b")};
+  flex: 1;
+  padding: 0;
+  margin: 0;
 `;
 
-const DropdownList = styled.View<{ isDark: boolean }>`
-  border-width: 1px;
-  border-color: #e2e8f0;
-  border-radius: 10px;
-  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#1e293b" : "#ffffff")};
+const ModalExtensionText = styled.Text<{ isDark: boolean }>`
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
+  margin-left: 4px;
+`;
+
+const ErrorText = styled.Text`
+  color: #ef4444;
+  font-size: 12px;
   margin-top: 4px;
-  max-height: 180px;
-  overflow: hidden;
+  font-weight: 500;
 `;
 
-const DropdownItem = styled.TouchableOpacity<{ isDark: boolean }>`
-  padding: 12px;
-  border-bottom-width: 1px;
-  border-bottom-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9")};
-`;
-
-const DropdownItemText = styled.Text<{ isDark: boolean; active: boolean }>`
-  font-size: 13.5px;
-  color: ${({ active, isDark }: { active: boolean; isDark: boolean }) => (active ? "#0d9488" : isDark ? "#cbd5e1" : "#475569")};
-  font-weight: ${({ active }: { active: boolean }) => (active ? "700" : "500")};
-`;
-
-const ActionButtonsRow = styled.View`
+const ModalFooterButtons = styled.View`
   flex-direction: row;
-  justify-content: flex-end;
-  margin-top: 16px;
+  justify-content: space-between;
+  margin-top: 20px;
   gap: 12px;
 `;
 
-const CancelEditBtn = styled.TouchableOpacity`
-  padding-vertical: 8px;
-  padding-horizontal: 16px;
-  border-radius: 8px;
+const DiscardButton = styled.TouchableOpacity`
+  flex: 1;
+  height: 48px;
+  border-radius: 12px;
   border-width: 1px;
   border-color: #cbd5e1;
-`;
-
-const CancelEditBtnText = styled.Text`
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 600;
-`;
-
-const SaveEditBtn = styled.TouchableOpacity`
-  padding-vertical: 8px;
-  padding-horizontal: 16px;
-  border-radius: 8px;
-  background-color: #0d9488;
-  flex-direction: row;
   align-items: center;
+  justify-content: center;
+  background-color: transparent;
 `;
 
-const SaveEditBtnText = styled.Text`
-  font-size: 13px;
+const DiscardButtonText = styled.Text`
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 700;
+`;
+
+const SaveButton = styled.TouchableOpacity`
+  flex: 1;
+  height: 48px;
+  border-radius: 12px;
+  background-color: #0d9488;
+  align-items: center;
+  justify-content: center;
+`;
+
+const SaveButtonText = styled.Text`
+  font-size: 14px;
   color: white;
-  font-weight: 600;
+  font-weight: 700;
 `;

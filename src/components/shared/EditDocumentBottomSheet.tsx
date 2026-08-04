@@ -13,7 +13,7 @@ import styled from "styled-components/native";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { updateDocument } from "../../services/documentService";
 import { queryClient } from "../../config/queryClient";
 import { DOCUMENT_TYPE_OPTIONS } from "../../types/documentUpload";
@@ -68,7 +68,7 @@ interface EditDocumentBottomSheetProps {
 export const EditDocumentBottomSheet = forwardRef<any, EditDocumentBottomSheetProps>(
   ({ document, onSuccess, onClose }, ref: any) => {
     const { theme, isDark } = useAppTheme();
-    const insets = useSafeAreaInsets();
+    const bottomPadding = useBottomBarPadding(24, 8);
 
     const initialFileInfo = document ? getFileNameAndExtension(document.fileName || "") : { name: "", extension: "" };
     const [formName, setFormName] = useState(initialFileInfo.name);
@@ -205,10 +205,9 @@ export const EditDocumentBottomSheet = forwardRef<any, EditDocumentBottomSheetPr
       []
     );
 
-    const baseBottomPadding = Math.max(insets.bottom, 16) + 8;
     const totalBottomPadding = keyboardHeight > 0
       ? keyboardHeight + 16
-      : baseBottomPadding;
+      : bottomPadding;
 
     return (
       <>
@@ -216,6 +215,7 @@ export const EditDocumentBottomSheet = forwardRef<any, EditDocumentBottomSheetPr
           ref={ref}
           enablePanDownToClose={true}
           backdropComponent={renderBackdrop}
+          enableDynamicSizing={true}
           keyboardBehavior="interactive"
           keyboardBlurBehavior="restore"
           android_keyboardInputMode="adjustResize"

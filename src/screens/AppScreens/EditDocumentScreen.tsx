@@ -16,6 +16,7 @@ import type { MedicalDocument } from "../../types";
 import BottomSheet from "../../components/shared/BottomSheet";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { Keyboard } from "react-native";
 import { queryClient } from "../../config/queryClient";
 import Loader from "../../components/shared/Loader";
@@ -99,7 +100,8 @@ const EditScreen = ({ route }: any) => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const { isDark } = useAppTheme();
+  const { theme, isDark } = useAppTheme();
+  const sheetBottomPadding = useBottomBarPadding(24, 12);
 
   const selected = CATEGORIES.find((c) => c.value === category);
 
@@ -299,7 +301,7 @@ const EditScreen = ({ route }: any) => {
       </ScrollContent>
 
       <BottomSheet ref={bottomSheetRef} enablePanDownToClose={true}>
-        <SheetContentWrapper>
+        <SheetContentWrapper bottomPadding={sheetBottomPadding}>
           <BSTitle>Select Category</BSTitle>
           <BSSub>Choose the type of medical document</BSSub>
           {CATEGORIES.map((item, idx) => (
@@ -329,13 +331,6 @@ const EditScreen = ({ route }: any) => {
 };
 
 export default EditScreen;
-
-const BLUE = "#1246A8";
-const BLUE_LIGHT = "#EEF3FD";
-const BLUE_BORDER = "#C5D5F7";
-const RED = "#E53535";
-const RED_BORDER = "#FECACA";
-const SLATE = "#94A3B8";
 
 const Container = styled(SafeAreaView)`
   flex: 1;
@@ -409,17 +404,6 @@ const FieldLabel = styled.Text`
   color: ${({ theme }: any) => theme.colors.textPrimary};
 `;
 
-const ReadOnlyPill = styled.View`
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-  background-color: #f1f5f9;
-  border-radius: 20px;
-  padding: 2px 8px;
-  border-width: 0.5px;
-  border-color: #e2e8f0;
-`;
-
 const ReadOnlyText = styled.Text`
   font-size: 10px;
   font-weight: 600;
@@ -488,135 +472,18 @@ const StyledTextArea = styled.TextInput`
   min-height: 96px;
 `;
 
-const ReadOnlyValue = styled.TextInput`
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
-  background-color: #f8fafc;
-  border-radius: 12px;
-  border-width: 1px;
-  border-color: #e2e8f0;
-  padding: 12px 14px;
-`;
-
 const Divider = styled.View`
   height: 0.5px;
   background-color: ${({ theme }: any) => theme.colors.border};
   margin-horizontal: -16px;
 `;
 
-const SaveButton = styled.TouchableOpacity<{ disabled?: boolean }>`
-  border-radius: 18px;
-  overflow: hidden;
-  opacity: ${({ disabled }: any) => (disabled ? 0.6 : 1)};
-  elevation: 6;
-  shadow-color: ${BLUE};
-  shadow-opacity: 0.28;
-  shadow-radius: 14px;
-  shadow-offset: 0px 6px;
-`;
-
-const SaveGradient = styled(LinearGradient)`
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 17px;
-`;
-
-const SaveButtonText = styled.Text`
-  font-size: 15px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: 0.3px;
-`;
-
-const DangerCard = styled.View`
-  margin-top: 14px;
-  border-radius: 20px;
-  overflow: hidden;
-  border-width: 0.5px;
-  border-color: ${RED_BORDER};
-  elevation: 4;
-  shadow-color: ${RED};
-  shadow-opacity: 0.08;
-  shadow-radius: 12px;
-  shadow-offset: 0px 4px;
-`;
-
-const DangerGradient = styled(LinearGradient)`
-  padding: 18px;
-`;
-
-const DangerHeader = styled.View`
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-`;
-
-const DangerIconBadge = styled.View`
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background-color: ${RED};
-  align-items: center;
-  justify-content: center;
-`;
-
-const DangerTitle = styled.Text`
-  font-size: 15px;
-  font-weight: 700;
-  color: ${RED};
-`;
-
-const DangerBody = styled.View`
-  gap: 8px;
-  margin-bottom: 18px;
-`;
-
-const DangerBullet = styled.View`
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 8px;
-`;
-
-const DangerBulletText = styled.Text`
-  font-size: 13px;
-  color: #64748b;
-  line-height: 20px;
-  flex: 1;
-`;
-
-const DeleteButton = styled.TouchableOpacity`
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background-color: ${RED};
-  border-radius: 14px;
-  padding: 14px;
-  elevation: 4;
-  shadow-color: ${RED};
-  shadow-opacity: 0.3;
-  shadow-radius: 10px;
-  shadow-offset: 0px 4px;
-`;
-
-const DeleteButtonText = styled.Text`
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: 0.2px;
-`;
-
 const BottomSpacer = styled.View`
   height: 70px;
 `;
 
-const SheetContentWrapper = styled.View`
-  padding: 25px 20px;
-  padding-bottom: 50px;
+const SheetContentWrapper = styled.View<{ bottomPadding: number }>`
+  padding: 25px 20px ${(props: any) => props.bottomPadding}px;
   align-items: center;
 `;
 
@@ -648,9 +515,7 @@ const BSIconBadge = styled.View<BgProps>`
   justify-content: center;
   margin-right: 13px;
 `;
-const BSIconTxt = styled.Text`
-  font-size: 17px;
-`;
+
 const BSLbl = styled.Text<SelProps>`
   flex: 1;
   font-size: 14px;

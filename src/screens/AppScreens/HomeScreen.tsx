@@ -11,6 +11,7 @@ import Animated, { FadeInRight } from "react-native-reanimated";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../navigation/types";
@@ -65,6 +66,7 @@ const HomeScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark } = useAppTheme();
+  const bottomPadding = useBottomBarPadding(40, 20);
 
   const {
     uploadingDocs,
@@ -431,7 +433,7 @@ const HomeScreen = () => {
                       <DocItemName numberOfLines={1} style={{ fontSize: 13 }}>{doc.name}</DocItemName>
                       <DocItemStatus isCompleted={isCompleted} isFailed={isFailed} style={{ fontSize: 11 }}>
                         {isCompleted
-                          ? "Completed • Medicines found"
+                          ? "Completed"
                           : isFailed
                             ? "Failed to process"
                             : `Processing • ${progress}%`}
@@ -565,8 +567,8 @@ const HomeScreen = () => {
 
       <BottomSheetModal
         ref={processingSheetRef}
-        snapPoints={["60%"]}
-        index={0}
+        enableDynamicSizing={true}
+        maxDynamicContentSize={550}
         backdropComponent={(props) => (
           <BottomSheetBackdrop
             {...props}
@@ -621,7 +623,7 @@ const HomeScreen = () => {
 
           <BottomSheetScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 40 }}
+            contentContainerStyle={{ paddingBottom: bottomPadding }}
           >
             {uploadingDocs.map((doc) => {
               const isCompleted = doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success";
@@ -642,7 +644,9 @@ const HomeScreen = () => {
                     <DocItemName numberOfLines={1}>{doc.name}</DocItemName>
                     <DocItemStatus isCompleted={isCompleted} isFailed={isFailed}>
                       {isCompleted
-                        ? "Completed • Medicines found"
+                        ? (doc.medicineCount !== undefined && doc.medicineCount > 0
+                          ? "Completed • Medicines found"
+                          : "Completed")
                         : isFailed
                           ? "Failed to process"
                           : `Processing • ${progress}%`}
@@ -1026,9 +1030,9 @@ const HideButtonText = styled.Text`
 `;
 
 const SheetContentWrapper = styled.View`
-  flex: 1;
   padding-horizontal: 24px;
   padding-top: 8px;
+  padding-bottom: 14px;
 `;
 
 const SheetHeaderRow = styled.View`

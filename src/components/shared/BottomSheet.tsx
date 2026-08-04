@@ -3,11 +3,13 @@ import styled from "styled-components/native";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
-import { BackHandler, Keyboard } from "react-native";
+import { BackHandler } from "react-native";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 const BottomSheet = forwardRef(({ children }: any, ref: any) => {
   const { theme } = useAppTheme();
-   const [sheetIndex, setSheetIndex] = useState(-1);
+  const [sheetIndex, setSheetIndex] = useState(-1);
+  const bottomPadding = useBottomBarPadding(15, 0);
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -48,6 +50,7 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
+      enableDynamicSizing={true}
       backgroundStyle={{
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
@@ -62,7 +65,7 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
       }}
       
     >
-      <BottomSheetView style={{ flex: 1 }}>
+      <BottomSheetView style={{ paddingBottom: bottomPadding }}>
         <CloseIconWrapper>
           <CloseIcon onPress={() => ref.current?.dismiss()}>
             <Ionicons name="close" size={24} color={theme.colors.background} />
