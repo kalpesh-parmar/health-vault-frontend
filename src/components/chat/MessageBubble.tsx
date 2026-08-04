@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInUp } from "react-native-reanimated";
@@ -19,9 +19,11 @@ interface Message {
 interface MessageBubbleProps {
   message: Message;
   isDark: boolean;
+  onSpeak?: () => void;
+  isSpeaking?: boolean;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, onSpeak, isSpeaking }) => {
   const isUser = message.role === "user";
   const timeString = message.createdAt ? formatUTCDateTime(message.createdAt, "hh:mm a", true) : "";
 
@@ -249,11 +251,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark })
           ]}
         >
           {renderMarkdown(message.text, aiTextColor, false)}
-          {timeString ? (
-            <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8" }]}>
-              {timeString}
-            </Text>
-          ) : null}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6, minHeight: 24 }}>
+            {timeString ? (
+              <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8", marginTop: 0 }]}>
+                {timeString}
+              </Text>
+            ) : <View />}
+
+            {onSpeak && (
+              <TouchableOpacity
+                onPress={onSpeak}
+                accessibilityRole="button"
+                accessibilityLabel={isSpeaking ? "Stop reading" : "Read response aloud"}
+                style={{ padding: 4, borderRadius: 8, alignSelf: "flex-end", marginRight: -4, marginBottom: -4 }}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isSpeaking ? "square" : "volume-medium-outline"}
+                  size={16}
+                  color={isSpeaking ? "#ef4444" : (isDark ? "#38bdf8" : "#0d9488")}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       ) : null}
     </Animated.View>

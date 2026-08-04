@@ -43,6 +43,7 @@ import {
 // Reusable Redesigned Components
 import { ChatInput } from "../../components/chat/ChatInput";
 import { MessageBubble } from "../../components/chat/MessageBubble";
+import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 import TypingIndicator from "../../components/chat/TypingIndicator";
 import UploadBottomSheet from "../../components/upload/UploadBottomSheet";
 import DocumentPreview from "../../components/upload/DocumentPreview";
@@ -104,6 +105,7 @@ const getNormalizedLang = (lang: string | null | undefined): string => {
 
 export default function OnboardingScreen() {
   const { theme, isDark } = useAppTheme();
+  const { speakingMessageId, speakMessage } = useTextToSpeech();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const navigation = useNavigation<any>();
@@ -1865,6 +1867,8 @@ export default function OnboardingScreen() {
                       <MessageBubble
                         message={{ ...mappedMsg, createdAt: item.createdAt }}
                         isDark={isDark}
+                        onSpeak={() => speakMessage(mappedMsg.id, mappedMsg.text, state.preferredLanguage || undefined)}
+                        isSpeaking={speakingMessageId === mappedMsg.id}
                       />
                     )}
                     {isAi && options !== null && (

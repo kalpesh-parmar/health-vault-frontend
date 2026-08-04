@@ -36,6 +36,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
+import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 
 // Reusable Redesigned Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
@@ -247,6 +248,7 @@ const SUGGESTED_QUESTIONS_I18N: Record<
 
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
+  const { speakingMessageId, speakMessage } = useTextToSpeech();
   const navigation = useNavigation<any>();
 
   const t = (key: string) => {
@@ -723,7 +725,12 @@ const AIChatScreen = ({ route }: any) => {
                     <View style={{ width: "100%" }}>
                       {dateHeader}
                       {hasText && (
-                        <MessageBubble message={item} isDark={isDark} />
+                        <MessageBubble
+                          message={item}
+                          isDark={isDark}
+                          onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                          isSpeaking={speakingMessageId === item.id}
+                        />
                       )}
                       <View style={styles.optionsWrapper}>{card}</View>
                     </View>
@@ -836,7 +843,12 @@ const AIChatScreen = ({ route }: any) => {
                   return (
                     <View style={{ width: "100%" }}>
                       {dateHeader}
-                      <MessageBubble message={item} isDark={isDark} />
+                      <MessageBubble
+                        message={item}
+                        isDark={isDark}
+                        onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                        isSpeaking={speakingMessageId === item.id}
+                      />
                       <View style={styles.optionsWrapper}>
                         <HistoricalChips
                           options={item.options || []}
@@ -852,7 +864,12 @@ const AIChatScreen = ({ route }: any) => {
                 return (
                   <View style={{ width: "100%" }}>
                     {dateHeader}
-                    <MessageBubble message={item} isDark={isDark} />
+                    <MessageBubble
+                      message={item}
+                      isDark={isDark}
+                      onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                      isSpeaking={speakingMessageId === item.id}
+                    />
                   </View>
                 );
               }}
