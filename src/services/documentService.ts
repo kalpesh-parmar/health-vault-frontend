@@ -257,10 +257,36 @@ export const addDocument = async (
   return response.data;
 };
 
+const UI_TO_BE_TYPE_MAP: Record<string, string> = {
+  "Prescription": "prescription",
+  "Lab Report": "lab report",
+  "Imaging Report": "imaging report",
+  "Discharge Summary": "discharge summary",
+  "Consultation Report": "consultation report",
+  "Surgery Report": "surgery procedure report",
+  "Vaccination Record": "vaccination record",
+  "Vaccination Report": "vaccination record",
+  "Medical Certificate": "medical certificate",
+  "Family": "family",
+  "Medical Document": "medical_document",
+  "Medication": "medication",
+  "Insurance": "insurance",
+  "Other Medical Document": "other medical document",
+};
+
 export const filterDocuments = async (payload: FilterDocumentsRequest) => {
+  const searchVal = payload.filter?.search || "";
+  const mappedSearch = UI_TO_BE_TYPE_MAP[searchVal] || searchVal;
+
   const response = await apiClient.post(
     DOCUMENT_ENDPOINTS.FILTER_AND_SORT,
-    payload,
+    {
+      ...payload,
+      filter: {
+        ...payload.filter,
+        search: mappedSearch === "All" ? "" : mappedSearch,
+      },
+    },
   );
   return response.data;
 };
@@ -277,9 +303,10 @@ export const documentListPaginated = async ({
   page,
   pageLimit,
 }: PaginatedDocumentRequest) => {
+  const mappedCategory = UI_TO_BE_TYPE_MAP[activeCategory] || activeCategory;
   const payload = {
     filter: {
-      search: activeCategory === "All" ? "" : activeCategory,
+      search: mappedCategory === "All" ? "" : mappedCategory,
     },
     page: {
       pageNumber: page,
@@ -295,22 +322,6 @@ export const documentListPaginated = async ({
     payload,
   );
   return response.data;
-};
-
-const UI_TO_BE_TYPE_MAP: Record<string, string> = {
-  "Prescription": "prescription",
-  "Lab Report": "lab report",
-  "Imaging Report": "imaging report",
-  "Discharge Summary": "discharge summary",
-  "Consultation Report": "consultation report",
-  "Surgery Report": "surgery procedure report",
-  "Vaccination Record": "vaccination record",
-  "Medical Certificate": "medical certificate",
-  "Family": "family",
-  "Medical Document": "medical_document",
-  "Medication": "medication",
-  "Insurance": "insurance",
-  "Other Medical Document": "other medical document",
 };
 
 export const updateDocument = async (

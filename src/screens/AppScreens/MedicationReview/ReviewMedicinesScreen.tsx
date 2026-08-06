@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, View, BackHandler } from "react-native";
 import styled from "styled-components/native";
 import { useRoute, RouteProp, useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -52,6 +52,18 @@ export const ReviewMedicinesScreen: React.FC = () => {
       // Don't clear state on unmount, we want state preservation when moving between details and list
     };
   }, [jobIds]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+    return () => subscription.remove();
+  }, [fromScreen, navigation]);
 
   const handleBack = () => {
     clearReviewState();

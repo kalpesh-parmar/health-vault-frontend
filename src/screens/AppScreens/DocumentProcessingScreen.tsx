@@ -301,7 +301,12 @@ export const DocumentProcessingScreen = () => {
       </ContentContainer>
 
       {/* Result Modal / Bottom Sheet */}
-      <Modal visible={Boolean(selectedResult)} animationType="slide" transparent>
+      <Modal
+        visible={Boolean(selectedResult)}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedResult(null)}
+      >
         <ModalOverlay>
           <ModalContentCard bottomPadding={bottomPadding}>
             <ModalHeader>

@@ -1002,19 +1002,12 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
           <Ionicons name="restaurant-outline" size={14} color={theme.colors.textSecondary} style={{ marginRight: 6 }} />
           <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
-            {preferredLang === "gujarati" ? "ભોજન સાથેનો સમય" : "Food Frequency"}
+            {t("foodFrequency")}
           </Text>
         </View>
         <View style={styles.chipRow}>
           {["BEFORE_FOOD", "AFTER_FOOD"].map((f) => {
-            const label =
-              f === "BEFORE_FOOD"
-                ? preferredLang === "gujarati"
-                  ? "જમ્યા પહેલા"
-                  : "Before Food"
-                : preferredLang === "gujarati"
-                  ? "જમ્યા પછી"
-                  : "After Food";
+            const label = f === "BEFORE_FOOD" ? t("beforeFood") : t("afterFood");
             return (
               <TouchableOpacity
                 key={f}
@@ -1067,7 +1060,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           onPress={() => setFormRefill(!formRefill)}
         >
           <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 11 }}>
-            {formRefill ? "ON" : "OFF"}
+            {formRefill ? t("on") : t("off")}
           </Text>
         </TouchableOpacity>
       </View>

@@ -47,11 +47,15 @@ import ErrorBoundary from "../../components/shared/ErrorBoundary";
 
 const CATEGORIES = [
   { key: "All", value: "All" },
-  { key: "Medical Documents", value: "Medical Documents" },
-  { key: "Lab Reports", value: "Medical Report" },
-  { key: "Prescriptions", value: "Prescription" },
-  { key: "Insurance", value: "Insurance" },
-  { key: "Other", value: "Other" },
+  { key: "Prescription", value: "Prescription" },
+  { key: "Lab Report", value: "Lab Report" },
+  { key: "Imaging Report", value: "Imaging Report" },
+  { key: "Discharge Summary", value: "Discharge Summary" },
+  { key: "Consultation Report", value: "Consultation Report" },
+  { key: "Surgery Report", value: "Surgery Report" },
+  { key: "Vaccination Report", value: "Vaccination Report" },
+  { key: "Medical Certificate", value: "Medical Certificate" },
+  { key: "Other Medical Document", value: "Other Medical Document" },
 ];
 
 const SORT_OPTIONS = [

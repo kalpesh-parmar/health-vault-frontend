@@ -543,7 +543,12 @@ const SummaryScreen = ({ route, navigation }: any) => {
       </ScrollView>
 
       {/* FULL SCREEN ZOOM MODAL */}
-      <Modal visible={isPreviewModalOpen} transparent animationType="fade">
+      <Modal
+        visible={isPreviewModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsPreviewModalOpen(false)}
+      >
         <GestureHandlerRootView style={{ flex: 1 }}>
           <ModalBackdrop>
             <CloseButton onPress={() => setIsPreviewModalOpen(false)}>

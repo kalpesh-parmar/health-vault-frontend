@@ -213,7 +213,12 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
         </RightButtonsContainer>
       </DocCard>
 
-      <Modal visible={menuVisible} transparent animationType="fade">
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
         <Overlay onPress={() => setMenuVisible(false)} />
         <MenuContainer style={{ top: menuPosition.y, left: menuPosition.x }}>
           <MenuItem onPress={handleEditPress}>

@@ -167,7 +167,12 @@ const ConfirmationModal = ({
   const isLogout = mode === "Log Out";
 
   return (
-    <Modal transparent visible={showModal} animationType="fade">
+    <Modal
+      transparent
+      visible={showModal}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <Overlay>
         <ModalCard>
           <Indicator />

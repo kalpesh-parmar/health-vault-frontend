@@ -9,7 +9,12 @@ type Props = {
 
 const PasswordInfoModal: React.FC<Props> = ({ visible, onClose }) => {
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <Overlay>
         <Container>
           <Title>Password Must Contain</Title>

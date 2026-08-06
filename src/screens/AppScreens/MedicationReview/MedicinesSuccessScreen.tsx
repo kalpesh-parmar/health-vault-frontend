@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { BackHandler } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, RouteProp } from "@react-navigation/native";
@@ -36,6 +37,18 @@ export const MedicinesSuccessScreen: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
     queryClient.invalidateQueries({ queryKey: ["allReminders"] });
     queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+  }, []);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleGoToHome();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+    return () => subscription.remove();
   }, []);
 
   const handleGoToMedications = () => {

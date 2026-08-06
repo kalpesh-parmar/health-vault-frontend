@@ -27,7 +27,7 @@ export const BE_TO_UI_TYPE_MAP: Record<string, string> = {
   "discharge summary": "Discharge Summary",
   "consultation report": "Consultation Report",
   "surgery procedure report": "Surgery Report",
-  "vaccination record": "Vaccination Record",
+  "vaccination record": "Vaccination Report",
   "medical certificate": "Medical Certificate",
   "family": "Family",
   "medical_document": "Medical Document",
@@ -133,12 +133,11 @@ export const EditDocumentBottomSheet = forwardRef<any, EditDocumentBottomSheetPr
 
     const handleNameChange = (text: string) => {
       const hasSpaces = /\s/.test(text);
-      const sanitized = text.replace(/\s/g, "");
-      setFormName(sanitized);
+      setFormName(text);
 
       if (hasSpaces) {
         setNameError("Spaces are not allowed in document name.");
-      } else if (!sanitized) {
+      } else if (!text.trim()) {
         setNameError("Document name cannot be empty.");
       } else {
         setNameError(null);

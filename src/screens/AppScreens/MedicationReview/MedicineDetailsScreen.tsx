@@ -85,6 +85,26 @@ export const MedicineDetailsScreen: React.FC = () => {
 
   const [localErrors, setLocalErrors] = useState<string[]>([]);
 
+  React.useEffect(() => {
+    if (localErrors.length > 0) {
+      setLocalErrors([]);
+    }
+  }, [
+    formName,
+    formType,
+    formFreq,
+    formNotes,
+    formPrescribed,
+    formRefill,
+    formQty,
+    formFoodFreq,
+    startDate,
+    formCount,
+    formVal,
+    formUnit,
+    selectedSlots,
+  ]);
+
   const handleBack = () => {
     navigation.goBack();
   };

@@ -385,9 +385,16 @@ export function ReviewMedicinesListCard({
                     <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="restaurant-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Food Context</Text>
+                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("foodFrequency")}</Text>
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
-                          {formatFoodContext(med.foodContext || med.medicationSchedule?.foodContext || med.foodFrequency)}
+                          {(() => {
+                            const raw = med.foodContext || med.medicationSchedule?.foodContext || med.foodFrequency;
+                            if (!raw) return t("none");
+                            const normalized = String(raw).toUpperCase().replace(/\s+/g, "_");
+                            if (normalized === "BEFORE_FOOD" || normalized === "BEFORE") return t("beforeFood");
+                            if (normalized === "AFTER_FOOD" || normalized === "AFTER") return t("afterFood");
+                            return t(raw);
+                          })()}
                         </Text>
                       </View>
                     </View>

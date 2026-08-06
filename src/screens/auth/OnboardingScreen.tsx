@@ -1539,7 +1539,7 @@ export default function OnboardingScreen() {
         const newMsg: Message = {
           id: `ai-${Date.now()}`,
           role: "assistant",
-          content: "Please edit the medication details below:",
+          content: uiT("editMedicationDetails"),
           action: "EDIT_MEDICINE",
           medicine: med,
         };

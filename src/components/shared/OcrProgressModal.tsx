@@ -22,7 +22,12 @@ const OcrProgressModal = ({
   const { isDark } = useAppTheme();
 
   return (
-    <Modal transparent visible={visible} animationType="fade">
+    <Modal
+      transparent
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <Overlay>
         <ModalCard>
           <Indicator />

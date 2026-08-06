@@ -68,6 +68,26 @@ export function AddMedicineCard({
     }
   }, [med]);
 
+  React.useEffect(() => {
+    if (localErrors.length > 0) {
+      setLocalErrors([]);
+    }
+  }, [
+    formName,
+    formType,
+    formFreq,
+    formNotes,
+    formPrescribed,
+    formRefill,
+    formQty,
+    formFoodFreq,
+    startDate,
+    formCount,
+    formVal,
+    formUnit,
+    selectedSlots,
+  ]);
+
   const t = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
@@ -210,16 +230,13 @@ export function AddMedicineCard({
             pointerEvents={readOnly ? "none" : "auto"}
           >
             <TouchableOpacity
-              disabled={selectedSlots.length !== N || readOnly}
+              disabled={readOnly}
               style={[
                 styles.bigActionButtonSide,
                 {
-                  backgroundColor:
-                    selectedSlots.length !== N
-                      ? isDark
-                        ? "#475569"
-                        : "#cbd5e1"
-                      : theme.colors.primary,
+                  backgroundColor: readOnly
+                    ? (isDark ? "#475569" : "#cbd5e1")
+                    : theme.colors.primary,
                   flex: 1,
                   marginRight: 8,
                   opacity: saveOpacity,
@@ -248,12 +265,9 @@ export function AddMedicineCard({
                   style={[
                     styles.bigActionButtonTextSide,
                     {
-                      color:
-                        selectedSlots.length !== N
-                          ? isDark
-                            ? "#94a3b8"
-                            : "#64748b"
-                          : "#ffffff",
+                      color: readOnly
+                        ? (isDark ? "#94a3b8" : "#64748b")
+                        : "#ffffff",
                     },
                   ]}
                 >

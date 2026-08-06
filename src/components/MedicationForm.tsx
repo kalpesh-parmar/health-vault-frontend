@@ -54,6 +54,26 @@ const MedicationForm = ({
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
   React.useEffect(() => {
+    if (localErrors.length > 0) {
+      setLocalErrors([]);
+    }
+  }, [
+    formName,
+    formType,
+    formFreq,
+    formNotes,
+    formPrescribed,
+    formRefill,
+    formQty,
+    formFoodFreq,
+    startDate,
+    formCount,
+    formVal,
+    formUnit,
+    selectedSlots,
+  ]);
+
+  React.useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       () => {
