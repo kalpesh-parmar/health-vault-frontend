@@ -152,5 +152,7 @@ export const mapApiDocumentToProcessedDocument = (
     type: "Document",
     status,
     medicines: medications,
+    summaryEnglish: apiJobResult?.summaries?.summaryEnglish || apiJobResult?.extractedStructuredData?.summaryEnglish || "",
+    summaryPreferred: apiJobResult?.summaries?.summaryInPreferredLanguage || "",
   };
 };

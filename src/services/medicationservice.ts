@@ -84,3 +84,14 @@ export const refillMedicationService = async ({
   const response = await apiClient.post(endpoint, { quantity });
   return response.data;
 };
+
+export const checkMedicationDuplicate = async (payload: {
+  medicationName: string;
+  medicationType: string;
+}): Promise<ApiResponse<any>> => {
+  const response = await apiClient.post(
+    MEDICATION_ENDPOINTS.CHECK_DUPLICATE,
+    payload
+  );
+  return response.data;
+};

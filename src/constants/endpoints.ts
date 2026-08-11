@@ -58,6 +58,7 @@ export const NOTIFICATION_ENDPOINTS = {
 
 export const MEDICATION_ENDPOINTS = {
   ADD_MEDICATION: "/medications/create",
+  CHECK_DUPLICATE: "/medications/check-duplicate",
   LIST_MEDICATION_PAGINATED: "/medications/list-paginated", // Pagination API.
   GET_MEDICATION: "/medications/list", // Normal API.
   UPDATE_MEDICATION: "/medications/{id}",

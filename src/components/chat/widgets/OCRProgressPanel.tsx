@@ -221,19 +221,16 @@ export default OCRProgressPanel;
 // --- Styled Components ---
 
 const PanelCard = styled.View<{ isModal: boolean; isDark: boolean }>`
-  border-width: 1px;
-  border-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "rgba(255,255,255,0.08)" : "rgba(13, 148, 136, 0.15)"};
-  border-radius: 16px;
+  border-radius: 20px;
   margin: ${({ isModal }: { isModal: boolean }) => (isModal ? "0px" : "12px 16px")};
   width: ${({ isModal }: { isModal: boolean }) => (isModal ? `${width - 40}px` : `${width * 0.9}px`)};
   align-self: center;
   overflow: hidden;
-  shadow-color: #000;
-  shadow-offset: 0px 4px;
-  shadow-opacity: 0.08;
-  shadow-radius: 8px;
-  elevation: 4;
+  shadow-color: #0f172a;
+  shadow-offset: 0px 8px;
+  shadow-opacity: 0.12;
+  shadow-radius: 16px;
+  elevation: 6;
 `;
 
 const MainRow = styled.View`
@@ -257,10 +254,11 @@ const ToggleButton = styled.TouchableOpacity`
 `;
 
 const ProgressTitle = styled.Text<{ isDark: boolean }>`
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
-  color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#f1f5f9" : "#1e293b")};
-  margin-bottom: 6px;
+  color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#f8fafc" : "#0f172a")};
+  margin-bottom: 8px;
+  letter-spacing: -0.2px;
 `;
 
 const DismissButton = styled.TouchableOpacity`
@@ -277,11 +275,11 @@ const ProgressBarContainer = styled.View<{ isDark: boolean }>`
 `;
 
 const DetailsList = styled.View<{ isDark: boolean }>`
-  margin-top: 12px;
+  margin-top: 14px;
   border-top-width: 1px;
   border-top-color: ${({ isDark }: { isDark: boolean }) =>
-    isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9"};
-  padding-top: 8px;
+    isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9"};
+  padding-top: 12px;
 `;
 
 const DocItem = styled.View`
@@ -322,16 +320,14 @@ const CancelAllButton = styled.TouchableOpacity`
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  border-width: 1.5px;
-  border-color: #fca5a5;
-  background-color: rgba(239, 68, 68, 0.05);
+  background-color: rgba(239, 68, 68, 0.08);
   border-radius: 12px;
-  padding-vertical: 8px;
-  margin-top: 12px;
+  padding-vertical: 10px;
+  margin-top: 14px;
 `;
 
 const CancelAllText = styled.Text`
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: #ef4444;
 `;

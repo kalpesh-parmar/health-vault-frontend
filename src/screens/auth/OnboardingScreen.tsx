@@ -1401,7 +1401,7 @@ export default function OnboardingScreen() {
     }
 
     if (
-      activeMsg.action === "ADD_MEDICINE" ||
+      activeMsg.action === "ADD_MEDICINE" || // "EXTRACTED_MEDICINES"
       activeMsg.action === "EDIT_MEDICINE" ||
       (activeMedicineToEdit && !isHistorical)
     ) {

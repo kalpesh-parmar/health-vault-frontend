@@ -24,8 +24,6 @@ const RootNavigator = () => {
     enabled: authContext.isAuthenticated,
   });
 
-  console.log("[USER_PROFILE]", userProfile);
-
   const isProfileIncomplete = (user: any) => {
     if (!user) return true;
     if (!user?.firstName || user?.firstName === "User") return true;

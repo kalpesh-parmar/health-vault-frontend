@@ -170,10 +170,32 @@ const DocumentList = () => {
     enabled: (isFilterApplied || searchQuery.trim().length > 0) && !!userId,
   });
 
-  // Fetch all documents when "All" is active.
-  const { data: allDocsData, isLoading: isLoadingAll } = useQuery({
+  // Fetch paginated documents when "All" is active.
+  const {
+    data: allDocsData,
+    isLoading: isLoadingAll,
+    fetchNextPage: fetchNextPageAll,
+    hasNextPage: hasNextPageAll,
+    isFetchingNextPage: isFetchingNextPageAll,
+  } = useInfiniteQuery({
     queryKey: ["allDocuments", userId],
-    queryFn: listDocument,
+    queryFn: ({ pageParam = 1 }) =>
+      documentListPaginated({
+        activeCategory: "All",
+        page: pageParam as number,
+        pageLimit: 10,
+      }),
+    getNextPageParam: (lastPage: any, allPages) => {
+      const data = lastPage?.data
+        ? Array.isArray(lastPage.data)
+          ? lastPage.data
+          : Array.isArray(lastPage.data.items)
+            ? lastPage.data.items
+            : []
+        : [];
+      return data.length === 10 ? allPages.length + 1 : undefined;
+    },
+    initialPageParam: 1,
     enabled: activeTab === "All" && !isFilterApplied && !!userId,
   });
 
@@ -192,7 +214,7 @@ const DocumentList = () => {
         page: pageParam as number,
         pageLimit: 10,
       }),
-    getNextPageParam: (lastPage, allPages) => {
+    getNextPageParam: (lastPage: any, allPages) => {
       const data = lastPage?.data
         ? Array.isArray(lastPage.data)
           ? lastPage.data
@@ -229,7 +251,10 @@ const DocumentList = () => {
     if (isFilterApplied || searchQuery.trim().length > 0) {
       return getSafeArray(filteredDocuments?.data || filteredDocuments);
     } else if (activeTab === "All") {
-      return getSafeArray(allDocsData);
+      const pages = Array.isArray(allDocsData?.pages)
+        ? allDocsData.pages
+        : [];
+      return pages.flatMap((page) => getSafeArray(page));
     } else {
       const pages = Array.isArray(documentListData?.pages)
         ? documentListData.pages
@@ -394,7 +419,7 @@ const DocumentList = () => {
         <FlatList
           data={documents}
           renderItem={renderItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => index + item.createdAt}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
           ListEmptyComponent={
@@ -415,13 +440,19 @@ const DocumentList = () => {
           maxToRenderPerBatch={10}
           windowSize={5}
           onEndReached={() => {
-            if (activeTab !== "All" && hasNextPage && !isFetchingNextPage) {
-              fetchNextPage();
+            if (activeTab === "All") {
+              if (hasNextPageAll && !isFetchingNextPageAll) {
+                fetchNextPageAll();
+              }
+            } else {
+              if (hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+              }
             }
           }}
           onEndReachedThreshold={0.2}
           ListFooterComponent={
-            activeTab !== "All" && isFetchingNextPage ? (
+            (activeTab === "All" && isFetchingNextPageAll) || (activeTab !== "All" && isFetchingNextPage) ? (
               <ActivityIndicator
                 size="small"
                 color="#8b5cf6"

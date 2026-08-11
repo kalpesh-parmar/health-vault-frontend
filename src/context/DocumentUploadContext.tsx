@@ -3,6 +3,28 @@ import Toast from "react-native-toast-message";
 import { SelectedDocument } from "../types/documentUpload";
 import { queryClient } from "../config/queryClient";
 import { uploadPatientDocuments, startOcrJob, getOcrJob, cancelOcr, getOcrJobResult } from "../services/documentService";
+import { ExtractedMedicine } from "../types/medicationReview";
+import { AddOrEditMedication } from "../types";
+
+export interface DuplicateConflict {
+  extractedMedicine: ExtractedMedicine;
+  existingMedication: AddOrEditMedication;
+  resolvedAction?: "keep" | "replace" | "merge" | "remove_new";
+}
+
+export interface ChatWizardState {
+  step: "idle" | "processing" | "results" | "conflicts" | "summary" | "completed";
+  jobIds: string[];
+  filesInfo: { jobId: string; fileName: string; fileKey: string }[];
+  extractedMedicines: ExtractedMedicine[];
+  conflicts: DuplicateConflict[];
+  currentConflictIndex: number;
+  resolvedMedicines: ExtractedMedicine[];
+  replaceList: { existingId: string; extractedMedicine: ExtractedMedicine }[];
+  mergeList: { existingId: string; mergedMedication: AddOrEditMedication }[];
+  summaries: { docName: string; summary: string }[];
+  hasViewedCompletedOcr?: boolean;
+}
 
 export interface UploadingDoc {
   id: string;
@@ -41,6 +63,9 @@ interface DocumentUploadContextType {
   clearCompletedBatch: () => void;
   isPillHidden: boolean;
   setIsPillHidden: (val: boolean) => void;
+  chatWizardState: ChatWizardState;
+  setChatWizardState: React.Dispatch<React.SetStateAction<ChatWizardState>>;
+  resetChatWizard: () => void;
 }
 
 const DocumentUploadContext = createContext<DocumentUploadContextType | undefined>(undefined);
@@ -114,6 +139,37 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     fromScreen?: string;
   } | null>(null);
   const [isPillHidden, setIsPillHidden] = useState(false);
+
+  const [chatWizardState, setChatWizardState] = useState<ChatWizardState>({
+    step: "idle",
+    jobIds: [],
+    filesInfo: [],
+    extractedMedicines: [],
+    conflicts: [],
+    currentConflictIndex: 0,
+    resolvedMedicines: [],
+    replaceList: [],
+    mergeList: [],
+    summaries: [],
+    hasViewedCompletedOcr: false,
+  });
+
+  const resetChatWizard = useCallback(() => {
+    setChatWizardState({
+      step: "idle",
+      jobIds: [],
+      filesInfo: [],
+      extractedMedicines: [],
+      conflicts: [],
+      currentConflictIndex: 0,
+      resolvedMedicines: [],
+      replaceList: [],
+      mergeList: [],
+      summaries: [],
+      hasViewedCompletedOcr: false,
+    });
+    setUploadingDocs([]);
+  }, []);
 
   const clearCompletedBatch = useCallback(() => {
     setCompletedBatch(null);
@@ -314,10 +370,16 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   onPressButton: () => {
                     const { navigationRef } = require("../navigation/RootNavigator");
                     if (navigationRef.isReady()) {
-                      navigationRef.navigate("ReviewMedicines", {
-                        jobIds: computedNext.map((d) => d.id),
-                        filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name.replace(/%20/g, " "), fileKey: "" })),
-                        fromScreen: activeUploadFromScreen,
+                      navigationRef.navigate("HOME", {
+                        screen: "Home",
+                        params: {
+                          screen: "ReviewMedicines",
+                          params: {
+                            jobIds: computedNext.map((d) => d.id),
+                            filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name.replace(/%20/g, " "), fileKey: "" })),
+                            fromScreen: activeUploadFromScreen,
+                          }
+                        }
                       });
                     }
                   },
@@ -341,7 +403,17 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const startUpload = useCallback(async (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
     if (selectedFiles.length === 0) return;
     setIsUploading(true);
-    setUploadingDocs([]);
+    
+    // Populate uploadingDocs immediately for upload progress tracking
+    const initialUploading = selectedFiles.map((file) => ({
+      id: file.id,
+      name: file.displayName || file.originalName,
+      progress: 5,
+      status: "UPLOADING" as any,
+      reason: null,
+    }));
+    setUploadingDocs(initialUploading);
+    
     setIsPillHidden(false);
     setCompletedBatch(null);
     if (fromScreen) {
@@ -366,33 +438,37 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         throw new Error("No documents returned from server.");
       }
 
-      // 2. Start OCR Jobs
+      // 2. Start OCR Jobs sequentially with a 3-second delay
       const jobIds: string[] = [];
       const filesInfo: any[] = [];
 
-      await Promise.all(
-        uploadedList.map(async (doc: any) => {
-          if (doc.jobId) {
+      for (let i = 0; i < uploadedList.length; i++) {
+        const doc: any = uploadedList[i];
+        if (doc.jobId) {
+          try {
+            await startOcrJob(doc.jobId);
+            jobIds.push(doc.jobId);
+            let finalFileName = doc.fileName || doc.originalFileName || "Document";
             try {
-              await startOcrJob(doc.jobId);
-              jobIds.push(doc.jobId);
-              let finalFileName = doc.fileName || doc.originalFileName || "Document";
-              try {
-                finalFileName = decodeURIComponent(finalFileName).replace(/%20/g, " ");
-              } catch (e) {
-                finalFileName = finalFileName.replace(/%20/g, " ");
-              }
-              filesInfo.push({
-                jobId: doc.jobId,
-                fileName: finalFileName,
-                fileKey: doc.fileKey || doc.s3Key || "",
-              });
-            } catch (jobErr) {
-              console.error(`Failed to start job ${doc.jobId}:`, jobErr);
+              finalFileName = decodeURIComponent(finalFileName).replace(/%20/g, " ");
+            } catch (e) {
+              finalFileName = finalFileName.replace(/%20/g, " ");
             }
+            filesInfo.push({
+              jobId: doc.jobId,
+              fileName: finalFileName,
+              fileKey: doc.fileKey || doc.s3Key || "",
+            });
+          } catch (jobErr) {
+            console.error(`Failed to start job ${doc.jobId}:`, jobErr);
           }
-        })
-      );
+
+          // Introduce a 3-second delay between jobs to prevent exceeding API rate limits
+          if (i < uploadedList.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+        }
+      }
 
       clearSelectedFiles();
       setIsUploading(false);
@@ -503,6 +579,9 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         clearCompletedBatch,
         isPillHidden,
         setIsPillHidden,
+        chatWizardState,
+        setChatWizardState,
+        resetChatWizard,
       }}
     >
       {children}

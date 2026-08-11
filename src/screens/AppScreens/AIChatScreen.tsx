@@ -13,6 +13,7 @@ import {
   ScrollView,
   StatusBar,
   BackHandler,
+  TouchableOpacity,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
@@ -20,21 +21,35 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { format } from "date-fns";
 import { formatUTCDateTime } from "../../utils/dateFormatter";
 
+import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import BottomSheet from "../../components/shared/BottomSheet";
+import { queryClient } from "../../config/queryClient";
 import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
-import {
-  ErrorScreen,
-  LoadingScreen,
-} from "../../components/shared/DefensiveStates";
+import { ErrorScreen, LoadingScreen } from "../../components/shared/DefensiveStates";
 import { listDocument, sendChatMessage } from "../../services/documentService";
+import { useMedicationFormState, MedicationFormFields } from "../../components/shared/MedicationFormFields";
+import { MedicationReviewService } from "../../services/medicationReviewService";
+import { listMedications, updateMedication, checkMedicationDuplicate, addMedication } from "../../services/medicationservice";
+import { createMedicationReminder } from "../../services/reminderService";
+import { ExtractedMedicine } from "../../types/medicationReview";
+import { AddOrEditMedication } from "../../types";
+import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
+import {
+  ExtractedMedicinesCard,
+  ConflictCarouselCard,
+  ConfirmMedicinesCard,
+  SuccessCard,
+  MedicineExtractionSummaryCard,
+  MedicineDocumentAccordionCard,
+} from "../../components/chat/widgets/ConversationalExtractionWidgets";
+import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
+import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
 import type { MedicalDocument } from "../../types";
 import { safeFilter, safeMap } from "../../utils/arrayUtils";
 import apiClient from "../../services/apiClient";
 import { ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import * as ImagePicker from "expo-image-picker";
-import * as DocumentPicker from "expo-document-picker";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 
@@ -74,12 +89,16 @@ type ChatMessage = {
   stepKey?: string;
   medicine?: any;
   medicines?: any[];
+  medicinesCount?: number;
+  failedCount?: number;
+  successCount?: number;
+  docsCount?: number;
   summary?: any;
   fields?: any[];
   loginSummary?: string;
   documentSummary?: string;
   loginProvider?: string;
-  documents?: { id: string; fileName: string }[];
+  documents?: { id: string; fileName: string; medicinesCount?: number }[];
   createdAt?: string | Date;
 };
 
@@ -246,6 +265,158 @@ const SUGGESTED_QUESTIONS_I18N: Record<
 
 
 
+interface EditMedicineFormWrapperProps {
+  medicine: ExtractedMedicine;
+  preferredLang: string;
+  isDark: boolean;
+  theme: any;
+  onClose: () => void;
+  onSave: (updated: ExtractedMedicine) => void;
+}
+
+const EditMedicineFormWrapper = ({
+  medicine,
+  preferredLang,
+  isDark,
+  theme,
+  onClose,
+  onSave,
+}: EditMedicineFormWrapperProps) => {
+  const initialData = useMemo(() => {
+    return {
+      id: medicine.id,
+      medicationName: medicine.name,
+      medicationType: medicine.medicineType || "TABLET",
+      dose: {
+        count: parseFloat(medicine.dosage || "1") || 1,
+        value: parseFloat(medicine.dosage || "1") || 1,
+        unit: medicine.dosageUnit || "tablet",
+      },
+      frequency: medicine.frequency || "ONCE",
+      notes: medicine.notes || "",
+      prescribed_by: medicine.prescribedBy || "",
+      refill_alert: medicine.refillAlert || false,
+      total_quantity: medicine.totalQuantity || 10,
+      foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
+      startDate: medicine.startDate || new Date().toISOString().split("T")[0],
+      medicationSchedule: medicine.medicationSchedule || ["08:00"],
+    };
+  }, [medicine]);
+
+  const formState = useMedicationFormState(initialData, preferredLang);
+  const {
+    formName,
+    formType,
+    formFreq,
+    formNotes,
+    formPrescribed,
+    formRefill,
+    formQty,
+    formFoodFreq,
+    startDate,
+    formCount,
+    formVal,
+    formUnit,
+    selectedSlots,
+  } = formState;
+
+  const [localErrors, setLocalErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (localErrors.length > 0) {
+      setLocalErrors([]);
+    }
+  }, [
+    formName,
+    formType,
+    formFreq,
+    formNotes,
+    formPrescribed,
+    formRefill,
+    formQty,
+    formFoodFreq,
+    startDate,
+    formCount,
+    formVal,
+    formUnit,
+    selectedSlots,
+  ]);
+
+  const handleSave = () => {
+    const errors: string[] = [];
+    if (!formName.trim()) {
+      errors.push("Name is required");
+    }
+    const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
+    if (selectedSlots.length !== N) {
+      errors.push(`Please select exactly ${N} reminder times`);
+    }
+    const parsedQty = parseInt(formQty.trim(), 10);
+    if (!formQty.trim() || isNaN(parsedQty) || parsedQty <= 0) {
+      errors.push("Total Quantity is required");
+    }
+
+    if (errors.length > 0) {
+      setLocalErrors(errors);
+      return;
+    }
+
+    onSave({
+      ...medicine,
+      name: formName.trim(),
+      medicineType: formType,
+      dosage: formType === "TABLET" || formType === "CAPSULE" ? String(formCount) : String(formVal),
+      dosageUnit: formType === "TABLET" || formType === "CAPSULE" ? (formType === "TABLET" ? "tablet" : "capsule") : formUnit,
+      frequency: formFreq,
+      foodFrequency: formFoodFreq,
+      timing: formFoodFreq === "BEFORE_FOOD" ? "Before Food" : "After Food",
+      prescribedBy: formPrescribed.trim(),
+      totalQuantity: parsedQty,
+      notes: formNotes.trim(),
+      refillAlert: formRefill,
+      refillAlertEnabled: formRefill,
+      medicationSchedule: selectedSlots,
+      startDate: startDate ? (startDate instanceof Date ? startDate.toISOString().split("T")[0] : startDate) : new Date().toISOString().split("T")[0],
+    });
+  };
+
+  return (
+    <View style={{ padding: 16 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#f8fafc' : '#1e293b' }}>Edit Medicine</Text>
+        <TouchableOpacity onPress={onClose}>
+          <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#475569"} />
+        </TouchableOpacity>
+      </View>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 350 }}>
+        <MedicationFormFields formState={formState} isDark={isDark} theme={{}} preferredLang={preferredLang} />
+        {localErrors.length > 0 && (
+          <View style={{ marginTop: 8, marginBottom: 12 }}>
+            {localErrors.map((err, idx) => (
+              <Text key={idx} style={{ color: "#ef4444", fontSize: 12 }}>
+                • {err}
+              </Text>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+      <TouchableOpacity
+        onPress={handleSave}
+        style={{
+          backgroundColor: '#0f766e',
+          borderRadius: 14,
+          padding: 14,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginTop: 16,
+        }}
+      >
+        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>Save Changes</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
   const { speakingMessageId, speakMessage } = useTextToSpeech();
@@ -261,6 +432,751 @@ const AIChatScreen = ({ route }: any) => {
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const hasInitializedHistory = useRef(false);
+
+  const {
+    chatWizardState,
+    setChatWizardState,
+    resetChatWizard,
+    startBackgroundOcr,
+    isUploading,
+    uploadingDocs,
+  } = useDocumentUpload();
+
+  const handleUploadSuccess = (jobIds: string[], filesInfo: any[]) => {
+    setChatWizardState({
+      step: "processing",
+      jobIds,
+      filesInfo,
+      extractedMedicines: [],
+      conflicts: [],
+      currentConflictIndex: 0,
+      resolvedMedicines: [],
+      replaceList: [],
+      mergeList: [],
+      summaries: [],
+    });
+
+    startBackgroundOcr(jobIds, filesInfo, "AIChat");
+  };
+
+  const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [medicineToEdit, setMedicineToEdit] = useState<ExtractedMedicine | null>(null);
+  const editSheetRef = useRef<BottomSheetModal>(null);
+  const [isConfirmingMeds, setIsConfirmingMeds] = useState(false);
+  const [failedSubmissions, setFailedSubmissions] = useState<{
+    type: "new" | "replace" | "merge";
+    med: any;
+    payload: any;
+    existingId?: string;
+  }[]>([]);
+
+  const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
+    const lang = preferredLang || "english";
+    const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
+    let str = dict[key] || I18N_ONBOARDING_UI.english[key] || key;
+    if (replacements) {
+      Object.entries(replacements).forEach(([k, v]) => {
+        str = str.split(`{${k}}`).join(String(v));
+      });
+    }
+    return str;
+  };
+  
+  useEffect(() => {
+    if (chatWizardState.step === "processing" && isAllTerminal && chatWizardState.jobIds.length > 0 && !isLoadingResults) {
+      const getResults = async () => {
+        setIsLoadingResults(true);
+        try {
+          const data = await MedicationReviewService.fetchExtractedMedicines(
+            chatWizardState.jobIds,
+            chatWizardState.filesInfo
+          );
+          const flatMeds: ExtractedMedicine[] = [];
+          data.forEach((doc) => {
+            const docMeds = doc.medicines || [];
+            docMeds.forEach((m) => {
+              flatMeds.push({
+                ...m,
+                documentName: doc.name || "Uploaded Report",
+              });
+            });
+          });
+
+          const summariesList = data.map((doc) => ({
+            docName: doc.name || "Report",
+            summary: doc.summaryPreferred || doc.summaryEnglish || "No summary generated.",
+          }));
+
+          setChatWizardState((prev) => ({
+            ...prev,
+            step: "results",
+            extractedMedicines: flatMeds,
+            summaries: summariesList,
+          }));
+
+          // Dismiss the progress bottom sheet if open
+          extractionSheetRef.current?.dismiss();
+
+          // Show Toast notification about process completion (instead of appending message to chat)
+          const toastBodyMap: Record<string, string> = {
+            english: `Successfully extracted ${flatMeds.length} medicine(s).`,
+            gujarati: `સફળતાપૂર્વક ${flatMeds.length} દવા(ઓ) કાઢવામાં આવી.`,
+            hindi: `सफलतापूर्वक ${flatMeds.length} दवाएं निकाली गईं।`,
+            marathi: `यशस्वीरित्या ${flatMeds.length} औषधे काढली गेली.`,
+            tamil: `வெற்றிகரமாக ${flatMeds.length} மருந்து(கள்) பிரித்தெடுக்கப்பட்டது.`,
+          };
+          const toastBody = toastBodyMap[preferredLang] || toastBodyMap.english;
+
+          const reviewNowMap: Record<string, string> = {
+            english: "Review Now",
+            gujarati: "હમણાં સમીક્ષા કરો",
+            hindi: "अभी समीक्षा करें",
+            marathi: "आता पुनरावलोकन करा",
+            tamil: "இப்போது மதிப்பாய்வு செய்யவும்",
+          };
+          const reviewNowText = reviewNowMap[preferredLang] || reviewNowMap.english;
+
+          Toast.show({
+            type: "success",
+            text1: tOnboarding("success"),
+            text2: toastBody,
+            autoHide: false,
+            props: {
+              buttonText: reviewNowText,
+              onPressButton: () => {
+                Toast.hide();
+                navigation.navigate("Home", {
+                  screen: "ReviewMedicines",
+                  params: {
+                    jobIds: chatWizardState.jobIds,
+                    filesInfo: chatWizardState.filesInfo,
+                    fromScreen: "AIChat",
+                  }
+                });
+              }
+            }
+          });
+        } catch (err) {
+          console.error("Failed to load extracted medicines in conversational chat:", err);
+          setChatWizardState((prev) => ({
+            ...prev,
+            step: "results",
+            extractedMedicines: [],
+            summaries: [],
+          }));
+        } finally {
+          setIsLoadingResults(false);
+        }
+      };
+      getResults();
+    }
+  }, [chatWizardState.step, isAllTerminal, chatWizardState.jobIds]);
+
+  const handleEditSave = (updated: ExtractedMedicine) => {
+    setChatWizardState((prev) => {
+      const updatedExtracted = prev.extractedMedicines.map((m) =>
+        m.id === updated.id ? updated : m
+      );
+
+      const updatedConflicts = prev.conflicts.map((c) => {
+        if (c.extractedMedicine.id === updated.id) {
+          return {
+            ...c,
+            extractedMedicine: updated,
+          };
+        }
+        return c;
+      });
+
+      return {
+        ...prev,
+        extractedMedicines: updatedExtracted,
+        conflicts: updatedConflicts,
+      };
+    });
+
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.action === "EXTRACTED_MEDICINES" && msg.medicines) {
+          return {
+            ...msg,
+            medicines: msg.medicines.map((m) => (m.id === updated.id ? updated : m)),
+          };
+        }
+        return msg;
+      })
+    );
+
+    editSheetRef.current?.dismiss();
+    setMedicineToEdit(null);
+
+    Toast.show({
+      type: "success",
+      text1: "Medicine Updated",
+      text2: `${updated.name} has been updated in the list.`,
+    });
+  };
+
+  const handleConfirmSelection = async () => {
+    setIsLoadingResults(true);
+    
+    // Add user message "Continue"
+    const userMsg: ChatMessage = {
+      id: `user-continue-${Date.now()}`,
+      role: "user",
+      text: "Continue",
+      createdAt: new Date().toISOString(),
+    };
+    
+    // Add progress message in chat
+    const checkingMsgId = `ai-checking-${Date.now()}`;
+    const checkingMsg: ChatMessage = {
+      id: checkingMsgId,
+      role: "ai",
+      text: `Checking your medicines for duplicates... 0 / ${chatWizardState.extractedMedicines.length} completed`,
+      action: "CHECKING_DUPLICATES",
+      createdAt: new Date().toISOString(),
+    };
+    
+    setMessages((prev) => [...prev, userMsg, checkingMsg]);
+    
+    try {
+      const existingRes = await listMedications();
+      const existingMeds = existingRes.data || existingRes || [];
+
+      const conflictsList: any[] = [];
+      const newMedsList: ExtractedMedicine[] = [];
+      const total = chatWizardState.extractedMedicines.length;
+
+      for (let i = 0; i < total; i++) {
+        const med = chatWizardState.extractedMedicines[i];
+        
+        // Normalize medication type
+        const typeStr = (med.medicineType || "TABLET").toUpperCase();
+        const normalizedType = typeStr === "DROP" ? "DROPS" : typeStr;
+        
+        try {
+          const duplicateRes = await checkMedicationDuplicate({
+            medicationName: med.name,
+            medicationType: normalizedType,
+          });
+          const dupData = duplicateRes?.data || duplicateRes || {};
+          
+          if (dupData.hasDuplicate) {
+            const match = dupData.matchedMedication || dupData.matchedMedications?.[0] || existingMeds.find((em: any) => em.medicationName.trim().toLowerCase() === med.name.trim().toLowerCase());
+            conflictsList.push({
+              extractedMedicine: med,
+              existingMedication: match,
+            });
+          } else {
+            newMedsList.push(med);
+          }
+        } catch (apiErr) {
+          console.warn(`Duplicate check failed for ${med.name}, falling back to local check:`, apiErr);
+          const duplicateLocal = existingMeds.find((existing: any) => 
+            existing.medicationName.trim().toLowerCase() === med.name.trim().toLowerCase()
+          );
+          if (duplicateLocal) {
+            conflictsList.push({
+              extractedMedicine: med,
+              existingMedication: duplicateLocal,
+            });
+          } else {
+            newMedsList.push(med);
+          }
+        }
+        
+        // Update progress in chat
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === checkingMsgId
+              ? { ...msg, text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed` }
+              : msg
+          )
+        );
+      }
+
+      if (conflictsList.length > 0) {
+        setChatWizardState((prev) => ({
+          ...prev,
+          step: "conflicts",
+          conflicts: conflictsList,
+          currentConflictIndex: 0,
+          resolvedMedicines: newMedsList,
+          replaceList: [],
+          mergeList: [],
+        }));
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === checkingMsgId
+              ? { ...msg, text: `I detected duplicate conflicts with your existing medications. Let's resolve them.` }
+              : msg
+          )
+        );
+
+        const conflictMsg: ChatMessage = {
+          id: `ai-conflict-${Date.now()}`,
+          role: "ai",
+          text: tOnboarding("aiConflictIntro"),
+          action: "EXTRACTED_MEDICINES_CONFLICTS",
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, conflictMsg]);
+      } else {
+        setChatWizardState((prev) => ({
+          ...prev,
+          step: "summary",
+          resolvedMedicines: newMedsList,
+        }));
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === checkingMsgId
+              ? { ...msg, text: `No duplicates found. All medicines are ready to be added.` }
+              : msg
+          )
+        );
+
+        const confirmMsg: ChatMessage = {
+          id: `ai-confirm-${Date.now()}`,
+          role: "ai",
+          text: tOnboarding("aiConfirmIntro"),
+          action: "EXTRACTED_MEDICINES_CONFIRM",
+          medicinesCount: newMedsList.length,
+          docsCount: chatWizardState.filesInfo.length,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, confirmMsg]);
+      }
+    } catch (err: any) {
+      console.error("Conflict checking failed:", err);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === checkingMsgId
+            ? { ...msg, text: `We couldn't check your medicines for duplicates. Please try again.` }
+            : msg
+        )
+      );
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to perform duplicate check. Please try again.",
+      });
+    } finally {
+      setIsLoadingResults(false);
+    }
+  };
+
+  const resolveCurrentConflict = (
+    resolution: "keep" | "replace" | "merge" | "remove_new",
+    mergedPayload?: AddOrEditMedication
+  ) => {
+    const currentConflict = chatWizardState.conflicts[chatWizardState.currentConflictIndex];
+    if (!currentConflict) return;
+
+    setChatWizardState((prev) => {
+      const updatedConflicts = prev.conflicts.map((c, idx) =>
+        idx === prev.currentConflictIndex ? { ...c, resolvedAction: resolution } : c
+      );
+
+      const nextReplaceList: { existingId: string; extractedMedicine: ExtractedMedicine }[] = [];
+      const nextMergeList: { existingId: string; mergedMedication: AddOrEditMedication }[] = [];
+      const nextResolvedMedicines = [...prev.resolvedMedicines];
+
+      updatedConflicts.forEach((c) => {
+        if (c.resolvedAction === "replace") {
+          nextReplaceList.push({
+            existingId: c.existingMedication.id!,
+            extractedMedicine: c.extractedMedicine,
+          });
+        } else if (c.resolvedAction === "merge") {
+          // Use the merged payload if provided for the current conflict, or fall back to existing medication
+          const payload = c.extractedMedicine.id === currentConflict.extractedMedicine.id && mergedPayload
+            ? mergedPayload
+            : buildMedicationPayload(c.extractedMedicine);
+          nextMergeList.push({
+            existingId: c.existingMedication.id!,
+            mergedMedication: payload,
+          });
+        } else if (c.resolvedAction === "keep") {
+          if (!nextResolvedMedicines.some((m) => m.id === c.extractedMedicine.id)) {
+            nextResolvedMedicines.push(c.extractedMedicine);
+          }
+        }
+      });
+
+      const nextIndex = prev.currentConflictIndex + 1;
+      const allResolved = updatedConflicts.every((c) => c.resolvedAction !== undefined);
+      const nextStep = allResolved ? "summary" : "conflicts";
+
+      if (nextStep === "summary") {
+        setTimeout(() => {
+          const confirmMsg: ChatMessage = {
+            id: `ai-confirm-${Date.now()}`,
+            role: "ai",
+            text: tOnboarding("aiConfirmIntro"),
+            action: "EXTRACTED_MEDICINES_CONFIRM",
+            medicinesCount: nextResolvedMedicines.length + nextReplaceList.length + nextMergeList.length,
+            docsCount: chatWizardState.filesInfo.length,
+            createdAt: new Date().toISOString(),
+          };
+          setMessages((prevMsg) => [...prevMsg, confirmMsg]);
+        }, 100);
+      }
+
+      return {
+        ...prev,
+        conflicts: updatedConflicts,
+        currentConflictIndex: nextIndex === prev.conflicts.length ? prev.currentConflictIndex : nextIndex,
+        step: nextStep,
+        replaceList: nextReplaceList,
+        mergeList: nextMergeList,
+        resolvedMedicines: nextResolvedMedicines,
+      };
+    });
+  };
+
+  const navigateConflict = (direction: "prev" | "next") => {
+    setChatWizardState((prev) => {
+      let nextIdx = prev.currentConflictIndex;
+      if (direction === "prev" && nextIdx > 0) nextIdx--;
+      if (direction === "next" && nextIdx < prev.conflicts.length - 1) nextIdx++;
+      return {
+        ...prev,
+        currentConflictIndex: nextIdx,
+      };
+    });
+  };
+
+  const handleContinueAnyway = () => {
+    setChatWizardState((prev) => {
+      const remainingNew = prev.conflicts.slice(prev.currentConflictIndex).map(c => c.extractedMedicine);
+      const nextResolved = [...prev.resolvedMedicines, ...remainingNew];
+      
+      setTimeout(() => {
+        const confirmMsg: ChatMessage = {
+          id: `ai-confirm-${Date.now()}`,
+          role: "ai",
+          text: tOnboarding("aiConfirmIntro"),
+          action: "EXTRACTED_MEDICINES_CONFIRM",
+          medicinesCount: nextResolved.length,
+          docsCount: prev.filesInfo.length,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prevMsg) => [...prevMsg, confirmMsg]);
+      }, 100);
+
+      return {
+        ...prev,
+        step: "summary",
+        resolvedMedicines: nextResolved,
+      };
+    });
+  };
+
+  const handleReviewMedicines = () => {
+    // Append user message: "Review Medicines"
+    const userMsg: ChatMessage = {
+      id: `user-review-${Date.now()}`,
+      role: "user",
+      text: "Review Medicines",
+      createdAt: new Date().toISOString(),
+    };
+    
+    // Append AI message for review:
+    const aiReviewMsg: ChatMessage = {
+      id: `ai-review-accordion-${Date.now()}`,
+      role: "ai",
+      text: "I've analyzed the medicines extracted from your documents. Please review them before I add them to your Health Vault.",
+      action: "MEDICINE_REVIEW_ACCORDION",
+      medicines: chatWizardState.extractedMedicines,
+      documents: chatWizardState.filesInfo.map(f => {
+        const m = chatWizardState.extractedMedicines.filter(x => x.documentId === f.jobId);
+        return { id: f.jobId, fileName: f.fileName, medicinesCount: m.length };
+      }),
+      createdAt: new Date().toISOString(),
+    };
+    
+    setMessages((prev) => [...prev, userMsg, aiReviewMsg]);
+    setChatWizardState((prev) => ({ ...prev, step: "results" }));
+
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
+  const buildMedicationPayload = (med: ExtractedMedicine): AddOrEditMedication => {
+    const scheduleObj: Record<string, any> = {};
+    const times = med.medicationSchedule || [];
+    times.forEach((timeStr) => {
+      let key = "CUSTOM";
+      if (timeStr === "08:00") key = "MORNING";
+      else if (timeStr === "14:00") key = "NOON";
+      else if (timeStr === "20:00") key = "NIGHT";
+      
+      const timeWithSec = `${timeStr}:00`;
+      if (scheduleObj[key]) {
+        if (Array.isArray(scheduleObj[key])) {
+          scheduleObj[key].push(timeWithSec);
+        } else {
+          scheduleObj[key] = [scheduleObj[key], timeWithSec];
+        }
+      } else {
+        scheduleObj[key] = key === "CUSTOM" ? [timeWithSec] : timeWithSec;
+      }
+    });
+
+    let freqLabel = "Once Daily";
+    if (med.frequency === "TWICE" || med.frequency === "Twice Daily") freqLabel = "Twice Daily";
+    else if (med.frequency === "THRICE" || med.frequency === "3x Daily") freqLabel = "3x Daily";
+
+    let normalizedFoodFreq = "AFTER_FOOD";
+    const rawFood = (med.foodFrequency || med.timing || "AFTER_FOOD").toUpperCase();
+    if (rawFood.includes("BEFORE") || rawFood.includes("PRE")) {
+      normalizedFoodFreq = "BEFORE_FOOD";
+    }
+
+    return {
+      medicationName: med.name.trim(),
+      medicationType: (med.medicineType || "TABLET").toUpperCase(),
+      prescribedBy: med.prescribedBy || "",
+      dosePerIntake: parseFloat(med.dosage || "1") || 1,
+      frequency: freqLabel,
+      foodFrequency: normalizedFoodFreq,
+      startDate: med.startDate ? med.startDate : new Date().toISOString().split("T")[0],
+      ongoing: true,
+      medicationSchedule: scheduleObj,
+      totalQuantity: med.totalQuantity || 10,
+      notes: med.notes || "",
+    };
+  };
+
+  const handleConfirmAndAddMeds = async (retryOnly = false) => {
+    setIsConfirmingMeds(true);
+    
+    if (!retryOnly) {
+      setFailedSubmissions([]);
+    }
+
+    const itemsToSubmit: typeof failedSubmissions = [];
+    
+    if (retryOnly) {
+      itemsToSubmit.push(...failedSubmissions);
+    } else {
+      chatWizardState.resolvedMedicines.forEach((med) => {
+        itemsToSubmit.push({
+          type: "new",
+          med,
+          payload: buildMedicationPayload(med),
+        });
+      });
+
+      chatWizardState.replaceList.forEach((replaceItem) => {
+        itemsToSubmit.push({
+          type: "replace",
+          med: replaceItem.extractedMedicine,
+          payload: buildMedicationPayload(replaceItem.extractedMedicine),
+          existingId: replaceItem.existingId,
+        });
+      });
+
+      chatWizardState.mergeList.forEach((mergeItem) => {
+        itemsToSubmit.push({
+          type: "merge",
+          med: mergeItem.mergedMedication,
+          payload: mergeItem.mergedMedication,
+          existingId: mergeItem.existingId,
+        });
+      });
+    }
+
+    const failed: typeof failedSubmissions = [];
+    let successCount = 0;
+
+    const addingProgressMap: Record<string, (done: number, total: number) => string> = {
+      english: (done, total) => `Adding medicines to your profile... ${done} / ${total} completed`,
+      gujarati: (done, total) => `તમારા પ્રોફાઇલમાં દવાઓ ઉમેરી રહ્યા છે... ${done} / ${total} પૂર્ણ થયું`,
+      hindi: (done, total) => `आपकी प्रोफाइल में दवाएं जोड़ी जा रही हैं... ${done} / ${total} पूर्ण`,
+      marathi: (done, total) => `तुमच्या प्रोफाइलमध्ये औषधे जोडत आहे... ${done} / ${total} પૂર્ણ झाले`,
+      tamil: (done, total) => `உங்கள் சுயவிவரத்தில் மருந்துகள் சேர்க்கப்படுகின்றன... ${done} / ${total} முடிந்தது`,
+    };
+    const getAddingProgressMsg = (done: number, total: number) => {
+      const fn = addingProgressMap[preferredLang] || addingProgressMap.english;
+      return fn(done, total);
+    };
+
+    const progressMsgId = `ai-adding-progress-${Date.now()}`;
+    const progressMsg: ChatMessage = {
+      id: progressMsgId,
+      role: "ai",
+      text: getAddingProgressMsg(0, itemsToSubmit.length),
+      action: "ADDING_MEDICINES_PROGRESS",
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, progressMsg]);
+
+    for (let i = 0; i < itemsToSubmit.length; i++) {
+      const task = itemsToSubmit[i];
+      try {
+        if (task.type === "new") {
+          const response = await addMedication(task.payload);
+          const medId = response?.data?.id;
+          if (medId) {
+            try {
+              await createMedicationReminder({ medicationId: medId });
+            } catch (remErr) {
+              console.warn("Failed to create reminder for medicine:", task.med.name, remErr);
+            }
+          }
+        } else if (task.type === "replace" && task.existingId) {
+          await updateMedication({
+            medicationId: task.existingId,
+            data: task.payload,
+          });
+          try {
+            await createMedicationReminder({ medicationId: task.existingId });
+          } catch (remErr) {
+            console.warn("Failed to recreate reminder for replace medicine:", task.med.name, remErr);
+          }
+        } else if (task.type === "merge" && task.existingId) {
+          await updateMedication({
+            medicationId: task.existingId,
+            data: task.payload,
+          });
+          try {
+            await createMedicationReminder({ medicationId: task.existingId });
+          } catch (remErr) {
+            console.warn("Failed to recreate reminder for merge medicine:", task.med.medicationName, remErr);
+          }
+        }
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to submit item: ${task.med.name || task.med.medicationName || "Medication"}`, err);
+        failed.push(task);
+      }
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === progressMsgId
+            ? { ...msg, text: getAddingProgressMsg(i + 1, itemsToSubmit.length) }
+            : msg
+        )
+      );
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["medications"] });
+    queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+    queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
+    queryClient.invalidateQueries({ queryKey: ["reminders"] });
+    queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+    queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+
+    if (failed.length > 0) {
+      setFailedSubmissions(failed);
+      
+      const partialFailureMap: Record<string, (success: number, fail: number) => string> = {
+        english: (success, fail) => `Operation partially failed. Successfully added ${success} medicines, but ${fail} failed. Please retry.`,
+        gujarati: (success, fail) => `પ્રક્રિયા અંશતઃ નિષ્ફળ રહી. ${success} દવાઓ સફળતાપૂર્વક ઉમેરાઈ, પરંતુ ${fail} નિષ્ફળ ગઈ. કૃપા કરીને ફરી પ્રયાસ કરો.`,
+        hindi: (success, fail) => `ऑपरेशन आंशिक रूप से विफल रहा। ${success} दवाएं सफलतापूर्वक जोड़ी गईं, लेकिन ${fail} विफल रहीं। कृपया पुनः प्रयास करें।`,
+        marathi: (success, fail) => `क्रिया अंशतः अपयशी ठरली. ${success} औषधे यशस्वीरित्या जोडली गेली, परंतु ${fail} अपयशी ठरली. कृपया पुन्हा प्रयत्न करा.`,
+        tamil: (success, fail) => `செயல்பாடு ஓரளவு தோல்வியடைந்தது. ${success} மருந்துகள் வெற்றிகரமாக சேர்க்கப்பட்டன, ஆனால் ${fail} தோல்வியடைந்தன. மீண்டும் முயற்சிக்கவும்.`,
+      };
+      const getPartialFailureMsg = (success: number, fail: number) => {
+        const fn = partialFailureMap[preferredLang] || partialFailureMap.english;
+        return fn(success, fail);
+      };
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === progressMsgId
+            ? { ...msg, text: getPartialFailureMsg(successCount, failed.length) }
+            : msg
+        )
+      );
+
+      const errorSummaryMap: Record<string, string> = {
+        english: "Some medicines could not be added to your profile.",
+        gujarati: "કેટલીક દવાઓ તમારા પ્રોફાઇલમાં ઉમેરી શકાઈ નથી.",
+        hindi: "कुछ दवाएं आपकी प्रोफाइल में नहीं जोड़ी जा सकीं।",
+        marathi: "काही औषधे तुमच्या प्रोफाइलमध्ये जोडली जाऊ शकली नाहीत.",
+        tamil: "சில மருந்துகளை உங்கள் சுயவிவரத்தில் சேர்க்க முடியவில்லை.",
+      };
+      const errorSummaryMsg = errorSummaryMap[preferredLang] || errorSummaryMap.english;
+
+      const errorMsg: ChatMessage = {
+        id: `ai-failure-summary-${Date.now()}`,
+        role: "ai",
+        text: errorSummaryMsg,
+        action: "EXTRACTED_MEDICINES_PARTIAL_FAILURE",
+        failedCount: failed.length,
+        successCount: successCount,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } else {
+      setChatWizardState((prev) => ({
+        ...prev,
+        step: "completed",
+      }));
+
+      const successProgressMap: Record<string, string> = {
+        english: "All medicines have been successfully added to your profile!",
+        gujarati: "બધી દવાઓ તમારા પ્રોફાઇલમાં સફળતાપૂર્વક ઉમેરવામાં આવી છે!",
+        hindi: "सभी दवाएं आपकी प्रोफाइल में सफलतापूर्वक जोड़ दी गई हैं!",
+        marathi: "सर्व औषधे तुमच्या प्रोफाइलमध्ये यशस्वीरित्या जोडली गेली आहेत!",
+        tamil: "அனைத்து மருந்துகளும் உங்கள் சுயவிவரத்தில் வெற்றிகரமாக சேர்க்கப்பட்டன!",
+      };
+      const successProgressMsg = successProgressMap[preferredLang] || successProgressMap.english;
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === progressMsgId
+            ? { ...msg, text: successProgressMsg }
+            : msg
+        )
+      );
+
+      const totalAdded = retryOnly ? successCount : itemsToSubmit.length;
+      const successIntro = tOnboarding("aiSuccessIntro");
+
+      const successMsg: ChatMessage = {
+        id: `ai-success-${Date.now()}`,
+        role: "ai",
+        text: successIntro,
+        action: "EXTRACTED_MEDICINES_SUCCESS",
+        medicinesCount: totalAdded,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, successMsg]);
+
+      // Append follow-up question message 300ms later to show it AFTER the success card (View My Medicines button)
+      setTimeout(() => {
+        const helpNextMap: Record<string, string> = {
+          english: "What would you like me to help you with next?",
+          gujarati: "હવે હું તમારી બીજી કઈ મદદ કરી શકું?",
+          hindi: "अब मैं आपकी आगे क्या मदद कर सकता हूँ?",
+          marathi: "आता मी तुम्हाला पुढे काय मदत करू?",
+          tamil: "அடுத்து நான் உங்களுக்கு எவ்வாறு உதவ வேண்டும்?",
+        };
+        const helpNextMsg = helpNextMap[preferredLang] || helpNextMap.english;
+        const followUpMsg: ChatMessage = {
+          id: `ai-followup-${Date.now()}`,
+          role: "ai",
+          text: helpNextMsg,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, followUpMsg]);
+      }, 300);
+
+      resetChatWizard();
+      setFailedSubmissions([]);
+    }
+
+    setIsConfirmingMeds(false);
+  };
 
   useEffect(() => {
     if (route?.params?.document) {
@@ -355,7 +1271,19 @@ const AIChatScreen = ({ route }: any) => {
 
   const documentSheetRef = useRef<BottomSheetModal>(null);
   const uploadSheetRef = useRef<BottomSheetModal>(null);
+  const extractionSheetRef = useRef<BottomSheetModal>(null);
+  const flatListRef = useRef<FlatList>(null);
   const bottomPadding = useBottomBarPadding(40, 20);
+
+  const handleOpenProgressSheet = () => {
+    extractionSheetRef.current?.present();
+    if (isAllTerminal) {
+      setChatWizardState((prev) => ({
+        ...prev,
+        hasViewedCompletedOcr: true,
+      }));
+    }
+  };
 
   // Fetch all documents
   const {
@@ -385,7 +1313,11 @@ const AIChatScreen = ({ route }: any) => {
 
   // Load sessions list and select the most recent session on mount
   useEffect(() => {
+    if (hasInitializedHistory.current) return;
+    if (isLoadingDocs) return;
+
     const initChatHistory = async () => {
+      hasInitializedHistory.current = true;
       setIsLoadingHistory(true);
       try {
         console.log("[AI_CHAT] Initializing sessions list...");
@@ -453,7 +1385,7 @@ const AIChatScreen = ({ route }: any) => {
     };
 
     initChatHistory();
-  }, [documentsList]);
+  }, [documentsList, isLoadingDocs]);
 
   const handleDocumentModeChange = (doc: MedicalDocument | null) => {
     setSelectedDocument(doc);
@@ -514,7 +1446,9 @@ const AIChatScreen = ({ route }: any) => {
 
     try {
       const response = await sendChatMessage({
-        documentId: selectedDocument?.s3Key || undefined,
+        documentId: selectedDocument?.s3Key
+          ? [selectedDocument.s3Key]
+          : undefined,
         question: textToSubmit,
         sessionId: onboardingSessionId!,
       });
@@ -570,6 +1504,10 @@ const AIChatScreen = ({ route }: any) => {
     return [...liveNewestFirst, ...onboardingNewestFirst];
   }, [messages, onboardingMessages]);
 
+  const isLatestActiveMessage = (msgId: string) => {
+    return mergedMessages[0]?.id === msgId;
+  };
+
   if (isLoadingDocs) {
     return <LoadingScreen />;
   }
@@ -598,6 +1536,14 @@ const AIChatScreen = ({ route }: any) => {
         isDark={isDark}
         theme={theme}
       />
+
+      {/* Floating Background Progress Panel */}
+      {(isUploading || (chatWizardState.step !== "idle" && !chatWizardState.hasViewedCompletedOcr)) && (
+        <FloatingProgressPanel
+          onOpenSheet={handleOpenProgressSheet}
+          isDark={isDark}
+        />
+      )}
 
       <View
         style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
@@ -633,6 +1579,7 @@ const AIChatScreen = ({ route }: any) => {
             />
           ) : (
             <FlatList
+              ref={flatListRef}
               data={mergedMessages}
               keyExtractor={(item: any, index: number) =>
                 item.id || String(index)
@@ -699,7 +1646,14 @@ const AIChatScreen = ({ route }: any) => {
                   item.action === "ADD_MEDICINE" ||
                   item.action === "EDIT_MEDICINE" ||
                   item.action === "REVIEW_MEDICINES_LIST" ||
-                  item.action === "CONFIRM_MEDICINE";
+                  item.action === "CONFIRM_MEDICINE" ||
+                  item.action === "EXTRACTED_MEDICINES" ||
+                  item.action === "EXTRACTED_MEDICINES_CONFLICTS" ||
+                  item.action === "EXTRACTED_MEDICINES_CONFIRM" ||
+                  item.action === "EXTRACTED_MEDICINES_SUCCESS" ||
+                  item.action === "MEDICINE_SUMMARY" ||
+                  item.action === "MEDICINE_REVIEW_ACCORDION" ||
+                  item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE";
 
                 const isExcludedStep =
                   item.action === "FILE_UPLOAD" ||
@@ -835,6 +1789,144 @@ const AIChatScreen = ({ route }: any) => {
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
                       />,
+                    );
+                  }
+                  if (item.action === "EXTRACTED_MEDICINES") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    return renderAssistantPrompt(
+                      <ExtractedMedicinesCard
+                        medicines={item.medicines || []}
+                        documents={item.documents || []}
+                        isDark={isDark}
+                        isLatest={isLatest}
+                        onEdit={(med) => {
+                          setMedicineToEdit(med);
+                          setTimeout(() => {
+                            editSheetRef.current?.present();
+                          }, 100);
+                        }}
+                        onConfirm={handleConfirmSelection}
+                        isLoading={isLoadingResults}
+                        preferredLang={preferredLang}
+                      />
+                    );
+                  }
+
+                  if (item.action === "EXTRACTED_MEDICINES_CONFLICTS") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    return renderAssistantPrompt(
+                      <ConflictCarouselCard
+                        conflicts={chatWizardState.conflicts || []}
+                        currentIndex={chatWizardState.currentConflictIndex}
+                        isDark={isDark}
+                        isLatest={isLatest}
+                        onResolve={resolveCurrentConflict}
+                        onNavigate={navigateConflict}
+                        onContinueAnyway={handleContinueAnyway}
+                        onReviewMedicines={handleReviewMedicines}
+                        onEdit={(med) => {
+                          setMedicineToEdit(med);
+                          setTimeout(() => {
+                            editSheetRef.current?.present();
+                          }, 100);
+                        }}
+                        preferredLang={preferredLang}
+                      />
+                    );
+                  }
+
+                  if (item.action === "EXTRACTED_MEDICINES_CONFIRM") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    return renderAssistantPrompt(
+                      <ConfirmMedicinesCard
+                        docsCount={item.docsCount || chatWizardState.filesInfo.length}
+                        extractedCount={chatWizardState.extractedMedicines.length}
+                        conflictsResolvedCount={chatWizardState.conflicts.length}
+                        toBeAddedCount={item.medicinesCount !== undefined ? item.medicinesCount : (
+                          chatWizardState.resolvedMedicines.length +
+                          chatWizardState.replaceList.length +
+                          chatWizardState.mergeList.length
+                        )}
+                        isDark={isDark}
+                        isLatest={isLatest}
+                        onConfirm={handleConfirmAndAddMeds}
+                        isLoading={isConfirmingMeds}
+                        preferredLang={preferredLang}
+                      />
+                    );
+                  }
+
+                  if (item.action === "EXTRACTED_MEDICINES_SUCCESS") {
+                    return renderAssistantPrompt(
+                      <SuccessCard
+                        count={item.medicinesCount || 0}
+                        isDark={isDark}
+                        onViewMedicines={() => navigation.navigate("MEDICATION")}
+                        preferredLang={preferredLang}
+                      />
+                    );
+                  }
+
+                  if (item.action === "MEDICINE_SUMMARY") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    return renderAssistantPrompt(
+                      <MedicineExtractionSummaryCard
+                        documents={item.documents || []}
+                        isDark={isDark}
+                        isLatest={isLatest}
+                        onReview={handleReviewMedicines}
+                      />
+                    );
+                  }
+
+                  if (item.action === "MEDICINE_REVIEW_ACCORDION") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    return renderAssistantPrompt(
+                      <MedicineDocumentAccordionCard
+                        documents={item.documents || []}
+                        medicines={chatWizardState.extractedMedicines}
+                        isDark={isDark}
+                        isLatest={isLatest}
+                        onEdit={(med) => {
+                          setMedicineToEdit(med);
+                          setTimeout(() => {
+                            editSheetRef.current?.present();
+                          }, 100);
+                        }}
+                        onContinue={handleConfirmSelection}
+                        isLoading={isLoadingResults}
+                        preferredLang={preferredLang}
+                      />
+                    );
+                  }
+
+                  if (item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    return renderAssistantPrompt(
+                      <View style={{ backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: "#ef4444", padding: 16, borderRadius: 16, borderWidth: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                          <Ionicons name="warning" size={24} color="#ef4444" style={{ marginRight: 8 }} />
+                          <Text style={{ fontSize: 16, fontWeight: "700", color: isDark ? "#f8fafc" : "#1e293b" }}>
+                            Some Additions Failed
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 13, color: isDark ? "#cbd5e1" : "#475569", marginBottom: 16 }}>
+                          Successfully added {item.successCount || 0} medicine(s), but {item.failedCount || 0} failed due to a network error.
+                        </Text>
+                        {isLatest && (
+                          <TouchableOpacity
+                            onPress={() => handleConfirmAndAddMeds(true)}
+                            disabled={isConfirmingMeds}
+                            style={{ backgroundColor: "#ef4444", padding: 12, borderRadius: 12, alignItems: "center" }}
+                          >
+                            {isConfirmingMeds ? (
+                              <ActivityIndicator size="small" color="#ffffff" />
+                            ) : (
+                              <Text style={{ color: "#ffffff", fontWeight: "700" }}>Retry Failed</Text>
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     );
                   }
                 }
@@ -1137,7 +2229,35 @@ const AIChatScreen = ({ route }: any) => {
         </SheetContentWrapper>
       </BottomSheet>
 
-      <DocumentUploadBottomSheet ref={uploadSheetRef} fromScreen="AIChat" />
+      <DocumentUploadBottomSheet
+        ref={uploadSheetRef}
+        fromScreen="AIChat"
+        onSuccess={handleUploadSuccess}
+      />
+
+      <MedicineExtractionBottomSheet
+        ref={extractionSheetRef}
+        preferredLang={preferredLang}
+        isDark={isDark}
+      />
+
+      <BottomSheet ref={editSheetRef}>
+        <View style={{ paddingBottom: bottomPadding }}>
+          {medicineToEdit && (
+            <EditMedicineFormWrapper
+              medicine={medicineToEdit}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+              onClose={() => {
+                editSheetRef.current?.dismiss();
+                setMedicineToEdit(null);
+              }}
+              onSave={handleEditSave}
+            />
+          )}
+        </View>
+      </BottomSheet>
     </Container>
   );
 };
@@ -1294,6 +2414,151 @@ const UploadButton = styled.TouchableOpacity`
 const UploadButtonText = styled.Text`
   color: #ffffff;
   font-size: 14px;
+  font-weight: 700;
+`;
+
+// Floating progress panel helper component
+const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
+  const { chatWizardState, resetChatWizard, uploadingDocs, isUploading } = useDocumentUpload();
+
+  const avgProgress = useMemo(() => {
+    if (!uploadingDocs || uploadingDocs.length === 0) return 0;
+    const sum = uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0);
+    return Math.round(sum / uploadingDocs.length);
+  }, [uploadingDocs]);
+
+  const completedJobsCount = useMemo(() => {
+    if (!uploadingDocs) return 0;
+    return uploadingDocs.filter(
+      (doc) =>
+        doc.status === "COMPLETED" ||
+        doc.status === "FAILED" ||
+        doc.status === "CANCELLED" ||
+        doc.status === "done" ||
+        doc.status === "completed" ||
+        doc.status === "success"
+    ).length;
+  }, [uploadingDocs]);
+
+  const progressBlocks = useMemo(() => {
+    const totalBlocks = 15;
+    const filledBlocks = Math.round((avgProgress / 100) * totalBlocks);
+    const emptyBlocks = totalBlocks - filledBlocks;
+    return "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
+  }, [avgProgress]);
+
+  const docCount = uploadingDocs?.length || 0;
+
+  return (
+    <FloatingPanelCard isDark={isDark}>
+      <Ionicons
+        name={chatWizardState.step === "completed" ? "checkmark-circle" : "document-text"}
+        size={24}
+        color="#0f766e"
+      />
+      <PanelInfo>
+        <PanelTitle isDark={isDark}>
+          {isUploading ? "Uploading Documents..." : `Processing Documents (${docCount})`}
+        </PanelTitle>
+        <ProgressLabel>Overall Progress</ProgressLabel>
+        <ProgressBarRow>
+          <ProgressBarFillBlocks>{progressBlocks}</ProgressBarFillBlocks>
+          <ProgressPercentText>{avgProgress}%</ProgressPercentText>
+        </ProgressBarRow>
+        <PanelSubtitle>
+          {isUploading
+            ? "Uploading files to server..."
+            : `${completedJobsCount} of ${docCount} documents processed`}
+        </PanelSubtitle>
+      </PanelInfo>
+      <PanelActions>
+        {chatWizardState.step === "completed" ? (
+          <ActionLink onPress={resetChatWizard}>
+            <ActionLinkText>Dismiss</ActionLinkText>
+          </ActionLink>
+        ) : (
+          <ActionLink onPress={onOpenSheet}>
+            <ActionLinkText>
+              View
+            </ActionLinkText>
+          </ActionLink>
+        )}
+      </PanelActions>
+    </FloatingPanelCard>
+  );
+};
+
+const FloatingPanelCard = styled.View<{ isDark: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  margin-horizontal: 16px;
+  margin-top: 10px;
+  margin-bottom: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background-color: ${(props: any) => (props.isDark ? "#1e293b" : "#ffffff")};
+  shadow-color: #0f172a;
+  shadow-offset: 0px 6px;
+  shadow-opacity: 0.08;
+  shadow-radius: 12px;
+`;
+
+const PanelInfo = styled.View`
+  flex: 1;
+  margin-left: 12px;
+`;
+
+const PanelTitle = styled.Text<{ isDark: boolean }>`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${(props: any) => (props.isDark ? "#f1f5f9" : "#0f172a")};
+`;
+
+const PanelSubtitle = styled.Text`
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
+`;
+
+const ProgressLabel = styled.Text`
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+`;
+
+const ProgressBarRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-top: 2px;
+`;
+
+const ProgressBarFillBlocks = styled.Text`
+  font-size: 12px;
+  color: #0f766e;
+  letter-spacing: 1px;
+`;
+
+const ProgressPercentText = styled.Text`
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f766e;
+  margin-left: 8px;
+`;
+
+const PanelActions = styled.View`
+  margin-left: 12px;
+`;
+
+const ActionLink = styled.TouchableOpacity`
+  background-color: #0f766e;
+  padding-horizontal: 12px;
+  padding-vertical: 6px;
+  border-radius: 20px;
+`;
+
+const ActionLinkText = styled.Text`
+  color: #ffffff;
+  font-size: 12px;
   font-weight: 700;
 `;
 

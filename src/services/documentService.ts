@@ -27,7 +27,7 @@ export interface CreateSessionRequest {
 
 export interface ChatMessageRequest {
   sessionId: string;
-  documentId?: string;
+  documentId?: string[];
   question: string;
 }
 
@@ -169,7 +169,14 @@ export const uploadPatientDocuments = async (
 
 export const startOcrJob = async (
   jobId: string,
-): Promise<ApiResponse<{ jobId: string; fileKey: string; status: string; stage?: string }>> => {
+): Promise<
+  ApiResponse<{
+    jobId: string;
+    fileKey: string;
+    status: string;
+    stage?: string;
+  }>
+> => {
   const endpoint = DOCUMENT_ENDPOINTS.OCR_JOB_START(jobId);
   const response = await apiClient.post(endpoint);
   return response.data;
@@ -258,7 +265,7 @@ export const addDocument = async (
 };
 
 const UI_TO_BE_TYPE_MAP: Record<string, string> = {
-  "Prescription": "prescription",
+  Prescription: "prescription",
   "Lab Report": "lab report",
   "Imaging Report": "imaging report",
   "Discharge Summary": "discharge summary",
@@ -267,10 +274,10 @@ const UI_TO_BE_TYPE_MAP: Record<string, string> = {
   "Vaccination Record": "vaccination record",
   "Vaccination Report": "vaccination record",
   "Medical Certificate": "medical certificate",
-  "Family": "family",
+  Family: "family",
   "Medical Document": "medical_document",
-  "Medication": "medication",
-  "Insurance": "insurance",
+  Medication: "medication",
+  Insurance: "insurance",
   "Other Medical Document": "other medical document",
 };
 
@@ -278,16 +285,13 @@ export const filterDocuments = async (payload: FilterDocumentsRequest) => {
   const searchVal = payload.filter?.search || "";
   const mappedSearch = UI_TO_BE_TYPE_MAP[searchVal] || searchVal;
 
-  const response = await apiClient.post(
-    DOCUMENT_ENDPOINTS.FILTER_AND_SORT,
-    {
-      ...payload,
-      filter: {
-        ...payload.filter,
-        search: mappedSearch === "All" ? "" : mappedSearch,
-      },
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.FILTER_AND_SORT, {
+    ...payload,
+    filter: {
+      ...payload.filter,
+      search: mappedSearch === "All" ? "" : mappedSearch,
     },
-  );
+  });
   return response.data;
 };
 
@@ -382,17 +386,27 @@ export const createShareLink = async (
   documentId: string,
   expiresInHours: number,
 ): Promise<ApiResponse<ShareLinkResponse>> => {
-  const endpoint = DOCUMENT_ENDPOINTS.SHARE_DOCUMENT.replace("{id}", documentId);
+  const endpoint = DOCUMENT_ENDPOINTS.SHARE_DOCUMENT.replace(
+    "{id}",
+    documentId,
+  );
   try {
     const response = await apiClient.post(endpoint, {
       expiresInHours,
     });
     return response.data;
   } catch (error) {
-    console.warn("API route not fully implemented on backend, using secure client-side mock:", error);
-    const mockToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    console.warn(
+      "API route not fully implemented on backend, using secure client-side mock:",
+      error,
+    );
+    const mockToken =
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15);
     const mockUrl = `https://healthvault.share.zrok.io/v1/share/${mockToken}`;
-    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(
+      Date.now() + expiresInHours * 60 * 60 * 1000,
+    ).toISOString();
     return {
       data: {
         shareToken: mockToken,
@@ -402,8 +416,8 @@ export const createShareLink = async (
       status: {
         statusCode: 200,
         success: true,
-        description: "Mock shared link created successfully"
-      }
+        description: "Mock shared link created successfully",
+      },
     };
   }
 };
@@ -412,21 +426,27 @@ export const revokeShareLink = async (
   documentId: string,
   shareToken: string,
 ): Promise<ApiResponse<void>> => {
-  const endpoint = DOCUMENT_ENDPOINTS.REVOKE_SHARE_LINK.replace("{id}", documentId);
+  const endpoint = DOCUMENT_ENDPOINTS.REVOKE_SHARE_LINK.replace(
+    "{id}",
+    documentId,
+  );
   try {
     const response = await apiClient.post(endpoint, {
       shareToken,
     });
     return response.data;
   } catch (error) {
-    console.warn("API route not fully implemented on backend, simulating successful revocation client-side:", error);
+    console.warn(
+      "API route not fully implemented on backend, simulating successful revocation client-side:",
+      error,
+    );
     return {
       data: undefined as any,
       status: {
         statusCode: 200,
         success: true,
-        description: "Mock shared link revoked successfully"
-      }
+        description: "Mock shared link revoked successfully",
+      },
     };
   }
 };
@@ -434,19 +454,25 @@ export const revokeShareLink = async (
 export const getSharedLinks = async (
   documentId: string,
 ): Promise<ApiResponse<ShareLinkResponse[]>> => {
-  const endpoint = DOCUMENT_ENDPOINTS.GET_SHARED_LINKS.replace("{id}", documentId);
+  const endpoint = DOCUMENT_ENDPOINTS.GET_SHARED_LINKS.replace(
+    "{id}",
+    documentId,
+  );
   try {
     const response = await apiClient.get(endpoint);
     return response.data;
   } catch (error) {
-    console.warn("API route not fully implemented on backend, returning empty shared links list:", error);
+    console.warn(
+      "API route not fully implemented on backend, returning empty shared links list:",
+      error,
+    );
     return {
       data: [],
       status: {
         statusCode: 200,
         success: true,
-        description: "Mock shared links fetched successfully"
-      }
+        description: "Mock shared links fetched successfully",
+      },
     };
   }
 };

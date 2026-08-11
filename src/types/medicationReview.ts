@@ -4,6 +4,8 @@ export interface ProcessedDocument {
   type: string;
   status: "completed" | "processing" | "failed" | "COMPLETED" | "FAILED" | "RUNNING" | "QUEUED";
   medicines: ExtractedMedicine[];
+  summaryEnglish?: string;
+  summaryPreferred?: string;
 }
 
 export interface ExtractedMedicine {

@@ -150,9 +150,22 @@ const HomeScreen = () => {
     ? medicationsData.data.length 
     : 0;
 
-  const documentsCount = Array.isArray((documentsData?.data as any)?.items) 
-    ? (documentsData?.data as any).items.length 
-    : (Array.isArray(documentsData?.data) ? documentsData.data.length : 0);
+  const rawDocs = documentsData?.data as any;
+  const documentsCount = rawDocs
+    ? typeof rawDocs.total === "number"
+      ? rawDocs.total
+      : typeof rawDocs.totalCount === "number"
+      ? rawDocs.totalCount
+      : typeof rawDocs.totalItems === "number"
+      ? rawDocs.totalItems
+      : typeof rawDocs.count === "number"
+      ? rawDocs.count
+      : Array.isArray(rawDocs.items)
+      ? rawDocs.items.length
+      : Array.isArray(documentsData?.data)
+      ? documentsData.data.length
+      : 0
+    : 0;
 
   const pendingMedicinesCount = reminders.filter(
     (r: Reminder) => (r.status || "").toLowerCase() === "pending"

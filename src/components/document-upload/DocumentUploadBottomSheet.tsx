@@ -44,20 +44,35 @@ const DocumentRowItem = ({
 }: DocumentRowItemProps) => {
   const isPdf = file.mimeType === "application/pdf" || file.originalName.toLowerCase().endsWith(".pdf");
 
+  const formatSize = (bytes: number) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <DocRowCard isDark={isDark}>
-      <MaterialCommunityIcons
-        name={isPdf ? "file-pdf-box" : "image"}
-        size={28}
-        color={isPdf ? "#ef4444" : "#3b82f6"}
-        style={{ marginRight: 12 }}
-      />
+      {isPdf ? (
+        <MaterialCommunityIcons
+          name="file-pdf-box"
+          size={36}
+          color="#ef4444"
+          style={{ marginRight: 12 }}
+        />
+      ) : (
+        <Image
+          source={{ uri: file.uri }}
+          style={{ width: 36, height: 36, borderRadius: 8, marginRight: 12 }}
+          resizeMode="cover"
+        />
+      )}
       <DocInfoArea style={{ flex: 1 }}>
         <DocDisplayName isDark={isDark} numberOfLines={1}>
           {file.displayName}
         </DocDisplayName>
         <DocMetaText>
-          Type: {file.documentType}
+          {file.documentType}
         </DocMetaText>
       </DocInfoArea>
 
@@ -217,9 +232,10 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
 
 interface DocumentUploadBottomSheetProps {
   fromScreen?: string;
+  onSuccess?: (jobIds: string[], filesInfo: any[]) => void;
 }
 
-export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: DocumentUploadBottomSheetProps, ref: any) => {
+export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSuccess }: DocumentUploadBottomSheetProps, ref: any) => {
   const { theme, isDark } = useAppTheme();
   const { userId } = useAuth();
   const navigation = useNavigation<any>();
@@ -428,26 +444,13 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
 
   const handleUpload = async () => {
     if (!userId) return;
-    setUploadMessage("Uploading documents...");
-
-    const messages = [
-      "Starting OCR parsing...",
-      "Analyzing document structure...",
-      "Preparing secure processing...",
-      "Finishing setup..."
-    ];
-    let msgIdx = 0;
-    const intervalId = setInterval(() => {
-      if (msgIdx < messages.length) {
-        setUploadMessage(messages[msgIdx]);
-        msgIdx++;
-      }
-    }, 2000);
-
+    ref.current?.dismiss();
     try {
       await startUpload(userId, fromScreen, (jobIds, filesInfo) => {
-        clearInterval(intervalId);
-        ref.current?.dismiss();
+        if (onSuccess) {
+          onSuccess(jobIds, filesInfo);
+          return;
+        }
         if (fromScreen === "AIChat" || fromScreen === "AIChatScreen") {
           navigation.navigate("Home", {
             screen: "DocumentProcessing",
@@ -466,9 +469,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
         }
       });
     } catch (err) {
-      clearInterval(intervalId);
-    } finally {
-      clearInterval(intervalId);
+      console.warn("Background upload starting error:", err);
     }
   };
 
@@ -538,7 +539,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen }: Docum
               <SectionTitle isDark={isDark}>Selected Documents ({selectedFiles.length})</SectionTitle>
               <ScrollView
                 keyboardShouldPersistTaps="handled"
-                style={{ maxHeight: 350 }}
+                showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: totalBottomPadding }}
               >
                 {selectedFiles.map((file) => {
