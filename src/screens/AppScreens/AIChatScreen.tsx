@@ -262,9 +262,6 @@ const SUGGESTED_QUESTIONS_I18N: Record<
     ],
   },
 };
-
-
-
 interface EditMedicineFormWrapperProps {
   medicine: ExtractedMedicine;
   preferredLang: string;
@@ -278,7 +275,6 @@ const EditMedicineFormWrapper = ({
   medicine,
   preferredLang,
   isDark,
-  theme,
   onClose,
   onSave,
 }: EditMedicineFormWrapperProps) => {
@@ -417,6 +413,77 @@ const EditMedicineFormWrapper = ({
   );
 };
 
+// Floating Progress Panel Component
+const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
+  const { chatWizardState, resetChatWizard, uploadingDocs, isUploading } = useDocumentUpload();
+
+  const avgProgress = useMemo(() => {
+    if (!uploadingDocs || uploadingDocs.length === 0) return 0;
+    const sum = uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0);
+    return Math.round(sum / uploadingDocs.length);
+  }, [uploadingDocs]);
+
+  const completedJobsCount = useMemo(() => {
+    if (!uploadingDocs) return 0;
+    return uploadingDocs.filter(
+      (doc) =>
+        doc.status === "COMPLETED" ||
+        doc.status === "FAILED" ||
+        doc.status === "CANCELLED" ||
+        doc.status === "done" ||
+        doc.status === "completed" ||
+        doc.status === "success"
+    ).length;
+  }, [uploadingDocs]);
+
+  const progressBlocks = useMemo(() => {
+    const totalBlocks = 15;
+    const filledBlocks = Math.round((avgProgress / 100) * totalBlocks);
+    const emptyBlocks = totalBlocks - filledBlocks;
+    return "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
+  }, [avgProgress]);
+
+  const docCount = uploadingDocs?.length || 0;
+
+  return (
+    <FloatingPanelCard isDark={isDark}>
+      <Ionicons
+        name={chatWizardState.step === "completed" ? "checkmark-circle" : "document-text"}
+        size={24}
+        color="#0f766e"
+      />
+      <PanelInfo>
+        <PanelTitle isDark={isDark}>
+          {isUploading ? "Uploading Documents..." : `Processing Documents (${docCount})`}
+        </PanelTitle>
+        <ProgressLabel>Overall Progress</ProgressLabel>
+        <ProgressBarRow>
+          <ProgressBarFillBlocks>{progressBlocks}</ProgressBarFillBlocks>
+          <ProgressPercentText>{avgProgress}%</ProgressPercentText>
+        </ProgressBarRow>
+        <PanelSubtitle>
+          {isUploading
+            ? "Uploading files to server..."
+            : `${completedJobsCount} of ${docCount} documents processed`}
+        </PanelSubtitle>
+      </PanelInfo>
+      <PanelActions>
+        {chatWizardState.step === "completed" ? (
+          <ActionLink onPress={resetChatWizard}>
+            <ActionLinkText>Dismiss</ActionLinkText>
+          </ActionLink>
+        ) : (
+          <ActionLink onPress={onOpenSheet}>
+            <ActionLinkText>
+              View
+            </ActionLinkText>
+          </ActionLink>
+        )}
+      </PanelActions>
+    </FloatingPanelCard>
+  );
+};
+
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
   const { speakingMessageId, speakMessage } = useTextToSpeech();
@@ -440,10 +507,9 @@ const AIChatScreen = ({ route }: any) => {
     resetChatWizard,
     startBackgroundOcr,
     isUploading,
-    uploadingDocs,
   } = useDocumentUpload();
 
-  const handleUploadSuccess = (jobIds: string[], filesInfo: any[]) => {
+  const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
     setChatWizardState({
       step: "processing",
       jobIds,
@@ -458,6 +524,61 @@ const AIChatScreen = ({ route }: any) => {
     });
 
     startBackgroundOcr(jobIds, filesInfo, "AIChat");
+
+    // 1. Show user message with file names in the chat
+    const docNames = filesInfo.map((f) => f.fileName).join(", ");
+    const userMsg: ChatMessage = {
+      id: `user-upload-${Date.now()}`,
+      role: "user",
+      text: `Document Uploaded: ${docNames}`,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    // 2. Call unified chatbot API /v1/onboarding/chat
+    const docIds = filesInfo.map((f) => f.documentId).filter(Boolean);
+    const docUris = filesInfo.map((f) => f.fileUrl).filter(Boolean);
+
+    try {
+      const payload = {
+        message: "DOCUMENT_UPLOADED",
+        sessionId: onboardingSessionId || undefined,
+        preferredLanguage: preferredLang,
+        history: messages.map((m) => ({
+          role: m.role === "ai" ? "assistant" : "user",
+          content: m.text,
+        })),
+        state: {
+          flowMode: "UPLOAD",
+          uploadedMedicalDocument: true,
+          documentUploaded: true,
+          documentIds: docIds,
+          documentUris: docUris,
+          documentId: docIds.length === 1 ? docIds[0] : docIds,
+        },
+      };
+
+      const response = await apiClient.post("/v1/onboarding/chat", payload);
+      const resData = response.data?.data;
+      if (resData?.reply) {
+        const aiMsg: ChatMessage = {
+          id: `ai-upload-response-${Date.now()}`,
+          role: "ai",
+          text: resData.reply,
+          action: resData.actionType || resData.action || "NORMAL_CHAT",
+          options: resData.options || [],
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+      }
+    } catch (err: any) {
+      console.warn("Failed to notify chatbot about document upload:", err);
+      Toast.show({
+        type: "error",
+        text1: "Chatbot Error",
+        text2: err.message || "Failed to notify chatbot of document upload.",
+      });
+    }
   };
 
   const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
@@ -579,7 +700,7 @@ const AIChatScreen = ({ route }: any) => {
       const updatedExtracted = prev.extractedMedicines.map((m) =>
         m.id === updated.id ? updated : m
       );
-
+  
       const updatedConflicts = prev.conflicts.map((c) => {
         if (c.extractedMedicine.id === updated.id) {
           return {
@@ -1269,7 +1390,6 @@ const AIChatScreen = ({ route }: any) => {
     return activeSess?.metadata?.type === "ONBOARDING";
   }, [sessions, activeSessionId]);
 
-  const documentSheetRef = useRef<BottomSheetModal>(null);
   const uploadSheetRef = useRef<BottomSheetModal>(null);
   const extractionSheetRef = useRef<BottomSheetModal>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -1387,11 +1507,6 @@ const AIChatScreen = ({ route }: any) => {
     initChatHistory();
   }, [documentsList, isLoadingDocs]);
 
-  const handleDocumentModeChange = (doc: MedicalDocument | null) => {
-    setSelectedDocument(doc);
-    documentSheetRef.current?.dismiss();
-  };
-
   // Infinite scroll pagination to load older messages
   const loadMoreMessages = async () => {
     if (isLoadingMore || !nextCursor || !activeSessionId) return;
@@ -1445,27 +1560,36 @@ const AIChatScreen = ({ route }: any) => {
     setIsSending(true);
 
     try {
-      const response = await sendChatMessage({
+      const payload = {
+        message: textToSubmit,
+        sessionId: activeSessionId || onboardingSessionId || undefined,
+        preferredLanguage: preferredLang,
+        history: messages.map((m) => ({
+          role: m.role === "ai" ? "assistant" : "user",
+          content: m.text,
+        })),
         documentId: selectedDocument?.s3Key
           ? [selectedDocument.s3Key]
           : undefined,
-        question: textToSubmit,
-        sessionId: onboardingSessionId!,
-      });
+      };
+
+      const response = await apiClient.post("/v1/onboarding/chat", payload);
+      const resData = response.data?.data;
 
       const aiMessage: ChatMessage = {
         id: `ai-${Date.now()}`,
         role: "ai",
-        text: response.data?.reply || "No reply from AI",
-        mode: response.data?.mode as ChatMode,
-        emergency: !!response.data?.emergency,
+        text: resData?.reply || "No reply from AI",
+        mode: resData?.mode as ChatMode,
+        action: resData?.actionType || resData?.action || "NORMAL_CHAT",
+        options: resData?.options || [],
         createdAt: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, aiMessage]);
 
-      if (response.data?.user?.sessionId && !activeSessionId) {
-        setActiveSessionId(response.data.user.sessionId);
+      if (resData?.sessionId && !activeSessionId) {
+        setActiveSessionId(resData.sessionId);
         apiClient
           .get("/chat/session", { params: { limit: 50 } })
           .then((res) => {
@@ -1479,6 +1603,60 @@ const AIChatScreen = ({ route }: any) => {
         text1: "Query Failed",
         text2: err.message || "An error occurred while calling the chatbot.",
       });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleGenericOptionPress = async (option: any) => {
+    // 1. Show user reply in chat
+    const userMsg: ChatMessage = {
+      id: `user-opt-${Date.now()}`,
+      role: "user",
+      text: option.label,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    // 2. Perform actions based on value/actionType
+    if (option.actionType === "ADD_DOCUMENT" || option.value === "ADD_DOCUMENT") {
+      uploadSheetRef.current?.present();
+      return;
+    }
+
+    if (option.actionType === "ADD_MEDICINE" || option.value === "ADD_MEDICINE") {
+      navigation.navigate("MEDICATION");
+      return;
+    }
+
+    // 3. Otherwise, send the selected value to /v1/onboarding/chat
+    setIsSending(true);
+    try {
+      const payload = {
+        message: option.value,
+        sessionId: activeSessionId || onboardingSessionId || undefined,
+        preferredLanguage: preferredLang,
+        history: messages.map((m) => ({
+          role: m.role === "ai" ? "assistant" : "user",
+          content: m.text,
+        })),
+      };
+
+      const response = await apiClient.post("/v1/onboarding/chat", payload);
+      const resData = response.data?.data;
+      if (resData?.reply) {
+        const aiMsg: ChatMessage = {
+          id: `ai-opt-res-${Date.now()}`,
+          role: "ai",
+          text: resData.reply,
+          action: resData.actionType || resData.action || "NORMAL_CHAT",
+          options: resData.options || [],
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+      }
+    } catch (err: any) {
+      console.warn("Failed to submit option click:", err);
     } finally {
       setIsSending(false);
     }
@@ -1953,6 +2131,8 @@ const AIChatScreen = ({ route }: any) => {
                   );
                 }
 
+                const showChips = item.options && item.options.length > 0;
+
                 return (
                   <View style={{ width: "100%" }}>
                     {dateHeader}
@@ -1962,6 +2142,39 @@ const AIChatScreen = ({ route }: any) => {
                       onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
                       isSpeaking={speakingMessageId === item.id}
                     />
+                    {showChips && (
+                      <View style={styles.optionsWrapper}>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                          {item.options.map((opt: any, idx: number) => {
+                            const isLatest = isLatestActiveMessage(item.id);
+                            return (
+                              <TouchableOpacity
+                                key={idx}
+                                disabled={!isLatest}
+                                onPress={() => handleGenericOptionPress(opt)}
+                                style={{
+                                  backgroundColor: isDark ? "#1e2d2f" : "#ccfbf1",
+                                  borderColor: isDark ? "#2d4d4f" : "#99f6e4",
+                                  borderWidth: 1,
+                                  borderRadius: 12,
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 16,
+                                  opacity: isLatest ? 1 : 0.6,
+                                }}
+                              >
+                                <Text style={{
+                                  color: isDark ? "#2dd4bf" : "#0f766e",
+                                  fontWeight: "600",
+                                  fontSize: 13,
+                                }}>
+                                  {opt.label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
                   </View>
                 );
               }}
@@ -2037,197 +2250,13 @@ const AIChatScreen = ({ route }: any) => {
               isDark={isDark}
               preferredLanguage={preferredLang}
               onAttachPress={() => {
-                documentSheetRef.current?.present();
+                uploadSheetRef.current?.present();
                 Keyboard.dismiss();
               }}
             />
           </>
         )}
       </View>
-
-      {/* Document Selector Bottom Sheet */}
-      <BottomSheet ref={documentSheetRef} enablePanDownToClose={true}>
-        <SheetContentWrapper bottomPadding={bottomPadding}>
-          <BSTitle>{t("selectModeOrReport")}</BSTitle>
-          <BSSub>{t("chooseGeneralOrDiscuss")}</BSSub>
-          <BSScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <BSItem
-              selected={selectedDocument === null}
-              onPress={() => handleDocumentModeChange(null)}
-              activeOpacity={0.7}
-            >
-              <BSIconBadge
-                bgColor={selectedDocument === null ? "#ccfbf1" : "#f1f5f9"}
-              >
-                <Ionicons
-                  name="sparkles"
-                  size={20}
-                  color={selectedDocument === null ? "#0f766e" : "#64748b"}
-                />
-              </BSIconBadge>
-              <BSLbl selected={selectedDocument === null}>
-                {t("generalHealthChatNoDoc")}
-              </BSLbl>
-              {selectedDocument === null && <BSCheck>✓</BSCheck>}
-            </BSItem>
-
-            {documentsList.length === 0 ? (
-              <EmptyDocumentsWrapper>
-                <EmptyTitle>{t("noReportsUploaded")}</EmptyTitle>
-              </EmptyDocumentsWrapper>
-            ) : (
-              <>
-                {safeMap(documentsList, (doc: MedicalDocument) => (
-                  <BSItem
-                    key={doc.id}
-                    selected={selectedDocument?.id === doc.id}
-                    onPress={() => handleDocumentModeChange(doc)}
-                    activeOpacity={0.7}
-                  >
-                    <BSIconBadge
-                      bgColor={
-                        selectedDocument?.id === doc.id ? "#ccfbf1" : "#f1f5f9"
-                      }
-                    >
-                      <Ionicons
-                        name="document-text-outline"
-                        size={20}
-                        color={
-                          selectedDocument?.id === doc.id ? "#0f766e" : "#64748b"
-                        }
-                      />
-                    </BSIconBadge>
-                    <BSLbl selected={selectedDocument?.id === doc.id}>
-                      {doc.fileName}
-                    </BSLbl>
-                    {selectedDocument?.id === doc.id && <BSCheck>✓</BSCheck>}
-                  </BSItem>
-                ))}
-              </>
-            )}
-
-            {/* Recent Conversations / Session Switcher */}
-            {sessions.length > 0 && (
-              <>
-                <BSTitle style={{ marginTop: 24, marginBottom: 8 }}>
-                  {t("recentConversations")}
-                </BSTitle>
-                {sessions.map((sess) => {
-                  const isSelected = activeSessionId === sess.id;
-                  const isOnboarding = sess.metadata?.type === "ONBOARDING";
-                  const titleText = isOnboarding
-                    ? t("onboardingSessionReadOnly")
-                    : sess.title || t("untitledSession");
-                  const dateText = sess.lastMessageAt
-                    ? format(new Date(sess.lastMessageAt), "MMM dd, yyyy HH:mm")
-                    : "";
-
-                  return (
-                    <BSItem
-                      key={sess.id}
-                      selected={isSelected}
-                      onPress={async () => {
-                        documentSheetRef.current?.dismiss();
-                        setActiveSessionId(sess.id);
-                        setIsLoadingHistory(true);
-                        try {
-                          if (sess.documentId) {
-                            const matchedDoc = documentsList.find(
-                              (d) => d.id === sess.documentId,
-                            );
-                            setSelectedDocument(matchedDoc || null);
-                          } else {
-                            setSelectedDocument(null);
-                          }
-
-                          const messagesRes = await apiClient.get(
-                            `/chat/session/${sess.id}/messages`,
-                            {
-                              params: { limit: 20 },
-                            },
-                          );
-                          const msgItems =
-                            messagesRes.data?.data?.items ||
-                            messagesRes.data?.items ||
-                            [];
-                          const newCursor =
-                            messagesRes.data?.data?.nextCursor ||
-                            messagesRes.data?.nextCursor ||
-                            null;
-                          setNextCursor(newCursor);
-
-                          const mapped: ChatMessage[] = msgItems.map(
-                            (dbMsg: any) => ({
-                              ...(dbMsg.metadata || {}),
-                              id: dbMsg.id,
-                              role: dbMsg.role === "assistant" ? "ai" : "user",
-                              text: dbMsg.content,
-                              mode: dbMsg.metadata?.mode as ChatMode,
-                              emergency: !!dbMsg.metadata?.emergency,
-                            }),
-                          );
-
-                          setMessages(mapped);
-                        } catch (err) {
-                          console.warn("[AI_CHAT] Switch session failed:", err);
-                        } finally {
-                          setIsLoadingHistory(false);
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <BSIconBadge bgColor={isSelected ? "#ccfbf1" : "#f1f5f9"}>
-                        <Ionicons
-                          name={
-                            isOnboarding
-                              ? "lock-closed"
-                              : "chatbubble-ellipses-outline"
-                          }
-                          size={20}
-                          color={isSelected ? "#0f766e" : "#64748b"}
-                        />
-                      </BSIconBadge>
-                      <View style={{ flex: 1, paddingRight: 10 }}>
-                        <BSLbl selected={isSelected} numberOfLines={1}>
-                          {titleText}
-                        </BSLbl>
-                        {dateText ? (
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: "#94a3b8",
-                              marginTop: 2,
-                            }}
-                          >
-                            {dateText}
-                          </Text>
-                        ) : null}
-                      </View>
-                      {isSelected && <BSCheck>✓</BSCheck>}
-                    </BSItem>
-                  );
-                })}
-              </>
-            )}
-          </BSScrollView>
-          <UploadButton
-            style={{ marginTop: 16 }}
-            onPress={() => {
-              documentSheetRef.current?.dismiss();
-              setTimeout(() => {
-                uploadSheetRef.current?.present();
-              }, 300);
-            }}
-          >
-            <UploadButtonText>
-              {t("uploadMedicalReport")}
-            </UploadButtonText>
-          </UploadButton>
-        </SheetContentWrapper>
-      </BottomSheet>
 
       <DocumentUploadBottomSheet
         ref={uploadSheetRef}
@@ -2287,26 +2316,6 @@ const ReadOnlyText = styled.Text`
   margin-left: 8px;
 `;
 
-const DocumentSelector = styled.TouchableOpacity`
-  flex-direction: row;
-  align-items: center;
-  margin: 12px 16px 8px;
-  padding: 10px 14px;
-  background-color: ${({ theme }: any) => theme.colors.surface};
-  border-radius: 16px;
-  border-width: 1px;
-  border-color: ${({ theme }: any) => theme.colors.border};
-`;
-
-const SelectorText = styled.Text`
-  flex: 1;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  margin-left: 10px;
-  margin-right: 10px;
-`;
-
 const EmergencyCard = styled.View`
   background-color: #fef2f2;
   border-width: 1.5px;
@@ -2335,158 +2344,6 @@ const EmergencyText = styled.Text`
   line-height: 17px;
   font-weight: 600;
 `;
-
-const SheetContentWrapper = styled.View<{ bottomPadding: number }>`
-  padding: 20px;
-  padding-bottom: ${(props: any) => props.bottomPadding}px;
-  width: 100%;
-`;
-
-const BSTitle = styled.Text`
-  font-size: 18px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  margin-bottom: 4px;
-`;
-
-const BSSub = styled.Text`
-  font-size: 13px;
-  color: ${({ theme }: any) => theme.colors.textMuted};
-  margin-bottom: 15px;
-`;
-
-const BSScrollView = styled(ScrollView)`
-  width: 100%;
-  max-height: 280px;
-`;
-
-const BSItem = styled.TouchableOpacity<{ selected: boolean }>`
-  flex-direction: row;
-  align-items: center;
-  padding: 14px 0px;
-  border-bottom-width: 1px;
-  border-bottom-color: ${({ theme }: any) => theme.colors.border};
-`;
-
-const BSIconBadge = styled.View<{ bgColor: string }>`
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  background-color: ${({ bgColor }: { bgColor: string }) => bgColor};
-  align-items: center;
-  justify-content: center;
-  margin-right: 13px;
-`;
-
-const BSLbl = styled.Text<{ selected: boolean }>`
-  flex: 1;
-  font-size: 14px;
-  font-weight: ${({ selected }: { selected: boolean }) =>
-    selected ? "700" : "600"};
-  color: ${({ selected, theme }: { selected: boolean; theme: any }) =>
-    selected ? "#0f766e" : theme.colors.textPrimary};
-`;
-
-const BSCheck = styled.Text`
-  font-size: 15px;
-  color: #0f766e;
-  font-weight: 700;
-`;
-
-const EmptyDocumentsWrapper = styled.View`
-  padding: 15px 5px;
-`;
-
-const EmptyTitle = styled.Text`
-  font-size: 14px;
-  font-weight: 800;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
-  margin-bottom: 16px;
-`;
-
-const UploadButton = styled.TouchableOpacity`
-  background-color: #0f766e;
-  padding: 12px;
-  border-radius: 12px;
-  align-items: center;
-`;
-
-const UploadButtonText = styled.Text`
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 700;
-`;
-
-// Floating progress panel helper component
-const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
-  const { chatWizardState, resetChatWizard, uploadingDocs, isUploading } = useDocumentUpload();
-
-  const avgProgress = useMemo(() => {
-    if (!uploadingDocs || uploadingDocs.length === 0) return 0;
-    const sum = uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0);
-    return Math.round(sum / uploadingDocs.length);
-  }, [uploadingDocs]);
-
-  const completedJobsCount = useMemo(() => {
-    if (!uploadingDocs) return 0;
-    return uploadingDocs.filter(
-      (doc) =>
-        doc.status === "COMPLETED" ||
-        doc.status === "FAILED" ||
-        doc.status === "CANCELLED" ||
-        doc.status === "done" ||
-        doc.status === "completed" ||
-        doc.status === "success"
-    ).length;
-  }, [uploadingDocs]);
-
-  const progressBlocks = useMemo(() => {
-    const totalBlocks = 15;
-    const filledBlocks = Math.round((avgProgress / 100) * totalBlocks);
-    const emptyBlocks = totalBlocks - filledBlocks;
-    return "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
-  }, [avgProgress]);
-
-  const docCount = uploadingDocs?.length || 0;
-
-  return (
-    <FloatingPanelCard isDark={isDark}>
-      <Ionicons
-        name={chatWizardState.step === "completed" ? "checkmark-circle" : "document-text"}
-        size={24}
-        color="#0f766e"
-      />
-      <PanelInfo>
-        <PanelTitle isDark={isDark}>
-          {isUploading ? "Uploading Documents..." : `Processing Documents (${docCount})`}
-        </PanelTitle>
-        <ProgressLabel>Overall Progress</ProgressLabel>
-        <ProgressBarRow>
-          <ProgressBarFillBlocks>{progressBlocks}</ProgressBarFillBlocks>
-          <ProgressPercentText>{avgProgress}%</ProgressPercentText>
-        </ProgressBarRow>
-        <PanelSubtitle>
-          {isUploading
-            ? "Uploading files to server..."
-            : `${completedJobsCount} of ${docCount} documents processed`}
-        </PanelSubtitle>
-      </PanelInfo>
-      <PanelActions>
-        {chatWizardState.step === "completed" ? (
-          <ActionLink onPress={resetChatWizard}>
-            <ActionLinkText>Dismiss</ActionLinkText>
-          </ActionLink>
-        ) : (
-          <ActionLink onPress={onOpenSheet}>
-            <ActionLinkText>
-              View
-            </ActionLinkText>
-          </ActionLink>
-        )}
-      </PanelActions>
-    </FloatingPanelCard>
-  );
-};
 
 const FloatingPanelCard = styled.View<{ isDark: boolean }>`
   flex-direction: row;

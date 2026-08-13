@@ -114,7 +114,7 @@ function maskSensitiveData(data: any): any {
   return data;
 }
 
-function truncatePayload(payload: any, maxLength = 5000): any {
+function truncatePayload(payload: any, maxLength = 50000): any {
   if (!payload) return payload;
 
   if (typeof payload === "string") {
@@ -291,7 +291,7 @@ apiClient.interceptors.request.use(
         timestamp: new Date().toISOString(),
         message: error.message,
       };
-      console.error(`[API LOG] OUTGOING REQUEST ERROR:\n${JSON.stringify(errLog, null, 2)}`);
+        console.error(`[API LOG] OUTGOING REQUEST ERROR:\n${JSON.stringify(errLog, null, 2)}`);
     }
     return Promise.reject(error);
   }
@@ -407,7 +407,7 @@ apiClient.interceptors.response.use(
         responseBody: error.response ? truncatePayload(maskSensitiveData(error.response.data)) : undefined,
       };
 
-      console.error(`[API LOG] OUTGOING RESPONSE ERROR:\n${JSON.stringify(errorLog, null, 2)}`);
+        console.error(`[API LOG] OUTGOING RESPONSE ERROR:\n${JSON.stringify(errorLog, null, 2)}`);
     }
 
     if (

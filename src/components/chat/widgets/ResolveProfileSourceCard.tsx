@@ -31,8 +31,21 @@ export function ResolveProfileSourceCard({
   chosenVal,
   chosenLabel,
 }: ResolveProfileSourceCardProps) {
-  const mode = activeMsg?.mode || "CONFIRM";
-  const fields = activeMsg?.fields || [];
+  const onboardingState = activeMsg?.onboardingState || state;
+  const loginProvider = onboardingState?.loginProvider || activeMsg?.loginProvider;
+
+  const isSocialLogin = !!(
+    loginProvider &&
+    ["google", "facebook", "microsoft", "apple", "social"].includes(loginProvider.toLowerCase())
+  );
+
+  // Determine actual mode: if the user hasn't done social login, force CONFIRM mode.
+  const rawMode = activeMsg?.mode || "CONFIRM";
+  const mode =
+    (rawMode === "CONFLICT" || activeMsg?.action === "RESOLVE_PROFILE_SOURCE") && isSocialLogin
+      ? "CONFLICT"
+      : "CONFIRM";
+
   const loginSummary = activeMsg?.loginSummary || "";
   const documentSummary = activeMsg?.documentSummary || "";
   const parsed = parseChosenJson(chosenVal);
@@ -48,6 +61,49 @@ export function ResolveProfileSourceCard({
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
     return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
   };
+
+  let fields = activeMsg?.fields || [];
+  if (!fields || fields.length === 0) {
+    const documentData = onboardingState?.documentData || {};
+    const loginData = onboardingState?.loginData || {};
+    const existingUserData = onboardingState?.existingUserData || {};
+
+    const fieldKeys = [
+      { key: "firstName", label: uiT("firstName") || "First Name" },
+      { key: "lastName", label: uiT("lastName") || "Last Name" },
+      { key: "dateOfBirth", label: uiT("dateOfBirth") || "Date of Birth" },
+      { key: "gender", label: uiT("gender") || "Gender" },
+      { key: "email", label: uiT("email") || "Email" },
+      { key: "phoneNumber", label: uiT("phoneNumber") || "Phone Number" },
+    ];
+
+    fields = fieldKeys.map((f) => {
+      const docVal = documentData[f.key] || existingUserData[f.key] || "";
+      const loginVal = loginData[f.key]?.value || onboardingState?.socialData?.[f.key] || "";
+      const isVerified = loginData[f.key]?.verified || false;
+
+      // Default value to display
+      const defaultValue = docVal || loginVal || "";
+
+      // Determine mismatch
+      const hasLoginVal = loginVal && String(loginVal).trim();
+      const hasDocVal = docVal && String(docVal).trim();
+      const isMismatch =
+        hasLoginVal &&
+        hasDocVal &&
+        String(loginVal).trim().toLowerCase() !== String(docVal).trim().toLowerCase();
+
+      return {
+        key: f.key,
+        label: f.label,
+        value: defaultValue,
+        loginValue: loginVal,
+        documentValue: docVal,
+        verified: isVerified,
+        isMismatch: !!isMismatch,
+      };
+    });
+  }
 
   const normalizeGenderFrontend = (rawVal: string | null | undefined): string => {
     if (!rawVal || typeof rawVal !== "string") return "";

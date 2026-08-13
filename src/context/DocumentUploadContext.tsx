@@ -458,6 +458,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
               jobId: doc.jobId,
               fileName: finalFileName,
               fileKey: doc.fileKey || doc.s3Key || "",
+              documentId: doc.id,
+              fileUrl: doc.fileUrl || doc.signedUrl || "",
             });
           } catch (jobErr) {
             console.error(`Failed to start job ${doc.jobId}:`, jobErr);

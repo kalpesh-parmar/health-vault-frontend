@@ -58,9 +58,9 @@ const getIconColors = (isDark: boolean) => ({
 });
 
 const GENDER_OPTIONS = [
-  { label: "Male", icon: "male" },
-  { label: "Female", icon: "female" },
-  { label: "Other", icon: "male-female-outline" },
+  { label: "Male", icon: "male", value: "male" },
+  { label: "Female", icon: "female", value: "female" },
+  { label: "Other", icon: "male-female-outline", value: "other" },
 ] as const;
 
 const calculateAge = (dob: Date | null) => {
@@ -660,7 +660,7 @@ const EditProfile = () => {
                           key={opt.label}
                           selected={selected}
                           onPress={() =>
-                            isEditing && updateField("gender", opt.label)
+                            isEditing && updateField("gender", opt.value)
                           }
                           activeOpacity={isEditing ? 0.7 : 1}
                         >

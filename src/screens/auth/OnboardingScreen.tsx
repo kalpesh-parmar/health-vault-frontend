@@ -68,6 +68,7 @@ type Message = {
   action?: string;
   options?: any[];
   fields?: any[];
+  onboardingState?: any;
   loginSummary?: string;
   documentSummary?: string;
   mode?: string;
@@ -519,15 +520,18 @@ export default function OnboardingScreen() {
 
   const processAssistantResponse = (aiRes: any, currentState: typeof state) => {
     const messageContent =
-      aiRes.message || aiRes.message_en || aiRes.message_gu;
+      aiRes.reply || aiRes.message || aiRes.message_en || aiRes.message_gu;
+
+    const action = aiRes.actionType || aiRes.action;
 
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
       content: messageContent || "Please provide the information.",
-      action: aiRes.action,
+      action,
       options: aiRes.options,
       fields: aiRes.fields,
+      onboardingState: aiRes.onboardingState,
       loginSummary: aiRes.loginSummary,
       documentSummary: aiRes.documentSummary,
       mode: aiRes.mode,
@@ -541,7 +545,7 @@ export default function OnboardingScreen() {
       createdAt: aiRes.createdAt || new Date().toISOString(),
     };
 
-    if (aiRes.action === "RESOLVE_PROFILE_SOURCE") {
+    if (action === "RESOLVE_PROFILE_SOURCE") {
       setMessages((prev) => {
         const existingIndex = prev.findIndex(
           (m) => m.action === "RESOLVE_PROFILE_SOURCE",
@@ -554,6 +558,7 @@ export default function OnboardingScreen() {
             content: newMsg.content,
             options: newMsg.options,
             fields: newMsg.fields,
+            onboardingState: aiRes.onboardingState,
             loginSummary: newMsg.loginSummary,
             documentSummary: newMsg.documentSummary,
             mode: newMsg.mode,
@@ -700,9 +705,10 @@ export default function OnboardingScreen() {
 
       if (resData) {
         processAssistantResponse(resData, updatedState);
+        const action = resData.actionType || resData.action;
         if (
-          resData.action === "COMPLETE" ||
-          resData.action === "POST_ONBOARDING" ||
+          action === "COMPLETE" ||
+          action === "POST_ONBOARDING" ||
           resData.state?.isOnboardingCompleted
         ) {
           queryClient.invalidateQueries({ queryKey: ["profile"] });
