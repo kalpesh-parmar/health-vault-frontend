@@ -1,10 +1,11 @@
-import auth from "@react-native-firebase/auth";
+import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { AccessToken, LoginManager } from "react-native-fbsdk-next";
 import Toast from "react-native-toast-message";
 import { configureGoogleSignIn } from "../config/googleConfig";
 import { AUTH_ENDPOINTS } from "../constants/endpoints";
 import apiClient from "./apiClient";
+import type { DummyConfirmationResult } from "./dummyAuth.service";
 
 // Singleton storage to avoid passing non-serializable objects in React Navigation params
 let activeConfirmationResult: any = null;
@@ -37,6 +38,17 @@ export const loginWithFirebaseToken = async (
   return response?.data?.data || {};
 };
 
+interface SocialLoginPayload {
+  loginType: "mobile" | "social";
+  provider: string;
+  deviceToken?: string | null;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  firebaseIdToken?: string;
+  providerToken?: string | null;
+}
+
 export const socialLogin = async (
   loginType: "mobile" | "social",
   provider: string,
@@ -45,7 +57,7 @@ export const socialLogin = async (
   deviceToken?: string | null,
   extraDetails?: { email?: string | null; firstName?: string | null; lastName?: string | null } | null,
 ) => {
-  const payload: any = {
+  const payload: SocialLoginPayload = {
     loginType,
     provider,
     deviceToken,
@@ -59,7 +71,6 @@ export const socialLogin = async (
   if (loginType === "social" && providerToken) {
     payload.providerToken = providerToken;
   }
-  console.log("Payload for social Login :- ", payload);
   const response = await apiClient.post("/auth/social-login", payload);
   return response?.data || response?.data?.data || {};
 };
@@ -69,9 +80,6 @@ export const loginSocialWithFirebase = async (
   token: string,
   accessToken?: string,
 ) => {
-  console.log("[AUTH_SERVICE] Provider :- ", provider);
-  console.log("[AUTH_SERVICE] Token :- ", token);
-  console.log("[AUTH_SERVICE] Access Token :- ", accessToken);
   let credential;
   switch (provider) {
     case "google":
@@ -86,10 +94,8 @@ export const loginSocialWithFirebase = async (
     default:
       throw new Error("Invalid provider");
   }
-  console.log("Switch case Execution Completed.")
 
   const userCredential = await auth().signInWithCredential(credential);
-  console.log("User Credential :- ", userCredential);
   return await userCredential.user.getIdToken(true);
 };
 
@@ -106,10 +112,6 @@ export const loginWithGoogle = async () => {
     }
 
     const signInResult: any = await GoogleSignin.signIn();
-    console.log(
-      "[AUTH] Full Google Sign-In Result:",
-      JSON.stringify(signInResult, null, 2),
-    );
 
     // Handle both v16 format (signInResult.data.idToken) and older v15 format (signInResult.idToken)
     const idToken = signInResult?.data?.idToken || signInResult?.idToken;

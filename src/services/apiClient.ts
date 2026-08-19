@@ -114,7 +114,7 @@ function maskSensitiveData(data: any): any {
   return data;
 }
 
-function truncatePayload(payload: any, maxLength = 50000): any {
+function truncatePayload(payload: any, maxLength = 1000): any {
   if (!payload) return payload;
 
   if (typeof payload === "string") {
@@ -149,6 +149,43 @@ function resolveFullUrl(baseURL?: string, url?: string): string {
     return `${base}${actualUrl.slice(1)}`;
   }
   return `${base}${separator}${actualUrl}`;
+}
+
+/**
+ * Recursively decodes S3 key filenames in the response payload to display spaces correctly.
+ */
+function decodeFileNamesInPayload(obj: any): any {
+  if (!obj || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(decodeFileNamesInPayload);
+  }
+  
+  const res: any = {};
+  for (const key of Object.keys(obj)) {
+    let value = obj[key];
+    if (typeof value === "string") {
+      if (
+        (key === "fileName" ||
+          key === "name" ||
+          key === "originalFileName" ||
+          key === "originalName" ||
+          key === "fileKey" ||
+          key === "displayName" ||
+          key === "documentName") &&
+        value.includes("%20")
+      ) {
+        try {
+          value = decodeURIComponent(value).replace(/%20/g, " ");
+        } catch (e) {
+          value = value.replace(/%20/g, " ");
+        }
+      }
+    } else if (typeof value === "object") {
+      value = decodeFileNamesInPayload(value);
+    }
+    res[key] = value;
+  }
+  return res;
 }
 
 type ForceLogoutCallback = () => void;
@@ -318,32 +355,7 @@ apiClient.interceptors.response.use(
 
     // Decode document names inside all response payloads to show spaces instead of %20
     if (response.data) {
-      const decodeNames = (obj: any): any => {
-        if (!obj || typeof obj !== "object") return obj;
-        if (Array.isArray(obj)) {
-          return obj.map(decodeNames);
-        }
-        
-        const res: any = {};
-        for (const key of Object.keys(obj)) {
-          let value = obj[key];
-          if (typeof value === "string") {
-            if ((key === "fileName" || key === "name" || key === "originalFileName" || key === "originalName" || key === "fileKey" || key === "displayName" || key === "documentName") && value.includes("%20")) {
-              try {
-                value = decodeURIComponent(value).replace(/%20/g, " ");
-              } catch (e) {
-                value = value.replace(/%20/g, " ");
-              }
-            }
-          } else if (typeof value === "object") {
-            value = decodeNames(value);
-          }
-          res[key] = value;
-        }
-        return res;
-      };
-      
-      response.data = decodeNames(response.data);
+      response.data = decodeFileNamesInPayload(response.data);
     }
 
     const enabled = ENABLE_API_LOGS;

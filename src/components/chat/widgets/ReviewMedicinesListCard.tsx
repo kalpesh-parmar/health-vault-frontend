@@ -32,7 +32,7 @@ export interface ReviewMedicinesListCardProps {
   preferredLang: string;
   isDark: boolean;
   theme: any;
-  onConfirm: (checkedMeds: string[]) => void;
+  onConfirm: (checkedMeds: string[], formattedMeds?: any[]) => void;
   onAddNew: () => void;
   onSkipAll: () => void;
   onEdit: (med: any) => void;
@@ -78,6 +78,55 @@ export function ReviewMedicinesListCard({
       (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
     );
   }, [localMedicines]);
+
+  // resolutions: holds resolution choice for each medicine
+  const [resolutions, setResolutions] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    (localMedicines || []).forEach((m) => {
+      if (!m.duplicateInfo?.hasDuplicate) {
+        initial[m.id] = "KEEP_NEW";
+      }
+    });
+    return initial;
+  });
+
+  // Sync resolutions if localMedicines changes
+  useEffect(() => {
+    setResolutions((prev) => {
+      const next = { ...prev };
+      (localMedicines || []).forEach((m) => {
+        if (!m.duplicateInfo?.hasDuplicate && next[m.id] === undefined) {
+          next[m.id] = "KEEP_NEW";
+        }
+      });
+      return next;
+    });
+  }, [localMedicines]);
+
+  const safeLocalMedicines = localMedicines || [];
+  const conflictingMeds = safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined);
+  const [viewMode, setViewMode] = useState<"conflicts" | "list">(() => {
+    return conflictingMeds.length > 0 ? "conflicts" : "list";
+  });
+  const [currentConflictIdx, setCurrentConflictIdx] = useState(0);
+
+  const autoAdvance = () => {
+    const remainingCount = safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined).length;
+    if (remainingCount === 0) {
+      setViewMode("list");
+    } else if (currentConflictIdx >= remainingCount) {
+      setCurrentConflictIdx(remainingCount - 1);
+    }
+  };
+
+  const getExistingDosage = (exist: any) => {
+    if (!exist) return "None";
+    return `${exist.dosePerIntake || "1"} ${exist.medicationType?.toLowerCase() || "tablet"}(s)`;
+  };
+
+  const getExtractedDosage = (med: any) => {
+    return `${med.dosage || "1"} ${med.dosageUnit || "tablet"}`;
+  };
 
   // Toggle medicine checkbox state
   const toggleCheck = (id: string) => {
@@ -156,7 +205,34 @@ export function ReviewMedicinesListCard({
   };
 
   const handleConfirm = () => {
-    onConfirm(checkedMeds);
+    const formattedMedicines = (localMedicines || [])
+      .filter((m) => checkedMeds.includes(m.id))
+      .map((m) => {
+        const resValue = resolutions[m.id] || "KEEP_NEW";
+        const matchedMed = m.duplicateInfo?.matchedMedication || m.duplicateInfo?.matchedMedications?.[0];
+        
+        const doseCount = typeof m.dose === "object" && m.dose !== null && m.dose.count !== undefined
+          ? parseFloat(String(m.dose.count)) || 1
+          : parseFloat(String(m.dosePerIntake || "1")) || 1;
+
+        const result: any = {
+          client_med_id: m.id,
+          name: m.name || m.medicationName || "Unknown",
+          type: String(m.type || m.medicationType || "TABLET").toUpperCase(),
+          frequency: String(m.frequency || "ONCE").toUpperCase(),
+          dose: { count: doseCount },
+          foodFrequency: String(m.foodFrequency || m.foodContext || "AFTER_FOOD").toUpperCase(),
+          resolution: resValue,
+        };
+
+        if (resValue === "REPLACE" && matchedMed?.id) {
+          result.replaceMedicationId = matchedMed.id;
+        }
+
+        return result;
+      });
+
+    onConfirm(checkedMeds, formattedMedicines);
   };
 
   // Translation helper
@@ -166,7 +242,7 @@ export function ReviewMedicinesListCard({
     return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
   };
 
-  const safeLocalMedicines = localMedicines || [];
+
 
   const parsed = parseChosenJson(chosenVal);
   const isConfirmChosen =
@@ -186,6 +262,188 @@ export function ReviewMedicinesListCard({
   const addNewOpacity = readOnly ? (isAddNewChosen ? 1 : 0.55) : 1;
   const skipAllOpacity = readOnly ? (isSkipAllChosen ? 1 : 0.55) : 1;
 
+  if (viewMode === "conflicts" && conflictingMeds.length > 0) {
+    const med = conflictingMeds[currentConflictIdx];
+    const exist = med.duplicateInfo?.matchedMedication || med.duplicateInfo?.matchedMedications?.[0];
+
+    return (
+      <View
+        style={[
+          styles.medListCard,
+          {
+            backgroundColor: isDark ? "#1e293b" : "#ffffff",
+            borderColor: isDark ? "#334155" : "#e2e8f0",
+            padding: 16,
+          },
+        ]}
+      >
+        {/* Toggle Header */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#f8fafc" : "#1e293b" }}>
+            Resolve Conflicts
+          </Text>
+          <TouchableOpacity onPress={() => setViewMode("list")}>
+            <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 13 }}>
+              Show List
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Header Info */}
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, fontWeight: "bold", color: "#b91c1c" }}>
+            Conflict {currentConflictIdx + 1} of {conflictingMeds.length}
+          </Text>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginTop: 4 }}>
+            {med.name}
+          </Text>
+        </View>
+
+        {/* Comparison Grid */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
+          {/* Left: Existing */}
+          {exist ? (
+            <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+              <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+                Existing in your profile
+              </Text>
+              <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+                {exist.medicationName}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {getExistingDosage(exist)}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {exist.frequency || "Once Daily"}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>
+                {exist.duration || (exist.totalQuantity ? `${exist.totalQuantity} Days` : "Ongoing")}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12, justifyContent: "center", alignItems: "center" }}>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>No details found</Text>
+            </View>
+          )}
+
+          {/* Right: New Extracted */}
+          <View style={{ flex: 1, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+            <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+              Newly extracted
+            </Text>
+            <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+              {med.name}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+              {getExtractedDosage(med)}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+              {(() => {
+                const freq = med.frequency || "ONCE";
+                if (freq === "ONCE") return "Once Daily";
+                if (freq === "TWICE") return "Twice Daily";
+                if (freq === "THRICE") return "3x Daily";
+                return freq;
+              })()}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#64748b" }}>
+              {med.duration || "30 Days"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Reason */}
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ fontSize: 12, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginBottom: 4 }}>
+            Reason
+          </Text>
+          <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#475569", fontStyle: "italic" }}>
+            Duplicate medicine with same strength and frequency
+          </Text>
+        </View>
+
+        {/* Resolution Buttons Grid */}
+        <View style={{ marginBottom: 16 }}>
+          {/* Row 1 */}
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+            <TouchableOpacity
+              disabled={readOnly}
+              onPress={() => {
+                setResolutions((prev) => ({ ...prev, [med.id]: "REMOVE_NEW" }));
+                autoAdvance();
+              }}
+              style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+            >
+              <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                Keep Existing
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={readOnly}
+              onPress={() => {
+                setResolutions((prev) => ({ ...prev, [med.id]: "REPLACE" }));
+                autoAdvance();
+              }}
+              style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+            >
+              <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                Replace
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Row 2 */}
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            <TouchableOpacity
+              disabled={readOnly}
+              onPress={() => onEdit(med)}
+              style={{ flex: 1, borderColor: "#2563eb", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+            >
+              <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 12 }}>
+                Edit
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={readOnly}
+              onPress={() => {
+                setResolutions((prev) => ({ ...prev, [med.id]: "REMOVE_NEW" }));
+                autoAdvance();
+              }}
+              style={{ flex: 1.2, borderColor: "#fca5a5", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+            >
+              <Text style={{ color: "#ef4444", fontWeight: "bold", fontSize: 12 }}>
+                Remove New
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Footer Pager */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 }}>
+          <TouchableOpacity
+            disabled={currentConflictIdx === 0}
+            onPress={() => setCurrentConflictIdx((prev) => Math.max(0, prev - 1))}
+            style={{ opacity: currentConflictIdx === 0 ? 0.3 : 1, padding: 8 }}
+          >
+            <Ionicons name="chevron-back" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
+          </TouchableOpacity>
+
+          <Text style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#475569" }}>
+            {currentConflictIdx + 1} of {conflictingMeds.length}
+          </Text>
+
+          <TouchableOpacity
+            disabled={currentConflictIdx === conflictingMeds.length - 1}
+            onPress={() => setCurrentConflictIdx((prev) => Math.min(conflictingMeds.length - 1, prev + 1))}
+            style={{ opacity: currentConflictIdx === conflictingMeds.length - 1 ? 0.3 : 1, padding: 8 }}
+          >
+            <Ionicons name="chevron-forward" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -197,6 +455,31 @@ export function ReviewMedicinesListCard({
         },
       ]}
     >
+      {conflictingMeds.length > 0 && (
+        <TouchableOpacity
+          onPress={() => setViewMode("conflicts")}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: "#ffedd5",
+            borderColor: "#f97316",
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 10,
+            marginBottom: 14,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+            <Ionicons name="warning" size={18} color="#ea580c" style={{ marginRight: 8 }} />
+            <Text style={{ fontSize: 12, color: "#c2410c", fontWeight: "600", flex: 1 }}>
+              {conflictingMeds.length} duplicate conflicts detected. Tap to resolve them one by one.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#ea580c" />
+        </TouchableOpacity>
+      )}
+
       <Text style={[styles.medCardTitle, { color: theme.colors.textPrimary }]}>
         {t("extractedMedicationsList")}
       </Text>
@@ -210,8 +493,14 @@ export function ReviewMedicinesListCard({
       </Text>
 
       <View style={{ marginVertical: 12 }}>
-        {/* Render medicine list - display first 3 items or all if isExpanded is active */}
-        {(isExpanded ? safeLocalMedicines : safeLocalMedicines.slice(0, 3)).map((med) => {
+        {(isExpanded ? safeLocalMedicines : safeLocalMedicines.slice(0, 3)).map((rawMed) => {
+          const med = {
+            ...rawMed,
+            name: rawMed.name || rawMed.medicationName || "Unknown",
+            type: rawMed.type || rawMed.medicationType || "Tablet",
+            frequency: rawMed.frequency || rawMed.medicationFrequency || rawMed.doseFrequency || rawMed.timeOfIntake || "None",
+            notes: rawMed.notes || rawMed.instructions || "None",
+          };
           const isChecked = checkedMeds.includes(med.id);
           const isPillExpanded = expandedMedId === med.id;
           const dosageStr = getDosageString(med);
@@ -263,18 +552,43 @@ export function ReviewMedicinesListCard({
                   <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
                     {/* Primary Info: Name & Type */}
                     <View style={{ flex: 1.2, paddingRight: 8 }}>
-                      <Text
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                        style={{
-                          fontSize: 14,
-                          fontWeight: "bold",
-                          color: "#1e293b",
-                          textDecorationLine: isChecked ? "none" : "line-through",
-                        }}
-                      >
-                        {med.name}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <Text
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          style={{
+                            fontSize: 14,
+                            fontWeight: "bold",
+                            color: "#1e293b",
+                            textDecorationLine: isChecked ? "none" : "line-through",
+                            flexShrink: 1,
+                          }}
+                        >
+                          {med.name}
+                        </Text>
+                        {med.duplicateInfo?.hasDuplicate && (
+                          (() => {
+                            const isSolved = resolutions[med.id] !== undefined;
+                            return (
+                              <View
+                                style={{
+                                  marginLeft: 6,
+                                  backgroundColor: isSolved ? "#d1fae5" : "#ffedd5",
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 1.5,
+                                  borderRadius: 6,
+                                  borderWidth: 0.5,
+                                  borderColor: isSolved ? "#10b981" : "#f97316",
+                                }}
+                              >
+                                <Text style={{ fontSize: 9, color: isSolved ? "#047857" : "#ea580c", fontWeight: "bold" }}>
+                                  {isSolved ? "Solved" : "Conflict"}
+                                </Text>
+                              </View>
+                            );
+                          })()
+                        )}
+                      </View>
                       <Text style={{ fontSize: 11, color: "#64748b", marginTop: 2, fontWeight: "500" }}>
                         {med.type || "Tablet"}
                       </Text>
@@ -480,6 +794,14 @@ export function ReviewMedicinesListCard({
         )}
       </View>
 
+      {!readOnly && conflictingMeds.length > 0 && (
+        <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
+          <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "600", textAlign: "center" }}>
+            ⚠️ Please solve all duplicate conflicts to enable these actions.
+          </Text>
+        </View>
+      )}
+
       <View
         style={{
           flexDirection: "row",
@@ -489,7 +811,7 @@ export function ReviewMedicinesListCard({
         pointerEvents={readOnly ? "none" : "auto"}
       >
         <TouchableOpacity
-          disabled={readOnly}
+          disabled={readOnly || conflictingMeds.length > 0}
           style={[
             styles.bigActionButtonSide,
             {
@@ -499,10 +821,10 @@ export function ReviewMedicinesListCard({
                   : isDark
                     ? "#334155"
                     : "#e2e8f0"
-                : theme.colors.primary,
+                : (conflictingMeds.length > 0 ? "#cbd5e1" : theme.colors.primary),
               flex: 1,
               marginRight: 6,
-              opacity: confirmOpacity,
+              opacity: (readOnly || conflictingMeds.length > 0) ? 0.55 : confirmOpacity,
               borderWidth: isConfirmChosen ? 2 : 0,
               borderColor: isConfirmChosen ? "#ffffff" : "transparent",
             },
@@ -540,13 +862,13 @@ export function ReviewMedicinesListCard({
           </View>
         </TouchableOpacity>
         <TouchableOpacity
-          disabled={readOnly}
+          disabled={readOnly || conflictingMeds.length > 0}
           style={[
             styles.bigActionButtonSide,
             {
               backgroundColor: isDark ? "#334155" : "#e2e8f0",
               flex: 0.5,
-              opacity: addNewOpacity,
+              opacity: (readOnly || conflictingMeds.length > 0) ? 0.55 : addNewOpacity,
               borderWidth: isAddNewChosen ? 2 : 0,
               borderColor: isAddNewChosen
                 ? isDark
@@ -585,11 +907,11 @@ export function ReviewMedicinesListCard({
       </View>
 
       <TouchableOpacity
-        disabled={readOnly}
+        disabled={readOnly || conflictingMeds.length > 0}
         style={[
           styles.skipListButton,
           {
-            opacity: skipAllOpacity,
+            opacity: (readOnly || conflictingMeds.length > 0) ? 0.55 : skipAllOpacity,
             alignSelf: "center",
             marginTop: 10,
             borderWidth: isSkipAllChosen ? 1 : 0,

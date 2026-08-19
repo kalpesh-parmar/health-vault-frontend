@@ -194,101 +194,167 @@ export function ConflictCarouselCard({
     : "";
 
   return (
-    <View style={[styles.card, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#334155" : "#e2e8f0" }]}>
-      {/* Title */}
-      <View style={styles.conflictHeader}>
-        <Text style={styles.conflictSubtitle}>Conflict {currentIndex + 1} of {conflicts.length}</Text>
-        <Text style={[styles.conflictTitle, { color: isDark ? "#f8fafc" : "#1e293b" }]}>
+    <View
+      style={{
+        padding: 16,
+        borderRadius: 16,
+        backgroundColor: isDark ? "#1e293b" : "#ffffff",
+        borderColor: isDark ? "#334155" : "#e2e8f0",
+        borderWidth: 1,
+        shadowColor: "#0f172a",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+      }}
+    >
+      {/* Header Info */}
+      <View style={{ marginBottom: 12 }}>
+        <Text style={{ fontSize: 13, fontWeight: "bold", color: "#b91c1c" }}>
+          Conflict {currentIndex + 1} of {conflicts.length}
+        </Text>
+        <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginTop: 4 }}>
           {extractedMedicine.name}
         </Text>
       </View>
 
-      {/* Side by Side Columns */}
-      <View style={styles.comparisonContainer}>
-        {/* Existing Medication Column */}
-        <View style={[styles.comparisonCol, { backgroundColor: isDark ? "#0f172a" : "#f8fafc", marginRight: 8 }]}>
-          <Text style={styles.colHeader}>Existing in profile</Text>
-          <Text style={[styles.colValueBold, { color: isDark ? "#cbd5e1" : "#1e293b" }]}>{existingMedication.medicationName}</Text>
-          <Text style={[styles.colValue, { color: isDark ? "#94a3b8" : "#475569" }]}>{getExistingDosage()}</Text>
-          <Text style={[styles.colValue, { color: isDark ? "#94a3b8" : "#475569" }]}>{existingMedication.frequency}</Text>
-          <Text style={[styles.colValue, { color: isDark ? "#94a3b8" : "#475569" }]}>Ongoing</Text>
+      {/* Grid Comparison */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
+        {/* Left: Existing */}
+        <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+          <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+            Existing in your profile
+          </Text>
+          <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+            {existingMedication.medicationName}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+            {getExistingDosage()}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+            {existingMedication.frequency || "Once Daily"}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#64748b" }}>
+            {existingMedication.duration || (existingMedication.totalQuantity ? `${existingMedication.totalQuantity} Days` : "Ongoing")}
+          </Text>
         </View>
 
-        {/* Newly Extracted Medication Column */}
-        <View style={[styles.comparisonCol, { backgroundColor: isDark ? "#0f172a" : "#f8fafc" }]}>
-          <Text style={styles.colHeader}>Newly extracted</Text>
-          <Text style={[styles.colValueBold, { color: isDark ? "#cbd5e1" : "#1e293b" }]}>{extractedMedicine.name}</Text>
-          <Text style={[styles.colValue, { color: isDark ? "#94a3b8" : "#475569" }]}>{getExtractedDosage()}</Text>
-          <Text style={[styles.colValue, { color: isDark ? "#94a3b8" : "#475569" }]}>
-            {extractedMedicine.frequency === "ONCE" ? "Once Daily" : extractedMedicine.frequency === "TWICE" ? "Twice Daily" : extractedMedicine.frequency === "THRICE" ? "3x Daily" : extractedMedicine.frequency}
+        {/* Right: New Extracted */}
+        <View style={{ flex: 1, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+          <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+            Newly extracted
           </Text>
-          <Text style={[styles.colValue, { color: isDark ? "#94a3b8" : "#475569" }]}>30 Days</Text>
+          <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+            {extractedMedicine.name}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+            {getExtractedDosage()}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+            {(() => {
+              const freq = extractedMedicine.frequency || "ONCE";
+              if (freq === "ONCE") return "Once Daily";
+              if (freq === "TWICE") return "Twice Daily";
+              if (freq === "THRICE") return "3x Daily";
+              return freq;
+            })()}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#64748b" }}>
+            {extractedMedicine.duration || "30 Days"}
+          </Text>
         </View>
       </View>
 
-      {/* Reason explanation */}
-      <View style={styles.reasonBlock}>
-        <Text style={styles.reasonLabel}>Reason</Text>
-        <Text style={[styles.reasonText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+      {/* Reason */}
+      <View style={{ marginBottom: 20 }}>
+        <Text style={{ fontSize: 12, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginBottom: 4 }}>
+          Reason
+        </Text>
+        <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#475569", fontStyle: "italic" }}>
           Duplicate medicine with same strength and frequency
         </Text>
       </View>
 
-      {/* Interactive Action Buttons / Resolved State */}
+      {/* Resolution Choice Buttons */}
       {currentConflict.resolvedAction !== undefined ? (
-        <View style={[styles.resolvedBlock, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.08)" : "#f0fdf4", borderColor: "#10b981" }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: isDark ? "rgba(16, 185, 129, 0.08)" : "#f0fdf4", borderColor: "#10b981", borderWidth: 1, padding: 12, borderRadius: 10, marginBottom: 12 }}>
           <Ionicons name="checkmark-circle" size={18} color="#10b981" style={{ marginRight: 6 }} />
-          <Text style={styles.resolvedText}>
+          <Text style={{ color: "#10b981", fontWeight: "bold", fontSize: 13 }}>
             ✓ Resolved - {resolvedLabel}
           </Text>
         </View>
       ) : (
         isLatest && (
-          <View style={{ gap: 8, marginTop: 12 }}>
-            {/* Main Resolutions */}
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <TouchableOpacity onPress={() => onResolve("keep")} style={[styles.actionBtn, { flex: 1, backgroundColor: "#0f766e" }]}>
-                <Text style={styles.actionBtnText}>{t("keepExisting") || "Keep Existing"}</Text>
+          <View style={{ marginBottom: 16 }}>
+            {/* Row 1: Solid blue buttons */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+              <TouchableOpacity
+                onPress={() => onResolve("keep")}
+                style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                  Keep Existing
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => onResolve("replace")} style={[styles.actionBtn, { flex: 1, backgroundColor: "#3b82f6" }]}>
-                <Text style={styles.actionBtnText}>{t("replace") || "Replace"}</Text>
+              <TouchableOpacity
+                onPress={() => onResolve("replace")}
+                style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                  Replace
+                </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Additional Actions */}
-            <View style={{ flexDirection: "row", gap: 6, justifyContent: "space-between" }}>
-              <TouchableOpacity onPress={() => onResolve("merge", existingMedication)} style={[styles.pillBtn, { backgroundColor: isDark ? "#334155" : "#e2e8f0" }]}>
-                <Text style={[styles.pillBtnText, { color: isDark ? "#f8fafc" : "#334155" }]}>{t("merge") || "Merge"}</Text>
+            {/* Row 2: Outlined buttons */}
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <TouchableOpacity
+                onPress={() => onResolve("merge", existingMedication)}
+                style={{ flex: 1, borderColor: "#2563eb", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 12 }}>
+                  Merge
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => onEdit(extractedMedicine)} style={[styles.pillBtn, { backgroundColor: isDark ? "#334155" : "#e2e8f0" }]}>
-                <Text style={[styles.pillBtnText, { color: isDark ? "#f8fafc" : "#334155" }]}>{t("edit") || "Edit"}</Text>
+              <TouchableOpacity
+                onPress={() => onEdit(extractedMedicine)}
+                style={{ flex: 1, borderColor: "#2563eb", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 12 }}>
+                  Edit
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => onResolve("remove_new")} style={[styles.pillBtn, { backgroundColor: "rgba(239, 68, 68, 0.08)" }]}>
-                <Text style={[styles.pillBtnText, { color: "#ef4444" }]}>{t("discardNewMedicine") || "Remove New"}</Text>
+              <TouchableOpacity
+                onPress={() => onResolve("remove_new")}
+                style={{ flex: 1.2, borderColor: "#fca5a5", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#ef4444", fontWeight: "bold", fontSize: 12 }}>
+                  Remove New
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         )
       )}
 
-      {/* Horizontal Carousel Pager */}
-      <View style={styles.pagerRow}>
-        <TouchableOpacity 
-          disabled={currentIndex === 0} 
+      {/* Footer Pager */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 }}>
+        <TouchableOpacity
+          disabled={currentIndex === 0}
           onPress={() => onNavigate("prev")}
-          style={[styles.pagerArrow, { opacity: currentIndex === 0 ? 0.3 : 1 }]}
+          style={{ opacity: currentIndex === 0 ? 0.3 : 1, padding: 8 }}
         >
           <Ionicons name="chevron-back" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
         </TouchableOpacity>
 
-        <Text style={[styles.pagerIndicator, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+        <Text style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#475569" }}>
           {currentIndex + 1} of {conflicts.length}
         </Text>
 
-        <TouchableOpacity 
-          disabled={currentIndex === conflicts.length - 1} 
+        <TouchableOpacity
+          disabled={currentIndex === conflicts.length - 1}
           onPress={() => onNavigate("next")}
-          style={[styles.pagerArrow, { opacity: currentIndex === conflicts.length - 1 ? 0.3 : 1 }]}
+          style={{ opacity: currentIndex === conflicts.length - 1 ? 0.3 : 1, padding: 8 }}
         >
           <Ionicons name="chevron-forward" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
         </TouchableOpacity>
@@ -296,12 +362,12 @@ export function ConflictCarouselCard({
 
       {/* Bottom Option buttons to bypass conflicts */}
       {isLatest && (
-        <View style={styles.bypassRow}>
-          <TouchableOpacity onPress={onContinueAnyway} style={styles.secondaryTextBtn}>
-            <Text style={styles.secondaryTextBtnText}>Continue Anyway</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 16, borderTopWidth: 0.5, borderTopColor: isDark ? "#334155" : "#e2e8f0", paddingTop: 12 }}>
+          <TouchableOpacity onPress={onContinueAnyway} style={{ padding: 4 }}>
+            <Text style={{ fontSize: 12, color: "#3b82f6", fontWeight: "600" }}>Continue Anyway</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onReviewMedicines} style={styles.secondaryTextBtn}>
-            <Text style={styles.secondaryTextBtnText}>Review Medicines</Text>
+          <TouchableOpacity onPress={onReviewMedicines} style={{ padding: 4 }}>
+            <Text style={{ fontSize: 12, color: "#3b82f6", fontWeight: "600" }}>Review Medicines</Text>
           </TouchableOpacity>
         </View>
       )}

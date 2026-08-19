@@ -55,6 +55,7 @@ export function ResolveProfileSourceCard({
   const [editedProfileData, setEditedProfileData] = useState<any>({});
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date");
+  const [localEditedData, setLocalEditedData] = useState<any>(null);
 
   const uiT = (key: string) => {
     const lang = preferredLang || "english";
@@ -521,18 +522,12 @@ export function ResolveProfileSourceCard({
               },
             ]}
             onPress={() => {
-              const userMessage = uiT("saveDetails");
-              console.log(userMessage);
               setIsEditingProfileManually(false);
               const dataToSend = { ...editedProfileData };
               if (dataToSend.gender) {
                 dataToSend.gender = normalizeGenderFrontend(dataToSend.gender);
               }
-              sendMessage(
-                JSON.stringify({ edited: dataToSend }),
-                state,
-                userMessage
-              );
+              setLocalEditedData(dataToSend);
             }}
           >
             <Text style={styles.resolveActionButtonText}>
@@ -605,7 +600,7 @@ export function ResolveProfileSourceCard({
       </View>
 
       {/* VS Card Columns or CONFIRM layout */}
-      {mode === "CONFIRM" || parsed?.edited !== undefined ? (
+      {mode === "CONFIRM" || parsed?.edited !== undefined || localEditedData !== null ? (
         <View style={[styles.vsColumn, { borderColor: isDark ? "#475569" : "#cbd5e1", width: "100%", marginBottom: 12, borderWidth: 1, borderRadius: 8, overflow: "hidden" }]}>
           <View style={[styles.columnHeader, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
             <Ionicons name="person-circle-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
@@ -615,9 +610,11 @@ export function ResolveProfileSourceCard({
           </View>
           <View style={styles.columnBody}>
             {fields.map((field: any) => {
-              const val = (parsed?.edited && parsed.edited[field.key] !== undefined)
-                ? parsed.edited[field.key]
-                : field.value;
+              const val = (localEditedData && localEditedData[field.key] !== undefined)
+                ? localEditedData[field.key]
+                : (parsed?.edited && parsed.edited[field.key] !== undefined)
+                  ? parsed.edited[field.key]
+                  : field.value;
               return (
                 <View key={field.key} style={styles.fieldRow}>
                   <View
@@ -664,7 +661,9 @@ export function ResolveProfileSourceCard({
                         onPress={() => {
                           const initData: any = {};
                           fields.forEach((f: any) => {
-                            const rawVal = f.value || "";
+                            const rawVal = (localEditedData && localEditedData[f.key] !== undefined)
+                              ? localEditedData[f.key]
+                              : f.value || "";
                             initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
                           });
                           setEditedProfileData(initData);
@@ -1003,13 +1002,16 @@ export function ResolveProfileSourceCard({
                     borderColor: isConfirmChosen ? "#ffffff" : "transparent",
                   },
                 ]}
-                onPress={() =>
+                onPress={() => {
+                  const payload = localEditedData
+                    ? { confirmed: true, edited: localEditedData }
+                    : { confirmed: true };
                   sendMessage(
-                    JSON.stringify({ confirmed: true }),
+                    JSON.stringify(payload),
                     state,
                     uiT("confirmAndContinue"),
-                  )
-                }
+                  );
+                }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
                   <Text
@@ -1025,7 +1027,7 @@ export function ResolveProfileSourceCard({
                   </Text>
                 </View>
               </TouchableOpacity>
-
+ 
               <TouchableOpacity
                 disabled={isHistorical}
                 style={[
@@ -1044,7 +1046,9 @@ export function ResolveProfileSourceCard({
                 onPress={() => {
                   const initData: any = {};
                   fields.forEach((f: any) => {
-                    const rawVal = f.value || "";
+                    const rawVal = (localEditedData && localEditedData[f.key] !== undefined)
+                      ? localEditedData[f.key]
+                      : f.value || "";
                     initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
                   });
                   setEditedProfileData(initData);

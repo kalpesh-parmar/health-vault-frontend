@@ -6,14 +6,14 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 interface UploadBottomSheetProps {
+  fromScreen?: boolean;
   onTakePhoto: () => void;
   onChooseGallery: () => void;
   onChooseDocument: () => void;
 }
 
 export const UploadBottomSheet = forwardRef<any, UploadBottomSheetProps>(
-  ({ onTakePhoto, onChooseGallery, onChooseDocument }, ref) => {
-    const { isDark } = useAppTheme();
+  ({ fromScreen, onTakePhoto, onChooseGallery, onChooseDocument }, ref) => {
     const bottomPadding = useBottomBarPadding(32, 16);
 
     const handleOptionPress = (callback: () => void) => {
@@ -28,7 +28,9 @@ export const UploadBottomSheet = forwardRef<any, UploadBottomSheetProps>(
         <SheetContentWrapper bottomPadding={bottomPadding}>
           <HeaderSection>
             <SheetTitle>Upload Medical Document</SheetTitle>
-            <SheetSubtitle>Please select a source to upload your file</SheetSubtitle>
+            <SheetSubtitle>
+              Please select a source to upload your file
+            </SheetSubtitle>
           </HeaderSection>
 
           <OptionsContainer>
@@ -57,25 +59,36 @@ export const UploadBottomSheet = forwardRef<any, UploadBottomSheetProps>(
             </OptionRow>
 
             {/* Choose Document */}
-            <OptionRow onPress={() => handleOptionPress(onChooseDocument)} isLast>
-              <IconContainer bgColor="#f0fdf4">
-                <Ionicons name="document-text-outline" size={24} color="#16a34a" />
-              </IconContainer>
-              <TextContent>
-                <OptionTitle>Choose Document</OptionTitle>
-                <OptionDesc>Select PDF or image file</OptionDesc>
-              </TextContent>
-              <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-            </OptionRow>
+            {!fromScreen && (
+              <OptionRow
+                onPress={() => handleOptionPress(onChooseDocument)}
+                isLast
+              >
+                <IconContainer bgColor="#f0fdf4">
+                  <Ionicons
+                    name="document-text-outline"
+                    size={24}
+                    color="#16a34a"
+                  />
+                </IconContainer>
+                <TextContent>
+                  <OptionTitle>Choose Document</OptionTitle>
+                  <OptionDesc>Select PDF or image file</OptionDesc>
+                </TextContent>
+                <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+              </OptionRow>
+            )}
           </OptionsContainer>
 
-          <CancelButton onPress={() => ref && "current" in ref && ref.current?.dismiss()}>
+          <CancelButton
+            onPress={() => ref && "current" in ref && ref.current?.dismiss()}
+          >
             <CancelButtonText>Cancel</CancelButtonText>
           </CancelButton>
         </SheetContentWrapper>
       </BottomSheet>
     );
-  }
+  },
 );
 
 export default UploadBottomSheet;
@@ -109,7 +122,10 @@ const OptionsContainer = styled.View`
   margin-bottom: 20px;
 `;
 
-const OptionRow = styled.TouchableOpacity<{ isFirst?: boolean; isLast?: boolean }>`
+const OptionRow = styled.TouchableOpacity<{
+  isFirst?: boolean;
+  isLast?: boolean;
+}>`
   flex-direction: row;
   align-items: center;
   padding: 16px;

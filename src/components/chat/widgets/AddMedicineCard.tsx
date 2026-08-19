@@ -132,8 +132,8 @@ export function AddMedicineCard({
 
     const dose =
       formType === "TABLET" || formType === "CAPSULE"
-        ? { count: formCount }
-        : { value: formVal, unit: formUnit };
+        ? { count: parseFloat(String(formCount)) || 0 }
+        : { value: parseFloat(String(formVal)) || 0, unit: formUnit };
 
     const sortedTimes = [...selectedSlots].sort((a, b) => {
       const [ha, ma] = a.split(":").map(Number);

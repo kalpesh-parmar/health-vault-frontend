@@ -32,8 +32,6 @@ interface TabItemProps {
   activeIcon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
-  isDark: boolean;
-  theme: any;
 }
 
 const TabItem: React.FC<TabItemProps> = ({
@@ -168,8 +166,6 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
               activeIcon="home"
               label="Home"
               onPress={() => handlePress("Home")}
-              isDark={isDark}
-              theme={theme}
             />
           </TabCol>
 
@@ -184,8 +180,6 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
               activeIcon="person"
               label="Profile"
               onPress={() => handlePress("Profile")}
-              isDark={isDark}
-              theme={theme}
             />
           </TabCol>
         </GlassContainer>

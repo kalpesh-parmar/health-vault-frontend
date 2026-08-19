@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   KeyboardAvoidingView,
+  BackHandler,
 } from "react-native";
 import styled from "styled-components/native";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
@@ -284,6 +285,27 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
 
   // Editing file states
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sheetIndex, setSheetIndex] = useState(-1);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (sheetIndex >= 0) {
+        if (!isUploading) {
+          ref.current?.dismiss();
+        }
+        return true;
+      }
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+
+    return () => subscription.remove();
+  }, [sheetIndex, isUploading]);
+
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -479,6 +501,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
         ref={ref}
         enablePanDownToClose={!isUploading}
         onChange={(index) => {
+          setSheetIndex(index);
           setIsBottomSheetVisible(index >= 0);
           if (index === -1) {
             setEditingId(null);

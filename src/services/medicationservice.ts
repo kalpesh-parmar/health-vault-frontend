@@ -65,7 +65,6 @@ export const updateMedication = async ({
     "{id}",
     medicationId,
   );
-  console.log("Medication Updation Payload :- ", data);
   const response = await apiClient.put(endpoint, data);
   return response.data;
 };

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -436,51 +436,88 @@ const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
     ).length;
   }, [uploadingDocs]);
 
-  const progressBlocks = useMemo(() => {
-    const totalBlocks = 15;
-    const filledBlocks = Math.round((avgProgress / 100) * totalBlocks);
-    const emptyBlocks = totalBlocks - filledBlocks;
-    return "█".repeat(filledBlocks) + "░".repeat(emptyBlocks);
-  }, [avgProgress]);
-
   const docCount = uploadingDocs?.length || 0;
 
   return (
-    <FloatingPanelCard isDark={isDark}>
-      <Ionicons
-        name={chatWizardState.step === "completed" ? "checkmark-circle" : "document-text"}
-        size={24}
-        color="#0f766e"
-      />
-      <PanelInfo>
-        <PanelTitle isDark={isDark}>
-          {isUploading ? "Uploading Documents..." : `Processing Documents (${docCount})`}
-        </PanelTitle>
-        <ProgressLabel>Overall Progress</ProgressLabel>
-        <ProgressBarRow>
-          <ProgressBarFillBlocks>{progressBlocks}</ProgressBarFillBlocks>
-          <ProgressPercentText>{avgProgress}%</ProgressPercentText>
-        </ProgressBarRow>
-        <PanelSubtitle>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginHorizontal: 16,
+        marginTop: 10,
+        marginBottom: 6,
+        padding: 10,
+        borderRadius: 14,
+        backgroundColor: isDark ? "#1e293b" : "#ffffff",
+        borderColor: isDark ? "#334155" : "#e2e8f0",
+        borderWidth: 1,
+        shadowColor: "#0f172a",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 3,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Left side: Info */}
+      <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+        <Text style={{ color: isDark ? "#f1f5f9" : "#0f172a", fontWeight: "bold", fontSize: 13 }}>
           {isUploading
-            ? "Uploading files to server..."
-            : `${completedJobsCount} of ${docCount} documents processed`}
-        </PanelSubtitle>
-      </PanelInfo>
-      <PanelActions>
-        {chatWizardState.step === "completed" ? (
-          <ActionLink onPress={resetChatWizard}>
-            <ActionLinkText>Dismiss</ActionLinkText>
-          </ActionLink>
-        ) : (
-          <ActionLink onPress={onOpenSheet}>
-            <ActionLinkText>
-              View
-            </ActionLinkText>
-          </ActionLink>
-        )}
-      </PanelActions>
-    </FloatingPanelCard>
+            ? "Uploading"
+            : `Processing ${completedJobsCount} of ${docCount}`}
+        </Text>
+        <Text style={{ color: "#64748b", marginHorizontal: 6, fontSize: 13 }}>•</Text>
+        <Text style={{ color: "#64748b", fontSize: 13 }} numberOfLines={1}>
+          {isUploading ? "Uploading files" : "Analyzing"}
+        </Text>
+      </View>
+
+      {/* Right side: Actions */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Text style={{ color: "#0f766e", fontWeight: "bold", fontSize: 13, marginRight: 12 }}>
+          {avgProgress}%
+        </Text>
+
+        <TouchableOpacity
+          onPress={onOpenSheet}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingVertical: 4,
+            paddingHorizontal: 8,
+            borderRadius: 8,
+            backgroundColor: isDark ? "#334155" : "#f1f5f9",
+          }}
+        >
+          <Text style={{ color: isDark ? "#f1f5f9" : "#0f172a", fontSize: 12, fontWeight: "500" }}>
+            View
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Progress Bar at the very bottom edge */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 3,
+          backgroundColor: isDark ? "#334155" : "#e2e8f0",
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            height: "100%",
+            width: `${avgProgress}%`,
+            backgroundColor: "#0f766e",
+          }}
+        />
+      </View>
+    </View>
   );
 };
 
@@ -488,6 +525,13 @@ const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
   const { speakingMessageId, speakMessage } = useTextToSpeech();
   const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
+
+  const [preferredLang, setPreferredLang] = useState("english");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(
+    null,
+  );
 
   const t = (key: string) => {
     const lang = preferredLang || "english";
@@ -524,61 +568,6 @@ const AIChatScreen = ({ route }: any) => {
     });
 
     startBackgroundOcr(jobIds, filesInfo, "AIChat");
-
-    // 1. Show user message with file names in the chat
-    const docNames = filesInfo.map((f) => f.fileName).join(", ");
-    const userMsg: ChatMessage = {
-      id: `user-upload-${Date.now()}`,
-      role: "user",
-      text: `Document Uploaded: ${docNames}`,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-
-    // 2. Call unified chatbot API /v1/onboarding/chat
-    const docIds = filesInfo.map((f) => f.documentId).filter(Boolean);
-    const docUris = filesInfo.map((f) => f.fileUrl).filter(Boolean);
-
-    try {
-      const payload = {
-        message: "DOCUMENT_UPLOADED",
-        sessionId: onboardingSessionId || undefined,
-        preferredLanguage: preferredLang,
-        history: messages.map((m) => ({
-          role: m.role === "ai" ? "assistant" : "user",
-          content: m.text,
-        })),
-        state: {
-          flowMode: "UPLOAD",
-          uploadedMedicalDocument: true,
-          documentUploaded: true,
-          documentIds: docIds,
-          documentUris: docUris,
-          documentId: docIds.length === 1 ? docIds[0] : docIds,
-        },
-      };
-
-      const response = await apiClient.post("/v1/onboarding/chat", payload);
-      const resData = response.data?.data;
-      if (resData?.reply) {
-        const aiMsg: ChatMessage = {
-          id: `ai-upload-response-${Date.now()}`,
-          role: "ai",
-          text: resData.reply,
-          action: resData.actionType || resData.action || "NORMAL_CHAT",
-          options: resData.options || [],
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      }
-    } catch (err: any) {
-      console.warn("Failed to notify chatbot about document upload:", err);
-      Toast.show({
-        type: "error",
-        text1: "Chatbot Error",
-        text2: err.message || "Failed to notify chatbot of document upload.",
-      });
-    }
   };
 
   const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
@@ -640,6 +629,65 @@ const AIChatScreen = ({ route }: any) => {
           // Dismiss the progress bottom sheet if open
           extractionSheetRef.current?.dismiss();
 
+          // 1. Show user message with file names in the chat only when all documents are processed successfully
+          const docNames = chatWizardState.filesInfo.map((f) => f.fileName).join(", ");
+          const userMsg: ChatMessage = {
+            id: `user-upload-${Date.now()}`,
+            role: "user",
+            text: `Document Uploaded: ${docNames}`,
+            createdAt: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, userMsg]);
+
+          // 2. Call unified chatbot API /v1/onboarding/chat with new request body format
+          const filesPayload = chatWizardState.filesInfo.map((f: any) => ({
+            fileKey: f.fileKey || f.s3Key || "",
+            fileName: f.fileName,
+            mimeType: f.mimeType || "application/octet-stream"
+          }));
+
+          const payload = {
+            actionType: "ADD_DOCUMENT",
+            sessionId: activeSessionId || onboardingSessionId || undefined,
+            actionData: {
+              files: filesPayload
+            }
+          };
+
+          try {
+            const response = await apiClient.post("/v1/onboarding/chat", payload);
+            const resData = response.data?.data;
+            if (resData?.reply) {
+              const aiMsg: ChatMessage = {
+                id: `ai-upload-response-${Date.now()}`,
+                role: "ai",
+                text: resData.reply,
+                action: resData.actionType || resData.action || "NORMAL_CHAT",
+                options: resData.options || [],
+                medicines: resData.medicines || [],
+                createdAt: new Date().toISOString(),
+              };
+              setMessages((prev) => [...prev, aiMsg]);
+            }
+
+            if (resData?.sessionId && !activeSessionId) {
+              setActiveSessionId(resData.sessionId);
+              apiClient
+                .get("/chat/session", { params: { limit: 50 } })
+                .then((res) => {
+                  setSessions(res.data?.data?.items || res.data?.items || []);
+                })
+                .catch(() => {});
+            }
+          } catch (err: any) {
+            console.warn("Failed to notify chatbot about document upload:", err);
+            Toast.show({
+              type: "error",
+              text1: "Chatbot Error",
+              text2: err.message || "Failed to notify chatbot of document upload.",
+            });
+          }
+
           // Show Toast notification about process completion (instead of appending message to chat)
           const toastBodyMap: Record<string, string> = {
             english: `Successfully extracted ${flatMeds.length} medicine(s).`,
@@ -693,7 +741,7 @@ const AIChatScreen = ({ route }: any) => {
       };
       getResults();
     }
-  }, [chatWizardState.step, isAllTerminal, chatWizardState.jobIds]);
+  }, [chatWizardState.step, isAllTerminal, chatWizardState.jobIds, activeSessionId, onboardingSessionId, preferredLang]);
 
   const handleEditSave = (updated: ExtractedMedicine) => {
     setChatWizardState((prev) => {
@@ -720,7 +768,7 @@ const AIChatScreen = ({ route }: any) => {
 
     setMessages((prev) =>
       prev.map((msg) => {
-        if (msg.action === "EXTRACTED_MEDICINES" && msg.medicines) {
+        if ((msg.action === "EXTRACTED_MEDICINES" || msg.action === "REVIEW_MEDICINES_LIST") && msg.medicines) {
           return {
             ...msg,
             medicines: msg.medicines.map((m) => (m.id === updated.id ? updated : m)),
@@ -1309,6 +1357,8 @@ const AIChatScreen = ({ route }: any) => {
   }, [route?.params]);
 
   useEffect(() => {
+    if (!isFocused) return;
+
     const onBackPress = () => {
       navigation.navigate("Home");
       return true;
@@ -1320,7 +1370,7 @@ const AIChatScreen = ({ route }: any) => {
     );
 
     return () => subscription.remove();
-  }, [navigation]);
+  }, [navigation, isFocused]);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -1338,16 +1388,10 @@ const AIChatScreen = ({ route }: any) => {
     };
   }, []);
 
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-
-  const [preferredLang, setPreferredLang] = useState("english");
-  const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(
-    null,
-  );
   const [onboardingMessages, setOnboardingMessages] = useState<any[]>([]);
 
   // Fetch onboarding history once on mount
@@ -1632,8 +1676,7 @@ const AIChatScreen = ({ route }: any) => {
     // 3. Otherwise, send the selected value to /v1/onboarding/chat
     setIsSending(true);
     try {
-      const payload = {
-        message: option.value,
+      const payload: any = {
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
         history: messages.map((m) => ({
@@ -1641,6 +1684,13 @@ const AIChatScreen = ({ route }: any) => {
           content: m.text,
         })),
       };
+
+      if (option.actionType === "CONFIRM_MEDICINES") {
+        payload.actionType = "CONFIRM_MEDICINES";
+        payload.actionData = option.value;
+      } else {
+        payload.message = typeof option.value === "object" ? JSON.stringify(option.value) : option.value;
+      }
 
       const response = await apiClient.post("/v1/onboarding/chat", payload);
       const resData = response.data?.data;
@@ -1651,6 +1701,7 @@ const AIChatScreen = ({ route }: any) => {
           text: resData.reply,
           action: resData.actionType || resData.action || "NORMAL_CHAT",
           options: resData.options || [],
+          medicines: resData.medicines || [],
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, aiMsg]);
@@ -1901,10 +1952,7 @@ const AIChatScreen = ({ route }: any) => {
                       />,
                     );
                   }
-                  if (
-                    item.action === "ADD_MEDICINE" ||
-                    item.action === "EDIT_MEDICINE"
-                  ) {
+                  if (item.action === "ADD_MEDICINE") {
                     const med = item.medicine || {};
                     return renderAssistantPrompt(
                       <AddMedicineCard
@@ -1923,19 +1971,149 @@ const AIChatScreen = ({ route }: any) => {
                       />,
                     );
                   }
-                  if (item.action === "REVIEW_MEDICINES_LIST") {
+                  if (item.action === "EDIT_MEDICINE") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    const med = item.medicine || {};
                     return renderAssistantPrompt(
-                      <ReviewMedicinesListCard
-                        localMedicines={item.medicines || []}
-                        setLocalMedicines={() => {}}
+                      <AddMedicineCard
+                        key={item.id}
+                        med={med}
+                        isEditingLocal={true}
                         preferredLang={preferredLang}
                         isDark={isDark}
                         theme={theme}
-                        onConfirm={() => {}}
-                        onAddNew={() => {}}
-                        onSkipAll={() => {}}
-                        onEdit={() => {}}
-                        readOnly={true}
+                        currentClientMedId={null}
+                        setCurrentClientMedId={() => {}}
+                        onSave={(updatedMed) => {
+                          setMessages((prev) =>
+                            prev
+                              .map((msg) => {
+                                if (msg.id === item.stepKey) {
+                                  const updatedMeds = (msg.medicines || []).map((m) =>
+                                    m.id === updatedMed.id
+                                      ? {
+                                          ...m,
+                                          ...updatedMed,
+                                          medicationName: updatedMed.name || updatedMed.medicationName,
+                                          medicationType: updatedMed.medicineType || updatedMed.medicationType || updatedMed.type,
+                                          instructions: updatedMed.notes || updatedMed.instructions,
+                                        }
+                                      : m
+                                  );
+                                  return {
+                                    ...msg,
+                                    medicines: updatedMeds,
+                                  };
+                                }
+                                return msg;
+                              })
+                              .filter((msg) => msg.id !== item.id)
+                          );
+                        }}
+                        onCancel={
+                          isLatest
+                            ? () => {
+                                setMessages((prev) =>
+                                  prev.filter((msg) => msg.id !== item.id)
+                                );
+                              }
+                            : undefined
+                        }
+                        readOnly={!isLatest}
+                        chosenVal={chosenVal}
+                        chosenLabel={chosenLabel}
+                      />,
+                    );
+                  }
+                  if (item.action === "REVIEW_MEDICINES_LIST") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    return renderAssistantPrompt(
+                      <ReviewMedicinesListCard
+                        localMedicines={item.medicines || []}
+                        setLocalMedicines={(updater) => {
+                          setMessages((prev) =>
+                            prev.map((msg) => {
+                              if (msg.id === item.id) {
+                                const nextMeds = typeof updater === "function" ? updater(msg.medicines || []) : updater;
+                                return {
+                                  ...msg,
+                                  medicines: nextMeds,
+                                };
+                              }
+                              return msg;
+                            })
+                          );
+                        }}
+                        preferredLang={preferredLang}
+                        isDark={isDark}
+                        theme={theme}
+                        onConfirm={(checkedMeds, formattedMeds) => {
+                          const displayLabel =
+                            preferredLang === "gujarati" || preferredLang === "gu"
+                              ? "પસંદ કરેલ પુષ્ટિ કરો"
+                              : preferredLang === "hindi" || preferredLang === "hi"
+                                ? "चयनित की पुष्टि करें"
+                                : preferredLang === "marathi" || preferredLang === "mr"
+                                  ? "निवडलेले निश्चित करा"
+                                  : preferredLang === "tamil" || preferredLang === "ta"
+                                    ? "தேர்ந்தெடுக்கப்பட்டதை உறுதிப்படுத்தவும்"
+                                    : "Confirm Selection";
+
+                          handleGenericOptionPress({
+                            label: displayLabel,
+                            value: { medicines: formattedMeds || [] },
+                            actionType: "CONFIRM_MEDICINES"
+                          });
+                        }}
+                        onAddNew={() => {
+                          const displayLabel =
+                            preferredLang === "gujarati" || preferredLang === "gu"
+                              ? "નવું ઉમેરો"
+                              : preferredLang === "hindi" || preferredLang === "hi"
+                                ? "नया जोड़ें"
+                                : preferredLang === "marathi" || preferredLang === "mr"
+                                  ? "नवीन जोडा"
+                                  : preferredLang === "tamil" || preferredLang === "ta"
+                                    ? "புதியதைச் சேர்க்கவும்"
+                                    : "Add New";
+
+                          handleGenericOptionPress({
+                            label: displayLabel,
+                            value: { addNew: true },
+                            actionType: "ADD_MEDICINE"
+                          });
+                        }}
+                        onSkipAll={() => {
+                          const displayLabel =
+                            preferredLang === "gujarati" || preferredLang === "gu"
+                              ? "બધા છોડી દો"
+                              : preferredLang === "hindi" || preferredLang === "hi"
+                                ? "सभी छोड़ें"
+                                : preferredLang === "marathi" || preferredLang === "mr"
+                                  ? "सर्व वगळा"
+                                  : preferredLang === "tamil" || preferredLang === "ta"
+                                    ? "அனைத்தையும் தவிர்க்கவும்"
+                                    : "Skip All";
+
+                          handleGenericOptionPress({
+                            label: displayLabel,
+                            value: { skipAll: true },
+                            actionType: "SKIP_MEDICINES"
+                          });
+                        }}
+                        onEdit={(med) => {
+                          const editMsg: ChatMessage = {
+                            id: `ai-edit-med-${Date.now()}`,
+                            role: "ai",
+                            text: "Please edit the medication details below:",
+                            action: "EDIT_MEDICINE",
+                            medicine: med,
+                            stepKey: item.id,
+                            createdAt: new Date().toISOString(),
+                          };
+                          setMessages((prev) => [...prev, editMsg]);
+                        }}
+                        readOnly={!isLatest}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
                       />,

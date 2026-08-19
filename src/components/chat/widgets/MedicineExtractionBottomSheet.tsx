@@ -26,145 +26,6 @@ interface MedicineExtractionBottomSheetProps {
   isDark: boolean;
 }
 
-interface EditMedicineModalProps {
-  medicine: ExtractedMedicine | null;
-  preferredLang: string;
-  isDark: boolean;
-  onClose: () => void;
-  onSave: (updated: ExtractedMedicine) => void;
-}
-
-const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }: EditMedicineModalProps) => {
-  if (!medicine) return null;
-
-  const initialData = useMemo(() => {
-    return {
-      id: medicine.id,
-      medicationName: medicine.name,
-      medicationType: medicine.medicineType || "TABLET",
-      dose: {
-        count: parseFloat(medicine.dosage || "1") || 1,
-        value: parseFloat(medicine.dosage || "1") || 1,
-        unit: medicine.dosageUnit || "tablet",
-      },
-      frequency: medicine.frequency || "ONCE",
-      notes: medicine.notes || "",
-      prescribed_by: medicine.prescribedBy || "",
-      refill_alert: medicine.refillAlert || false,
-      total_quantity: medicine.totalQuantity || 10,
-      foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
-      startDate: medicine.startDate || new Date().toISOString().split("T")[0],
-      medicationSchedule: medicine.medicationSchedule || ["08:00"],
-    };
-  }, [medicine]);
-
-  const formState = useMedicationFormState(initialData, preferredLang);
-  const {
-    formName,
-    formType,
-    formFreq,
-    formNotes,
-    formPrescribed,
-    formRefill,
-    formQty,
-    formFoodFreq,
-    startDate,
-    formCount,
-    formVal,
-    formUnit,
-    selectedSlots,
-  } = formState;
-
-  const [localErrors, setLocalErrors] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (localErrors.length > 0) {
-      setLocalErrors([]);
-    }
-  }, [
-    formName,
-    formType,
-    formFreq,
-    formNotes,
-    formPrescribed,
-    formRefill,
-    formQty,
-    formFoodFreq,
-    startDate,
-    formCount,
-    formVal,
-    formUnit,
-    selectedSlots,
-  ]);
-
-  const handleSave = () => {
-    const errors: string[] = [];
-    if (!formName.trim()) {
-      errors.push("Name is required");
-    }
-    const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
-    if (selectedSlots.length !== N) {
-      errors.push(`Please select exactly ${N} reminder times`);
-    }
-    const parsedQty = parseInt(formQty.trim(), 10);
-    if (!formQty.trim() || isNaN(parsedQty) || parsedQty <= 0) {
-      errors.push("Total Quantity is required");
-    }
-
-    if (errors.length > 0) {
-      setLocalErrors(errors);
-      return;
-    }
-
-    onSave({
-      ...medicine,
-      name: formName.trim(),
-      medicineType: formType,
-      dosage: formType === "TABLET" || formType === "CAPSULE" ? String(formCount) : String(formVal),
-      dosageUnit: formType === "TABLET" || formType === "CAPSULE" ? (formType === "TABLET" ? "tablet" : "capsule") : formUnit,
-      frequency: formFreq,
-      foodFrequency: formFoodFreq,
-      timing: formFoodFreq === "BEFORE_FOOD" ? "Before Food" : "After Food",
-      prescribedBy: formPrescribed.trim(),
-      totalQuantity: parsedQty,
-      notes: formNotes.trim(),
-      refillAlert: formRefill,
-      refillAlertEnabled: formRefill,
-      medicationSchedule: selectedSlots,
-      startDate: startDate ? (startDate instanceof Date ? startDate.toISOString().split("T")[0] : startDate) : new Date().toISOString().split("T")[0],
-    });
-  };
-
-  return (
-    <ModalContainer>
-      <ModalBackdrop onPress={onClose} />
-      <ModalContentCard isDark={isDark}>
-        <ModalHeader>
-          <ModalTitle isDark={isDark}>Edit Medicine</ModalTitle>
-          <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#475569"} />
-          </TouchableOpacity>
-        </ModalHeader>
-        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
-          <MedicationFormFields formState={formState} isDark={isDark} theme={{}} preferredLang={preferredLang} />
-          {localErrors.length > 0 && (
-            <ErrorWrapper>
-              {localErrors.map((err, idx) => (
-                <Text key={idx} style={{ color: "#ef4444", fontSize: 12 }}>
-                  • {err}
-                </Text>
-              ))}
-            </ErrorWrapper>
-          )}
-        </ScrollView>
-        <SaveButton onPress={handleSave}>
-          <SaveButtonText>Save Changes</SaveButtonText>
-        </SaveButton>
-      </ModalContentCard>
-    </ModalContainer>
-  );
-};
-
 export const MedicineExtractionBottomSheet = forwardRef<any, MedicineExtractionBottomSheetProps>(
   ({ preferredLang, isDark }, ref) => {
     const { chatWizardState, setChatWizardState, resetChatWizard, uploadingDocs, isUploading } = useDocumentUpload();
@@ -183,7 +44,7 @@ export const MedicineExtractionBottomSheet = forwardRef<any, MedicineExtractionB
     };
 
     // OCR Job Polling Hook
-    const { jobList, isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
+    const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
 
     const [isLoadingResults, setIsLoadingResults] = useState(false);
     const [medicineToEdit, setMedicineToEdit] = useState<ExtractedMedicine | null>(null);
@@ -414,50 +275,116 @@ export const MedicineExtractionBottomSheet = forwardRef<any, MedicineExtractionB
 
     // STEP RENDERING LOGIC
     const renderProcessingStep = () => {
+      const completedCount = uploadingDocs.filter(
+        (d) => d.status === "COMPLETED" || d.status === "completed" || d.status === "done" || d.status === "success"
+      ).length;
+      const inProgressCount = uploadingDocs.filter(
+        (d) => d.status === "RUNNING" || d.status === "running" || d.status === "UPLOADING" || d.status === "uploading"
+      ).length;
+      const queuedCount = uploadingDocs.filter(
+        (d) => d.status === "PENDING" || d.status === "pending" || d.status === "queued" || d.status === "QUEUED" || !d.status
+      ).length;
+      const failedCount = uploadingDocs.filter(
+        (d) => d.status === "FAILED" || d.status === "failed" || d.status === "cancelled" || d.status === "CANCELLED"
+      ).length;
+      const totalCount = uploadingDocs.length;
+
       return (
-        <StepWrapper style={{ paddingHorizontal: 20, paddingTop: 24 }}>
-          <StepTitle isDark={isDark}>{isUploading ? "Uploading Documents" : t("processingDocs")}</StepTitle>
-          <StepSubtitle>{isUploading ? "Uploading your files to our secure servers..." : t("processingSub")}</StepSubtitle>
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 24 }}
-          >
-            {uploadingDocs.map((doc) => {
+        <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+          {/* Header Row */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#f8fafc" : "#0f172a" }}>
+              Processing Documents
+            </Text>
+          </View>
+
+          {/* Status Badge Pills Row */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: isDark ? "#064e3b" : "#ecfdf5", borderColor: "#10b981", borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }}>
+                <Ionicons name="checkmark-circle" size={14} color="#10b981" style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#10b981" }}>Completed {completedCount}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: isDark ? "#1e3a8a" : "#eff6ff", borderColor: "#3b82f6", borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }}>
+                <ActivityIndicator size="small" color="#3b82f6" style={{ marginRight: 4, transform: [{ scale: 0.7 }] }} />
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#3b82f6" }}>In progress {inProgressCount}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: isDark ? "#334155" : "#f1f5f9", borderColor: "#94a3b8", borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }}>
+                <Ionicons name="time" size={14} color="#64748b" style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748b" }}>Queued {queuedCount}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: isDark ? "#7f1d1d" : "#fef2f2", borderColor: "#ef4444", borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }}>
+                <Ionicons name="alert-circle" size={14} color="#ef4444" style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#ef4444" }}>Failed {failedCount}</Text>
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* List of document process rows */}
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280, marginBottom: 20 }}>
+            {uploadingDocs.map((doc, index) => {
               const isFailed = doc.status === "FAILED" || doc.status === "CANCELLED" || doc.status === "failed";
               const isDone = doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "done" || doc.status === "success";
               const progress = doc.progress || 0;
 
               let stepLabel = "Queued";
-              if (doc.status === "UPLOADING") {
-                stepLabel = "Uploading...";
-              } else if (doc.status === "RUNNING") {
-                stepLabel = progress <= 50 ? "OCR Processing" : "Medicine Extraction";
+              let statusIcon = <Ionicons name="time" size={18} color="#64748b" />;
+              let barColor = isDark ? "#475569" : "#cbd5e1";
+              let statusTextColor = "#64748b";
+
+              if (doc.status === "UPLOADING" || doc.status === "uploading") {
+                stepLabel = "Uploading";
+                statusIcon = <ActivityIndicator size="small" color="#3b82f6" style={{ transform: [{ scale: 0.8 }] }} />;
+                barColor = "#3b82f6";
+                statusTextColor = "#3b82f6";
+              } else if (doc.status === "RUNNING" || doc.status === "running") {
+                stepLabel = progress <= 50 ? "OCR Extraction" : "Medicine Extraction";
+                statusIcon = <ActivityIndicator size="small" color="#3b82f6" style={{ transform: [{ scale: 0.8 }] }} />;
+                barColor = "#3b82f6";
+                statusTextColor = "#3b82f6";
               } else if (isDone) {
                 stepLabel = "Completed";
+                statusIcon = <Ionicons name="checkmark-circle" size={18} color="#10b981" />;
+                barColor = "#10b981";
+                statusTextColor = "#10b981";
               } else if (isFailed) {
                 stepLabel = "Failed";
+                statusIcon = <Ionicons name="alert-circle" size={18} color="#ef4444" />;
+                barColor = "#ef4444";
+                statusTextColor = "#ef4444";
               }
 
               return (
-                <DocProgressRow key={doc.id} isDark={isDark}>
-                  <DocHeaderRow>
-                    <Ionicons name="document-text-outline" size={18} color="#0f766e" style={{ marginRight: 8 }} />
-                    <DocName numberOfLines={1} isDark={isDark}>
+                <View key={doc.id} style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "bold", color: "#64748b", width: 22 }}>
+                    {index + 1}.
+                  </Text>
+                  
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#334155" }}>
                       {doc.name}
-                    </DocName>
-                    <ProgressPercentage isFailed={isFailed} isDone={isDone}>
-                      {isFailed ? "Failed" : isDone ? "Completed" : `${progress}%`}
-                    </ProgressPercentage>
-                  </DocHeaderRow>
-                  <ProgressSubtext>{stepLabel}</ProgressSubtext>
-                  <ProgressBarContainer isDark={isDark}>
-                    <ProgressBarFill progress={progress} isFailed={isFailed} />
-                  </ProgressBarContainer>
-                </DocProgressRow>
+                    </Text>
+                    <Text style={{ fontSize: 11, color: statusTextColor, marginTop: 2, fontWeight: "500" }}>
+                      {stepLabel}
+                    </Text>
+                  </View>
+
+                  <View style={{ marginRight: 12 }}>
+                    {statusIcon}
+                  </View>
+
+                  <View style={{ flex: 0.6, height: 4, backgroundColor: isDark ? "#334155" : "#e2e8f0", borderRadius: 2, overflow: "hidden", marginRight: 12 }}>
+                    <View style={{ height: "100%", width: `${progress}%`, backgroundColor: barColor }} />
+                  </View>
+
+                  <Text style={{ fontSize: 12, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#334155", width: 35, textAlign: "right" }}>
+                    {isFailed ? "-" : isDone ? "100%" : `${progress}%`}
+                  </Text>
+                </View>
               );
             })}
           </ScrollView>
-        </StepWrapper>
+        </View>
       );
     };
 
@@ -492,9 +419,6 @@ export const MedicineExtractionBottomSheet = forwardRef<any, MedicineExtractionB
           <StepSubtitle>{t("reviewExtractedSub")}</StepSubtitle>
           <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
             {meds.map((med) => {
-              const confidence = med.confidence ? Math.round(med.confidence * 100) : 85;
-              const isHighConfidence = confidence >= 80;
-
               return (
                 <MedicineResultCard key={med.id} isDark={isDark}>
                   <MedicineResultHeader>
@@ -523,10 +447,6 @@ export const MedicineExtractionBottomSheet = forwardRef<any, MedicineExtractionB
                         {med.frequency === "ONCE" ? t("frequency.ONCE") : med.frequency === "TWICE" ? t("frequency.TWICE") : med.frequency === "THRICE" ? t("frequency.THRICE") : med.frequency}
                       </MetaVal>
                     </MetaItem>
-                    <MetaItem>
-                      <MetaLabel>Confidence</MetaLabel>
-                      <ConfidenceBadge isHigh={isHighConfidence}>{confidence}%</ConfidenceBadge>
-                    </MetaItem>
                   </MedicineMetaRow>
                 </MedicineResultCard>
               );
@@ -554,54 +474,162 @@ export const MedicineExtractionBottomSheet = forwardRef<any, MedicineExtractionB
         medicationSchedule: extPayload.medicationSchedule,
       };
 
+      const getExistingDosage = () => {
+        return `${exist.dosePerIntake || "1"} ${exist.medicationType?.toLowerCase() || "tablet"}(s)`;
+      };
+
+      const getExtractedDosage = () => {
+        return `${ext.dosage || "1"} ${ext.dosageUnit || "tablet"}`;
+      };
+
+      const currentIndex = chatWizardState.currentConflictIndex;
+      const totalConflicts = chatWizardState.conflicts.length;
+
       return (
-        <StepWrapper style={{ paddingHorizontal: 16 }}>
-          <StepTitle isDark={isDark}>
-            {t("conflictResolution", { current: chatWizardState.currentConflictIndex + 1, total: chatWizardState.conflicts.length })}
-          </StepTitle>
-          <StepSubtitle>
-            {t("duplicateDetectedSub", { name: ext.name })}
-          </StepSubtitle>
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          {/* Header Info */}
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: "bold", color: "#b91c1c" }}>
+              Conflict {currentIndex + 1} of {totalConflicts}
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginTop: 4 }}>
+              {ext.name}
+            </Text>
+          </View>
 
-          <ComparisonGrid>
-            <CompareColumn isDark={isDark}>
-              <ColumnTitle>Existing Medication</ColumnTitle>
-              <CompareValName isDark={isDark}>{exist.medicationName}</CompareValName>
-              <CompareMeta>Dose: {exist.dosePerIntake} {exist.unit || "unit"}</CompareMeta>
-              <CompareMeta>Freq: {exist.frequency}</CompareMeta>
-              {exist.notes ? <CompareNotes numberOfLines={2}>Notes: {exist.notes}</CompareNotes> : null}
-            </CompareColumn>
-            <CompareColumn isDark={isDark}>
-              <ColumnTitle>New Extracted</ColumnTitle>
-              <CompareValName isDark={isDark}>{ext.name}</CompareValName>
-              <CompareMeta>Dose: {ext.dosage} {ext.dosageUnit}</CompareMeta>
-              <CompareMeta>Freq: {ext.frequency === "ONCE" ? t("frequency.ONCE") : ext.frequency === "TWICE" ? t("frequency.TWICE") : ext.frequency === "THRICE" ? t("frequency.THRICE") : ext.frequency}</CompareMeta>
-              {ext.notes ? <CompareNotes numberOfLines={2}>Notes: {ext.notes}</CompareNotes> : null}
-            </CompareColumn>
-          </ComparisonGrid>
+          {/* Grid Comparison */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
+            {/* Left: Existing */}
+            <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+              <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+                Existing in your profile
+              </Text>
+              <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+                {exist.medicationName}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {getExistingDosage()}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {exist.frequency || "Once Daily"}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>
+                {(exist as any).duration || (exist.totalQuantity ? `${exist.totalQuantity} Days` : "Ongoing")}
+              </Text>
+            </View>
 
-          <ActionButtonsRow>
-            <OptionButton onPress={() => resolveCurrentConflict("keep")} isDark={isDark}>
-              <OptionButtonText isDark={isDark}>{t("keepExisting")}</OptionButtonText>
-            </OptionButton>
-            <OptionButton onPress={() => resolveCurrentConflict("replace")} isDark={isDark}>
-              <OptionButtonText isDark={isDark}>{t("replace")}</OptionButtonText>
-            </OptionButton>
-          </ActionButtonsRow>
-          <ActionButtonsRow style={{ marginTop: 8 }}>
-            <OptionButton onPress={() => resolveCurrentConflict("merge", mergedPayload)} isDark={isDark}>
-              <OptionButtonText isDark={isDark}>{t("merge")}</OptionButtonText>
-            </OptionButton>
-            <OptionButton onPress={() => setMedicineToEdit(ext)} isDark={isDark}>
-              <OptionButtonText isDark={isDark}>{t("editDetails")}</OptionButtonText>
-            </OptionButton>
-          </ActionButtonsRow>
-          <CancelLinkRow>
-            <TouchableOpacity onPress={() => resolveCurrentConflict("remove_new")}>
-              <CancelLinkText>{t("discardNewMedicine")}</CancelLinkText>
+            {/* Right: New Extracted */}
+            <View style={{ flex: 1, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+              <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+                Newly extracted
+              </Text>
+              <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+                {ext.name}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {getExtractedDosage()}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {(() => {
+                  const freq = ext.frequency || "ONCE";
+                  if (freq === "ONCE") return "Once Daily";
+                  if (freq === "TWICE") return "Twice Daily";
+                  if (freq === "THRICE") return "3x Daily";
+                  return freq;
+                })()}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>
+                {(ext as any).duration || "30 Days"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Reason */}
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 12, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginBottom: 4 }}>
+              Reason
+            </Text>
+            <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#475569", fontStyle: "italic" }}>
+              Duplicate medicine with same strength and frequency
+            </Text>
+          </View>
+
+          {/* Resolution Choice Buttons */}
+          <View style={{ marginBottom: 16 }}>
+            {/* Row 1: Solid blue buttons */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+              <TouchableOpacity
+                onPress={() => resolveCurrentConflict("keep")}
+                style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                  Keep Existing
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => resolveCurrentConflict("replace")}
+                style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                  Replace
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Row 2: Outlined buttons */}
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <TouchableOpacity
+                onPress={() => setMedicineToEdit(ext)}
+                style={{ flex: 1, borderColor: "#2563eb", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 12 }}>
+                  Edit
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => resolveCurrentConflict("remove_new")}
+                style={{ flex: 1.2, borderColor: "#fca5a5", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "#ef4444", fontWeight: "bold", fontSize: 12 }}>
+                  Remove New
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Footer Pager */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, marginBottom: 12 }}>
+            <TouchableOpacity
+              disabled={currentIndex === 0}
+              onPress={() => {
+                setChatWizardState(prev => ({
+                  ...prev,
+                  currentConflictIndex: Math.max(0, prev.currentConflictIndex - 1)
+                }));
+              }}
+              style={{ opacity: currentIndex === 0 ? 0.3 : 1, padding: 8 }}
+            >
+              <Ionicons name="chevron-back" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
             </TouchableOpacity>
-          </CancelLinkRow>
-        </StepWrapper>
+
+            <Text style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#475569" }}>
+              {currentIndex + 1} of {totalConflicts}
+            </Text>
+
+            <TouchableOpacity
+              disabled={currentIndex === totalConflicts - 1}
+              onPress={() => {
+                setChatWizardState(prev => ({
+                  ...prev,
+                  currentConflictIndex: Math.min(totalConflicts - 1, prev.currentConflictIndex + 1)
+                }));
+              }}
+              style={{ opacity: currentIndex === totalConflicts - 1 ? 0.3 : 1, padding: 8 }}
+            >
+              <Ionicons name="chevron-forward" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
+            </TouchableOpacity>
+          </View>
+        </View>
       );
     };
 
@@ -677,12 +705,31 @@ export const MedicineExtractionBottomSheet = forwardRef<any, MedicineExtractionB
       );
     };
 
-    if (chatWizardState.step !== "processing" && !isUploading) return null;
+    const renderStepContent = () => {
+      switch (chatWizardState.step) {
+        case "processing":
+          return renderProcessingStep();
+        case "results":
+          return renderResultsStep();
+        case "conflicts":
+          return renderConflictsStep();
+        case "summary":
+          return renderSummaryStep();
+        case "completed":
+          return renderCompletedStep();
+        default:
+          if (isUploading) return renderProcessingStep();
+          return null;
+      }
+    };
+
+    const hasContent = chatWizardState.step !== "idle" || isUploading;
+    if (!hasContent) return null;
 
     return (
       <BottomSheet ref={ref}>
         <View style={{ paddingBottom: bottomPadding }}>
-          {renderProcessingStep()}
+          {renderStepContent()}
         </View>
       </BottomSheet>
     );

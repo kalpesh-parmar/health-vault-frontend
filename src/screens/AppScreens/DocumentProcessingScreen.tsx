@@ -13,7 +13,7 @@ import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRoute, RouteProp } from "@react-navigation/native";
+import { useRoute, RouteProp, useIsFocused } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 
 import { useAppNavigation } from "../../types/navigation";
@@ -43,6 +43,7 @@ export const DocumentProcessingScreen = () => {
   const { userId } = useAuth();
   const bottomPadding = useBottomBarPadding(20);
   const { startBackgroundOcr } = useDocumentUpload();
+  const isFocused = useIsFocused();
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
 
@@ -83,6 +84,8 @@ export const DocumentProcessingScreen = () => {
   }, [isAllTerminal, fromScreen, navigation]);
 
   useEffect(() => {
+    if (!isFocused) return;
+
     const onBackPress = () => {
       handleBackAction();
       return true;
@@ -94,7 +97,7 @@ export const DocumentProcessingScreen = () => {
     );
 
     return () => subscription.remove();
-  }, [fromScreen, navigation, jobIds, filesInfo]);
+  }, [isFocused, fromScreen, navigation, jobIds, filesInfo]);
 
   const [selectedResult, setSelectedResult] = useState<{
     fileName: string;

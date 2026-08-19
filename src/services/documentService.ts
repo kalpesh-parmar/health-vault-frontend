@@ -167,27 +167,54 @@ export const uploadPatientDocuments = async (
   return response.data;
 };
 
-export const startOcrJob = async (
-  jobId: string,
-): Promise<
-  ApiResponse<{
+export interface BatchOcrStartResponse {
+  started: {
     jobId: string;
     fileKey: string;
     status: string;
-    stage?: string;
-  }>
-> => {
-  const endpoint = DOCUMENT_ENDPOINTS.OCR_JOB_START(jobId);
-  const response = await apiClient.post(endpoint);
+    stage: string;
+  }[];
+  failed: any[];
+}
+
+export const startOcrBatchJob = async (
+  jobIds: string[],
+): Promise<ApiResponse<BatchOcrStartResponse>> => {
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.OCR_BATCH_START, {
+    jobIds,
+  });
   return response.data;
+};
+
+export const getOcrBatchStatus = async (
+  jobIds: string[],
+): Promise<ApiResponse<OcrJobStatus[]>> => {
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.OCR_BATCH_STATUS, {
+    jobIds,
+  });
+  return response.data;
+};
+
+export const startOcrJob = async (
+  jobId: string,
+): Promise<any> => {
+  const response = await startOcrBatchJob([jobId]);
+  const startedJob = response?.data?.started?.find((j: any) => j.jobId === jobId) || response?.data?.started?.[0];
+  return {
+    data: startedJob,
+    status: response.status,
+  };
 };
 
 export const getOcrJob = async (
   jobId: string,
 ): Promise<ApiResponse<OcrJobStatus>> => {
-  const endpoint = DOCUMENT_ENDPOINTS.OCR_JOB_STATUS(jobId);
-  const response = await apiClient.get(endpoint);
-  return response.data;
+  const response = await getOcrBatchStatus([jobId]);
+  const matchedJob = response?.data?.find((j: any) => j.jobId === jobId) || response?.data?.[0];
+  return {
+    data: matchedJob,
+    status: response.status,
+  } as any;
 };
 
 export const getOcrJobResult = async (

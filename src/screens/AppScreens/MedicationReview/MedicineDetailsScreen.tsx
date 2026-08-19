@@ -152,8 +152,8 @@ export const MedicineDetailsScreen: React.FC = () => {
       refillAlertEnabled: formRefill,
       medicationSchedule: selectedSlots,
       dosageDetails: formType === "TABLET" || formType === "CAPSULE" 
-        ? { count: formCount } 
-        : { value: formVal, unit: formUnit },
+        ? { count: parseFloat(String(formCount)) || 0 } 
+        : { value: parseFloat(String(formVal)) || 0, unit: formUnit },
     };
 
     updateMedicineDraft(updatedMed);

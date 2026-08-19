@@ -153,8 +153,8 @@ const MedicationForm = ({
       prescribedBy: formPrescribed.trim(),
       dosePerIntake:
         formType === "TABLET" || formType === "CAPSULE"
-          ? formCount
-          : formVal,
+          ? parseFloat(String(formCount)) || 1
+          : parseFloat(String(formVal)) || 1,
       frequency: formFreq === "ONCE" ? "Once Daily" : formFreq === "TWICE" ? "Twice Daily" : "3x Daily",
       foodFrequency: formFoodFreq,
       startDate: startDate ? format(startDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),

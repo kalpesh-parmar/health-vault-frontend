@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { BackHandler } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRoute, RouteProp } from "@react-navigation/native";
+import { useRoute, RouteProp, useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { queryClient } from "../../../config/queryClient";
 import { useAppTheme } from "../../../context/ThemeContext";
@@ -24,6 +24,7 @@ export const MedicinesSuccessScreen: React.FC = () => {
   const route = useRoute<SuccessRouteProp>();
   const navigation = useAppNavigation();
   const { theme, isDark } = useAppTheme();
+  const isFocused = useIsFocused();
   
   const { count = 0 } = route.params || {};
   const { clearReviewState } = useMedicationReview();
@@ -40,6 +41,8 @@ export const MedicinesSuccessScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!isFocused) return;
+
     const onBackPress = () => {
       handleGoToHome();
       return true;
@@ -49,7 +52,7 @@ export const MedicinesSuccessScreen: React.FC = () => {
       onBackPress
     );
     return () => subscription.remove();
-  }, []);
+  }, [isFocused]);
 
   const handleGoToMedications = () => {
     clearReviewState();

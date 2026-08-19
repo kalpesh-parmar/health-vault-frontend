@@ -21,6 +21,8 @@ export const DOCUMENT_ENDPOINTS = {
   OCR_JOB_START: (jobId: string) => `/ocr/jobs/${jobId}/start`,
   OCR_JOB_STATUS: (jobId: string) => `/ocr/jobs/${jobId}`,
   OCR_JOB_RESULT: (jobId: string) => `/ocr/jobs/${jobId}/result`,
+  OCR_BATCH_START: "/ocr/jobs/batch-start",
+  OCR_BATCH_STATUS: "/ocr/jobs/batch-status",
   RUN_OCR: "/documents/run-ocr",
   OCR_PROGRESS: "/documents/run-ocr-status/{fileKey}",
   ADD_DOCUMENT: "/documents/add",

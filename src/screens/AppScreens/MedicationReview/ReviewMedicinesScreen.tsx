@@ -54,6 +54,8 @@ export const ReviewMedicinesScreen: React.FC = () => {
   }, [jobIds]);
 
   useEffect(() => {
+    if (!isFocused) return;
+
     const onBackPress = () => {
       handleBack();
       return true;
@@ -63,7 +65,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
       onBackPress
     );
     return () => subscription.remove();
-  }, [fromScreen, navigation]);
+  }, [isFocused, fromScreen, navigation]);
 
   const handleBack = () => {
     clearReviewState();

@@ -116,8 +116,8 @@ export const useMedicationFormState = (initialMed: any, preferredLang: string = 
     }
   }
 
-  const [formCount, setFormCount] = useState(initialCount);
-  const [formVal, setFormVal] = useState(initialVal);
+  const [formCount, setFormCount] = useState<string | number>(initialCount);
+  const [formVal, setFormVal] = useState<string | number>(initialVal);
   const [formUnit, setFormUnit] = useState(initialUnit);
 
   // Time Slots / Reminder times parsing
@@ -345,14 +345,16 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
 
   const getDosePreviewText = () => {
     if (formType === "TABLET") {
-      const fracLabel = formatTabletDose(formCount);
+      const fracLabel = formatTabletDose(parseFloat(String(formCount)) || 0);
       return t("dosePreview.tablet").replace("{count}", fracLabel);
     }
     if (formType === "CAPSULE") {
-      return t("dosePreview.capsule").replace("{count}", String(formCount));
+      const fracLabel = formatTabletDose(parseFloat(String(formCount)) || 0);
+      return t("dosePreview.capsule").replace("{count}", fracLabel);
     }
     if (formType === "SPRAY" || formType === "INHALER") {
-      return t("dosePreview.puff").replace("{count}", String(formVal));
+      const fracLabel = formatTabletDose(parseFloat(String(formVal)) || 0);
+      return t("dosePreview.puff").replace("{count}", fracLabel);
     }
     return t("dosePreview.other")
       .replace("{count}", String(formVal))
@@ -371,7 +373,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
             onPress={() =>
-              setFormCount((prev) => Math.max(0.25, Math.round((prev - 0.25) * 100) / 100))
+              setFormCount((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
             }
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
@@ -386,7 +388,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               },
             ]}
           >
-            {formatTabletDose(formCount)}
+            {formatTabletDose(parseFloat(String(formCount)) || 0)}
           </Text>
           <TouchableOpacity
             style={[
@@ -394,7 +396,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
             onPress={() =>
-              setFormCount((prev) => Math.round((prev + 0.25) * 100) / 100)
+              setFormCount((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)
             }
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
@@ -415,7 +417,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
             onPress={() =>
-              setFormCount((prev) => Math.max(1, Math.round(prev - 1)))
+              setFormCount((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
             }
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
@@ -425,19 +427,19 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperValue,
               {
                 color: theme.colors.textPrimary,
-                minWidth: 40,
+                minWidth: 50,
                 textAlign: "center",
               },
             ]}
           >
-            {Math.max(1, Math.round(formCount))}
+            {formatTabletDose(parseFloat(String(formCount)) || 0)}
           </Text>
           <TouchableOpacity
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() => setFormCount((prev) => Math.round(prev + 1))}
+            onPress={() => setFormCount((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)}
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -457,7 +459,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
             onPress={() =>
-              setFormVal((prev) => Math.max(1, Math.round(prev - 1)))
+              setFormVal((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
             }
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
@@ -467,19 +469,19 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperValue,
               {
                 color: theme.colors.textPrimary,
-                minWidth: 40,
+                minWidth: 50,
                 textAlign: "center",
               },
             ]}
           >
-            {Math.max(1, Math.round(formVal))}
+            {formatTabletDose(parseFloat(String(formVal)) || 0)}
           </Text>
           <TouchableOpacity
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() => setFormVal((prev) => Math.round(prev + 1))}
+            onPress={() => setFormVal((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)}
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -499,7 +501,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
             onPress={() =>
-              setFormVal((prev) => Math.max(1, Math.round(prev - 1)))
+              setFormVal((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
             }
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
@@ -509,19 +511,19 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperValue,
               {
                 color: theme.colors.textPrimary,
-                minWidth: 40,
+                minWidth: 50,
                 textAlign: "center",
               },
             ]}
           >
-            {Math.max(1, Math.round(formVal))}
+            {formatTabletDose(parseFloat(String(formVal)) || 0)}
           </Text>
           <TouchableOpacity
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() => setFormVal((prev) => Math.round(prev + 1))}
+            onPress={() => setFormVal((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)}
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -547,7 +549,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             },
           ]}
           value={String(formVal)}
-          onChangeText={(val) => setFormVal(parseFloat(val) || 0)}
+          onChangeText={(val) => setFormVal(val)}
           keyboardType="numeric"
           placeholder="1"
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
@@ -945,7 +947,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <DoseVisual
                 type={formType}
-                value={formType === "TABLET" || formType === "CAPSULE" ? formCount : formVal}
+                value={formType === "TABLET" || formType === "CAPSULE" ? parseFloat(String(formCount)) || 0 : parseFloat(String(formVal)) || 0}
                 unit={formUnit}
                 size={36}
                 color="#10b981"

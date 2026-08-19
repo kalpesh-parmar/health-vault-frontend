@@ -2,16 +2,14 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import Toast from "react-native-toast-message";
 import { SelectedDocument } from "../types/documentUpload";
 import { queryClient } from "../config/queryClient";
-import { uploadPatientDocuments, startOcrJob, getOcrJob, cancelOcr, getOcrJobResult } from "../services/documentService";
+import { uploadPatientDocuments, startOcrBatchJob, cancelOcr, getOcrJobResult, getOcrBatchStatus } from "../services/documentService";
 import { ExtractedMedicine } from "../types/medicationReview";
 import { AddOrEditMedication } from "../types";
-
 export interface DuplicateConflict {
   extractedMedicine: ExtractedMedicine;
   existingMedication: AddOrEditMedication;
   resolvedAction?: "keep" | "replace" | "merge" | "remove_new";
 }
-
 export interface ChatWizardState {
   step: "idle" | "processing" | "results" | "conflicts" | "summary" | "completed";
   jobIds: string[];
@@ -25,7 +23,6 @@ export interface ChatWizardState {
   summaries: { docName: string; summary: string }[];
   hasViewedCompletedOcr?: boolean;
 }
-
 export interface UploadingDoc {
   id: string;
   name: string;
@@ -34,7 +31,6 @@ export interface UploadingDoc {
   reason?: string | null;
   medicineCount?: number;
 }
-
 interface DocumentUploadContextType {
   selectedFiles: SelectedDocument[];
   isUploading: boolean;
@@ -220,30 +216,31 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       if (!isPollingRef.current) return;
 
       try {
-        // Poll each document status using the jobs API in parallel
+        // Poll all document statuses using getOcrBatchStatus in a single request
+        const jobIds = initialDocs.map((d) => d.id);
+        const batchResponse = await getOcrBatchStatus(jobIds);
+        const batchData = batchResponse?.data || batchResponse || [];
+
         const results = await Promise.all(
           initialDocs.map(async (doc) => {
-            try {
-              const response = await getOcrJob(doc.id);
-              const data = response?.data || response;
-              let medicineCount: number | undefined;
-              if (data.status === "COMPLETED") {
-                try {
-                  const res = await getOcrJobResult(doc.id);
-                  const resData = res?.data || res;
-                  const meds = resData?.extractedStructuredData?.medications || resData?.extractedStructuredData?.medicines;
-                  if (Array.isArray(meds)) {
-                    medicineCount = meds.length;
-                  }
-                } catch (e) {
-                  console.log("Failed to fetch medicine count during polling for", doc.id, e);
-                }
-              }
-              return { id: doc.id, success: true, data, medicineCount };
-            } catch (err) {
-              console.warn(`[Background Polling] Failed to fetch status for ${doc.id}:`, err);
-              return { id: doc.id, success: false, error: err };
+            const matchedJob = batchData.find((j: any) => j.jobId === doc.id);
+            if (!matchedJob) {
+              return { id: doc.id, success: false, error: "Not found in batch data" };
             }
+            let medicineCount: number | undefined;
+            if (matchedJob.status === "COMPLETED") {
+              try {
+                const res = await getOcrJobResult(doc.id);
+                const resData = res?.data || res;
+                const meds = resData?.extractedStructuredData?.medications || resData?.extractedStructuredData?.medicines;
+                if (Array.isArray(meds)) {
+                  medicineCount = meds.length;
+                }
+              } catch (e) {
+                console.log("Failed to fetch medicine count during polling for", doc.id, e);
+              }
+            }
+            return { id: doc.id, success: true, data: matchedJob, medicineCount };
           })
         );
 
@@ -438,37 +435,36 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         throw new Error("No documents returned from server.");
       }
 
-      // 2. Start OCR Jobs sequentially with a 3-second delay
-      const jobIds: string[] = [];
+      // 2. Start OCR Jobs in batch
+      const jobIds: string[] = uploadedList.map((doc: any) => doc.jobId).filter(Boolean);
       const filesInfo: any[] = [];
 
-      for (let i = 0; i < uploadedList.length; i++) {
-        const doc: any = uploadedList[i];
-        if (doc.jobId) {
-          try {
-            await startOcrJob(doc.jobId);
-            jobIds.push(doc.jobId);
-            let finalFileName = doc.fileName || doc.originalFileName || "Document";
-            try {
-              finalFileName = decodeURIComponent(finalFileName).replace(/%20/g, " ");
-            } catch (e) {
-              finalFileName = finalFileName.replace(/%20/g, " ");
+      if (jobIds.length > 0) {
+        try {
+          await startOcrBatchJob(jobIds);
+          
+          uploadedList.forEach((doc: any) => {
+            if (doc.jobId) {
+              let finalFileName = doc.fileName || doc.originalFileName || "Document";
+              try {
+                finalFileName = decodeURIComponent(finalFileName).replace(/%20/g, " ");
+              } catch (e) {
+                finalFileName = finalFileName.replace(/%20/g, " ");
+              }
+              filesInfo.push({
+                jobId: doc.jobId,
+                fileName: finalFileName,
+                fileKey: doc.fileKey || doc.s3Key || "",
+                s3Key: doc.s3Key || doc.fileKey || "",
+                fileSize: doc.fileSize || 0,
+                mimeType: doc.fileType || "application/octet-stream",
+                documentId: doc.id,
+                fileUrl: doc.fileUrl || doc.signedUrl || "",
+              });
             }
-            filesInfo.push({
-              jobId: doc.jobId,
-              fileName: finalFileName,
-              fileKey: doc.fileKey || doc.s3Key || "",
-              documentId: doc.id,
-              fileUrl: doc.fileUrl || doc.signedUrl || "",
-            });
-          } catch (jobErr) {
-            console.error(`Failed to start job ${doc.jobId}:`, jobErr);
-          }
-
-          // Introduce a 3-second delay between jobs to prevent exceeding API rate limits
-          if (i < uploadedList.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-          }
+          });
+        } catch (batchErr) {
+          console.error("Failed to start batch OCR jobs:", batchErr);
         }
       }
 

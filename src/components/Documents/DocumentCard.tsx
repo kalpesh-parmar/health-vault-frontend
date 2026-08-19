@@ -3,8 +3,8 @@ import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { TouchableOpacity, Modal, GestureResponderEvent, View, Text } from "react-native";
-import { AppStackParamList, DocumentsStackParamList } from "../../navigation/types";
+import { Modal, GestureResponderEvent, View, Text, Dimensions } from "react-native";
+import { DocumentsStackParamList } from "../../navigation/types";
 import ConfirmationModal from "../shared/ConfirmationModal";
 import type { MedicalDocument } from "../../types";
 import { useAppTheme } from "../../context/ThemeContext";
@@ -12,12 +12,9 @@ import { getFileExtension } from "../../utils/fileUtils";
 import Toast from "react-native-toast-message";
 import { formatUTCDateTime } from "../../utils/dateFormatter";
 import { formatDocumentType } from "../shared/EditDocumentBottomSheet";
-
 interface Props {
   document: MedicalDocument;
-  selected?: boolean;
   onSelect?: (id: string) => void;
-  isSelectionMode?: boolean;
   onEdit?: (document: MedicalDocument) => void;
   onShare?: (document: MedicalDocument) => void;
 }
@@ -45,7 +42,7 @@ const getFileStyle = (ext: string, isDark: boolean) => {
   };
 };
 
-const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMode = false, onEdit, onShare }: Props) => {
+const DocumentCard = memo(({ document, onSelect, onEdit, onShare }: Props) => {
   const navigation = useNavigation<NativeStackNavigationProp<DocumentsStackParamList>>();
   const { isDark } = useAppTheme();
 
@@ -53,6 +50,11 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const moreButtonRef = useRef<View>(null);
+  const SCREEN_WIDTH = Dimensions.get('window').width;
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+  const MENU_WIDTH = 140;
+  const MENU_HEIGHT = 200; // approximate height of menu
+
   
   // Mock size - in production this would come from document metadata
   const docSize = useMemo(() => "2.4 MB", []);
@@ -114,10 +116,19 @@ const DocumentCard = memo(({ document, selected = false, onSelect, isSelectionMo
       if (moreButtonRef.current) {
         moreButtonRef.current.measure(
           (_x, _y, width, height, px, py) => {
-            setMenuPosition({
-              x: px - 125,
-              y: py + height + 4,
-            });
+            // Calculate x position ensuring menu stays within screen width
+            let calcX = px - MENU_WIDTH / 2;
+            if (calcX < 0) calcX = 4; // small padding
+            if (calcX + MENU_WIDTH > SCREEN_WIDTH) calcX = SCREEN_WIDTH - MENU_WIDTH - 4;
+
+            // Calculate y position; if it would overflow bottom, show above the button
+            let calcY = py + height + 4;
+            if (calcY + MENU_HEIGHT > SCREEN_HEIGHT) {
+              calcY = py - MENU_HEIGHT - 4;
+              if (calcY < 0) calcY = 4; // fallback to top padding
+            }
+
+            setMenuPosition({ x: calcX, y: calcY });
             setMenuVisible(true);
           },
         );

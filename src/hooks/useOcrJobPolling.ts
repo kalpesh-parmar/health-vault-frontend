@@ -1,6 +1,6 @@
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { getOcrJob, OcrJobStatus } from "../services/documentService";
+import { getOcrBatchStatus, OcrJobStatus } from "../services/documentService";
 
 export interface JobState {
   jobId: string;
@@ -27,25 +27,23 @@ export interface UseOcrJobPollingResult {
 }
 
 export const useOcrJobPolling = (jobIds: string[]): UseOcrJobPollingResult => {
-  const queryResults = useQueries({
-    queries: jobIds.map((jobId) => ({
-      queryKey: ["ocrJobStatus", jobId],
-      queryFn: async () => {
-        const response = await getOcrJob(jobId);
-        return response?.data || response;
-      },
-      refetchInterval: (query: any) => {
-        const data: OcrJobStatus | undefined = query.state.data;
-        if (!data) return 2500;
-        const status = data.status;
-        if (status === "QUEUED" || status === "RUNNING") {
-          return 2500;
-        }
-        return false; // Stop polling on COMPLETED, FAILED, or CANCELLED
-      },
-      staleTime: 0,
-      enabled: Boolean(jobId),
-    })),
+  const queryResult = useQuery({
+    queryKey: ["ocrJobBatchStatus", jobIds],
+    queryFn: async () => {
+      if (jobIds.length === 0) return [];
+      const response = await getOcrBatchStatus(jobIds);
+      return response?.data || response || [];
+    },
+    refetchInterval: (query: any) => {
+      const data: OcrJobStatus[] | undefined = query.state.data;
+      if (!data || data.length === 0) return 2500;
+      const isAnyActive = data.some(
+        (job) => job.status === "QUEUED" || job.status === "RUNNING"
+      );
+      return isAnyActive ? 2500 : false;
+    },
+    staleTime: 0,
+    enabled: jobIds.length > 0,
   });
 
   const { jobs, jobList, aggregatePercentage, isAllTerminal, completedCount, failedCount, runningCount, queuedCount } =
@@ -59,10 +57,12 @@ export const useOcrJobPolling = (jobIds: string[]): UseOcrJobPollingResult => {
       let running = 0;
       let queued = 0;
 
-      jobIds.forEach((jobId, index) => {
-        const query = queryResults[index];
-        const data: OcrJobStatus | undefined = query?.data;
-        const status = data?.status || (query?.isLoading ? "QUEUED" : "UNKNOWN");
+      const batchData = queryResult.data || [];
+
+      jobIds.forEach((jobId) => {
+        const data = batchData.find((j: any) => j.jobId === jobId);
+        
+        const status = data?.status || (queryResult.isLoading ? "QUEUED" : "UNKNOWN");
         const stage = data?.stage || (status === "QUEUED" ? "QUEUED" : status);
         const percentage = typeof data?.percentage === "number" ? data.percentage : status === "COMPLETED" ? 100 : 0;
         const currentStep = data?.currentStep || data?.message || stage;
@@ -70,7 +70,7 @@ export const useOcrJobPolling = (jobIds: string[]): UseOcrJobPollingResult => {
         const rawSkipped = data?.metadata?.skippedPages || data?.metadata?.skipped_pages || [];
         const skippedPages = Array.isArray(rawSkipped) ? rawSkipped : [];
 
-        const error = data?.error || (query?.isError ? (query.error as Error)?.message || "Failed to fetch status" : null);
+        const error = data?.error || (queryResult.isError ? (queryResult.error as Error)?.message || "Failed to fetch status" : null);
 
         const state: JobState = {
           jobId,
@@ -81,8 +81,8 @@ export const useOcrJobPolling = (jobIds: string[]): UseOcrJobPollingResult => {
           skippedPages,
           error,
           rawData: data,
-          isLoading: query?.isLoading || false,
-          isError: query?.isError || false,
+          isLoading: queryResult.isLoading || false,
+          isError: queryResult.isError || false,
         };
 
         jobsMap[jobId] = state;
@@ -110,7 +110,7 @@ export const useOcrJobPolling = (jobIds: string[]): UseOcrJobPollingResult => {
         runningCount: running,
         queuedCount: queued,
       };
-    }, [jobIds, queryResults]);
+    }, [jobIds, queryResult.data, queryResult.isLoading, queryResult.isError, queryResult.error]);
 
   return {
     jobs,

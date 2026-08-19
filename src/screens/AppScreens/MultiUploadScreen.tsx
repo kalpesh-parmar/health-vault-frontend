@@ -18,7 +18,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/ContextAPI";
 import { useDocumentMedia, PickedFile } from "../../hooks/useDocumentMedia";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
-import { uploadPatientDocuments, startOcrJob } from "../../services/documentService";
+import { uploadPatientDocuments, startOcrJob, startOcrBatchJob } from "../../services/documentService";
 
 interface SelectedFile extends PickedFile {
   originalName: string;
@@ -196,18 +196,22 @@ export const MultiUploadScreen = () => {
 
       setCurrentActionText("Initiating background OCR jobs...");
 
-      // 2. Start OCR job for each file
+      // 2. Start OCR jobs in batch
+      const jobIds = items.map((item) => item.jobId).filter(Boolean);
+      if (jobIds.length > 0) {
+        try {
+          await startOcrBatchJob(jobIds);
+        } catch (err: any) {
+          console.warn(`[MultiUpload] Failed to trigger batch OCR start:`, err.message);
+        }
+      }
+
       const jobList: { jobId: string; fileName: string; fileKey: string }[] = [];
 
       for (const item of items) {
         if (item.jobId) {
           const matchedFile = selectedFiles.find((f) => f.name === item.fileName) || selectedFiles[jobList.length];
           const finalName = matchedFile ? matchedFile.name : item.fileName;
-          try {
-            await startOcrJob(item.jobId);
-          } catch (err: any) {
-            console.warn(`[MultiUpload] Failed to trigger job start for ${item.jobId}:`, err.message);
-          }
           jobList.push({
             jobId: item.jobId,
             fileName: finalName,
@@ -223,9 +227,9 @@ export const MultiUploadScreen = () => {
       });
 
       // 3. Navigate to DocumentProcessingScreen
-      const jobIds = jobList.map((j) => j.jobId);
+      const jobIdss = jobList.map((j) => j.jobId);
       navigation.navigate("DocumentProcessing" as any, {
-        jobIds,
+        jobIds: jobIdss,
         filesInfo: jobList,
         fromScreen,
       });

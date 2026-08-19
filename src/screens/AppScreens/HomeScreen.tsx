@@ -576,8 +576,6 @@ const HomeScreen = () => {
         </FloatingProgressPill>
       )}
 
-      <DocumentUploadBottomSheet ref={refRBSheet} />
-
       <BottomSheetModal
         ref={processingSheetRef}
         enableDynamicSizing={true}

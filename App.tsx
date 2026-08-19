@@ -41,7 +41,6 @@ export default function App() {
 
         // FCM Token Generation for Push Notifications using Firebase Cloud Messaging.
         const fcmToken = await getToken(getMessaging());
-        console.log("FCM Token:", fcmToken);
 
         await SecureStore.setItemAsync("deviceToken", String(fcmToken));
 
@@ -77,7 +76,6 @@ export default function App() {
     const unsubscribeFCM = onTokenRefresh(
       getMessaging(),
       (newToken: string) => {
-        console.log("FCM Token Refreshed:", newToken);
         SecureStore.setItemAsync("deviceToken", String(newToken));
       },
     );

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { View, StyleSheet, FlatList } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 
 import { useAppTheme } from "../context/ThemeContext";
+import { DrawerContentComponentProps } from "@react-navigation/drawer";
 import { AppStackParamList } from "./types";
 import { getUser } from "../services/userService";
 import ConfirmationModal from "../components/shared/ConfirmationModal";
@@ -17,7 +18,7 @@ import DrawerMenuItem from "../components/navigation/DrawerMenuItem";
 import DrawerFooter from "../components/navigation/DrawerFooter";
 
 
-const CustomDrawerContent = (props: any) => {
+const CustomDrawerContent = (props: DrawerContentComponentProps) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark, theme } = useAppTheme();
@@ -57,9 +58,9 @@ const CustomDrawerContent = (props: any) => {
         keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"
         renderItem={({ item, index }) => {
           const { options } = descriptors[item.key];
-          const label = options.drawerLabel !== undefined
+          const label = typeof options.drawerLabel === "string"
             ? options.drawerLabel
-            : options.title !== undefined
+            : typeof options.title === "string"
               ? options.title
               : item.name;
 
@@ -70,7 +71,7 @@ const CustomDrawerContent = (props: any) => {
               label={label}
               focused={isFocused}
               onPress={() => props.navigation.navigate(item.name)}
-              icon={options.drawerIcon}
+              icon={options.drawerIcon as any}
               isDark={isDark}
               theme={theme}
             />

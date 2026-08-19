@@ -124,6 +124,7 @@ export default function OnboardingScreen() {
   const [editedProfileData, setEditedProfileData] = useState<any>({});
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const [isProgressCollapsed, setIsProgressCollapsed] = useState(true);
   const [actualKeyboardHeight, setActualKeyboardHeight] = useState(0);
 
   // State Machine states for OCR Redesign
@@ -495,6 +496,7 @@ export default function OnboardingScreen() {
         message: "hello",
         history: [],
         state: currentState,
+        stream: false,
       };
 
       const response = await apiClient.post("/v1/onboarding/chat", payload, {
@@ -663,7 +665,7 @@ export default function OnboardingScreen() {
     try {
       if (userText.startsWith("{") && userText.includes('"edited"')) {
         const parsed = JSON.parse(userText);
-        if (parsed && parsed.edited) {
+        if (parsed && parsed.edited && !parsed.confirmed) {
           isEditSave = true;
         }
       }
@@ -696,12 +698,14 @@ export default function OnboardingScreen() {
         history,
         state: updatedState,
         displayLabel,
+        stream: false,
       };
 
       const response = await apiClient.post("/v1/onboarding/chat", payload, {
         timeout: 90000,
       });
       const resData = response.data?.data;
+      console.log("Onboarding sendMessage Response :- ", resData);
 
       if (resData) {
         processAssistantResponse(resData, updatedState);
@@ -938,6 +942,13 @@ export default function OnboardingScreen() {
         setUploadState("processing");
         if (typeof jobData?.percentage === "number") {
           setUploadPercent(jobData.percentage);
+        }
+        if (jobData?.metadata?.pageCount) {
+          const total = jobData.metadata.pageCount;
+          setPollTotalPages(total);
+          const pct = jobData.percentage || 0;
+          const current = Math.min(total, Math.max(1, Math.ceil((pct / 100) * total)));
+          setPollCurrentPage(current);
         }
 
         localElapsedTime += 2500;
@@ -1906,259 +1917,141 @@ export default function OnboardingScreen() {
                   backgroundColor: isDark ? "#1e293b" : "#ffffff",
                   borderColor: isDark ? "#334155" : "#e2e8f0",
                   borderWidth: 1,
+                  padding: 10,
+                  borderRadius: 14,
+                  position: "absolute",
+                  bottom: 80,
+                  left: 12,
+                  right: 12,
+                  alignItems: "stretch",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 4,
+                  top: undefined,
                 },
               ]}
             >
-              {/* Progress UI for Success */}
+              {/* COMPACT VIEW (Row layout) */}
+              {(uploadState === "uploading" || uploadState === "processing" || uploadState === "validating" || uploadState === "queued") && (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 }}>
+                  {/* Left Side: Bold Status & Secondary Text */}
+                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+                    <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 13 }}>
+                      {uploadState === "uploading"
+                        ? "Uploading"
+                        : uploadState === "processing"
+                          ? (
+                              ONBOARDING_I18N[
+                                (state.preferredLanguage || "english").toLowerCase()
+                              ]?.page_progress ||
+                              ONBOARDING_I18N.english.page_progress
+                            )
+                              .replace("Page", "Processing")
+                              .replace("પૃષ્ઠ", "Processing")
+                              .replace("पृष्ठ", "Processing")
+                              .replace("पान", "Processing")
+                              .replace("பக்கம்", "Processing")
+                              .replace("{current}", String(pollCurrentPage))
+                              .replace("{total}", String(pollTotalPages))
+                          : uploadState === "validating"
+                            ? "Validating"
+                            : "Queued"}
+                    </Text>
+                    
+                    <Text style={{ color: theme.colors.textSecondary, marginHorizontal: 6, fontSize: 13 }}>•</Text>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }} numberOfLines={1}>
+                      {uploadState === "uploading"
+                        ? "Uploading"
+                        : uploadState === "processing"
+                          ? "Analyzing"
+                          : uploadState === "validating"
+                            ? "Validating"
+                            : "Waiting"}
+                    </Text>
+                  </View>
+
+                  {/* Right Side: Percentage & Collapse Toggle */}
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {/* Percentage */}
+                    {["uploading", "processing"].includes(uploadState) && (
+                      <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 13, marginRight: 12 }}>
+                        {`${uploadPercent}%`}
+                      </Text>
+                    )}
+
+                    {/* Toggle button */}
+                    <TouchableOpacity
+                      onPress={() => setIsProgressCollapsed((prev) => !prev)}
+                      style={{ flexDirection: "row", alignItems: "center", paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: isDark ? "#334155" : "#f1f5f9" }}
+                    >
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: 12, fontWeight: "500", marginRight: 2 }}>
+                        {isProgressCollapsed ? "View" : "Hide"}
+                      </Text>
+                      <Ionicons
+                        name={isProgressCollapsed ? "chevron-down" : "chevron-up"}
+                        size={12}
+                        color={theme.colors.textPrimary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Success View */}
               {uploadState === "success" && (
-                <View style={{ alignItems: "center", padding: 15 }}>
-                  <Ionicons name="checkmark-circle" size={32} color="#10b981" />
-                  <Text
-                    style={[
-                      styles.progressText,
-                      {
-                        color: theme.colors.textPrimary,
-                        marginTop: 10,
-                        fontWeight: "bold",
-                      },
-                    ]}
-                  >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 4 }}>
+                  <Ionicons name="checkmark-circle" size={20} color="#10b981" style={{ marginRight: 6 }} />
+                  <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 13 }}>
                     {ONBOARDING_I18N[
                       (state.preferredLanguage || "english").toLowerCase()
                     ]?.success || "Analysis Complete"}
                   </Text>
                 </View>
               )}
-              {/* Progress UI for Validating */}
-              {uploadState === "validating" && (
-                <View style={{ alignItems: "center", padding: 15 }}>
-                  <ActivityIndicator
-                    size="large"
-                    color={theme.colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.progressText,
-                      { color: theme.colors.textPrimary, marginTop: 10 },
-                    ]}
-                  >
-                    {ONBOARDING_I18N[
-                      (state.preferredLanguage || "english").toLowerCase()
-                    ]?.validating || ONBOARDING_I18N.english.validating}
-                  </Text>
-                </View>
-              )}
 
-              {/* Progress UI for Uploading */}
-              {uploadState === "uploading" && (
-                <View style={{ width: "100%", padding: 15 }}>
-                  <Text
-                    style={[
-                      styles.progressText,
-                      {
-                        color: theme.colors.textPrimary,
-                        marginBottom: 8,
-                        fontWeight: "bold",
-                      },
-                    ]}
-                  >
-                    {autoRetryCount > 0
-                      ? (
-                          ONBOARDING_I18N[
-                            (state.preferredLanguage || "english").toLowerCase()
-                          ]?.retry_count || ONBOARDING_I18N.english.retry_count
-                        )
-                          .replace("{attempt}", String(autoRetryCount))
-                          .replace("{max}", "3")
-                      : ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.uploading || ONBOARDING_I18N.english.uploading}
-                  </Text>
-                  {/* Linear Progress Bar */}
-                  <View
-                    style={{
-                      height: 6,
-                      backgroundColor: isDark ? "#334155" : "#e2e8f0",
-                      borderRadius: 3,
-                      overflow: "hidden",
-                      marginVertical: 10,
-                    }}
-                  >
-                    <View
-                      style={{
-                        height: "100%",
-                        width: `${uploadPercent}%`,
-                        backgroundColor: theme.colors.primary,
-                      }}
-                    />
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        fontSize: 12,
-                      }}
-                    >
-                      {uploadPercent}%
-                    </Text>
-                    <TouchableOpacity
-                      accessibilityLabel={
-                        ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel
-                      }
-                      accessibilityRole="button"
-                      onPress={cancelProcessing}
-                      style={{
-                        paddingHorizontal: 15,
-                        paddingVertical: 6,
-                        borderRadius: 15,
-                        backgroundColor: isDark ? "#334155" : "#f1f5f9",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: theme.colors.primary,
-                          fontWeight: "bold",
-                          fontSize: 12,
-                        }}
-                      >
+              {/* EXPANDED VIEW (Additional details) */}
+              {!isProgressCollapsed && (uploadState === "uploading" || uploadState === "processing" || uploadState === "validating" || uploadState === "queued") && (
+                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? "#334155" : "#f1f5f9" }}>
+                  {uploadState === "processing" && (
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 11, fontStyle: "italic", flex: 1, marginRight: 8 }}>
                         {ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
+                        ]?.eta_hint || ONBOARDING_I18N.english.eta_hint}
                       </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* Progress UI for Queued */}
-              {uploadState === "queued" && (
-                <View style={{ alignItems: "center", padding: 15 }}>
-                  <ActivityIndicator
-                    size="large"
-                    color={theme.colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.progressText,
-                      { color: theme.colors.textPrimary, marginTop: 10 },
-                    ]}
-                  >
-                    {ONBOARDING_I18N[
-                      (state.preferredLanguage || "english").toLowerCase()
-                    ]?.queued || ONBOARDING_I18N.english.queued}
-                  </Text>
-                </View>
-              )}
-
-              {/* Progress UI for Processing */}
-              {uploadState === "processing" && (
-                <View style={{ width: "100%", padding: 15 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: 10,
-                    }}
-                  >
-                    <ActivityIndicator
-                      size="small"
-                      color={theme.colors.primary}
-                      style={{ marginRight: 10 }}
-                    />
-                    <Text
-                      style={{
-                        color: theme.colors.textPrimary,
-                        fontWeight: "bold",
-                      }}
-                      accessibilityLiveRegion="polite"
-                    >
-                      {isOffline
-                        ? "Internet connection lost. Analysis paused..."
-                        : ONBOARDING_I18N[
-                            (state.preferredLanguage || "english").toLowerCase()
-                          ]?.processing || ONBOARDING_I18N.english.processing}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      marginVertical: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        fontSize: 13,
-                      }}
-                    >
+                      <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 12 }}>
+                        {Math.round(pollElapsedTime / 1000)}s
+                      </Text>
+                    </View>
+                  )}
+                  {uploadState === "uploading" && autoRetryCount > 0 && (
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginBottom: 8 }}>
                       {(
                         ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ]?.page_progress ||
-                        ONBOARDING_I18N.english.page_progress
+                        ]?.retry_count || ONBOARDING_I18N.english.retry_count
                       )
-                        .replace("{current}", String(pollCurrentPage))
-                        .replace("{total}", String(pollTotalPages))}
+                        .replace("{attempt}", String(autoRetryCount))
+                        .replace("{max}", "3")}
                     </Text>
-                    {/* Screen reader isolated timer */}
-                    <Text
-                      style={{
-                        color: theme.colors.textPrimary,
-                        fontWeight: "bold",
-                        fontSize: 13,
-                      }}
-                      importantForAccessibility="no-hide-descendants"
-                    >
-                      {Math.round(pollElapsedTime / 1000)}s
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={{
-                      color: theme.colors.textSecondary,
-                      fontSize: 11,
-                      fontStyle: "italic",
-                      marginBottom: 12,
-                    }}
-                  >
-                    {ONBOARDING_I18N[
-                      (state.preferredLanguage || "english").toLowerCase()
-                    ]?.eta_hint || ONBOARDING_I18N.english.eta_hint}
-                  </Text>
-
+                  )}
+                  
+                  {/* Cancel action button */}
                   <TouchableOpacity
-                    accessibilityLabel={
-                      ONBOARDING_I18N[
-                        (state.preferredLanguage || "english").toLowerCase()
-                      ]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel
-                    }
+                    accessibilityLabel="Cancel processing"
                     accessibilityRole="button"
                     onPress={cancelProcessing}
                     style={{
                       alignSelf: "flex-end",
-                      paddingHorizontal: 20,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                      backgroundColor: isDark ? "#334155" : "#f1f5f9",
+                      paddingHorizontal: 16,
+                      paddingVertical: 6,
+                      borderRadius: 12,
+                      backgroundColor: isDark ? "#475569" : "#e2e8f0",
                     }}
                   >
-                    <Text
-                      style={{
-                        color: theme.colors.primary,
-                        fontWeight: "bold",
-                        fontSize: 13,
-                      }}
-                    >
+                    <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 12 }}>
                       {ONBOARDING_I18N[
                         (state.preferredLanguage || "english").toLowerCase()
                       ]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
@@ -2169,131 +2062,76 @@ export default function OnboardingScreen() {
 
               {/* Failure / Timeout Card */}
               {(uploadState === "failed" || uploadState === "timed_out") && (
-                <View style={{ width: "100%", padding: 15 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <Ionicons
-                      name="alert-circle"
-                      size={24}
-                      color="#ef4444"
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text
-                      style={{
-                        color: "#ef4444",
-                        fontWeight: "bold",
-                        fontSize: 16,
-                      }}
-                    >
-                      {uploadState === "timed_out"
-                        ? "Analysis Timeout"
-                        : "Analysis Failed"}
+                <View style={{ width: "100%" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+                    <Ionicons name="alert-circle" size={20} color="#ef4444" style={{ marginRight: 6 }} />
+                    <Text style={{ color: "#ef4444", fontWeight: "bold", fontSize: 14 }}>
+                      {uploadState === "timed_out" ? "Analysis Timeout" : "Analysis Failed"}
                     </Text>
                   </View>
-
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      marginBottom: 15,
-                      fontSize: 14,
-                    }}
-                  >
+                  <Text style={{ color: theme.colors.textPrimary, marginBottom: 12, fontSize: 13 }}>
                     {uploadState === "timed_out"
                       ? ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ]?.err_network_timeout ||
-                        ONBOARDING_I18N.english.err_network_timeout
+                        ]?.err_network_timeout || ONBOARDING_I18N.english.err_network_timeout
                       : ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ][`err_${activeErrorCode?.toLowerCase()}`] ||
-                        ONBOARDING_I18N.english.err_unexpected_error}
+                        ][`err_${activeErrorCode?.toLowerCase()}`] || ONBOARDING_I18N.english.err_unexpected_error}
                   </Text>
-
                   {__DEV__ && activeErrorDetails && (
-                    <View
-                      style={{
-                        backgroundColor: isDark ? "#0f172a" : "#f8fafc",
-                        padding: 8,
-                        borderRadius: 6,
-                        marginBottom: 15,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#ef4444",
-                          fontFamily:
-                            Platform.OS === "ios" ? "Courier" : "monospace",
-                          fontSize: 11,
-                        }}
-                        numberOfLines={4}
-                      >
+                    <View style={{ backgroundColor: isDark ? "#0f172a" : "#f8fafc", padding: 6, borderRadius: 6, marginBottom: 12 }}>
+                      <Text style={{ color: "#ef4444", fontFamily: Platform.OS === "ios" ? "Courier" : "monospace", fontSize: 10 }} numberOfLines={3}>
                         {activeErrorDetails}
                       </Text>
                     </View>
                   )}
-
-                  <View style={{ flexDirection: "column", gap: 8 }}>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
                     <TouchableOpacity
-                      accessibilityLabel={
-                        ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_try_again ||
-                        ONBOARDING_I18N.english.btn_try_again
-                      }
-                      accessibilityRole="button"
                       onPress={() => uploadSelectedFile(selectedFile)}
-                      style={{
-                        width: "100%",
-                        paddingVertical: 12,
-                        borderRadius: 8,
-                        backgroundColor: theme.colors.primary,
-                        alignItems: "center",
-                      }}
+                      style={{ flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: "center" }}
                     >
-                      <Text style={{ color: "#ffffff", fontWeight: "bold" }}>
+                      <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 12 }}>
                         {ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_try_again ||
-                          ONBOARDING_I18N.english.btn_try_again}
+                        ]?.btn_try_again || ONBOARDING_I18N.english.btn_try_again}
                       </Text>
                     </TouchableOpacity>
-
                     <TouchableOpacity
-                      accessibilityLabel={
-                        ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_choose_different ||
-                        ONBOARDING_I18N.english.btn_choose_different
-                      }
-                      accessibilityRole="button"
                       onPress={handleChooseDifferentFile}
-                      style={{
-                        width: "100%",
-                        paddingVertical: 12,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: theme.colors.primary,
-                        alignItems: "center",
-                      }}
+                      style={{ flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.primary, alignItems: "center" }}
                     >
-                      <Text
-                        style={{
-                          color: theme.colors.primary,
-                          fontWeight: "bold",
-                        }}
-                      >
+                      <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 12 }}>
                         {ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_choose_different ||
-                          ONBOARDING_I18N.english.btn_choose_different}
+                        ]?.btn_choose_different || ONBOARDING_I18N.english.btn_choose_different}
                       </Text>
                     </TouchableOpacity>
                   </View>
+                </View>
+              )}
+
+              {/* Progress bar at the bottom edge */}
+              {["uploading", "processing", "success"].includes(uploadState) && (
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 3,
+                    backgroundColor: isDark ? "#334155" : "#e2e8f0",
+                    borderBottomLeftRadius: 14,
+                    borderBottomRightRadius: 14,
+                    overflow: "hidden",
+                  }}
+                >
+                  <View
+                    style={{
+                      height: "100%",
+                      width: `${uploadState === "success" ? 100 : uploadPercent}%`,
+                      backgroundColor: theme.colors.primary,
+                    }}
+                  />
                 </View>
               )}
             </View>
@@ -2353,6 +2191,7 @@ export default function OnboardingScreen() {
         {/* Custom Upload Bottom Sheet */}
         <UploadBottomSheet
           ref={uploadSheetRef}
+          fromScreen={true}
           onTakePhoto={handleTakePhoto}
           onChooseGallery={handleChooseGallery}
           onChooseDocument={handleChooseDocument}

@@ -45,8 +45,8 @@ export const AppThemeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const isDark = themeMode === 'system' ? systemColorScheme === 'dark' : themeMode === 'dark';
-  const theme = isDark ? DARK_THEME : LIGHT_THEME;
+  const isDark = false;
+  const theme = LIGHT_THEME;
 
   if (!isReady) return null; 
 
