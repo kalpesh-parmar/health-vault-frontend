@@ -143,6 +143,57 @@ export const documentUpload = async (
   return response.data;
 };
 
+export interface UploadBatchResponse {
+  batchId: string;
+  patientId: string;
+  total: number;
+  batchUrl: string;
+  documents: {
+    fileKey: string;
+    jobId?: string;
+    fileName: string;
+    status: string;
+    streamUrl: string;
+  }[];
+}
+
+export interface RetryDocumentResponse {
+  fileKey: string;
+  batchId?: string;
+  status: string;
+  streamUrl: string;
+}
+
+export const uploadDocumentsBatch = async (
+  files: Array<{ uri: string; name: string; type: string }>,
+  onUploadProgress?: (progressEvent: any) => void,
+): Promise<ApiResponse<UploadBatchResponse>> => {
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append("files", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+  });
+
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.UPLOAD_DOCUMENT, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+    onUploadProgress,
+  });
+  return response.data;
+};
+
+export const retryDocumentProcessing = async (payload: {
+  fileKey: string;
+  batchId?: string;
+}): Promise<ApiResponse<RetryDocumentResponse>> => {
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.RETRY_DOCUMENT, payload);
+  return response.data;
+};
+
 export const uploadPatientDocuments = async (
   patientId: string,
   files: Array<{ uri: string; name: string; type: string }>,
@@ -167,6 +218,7 @@ export const uploadPatientDocuments = async (
   return response.data;
 };
 
+
 export interface BatchOcrStartResponse {
   started: {
     jobId: string;
@@ -186,15 +238,6 @@ export const startOcrBatchJob = async (
   return response.data;
 };
 
-export const getOcrBatchStatus = async (
-  jobIds: string[],
-): Promise<ApiResponse<OcrJobStatus[]>> => {
-  const response = await apiClient.post(DOCUMENT_ENDPOINTS.OCR_BATCH_STATUS, {
-    jobIds,
-  });
-  return response.data;
-};
-
 export const startOcrJob = async (
   jobId: string,
 ): Promise<any> => {
@@ -204,17 +247,6 @@ export const startOcrJob = async (
     data: startedJob,
     status: response.status,
   };
-};
-
-export const getOcrJob = async (
-  jobId: string,
-): Promise<ApiResponse<OcrJobStatus>> => {
-  const response = await getOcrBatchStatus([jobId]);
-  const matchedJob = response?.data?.find((j: any) => j.jobId === jobId) || response?.data?.[0];
-  return {
-    data: matchedJob,
-    status: response.status,
-  } as any;
 };
 
 export const getOcrJobResult = async (

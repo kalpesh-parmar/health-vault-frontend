@@ -42,8 +42,9 @@ export const DocumentProcessingScreen = () => {
   const { isDark } = useAppTheme();
   const { userId } = useAuth();
   const bottomPadding = useBottomBarPadding(20);
-  const { startBackgroundOcr } = useDocumentUpload();
+  const { startBackgroundOcr, retryDocument } = useDocumentUpload();
   const isFocused = useIsFocused();
+
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
 
@@ -265,14 +266,39 @@ export const DocumentProcessingScreen = () => {
                   </AdSkipBanner>
                 )}
 
-                {/* Non-medical Rejection Error State Actions */}
-                {job.status === "FAILED" && nonMedical && (
+                {/* Error State & Retry Actions */}
+                {job.status === "FAILED" && (
                   <RejectionContainer>
                     <RejectionReasonText>
-                      This file was detected as a non-medical record and could not be processed.
+                      {nonMedical
+                        ? "This file was detected as a non-medical record and could not be processed."
+                        : job.error || "Document extraction failed."}
                     </RejectionReasonText>
+                    {!nonMedical && (
+                      <TouchableOpacity
+                        style={{
+                          marginTop: 8,
+                          paddingVertical: 6,
+                          paddingHorizontal: 12,
+                          backgroundColor: "#0d9488",
+                          borderRadius: 6,
+                          alignSelf: "flex-start",
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
+                        onPress={() => {
+                          const matchedFile = filesInfo.find((f) => f.jobId === job.jobId);
+                          const fileKey = matchedFile?.fileKey || job.jobId;
+                          retryDocument(fileKey);
+                        }}
+                      >
+                        <Ionicons name="refresh" size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                        <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "600" }}>Retry Extraction</Text>
+                      </TouchableOpacity>
+                    )}
                   </RejectionContainer>
                 )}
+
 
                 {/* Loading Result Spinner Overlay */}
                 {isLoadingResult === job.jobId && (

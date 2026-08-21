@@ -659,8 +659,8 @@ const HomeScreen = () => {
                           ? "Completed • Medicines found"
                           : "Completed")
                         : isFailed
-                          ? "Failed to process"
-                          : `Processing • ${progress}%`}
+                          ? (doc.reason || "Failed to process")
+                          : (doc.currentStep ? `${doc.currentStep} • ${progress}%` : `Processing • ${progress}%`)}
                     </DocItemStatus>
                   </DocItemInfo>
 
