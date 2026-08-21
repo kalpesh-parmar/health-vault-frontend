@@ -503,3 +503,8 @@ export const getSharedLinks = async (
     };
   }
 };
+
+export const getDocumentsSummary = async (): Promise<any> => {
+  const response = await apiClient.get(DOCUMENT_ENDPOINTS.DOCUMENTS_COUNT);
+  return response.data;
+};

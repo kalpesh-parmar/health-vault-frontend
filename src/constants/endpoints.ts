@@ -22,6 +22,7 @@ export const DOCUMENT_ENDPOINTS = {
   OCR_JOB_STATUS: (jobId: string) => `/ocr/jobs/${jobId}`,
   OCR_JOB_RESULT: (jobId: string) => `/ocr/jobs/${jobId}/result`,
   OCR_BATCH_START: "/ocr/jobs/batch-start",
+  DOCUMENTS_COUNT: "/documents/summary",
   OCR_BATCH_STATUS: "/ocr/jobs/batch-status",
   RUN_OCR: "/documents/run-ocr",
   OCR_PROGRESS: "/documents/run-ocr-status/{fileKey}",
@@ -47,6 +48,7 @@ export const MEDICATION_REMINDER_ENDPOINTS = {
   GET_ALL_MAIN_REMINDERS_OCCURENCES: "/medication-reminders",
   GET_ALL_SUB_REMINDERS_OCCURRENCES: "/medication-reminders/occurrences",
   LIST_TODAY_OCCURRENCES: "/medication-reminders/occurrences/today",
+  LIST_TODAY_OCCURENCES_COUNT: "/medication-reminders/occurrences/summary",
   UPDATE_REMINDER_OCCURRENCE_STATUS: "/medication-reminders/occurrences/{id}",
   FILTER_AND_SORT_OCCURRENCES: "/medication-reminders/occurrences/list",
 } as const;

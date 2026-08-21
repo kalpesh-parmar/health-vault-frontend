@@ -89,6 +89,10 @@ export const ConfirmMedicinesScreen: React.FC = () => {
         });
       }
     } catch (error: any) {
+      if (error?.isDuplicate) {
+        setIsSubmitting(false);
+        return;
+      }
       console.error("[ConfirmMedicinesScreen] Save failed:", error);
       Toast.show({
         type: "error",

@@ -59,7 +59,7 @@ export const FloatingProgressPanel = ({ onOpenSheet, isDark }: FloatingProgressP
         <Text style={{ color: isDark ? "#f1f5f9" : "#0f172a", fontWeight: "bold", fontSize: 13 }}>
           {isUploading
             ? "Uploading"
-            : `Processing ${completedJobsCount} of ${docCount}`}
+            : `Processed ${completedJobsCount} of ${docCount}`}
         </Text>
         <Text style={{ color: "#64748b", marginHorizontal: 6, fontSize: 13 }}>•</Text>
         <Text style={{ color: "#64748b", fontSize: 13 }} numberOfLines={1}>

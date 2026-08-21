@@ -6,7 +6,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { BackHandler } from "react-native";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
-const BottomSheet = forwardRef(({ children }: any, ref: any) => {
+const BottomSheet = forwardRef(({ children, onChange }: any, ref: any) => {
   const { theme } = useAppTheme();
   const [sheetIndex, setSheetIndex] = useState(-1);
   const bottomPadding = useBottomBarPadding(15, 0);
@@ -45,7 +45,10 @@ const BottomSheet = forwardRef(({ children }: any, ref: any) => {
     <BottomSheetModal
       ref={ref}
       enablePanDownToClose={true}
-      onChange={setSheetIndex}
+      onChange={(index) => {
+        setSheetIndex(index);
+        if (onChange) onChange(index);
+      }}
       backdropComponent={renderBackdrop}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"

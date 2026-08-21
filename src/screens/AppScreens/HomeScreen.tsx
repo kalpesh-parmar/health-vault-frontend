@@ -25,14 +25,15 @@ import { queryClient } from "../../config/queryClient";
 import { getNotificationCount } from "../../services/notificationService";
 import { getUser } from "../../services/userService";
 import { getFileSource } from "../../services/fileService";
-import { ActivityIndicator, View, TouchableOpacity } from "react-native";
+import { ActivityIndicator, View, TouchableOpacity, Text } from "react-native";
 import ReminderCard from "../../components/shared/ReminderCard";
 import {
   listTodayOccurrences,
   updateReminderOccurrenceStatus,
+  listTodayOccurrencesCount,
 } from "../../services/reminderService";
 import { listMedications } from "../../services/medicationservice";
-import { listDocument } from "../../services/documentService";
+import { listDocument, getDocumentsSummary } from "../../services/documentService";
 import { Reminder } from "../../types";
 import { getInitials } from "../../utils/avatarUtils";
 
@@ -60,7 +61,6 @@ const ActionItem = memo(
 const HomeScreen = () => {
   const isFocused = useIsFocused();
   const refRBSheet = useRef<BottomSheetModal>(null);
-  const processingSheetRef = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
 
   const navigation =
@@ -72,8 +72,6 @@ const HomeScreen = () => {
     uploadingDocs,
     completedBatch,
     clearCompletedBatch,
-    isPillHidden,
-    setIsPillHidden,
   } = useDocumentUpload();
 
   const [isBannerDismissed, setIsBannerDismissed] = React.useState(false);
@@ -141,35 +139,25 @@ const HomeScreen = () => {
     queryFn: listMedications,
   });
 
-  const { data: documentsData } = useQuery({
-    queryKey: ["allDocuments"],
-    queryFn: listDocument,
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+
+  const { data: todayOccurrencesCountData } = useQuery({
+    queryKey: ["todayOccurrencesCount", todayStr],
+    queryFn: () => listTodayOccurrencesCount({ startDate: todayStr, endDate: todayStr }),
+  });
+
+  const { data: documentsSummaryData } = useQuery({
+    queryKey: ["documentsSummary"],
+    queryFn: getDocumentsSummary,
   });
 
   const medicationsCount = Array.isArray(medicationsData?.data) 
     ? medicationsData.data.length 
     : 0;
 
-  const rawDocs = documentsData?.data as any;
-  const documentsCount = rawDocs
-    ? typeof rawDocs.total === "number"
-      ? rawDocs.total
-      : typeof rawDocs.totalCount === "number"
-      ? rawDocs.totalCount
-      : typeof rawDocs.totalItems === "number"
-      ? rawDocs.totalItems
-      : typeof rawDocs.count === "number"
-      ? rawDocs.count
-      : Array.isArray(rawDocs.items)
-      ? rawDocs.items.length
-      : Array.isArray(documentsData?.data)
-      ? documentsData.data.length
-      : 0
-    : 0;
+  const documentsCount = documentsSummaryData?.data?.total || 0;
 
-  const pendingMedicinesCount = reminders.filter(
-    (r: Reminder) => (r.status || "").toLowerCase() === "pending"
-  ).length;
+  const pendingMedicinesCount = todayOccurrencesCountData?.data?.total ?? 0;
 
   const recentTwoReminders = useMemo(() => {
     return reminders
@@ -181,7 +169,7 @@ const HomeScreen = () => {
       })
       .slice(0, 2);
   }, [reminders]);
-
+  
   const updateStatusMutation = useMutation({
     mutationFn: updateReminderOccurrenceStatus,
     onSuccess: () => {
@@ -191,6 +179,7 @@ const HomeScreen = () => {
       queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
       queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
       queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] });
     },
   });
 
@@ -383,8 +372,8 @@ const HomeScreen = () => {
 
         {/* Inline Processing Documents Card */}
         {uploadingDocs.length > 0 && (
-          <ProcessingCard style={{ marginHorizontal: 24, marginTop: 15 }}>
-            <SheetHeaderRow style={{ flexWrap: "nowrap" }}>
+          <ProcessingCard style={{ marginHorizontal: 24, marginTop: 15, paddingBottom: 15 }}>
+            <SheetHeaderRow style={{ flexWrap: "nowrap", marginBottom: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8, flexShrink: 1 }}>
                 <SheetHeaderTitle style={{ color: "#4f46e5", flexShrink: 1 }} numberOfLines={1}>Processing</SheetHeaderTitle>
                 <SheetHeaderBadge style={{ backgroundColor: "#e0e7ff", marginLeft: 6 }}>
@@ -400,15 +389,23 @@ const HomeScreen = () => {
                     filesInfo: uploadingDocs.map(d => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
                   });
                 }}
-                style={{ flexDirection: "row", alignItems: "center", flexShrink: 0 }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={{
+                  backgroundColor: "#6366f1",
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
               >
-                <SheetDetailsText>View Details</SheetDetailsText>
-                <Ionicons name="chevron-forward" size={14} color="#6366f1" style={{ marginLeft: 2 }} />
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 12 }}>View</Text>
               </TouchableOpacity>
             </SheetHeaderRow>
 
             {/* Progress bar */}
-            <SheetProgressRow>
+            <SheetProgressRow style={{ marginBottom: 0 }}>
               <SheetProgressBarBg>
                 <SheetProgressBarFill
                   style={{
@@ -425,47 +422,6 @@ const HomeScreen = () => {
                 )}%
               </SheetProgressPctText>
             </SheetProgressRow>
-
-            <View style={{ marginTop: 10 }}>
-              {uploadingDocs.map((doc) => {
-                const isCompleted = doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success";
-                const isFailed = doc.status === "FAILED" || doc.status === "failed";
-                const progress = doc.progress || 0;
-
-                return (
-                  <DocItemRow key={doc.id} style={{ backgroundColor: "#ffffff", borderWidth: 0, paddingVertical: 8, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: "#f1f5f9", borderRadius: 0 }}>
-                    <DocItemIconBox isCompleted={isCompleted} isFailed={isFailed} style={{ width: 36, height: 36, borderRadius: 8 }}>
-                      <MaterialCommunityIcons
-                        name={doc.name.endsWith(".pdf") ? "file-pdf-box" : "file-image-outline"}
-                        size={22}
-                        color={isCompleted ? "#10b981" : isFailed ? "#ef4444" : "#6366f1"}
-                      />
-                    </DocItemIconBox>
-
-                    <DocItemInfo>
-                      <DocItemName numberOfLines={1} style={{ fontSize: 13 }}>{doc.name}</DocItemName>
-                      <DocItemStatus isCompleted={isCompleted} isFailed={isFailed} style={{ fontSize: 11 }}>
-                        {isCompleted
-                          ? "Completed"
-                          : isFailed
-                            ? "Failed to process"
-                            : `Processing • ${progress}%`}
-                      </DocItemStatus>
-                    </DocItemInfo>
-
-                    {isCompleted ? (
-                      <Ionicons name="checkmark-circle" size={22} color="#10b981" />
-                    ) : isFailed ? (
-                      <Ionicons name="alert-circle" size={22} color="#ef4444" />
-                    ) : (
-                      <DocProgressCircle style={{ width: 28, height: 28, borderRadius: 14 }}>
-                        <DocProgressCircleText style={{ fontSize: 8 }}>{progress}%</DocProgressCircleText>
-                      </DocProgressCircle>
-                    )}
-                  </DocItemRow>
-                );
-              })}
-            </View>
           </ProcessingCard>
         )}
 
@@ -481,15 +437,50 @@ const HomeScreen = () => {
                     We found {completedBatch.medicineCount} medicine{completedBatch.medicineCount === 1 ? "" : "s"} in your documents.
                   </AnalysisCompleteSub>
                 </View>
+
+                {completedBatch.documents && completedBatch.documents.length > 0 && (
+                  <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: isDark ? "#2d3748" : "#e2e8f0", paddingTop: 10 }}>
+                    {completedBatch.documents.map((doc) => {
+                      const isCompleted = doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success";
+                      return (
+                        <View key={doc.id} style={{ flexDirection: "row", alignItems: "flex-start", marginVertical: 4 }}>
+                          <Ionicons
+                            name={isCompleted ? "checkmark-circle" : "close-circle"}
+                            size={16}
+                            color={isCompleted ? "#10b981" : "#ef4444"}
+                            style={{ marginRight: 6, marginTop: 2 }}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#1e293b" }}>{doc.name}</Text>
+                            {isCompleted ? (
+                              <Text style={{ fontSize: 11, color: isDark ? "#94a3b8" : "#64748b" }}>
+                                Successfully processed • {doc.medicineCount || 0} medicines found
+                              </Text>
+                            ) : (
+                              <Text style={{ fontSize: 11, color: "#ef4444" }} numberOfLines={2}>
+                                Rejected: {doc.reason || "Failed to process"}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
                 <ReviewNowBtn
                   onPress={() => {
-                    navigation.navigate("ReviewMedicines", {
-                      jobIds: completedBatch.jobIds,
-                      filesInfo: completedBatch.filesInfo,
-                    });
+                    if (completedBatch.fromScreen === "AIChat") {
+                      navigation.navigate("AIChat");
+                    } else {
+                      navigation.navigate("ReviewMedicines", {
+                        jobIds: completedBatch.jobIds,
+                        filesInfo: completedBatch.filesInfo,
+                      });
+                    }
                   }}
                   activeOpacity={0.8}
-                  style={{ alignSelf: "flex-start", marginTop: 8 }}
+                  style={{ alignSelf: "flex-start", marginTop: 12 }}
                 >
                   <ReviewNowBtnText>Review Now</ReviewNowBtnText>
                 </ReviewNowBtn>
@@ -539,165 +530,6 @@ const HomeScreen = () => {
 
         <BottomSpacing />
       </ScrollContent>
-
-      {/* Floating Processing progress pill */}
-      {uploadingDocs.length > 0 && !isPillHidden && (
-        <FloatingProgressPill
-          activeOpacity={0.9}
-          onPress={() => processingSheetRef.current?.present()}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-            <PillIconBox>
-              <MaterialCommunityIcons name="file-document-outline" size={22} color="#3b82f6" />
-            </PillIconBox>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <PillTitle numberOfLines={1}>
-                {uploadingDocs.length} document{uploadingDocs.length === 1 ? "" : "s"} are being processed
-              </PillTitle>
-              <PillSub numberOfLines={1}>
-                You can hide this and we'll notify you when done.
-              </PillSub>
-            </View>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <HideButton
-              onPress={(e: any) => {
-                e.stopPropagation();
-                setIsPillHidden(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <HideButtonText>Hide</HideButtonText>
-            </HideButton>
-            <TouchableOpacity onPress={() => processingSheetRef.current?.present()} style={{ padding: 4, marginLeft: 8 }}>
-              <Ionicons name="chevron-up" size={20} color="#64748b" />
-            </TouchableOpacity>
-          </View>
-        </FloatingProgressPill>
-      )}
-
-      <BottomSheetModal
-        ref={processingSheetRef}
-        enableDynamicSizing={true}
-        maxDynamicContentSize={550}
-        backdropComponent={(props) => (
-          <BottomSheetBackdrop
-            {...props}
-            disappearsOnIndex={-1}
-            appearsOnIndex={0}
-            pressBehavior="close"
-          />
-        )}
-      >
-        <SheetContentWrapper>
-          <SheetHeaderRow style={{ flexWrap: "nowrap" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8, flexShrink: 1 }}>
-              <SheetHeaderTitle style={{ flexShrink: 1 }} numberOfLines={1}>Processing</SheetHeaderTitle>
-              <SheetHeaderBadge style={{ marginLeft: 6 }}>
-                <SheetHeaderBadgeText>
-                  {uploadingDocs.filter(d => d.status === "COMPLETED" || d.status === "completed" || d.status === "success" || d.status === "FAILED" || d.status === "failed").length}/{uploadingDocs.length} Completed
-                </SheetHeaderBadgeText>
-              </SheetHeaderBadge>
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                processingSheetRef.current?.dismiss();
-                navigation.navigate("DocumentProcessing", {
-                  jobIds: uploadingDocs.map(d => d.id),
-                  filesInfo: uploadingDocs.map(d => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
-                });
-              }}
-              style={{ flexDirection: "row", alignItems: "center", flexShrink: 0 }}
-            >
-              <SheetDetailsText>View Details</SheetDetailsText>
-              <Ionicons name="chevron-forward" size={14} color="#6366f1" style={{ marginLeft: 2 }} />
-            </TouchableOpacity>
-          </SheetHeaderRow>
-
-          {/* Progress bar */}
-          <SheetProgressRow>
-            <SheetProgressBarBg>
-              <SheetProgressBarFill
-                style={{
-                  width: `${Math.round(
-                    uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0) / uploadingDocs.length
-                  )}%`
-                }}
-              />
-            </SheetProgressBarBg>
-            <SheetProgressPctText>
-              {Math.round(
-                uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0) / uploadingDocs.length
-              )}%
-            </SheetProgressPctText>
-          </SheetProgressRow>
-
-          <BottomSheetScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: bottomPadding }}
-          >
-            {uploadingDocs.map((doc) => {
-              const isCompleted = doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success";
-              const isFailed = doc.status === "FAILED" || doc.status === "failed";
-              const progress = doc.progress || 0;
-
-              return (
-                <DocItemRow key={doc.id}>
-                  <DocItemIconBox isCompleted={isCompleted} isFailed={isFailed}>
-                    <MaterialCommunityIcons
-                      name={doc.name.endsWith(".pdf") ? "file-pdf-box" : "file-image-outline"}
-                      size={24}
-                      color={isCompleted ? "#10b981" : isFailed ? "#ef4444" : "#6366f1"}
-                    />
-                  </DocItemIconBox>
-
-                  <DocItemInfo>
-                    <DocItemName numberOfLines={1}>{doc.name}</DocItemName>
-                    <DocItemStatus isCompleted={isCompleted} isFailed={isFailed}>
-                      {isCompleted
-                        ? (doc.medicineCount !== undefined && doc.medicineCount > 0
-                          ? "Completed • Medicines found"
-                          : "Completed")
-                        : isFailed
-                          ? "Failed to process"
-                          : `Processing • ${progress}%`}
-                    </DocItemStatus>
-                  </DocItemInfo>
-
-                  {isCompleted ? (
-                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-                  ) : isFailed ? (
-                    <Ionicons name="alert-circle" size={24} color="#ef4444" />
-                  ) : (
-                    <DocProgressCircle>
-                      <DocProgressCircleText>{progress}%</DocProgressCircleText>
-                    </DocProgressCircle>
-                  )}
-                </DocItemRow>
-              );
-            })}
-
-            {/* "Review Now" button (only shown when all are complete/terminal) */}
-            {uploadingDocs.every(
-              (d) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success" || d.status === "FAILED" || d.status === "failed"
-            ) && (
-              <SheetReviewNowBtn
-                onPress={() => {
-                  processingSheetRef.current?.dismiss();
-                  navigation.navigate("DocumentProcessing", {
-                    jobIds: uploadingDocs.map(d => d.id),
-                    filesInfo: uploadingDocs.map(d => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
-                  });
-                }}
-                activeOpacity={0.8}
-              >
-                <SheetReviewNowBtnText>Review Now</SheetReviewNowBtnText>
-              </SheetReviewNowBtn>
-            )}
-          </BottomSheetScrollView>
-        </SheetContentWrapper>
-      </BottomSheetModal>
-
       <DocumentUploadBottomSheet ref={refRBSheet} />
     </Container>
   );

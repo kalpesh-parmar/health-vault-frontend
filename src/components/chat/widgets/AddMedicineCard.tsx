@@ -72,21 +72,7 @@ export function AddMedicineCard({
     if (localErrors.length > 0) {
       setLocalErrors([]);
     }
-  }, [
-    formName,
-    formType,
-    formFreq,
-    formNotes,
-    formPrescribed,
-    formRefill,
-    formQty,
-    formFoodFreq,
-    startDate,
-    formCount,
-    formVal,
-    formUnit,
-    selectedSlots,
-  ]);
+  }, [formState]);
 
   const t = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";

@@ -77,7 +77,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
   };
 
   const handleContinue = () => {
-    navigation.navigate("ReviewAllMedicines" as any, { fromScreen });
+    navigation.navigate("ConfirmMedicines" as any, { fromScreen });
   };
 
   const selectedCount = selectedMedicineIds.length;

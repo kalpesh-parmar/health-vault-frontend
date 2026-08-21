@@ -131,6 +131,7 @@ const MedicationOperation = ({
       queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
       navigation.goBack();
     } catch (error: any) {
+      if (error?.isDuplicate) return;
       Toast.show({
         type: "error",
         text1: error.message || "Something went wrong",

@@ -234,9 +234,10 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
 interface DocumentUploadBottomSheetProps {
   fromScreen?: string;
   onSuccess?: (jobIds: string[], filesInfo: any[]) => void;
+  onUploadStart?: () => void;
 }
 
-export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSuccess }: DocumentUploadBottomSheetProps, ref: any) => {
+export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSuccess, onUploadStart }: DocumentUploadBottomSheetProps, ref: any) => {
   const { theme, isDark } = useAppTheme();
   const { userId } = useAuth();
   const navigation = useNavigation<any>();
@@ -467,6 +468,9 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
   const handleUpload = async () => {
     if (!userId) return;
     ref.current?.dismiss();
+    if (onUploadStart) {
+      onUploadStart();
+    }
     try {
       await startUpload(userId, fromScreen, (jobIds, filesInfo) => {
         if (onSuccess) {

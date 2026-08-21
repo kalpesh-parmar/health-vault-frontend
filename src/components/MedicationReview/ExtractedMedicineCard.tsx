@@ -27,8 +27,6 @@ export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
 
   return (
     <CardContainer
-      onPress={onPress}
-      activeOpacity={0.9}
       isDark={isDark}
       style={{
         shadowColor: "#000",
@@ -39,6 +37,10 @@ export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
       }}
     >
       <MainRow>
+        <CheckboxWrapper style={{ marginRight: 8 }}>
+          <MedicineCheckbox checked={medicine.selected} onPress={onToggle} />
+        </CheckboxWrapper>
+
         <MedIconContainer>
           <MedEmoji>💊</MedEmoji>
         </MedIconContainer>
@@ -70,15 +72,15 @@ export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
           )}
         </InfoColumn>
 
-        <CheckboxWrapper>
-          <MedicineCheckbox checked={medicine.selected} onPress={onToggle} />
-        </CheckboxWrapper>
+        <EditButton onPress={onPress} activeOpacity={0.7} isDark={isDark}>
+          <Ionicons name="pencil" size={16} color={isDark ? "#94a3b8" : "#475569"} />
+        </EditButton>
       </MainRow>
     </CardContainer>
   );
 };
 
-const CardContainer = styled.TouchableOpacity<{ isDark: boolean }>`
+const CardContainer = styled.View<{ isDark: boolean }>`
   background-color: ${(props: any) => props.isDark ? "#1e293b" : "#ffffff"};
   border-radius: 12px;
   padding: 14px;
@@ -164,6 +166,15 @@ const DuplicateBadgeText = styled.Text`
   font-size: 10px;
   font-weight: 700;
   color: #312e81;
+`;
+
+const EditButton = styled.TouchableOpacity<{ isDark: boolean }>`
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  background-color: ${(props: any) => props.isDark ? "#334155" : "#f1f5f9"};
+  justify-content: center;
+  align-items: center;
 `;
 
 export default ExtractedMedicineCard;

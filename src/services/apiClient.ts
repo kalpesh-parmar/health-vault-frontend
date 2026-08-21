@@ -394,7 +394,6 @@ apiClient.interceptors.response.use(
       config.url === "/auth/refresh-token"
     );
 
-    const enabled = ENABLE_API_LOGS;
     const message =
       data?.error?.message ||
       data?.status?.description?.message ||
@@ -404,6 +403,30 @@ apiClient.interceptors.response.use(
       error.message ||
       "An unexpected error occurred";
 
+    const isMedicationUrl = config?.url && (
+      config.url.includes("/medications/create") ||
+      config.url.includes("/medications/")
+    );
+    const isDuplicate = isMedicationUrl && (
+      error.response?.status === 409 ||
+      data?.errorCode === "MEDICINE_ALREADY_EXISTS" ||
+      (typeof message === "string" && (
+        message.toLowerCase().includes("already exists") ||
+        message.toLowerCase().includes("medicine already exists")
+      ))
+    );
+
+    if (isDuplicate) {
+      Toast.show({
+        type: "error",
+        text1: "Medicine already exists in your profile.",
+      });
+      const dupError = new Error("Medicine already exists in your profile.");
+      (dupError as any).isDuplicate = true;
+      return Promise.reject(dupError);
+    }
+
+    const enabled = ENABLE_API_LOGS;
     if (enabled && config && config.metadata) {
       const duration = Date.now() - config.metadata.startTime;
       const fullUrl = resolveFullUrl(config.baseURL, config.url);

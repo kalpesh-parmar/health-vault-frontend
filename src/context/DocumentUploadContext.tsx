@@ -55,6 +55,7 @@ interface DocumentUploadContextType {
     failedCount: number;
     medicineCount: number;
     fromScreen?: string;
+    documents?: { id: string; name: string; status: string; reason: string | null; medicineCount?: number }[];
   } | null;
   clearCompletedBatch: () => void;
   isPillHidden: boolean;
@@ -125,7 +126,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const [uploadingDocs, setUploadingDocs] = useState<UploadingDoc[]>([]);
   const [isProgressExpanded, setIsProgressExpanded] = useState(false);
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
-  const [activeUploadFromScreen, setActiveUploadFromScreen] = useState<string>("Home");
+  const activeUploadFromScreenRef = useRef<string>("Home");
   const [completedBatch, setCompletedBatch] = useState<{
     jobIds: string[];
     filesInfo: { jobId: string; fileName: string; fileKey: string }[];
@@ -133,6 +134,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     failedCount: number;
     medicineCount: number;
     fromScreen?: string;
+    documents?: { id: string; name: string; status: string; reason: string | null; medicineCount?: number }[];
   } | null>(null);
   const [isPillHidden, setIsPillHidden] = useState(false);
 
@@ -309,59 +311,60 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           queryClient.invalidateQueries({ queryKey: ["documents"] });
           queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
           queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
+          queryClient.invalidateQueries({ queryKey: ["documentsSummary"] });
 
-          const hasFailures = computedNext.some(
+          const failedCount = computedNext.filter(
             (d) => d.status === "FAILED" || d.status === "failed" || d.progress < 0
-          );
-          if (hasFailures) {
-            Toast.show({
-              type: "error",
-              text1: "Processing Finished with Errors",
-              text2: "Some documents failed to process.",
-            });
-            setUploadingDocs([]);
-          } else {
-            (async () => {
-              let medicineCount = 0;
-              const completedCount = computedNext.filter(
-                (d) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
-              ).length;
-              const failedCount = computedNext.filter(
-                (d) => d.status === "FAILED" || d.status === "failed" || d.progress < 0
-              ).length;
+          ).length;
 
-              await Promise.all(
-                computedNext.map(async (doc) => {
-                  if (doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success") {
-                    try {
-                      const res = await getOcrJobResult(doc.id);
-                      const data = res?.data || res;
-                      const meds = data?.extractedStructuredData?.medications || data?.extractedStructuredData?.medicines;
-                      if (Array.isArray(meds)) {
-                        medicineCount += meds.length;
-                      }
-                    } catch (e) {
-                      console.log("Failed to fetch medicine count for job", doc.id, e);
+          (async () => {
+            let medicineCount = 0;
+            const completedCount = computedNext.filter(
+              (d) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
+            ).length;
+
+            await Promise.all(
+              computedNext.map(async (doc) => {
+                if (doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success") {
+                  try {
+                    const res = await getOcrJobResult(doc.id);
+                    const data = res?.data || res;
+                    const meds = data?.extractedStructuredData?.medications || data?.extractedStructuredData?.medicines;
+                    if (Array.isArray(meds)) {
+                      medicineCount += meds.length;
                     }
+                  } catch (e) {
+                    console.log("Failed to fetch medicine count for job", doc.id, e);
                   }
-                })
-              );
+                }
+              })
+            );
 
-              setCompletedBatch({
-                jobIds: computedNext.map((d) => d.id),
-                filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name.replace(/%20/g, " "), fileKey: "" })),
-                completedCount,
-                failedCount,
-                medicineCount,
-                fromScreen: activeUploadFromScreen,
-              });
+            setCompletedBatch({
+              jobIds: computedNext.map((d) => d.id),
+              filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name.replace(/%20/g, " "), fileKey: "" })),
+              completedCount,
+              failedCount,
+              medicineCount,
+              fromScreen: activeUploadFromScreenRef.current,
+              documents: computedNext.map((d) => ({
+                id: d.id,
+                name: d.name,
+                status: d.status,
+                reason: d.reason || null,
+                medicineCount: d.medicineCount || 0,
+              })),
+            });
 
-              setUploadingDocs([]);
+            setUploadingDocs([]);
 
+            if (activeUploadFromScreenRef.current !== "AIChat") {
               Toast.show({
                 type: "success",
                 text1: "Analysis Complete!",
-                text2: `We found ${medicineCount} medicine${medicineCount === 1 ? "" : "s"} in your documents.`,
+                text2: failedCount > 0
+                  ? `Processed with some errors. Found ${medicineCount} medicine(s).`
+                  : `We found ${medicineCount} medicine${medicineCount === 1 ? "" : "s"} in your documents.`,
                 props: {
                   buttonText: "Review Now",
                   onPressButton: () => {
@@ -374,7 +377,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                           params: {
                             jobIds: computedNext.map((d) => d.id),
                             filesInfo: computedNext.map((d) => ({ jobId: d.id, fileName: d.name.replace(/%20/g, " "), fileKey: "" })),
-                            fromScreen: activeUploadFromScreen,
+                            fromScreen: activeUploadFromScreenRef.current,
                           }
                         }
                       });
@@ -382,8 +385,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   },
                 },
               });
-            })();
-          }
+            }
+          })();
         }
       } catch (err) {
         console.warn("[Polling OCR Status Error]", err);
@@ -395,7 +398,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     };
 
     setTimeout(runPoll, 3000);
-  }, [activeUploadFromScreen]);
+  }, []);
 
   const startUpload = useCallback(async (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
     if (selectedFiles.length === 0) return;
@@ -414,7 +417,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     setIsPillHidden(false);
     setCompletedBatch(null);
     if (fromScreen) {
-      setActiveUploadFromScreen(fromScreen);
+      activeUploadFromScreenRef.current = fromScreen;
     }
 
     try {
@@ -494,7 +497,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
   const startBackgroundOcr = useCallback((jobIds: string[], filesInfo: any[], fromScreen?: string) => {
     if (fromScreen) {
-      setActiveUploadFromScreen(fromScreen);
+      activeUploadFromScreenRef.current = fromScreen;
     }
     const docs = jobIds.map((jobId) => {
       const file = filesInfo?.find((f) => f.jobId === jobId);

@@ -42,10 +42,22 @@ export const DocumentProcessingScreen = () => {
   const { isDark } = useAppTheme();
   const { userId } = useAuth();
   const bottomPadding = useBottomBarPadding(20);
-  const { startBackgroundOcr } = useDocumentUpload();
+  const { startBackgroundOcr, uploadingDocs } = useDocumentUpload();
   const isFocused = useIsFocused();
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
+  const [hasMovedToBackground, setHasMovedToBackground] = useState(false);
+
+  useEffect(() => {
+    if (jobIds && jobIds.length > 0 && uploadingDocs && uploadingDocs.length > 0) {
+      const alreadyInBackground = jobIds.some((id) =>
+        uploadingDocs.some((d) => d.id === id)
+      );
+      if (alreadyInBackground) {
+        setHasMovedToBackground(true);
+      }
+    }
+  }, [jobIds, uploadingDocs]);
 
   const {
     jobList,
@@ -68,6 +80,13 @@ export const DocumentProcessingScreen = () => {
         index: 0,
         routes: [{ name: "Home" as any }],
       });
+    }
+  };
+
+  const handleMoveToBackground = () => {
+    if (!isAllTerminal) {
+      startBackgroundOcr(jobIds, filesInfo);
+      setHasMovedToBackground(true);
     }
   };
 
@@ -227,9 +246,7 @@ export const DocumentProcessingScreen = () => {
                       {job.status === "COMPLETED"
                         ? "Extraction Ready — Tap to view"
                         : job.status === "FAILED"
-                          ? nonMedical
-                            ? "Rejected: Non-Medical Document"
-                            : job.error || "Processing failed"
+                          ? `Rejected: ${job.error || "Processing failed"}`
                           : job.currentStep || "Processing..."}
                     </JobStepText>
                   </HeaderInfo>
@@ -265,11 +282,11 @@ export const DocumentProcessingScreen = () => {
                   </AdSkipBanner>
                 )}
 
-                {/* Non-medical Rejection Error State Actions */}
-                {job.status === "FAILED" && nonMedical && (
+                {/* Rejection Error State Reason */}
+                {job.status === "FAILED" && (
                   <RejectionContainer>
-                    <RejectionReasonText>
-                      This file was detected as a non-medical record and could not be processed.
+                    <RejectionReasonText style={{ color: "#ef4444" }}>
+                      {job.error || "Processing failed"}
                     </RejectionReasonText>
                   </RejectionContainer>
                 )}
@@ -296,10 +313,24 @@ export const DocumentProcessingScreen = () => {
             </DoneBanner>
           )}
 
-          <BackgroundButton onPress={handleBackAction} activeOpacity={0.8}>
-            <Ionicons name="arrow-back-outline" size={16} color="white" style={{ marginRight: 8 }} />
-            <BackgroundButtonText>Move to Background</BackgroundButtonText>
-          </BackgroundButton>
+          {!isAllTerminal && (
+            hasMovedToBackground ? (
+              <InfoBoxContainer style={{ marginHorizontal: 20, marginTop: 15, marginBottom: 20 }}>
+                <Ionicons name="information-circle-outline" size={20} color="#4f46e5" style={{ marginRight: 8, marginTop: 1 }} />
+                <View style={{ flex: 1 }}>
+                  <InfoBoxTitle>Running in background</InfoBoxTitle>
+                  <InfoBoxText>
+                    You can safely navigate anywhere in the application. It will not affect the background document processing.
+                  </InfoBoxText>
+                </View>
+              </InfoBoxContainer>
+            ) : (
+              <BackgroundButton onPress={handleMoveToBackground} activeOpacity={0.8} style={{ marginBottom: 20 }}>
+                <Ionicons name="arrow-back-outline" size={16} color="white" style={{ marginRight: 8 }} />
+                <BackgroundButtonText>Move to Background</BackgroundButtonText>
+              </BackgroundButton>
+            )
+          )}
         </ScrollView>
       </ContentContainer>
 
@@ -790,4 +821,27 @@ const BackgroundButtonText = styled.Text`
   color: white;
   font-size: 15px;
   font-weight: 700;
+`;
+
+const InfoBoxContainer = styled.View`
+  flex-direction: row;
+  background-color: rgba(99, 102, 241, 0.08);
+  border-width: 1px;
+  border-color: rgba(99, 102, 241, 0.15);
+  border-radius: 12px;
+  padding: 14px;
+  align-items: flex-start;
+`;
+
+const InfoBoxTitle = styled.Text`
+  font-size: 14px;
+  font-weight: 700;
+  color: #4f46e5;
+  margin-bottom: 2px;
+`;
+
+const InfoBoxText = styled.Text`
+  font-size: 13px;
+  color: #4f46e5;
+  line-height: 18px;
 `;

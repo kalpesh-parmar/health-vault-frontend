@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import {
   MedicationFormFields,
@@ -130,7 +131,7 @@ export const EditMedicineFormWrapper = ({
           <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#475569"} />
         </TouchableOpacity>
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 350 }}>
+      <BottomSheetScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 350 }}>
         <MedicationFormFields formState={formState} isDark={isDark} theme={theme} preferredLang={preferredLang} />
         {localErrors.length > 0 && (
           <View style={{ marginTop: 8, marginBottom: 12 }}>
@@ -141,7 +142,7 @@ export const EditMedicineFormWrapper = ({
             ))}
           </View>
         )}
-      </ScrollView>
+      </BottomSheetScrollView>
       <TouchableOpacity
         onPress={handleSave}
         style={{

@@ -17,6 +17,7 @@ import { ExtractedMedicine } from "../../../types/medicationReview";
 import { AddOrEditMedication } from "../../../types";
 import { queryClient } from "../../../config/queryClient";
 import { useMedicationFormState, MedicationFormFields } from "../../shared/MedicationFormFields";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 
 interface MedicationExtractionWizardProps {
@@ -144,7 +145,7 @@ const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }:
             <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#475569"} />
           </TouchableOpacity>
         </ModalHeader>
-        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 450 }}>
+        <BottomSheetScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 450 }}>
           <MedicationFormFields formState={formState} isDark={isDark} theme={{}} preferredLang={preferredLang} />
           {localErrors.length > 0 && (
             <ErrorWrapper>
@@ -155,7 +156,7 @@ const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }:
               ))}
             </ErrorWrapper>
           )}
-        </ScrollView>
+        </BottomSheetScrollView>
         <SaveButton onPress={handleSave}>
           <SaveButtonText>Save Changes</SaveButtonText>
         </SaveButton>
@@ -409,7 +410,11 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
         ...prev,
         step: "completed",
       }));
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.isDuplicate) {
+        setIsSubmitting(false);
+        return;
+      }
       console.error("Failed to confirm and add medicines:", err);
       Alert.alert("Error", "Failed to save medications. Please try again.");
     } finally {
