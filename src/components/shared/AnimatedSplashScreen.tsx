@@ -310,7 +310,7 @@ export default function AnimatedSplashScreen({
         <AnimatedView style={[styles.vaultCenterWrapper, vaultHeroStyle]}>
           
           {/* Light glow behind shield */}
-          <AnimatedView style={[styles.shieldGlowBack, shieldGlowStyle]} />
+          {/* <AnimatedView style={[styles.shieldGlowBack, shieldGlowStyle]} /> */}
 
           {/* SVG representation of the premium vault structure (matching reference composition exactly) */}
           <Svg width={250} height={250} viewBox="0 0 250 250">

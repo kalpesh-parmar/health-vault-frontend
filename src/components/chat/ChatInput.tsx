@@ -1,11 +1,57 @@
 import React, { useEffect, useState } from "react";
-import { View, TextInput, TouchableOpacity, StyleSheet, Platform, Keyboard, KeyboardEvent } from "react-native";
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Keyboard,
+  KeyboardEvent,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withRepeat, withTiming } from "react-native-reanimated";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
+
+type SpeechRecognitionResult = {
+  results?: Array<{ transcript: string }>;
+};
+
+type SpeechRecognitionError = {
+  error?: string;
+  message?: string;
+};
+
+type SpeechRecognitionSubscription = {
+  remove: () => void;
+};
+
+type SpeechRecognitionModuleShape = {
+  addListener: (
+    eventName: string,
+    listener: (event: any) => void,
+  ) => SpeechRecognitionSubscription;
+  stop: () => void;
+  start: (options: { lang: string }) => void;
+  requestPermissionsAsync: () => Promise<unknown>;
+};
+
+let ExpoSpeechRecognitionModule: SpeechRecognitionModuleShape | null = null;
+
+try {
+  const speechRecognition = require("expo-speech-recognition");
+  ExpoSpeechRecognitionModule =
+    speechRecognition.ExpoSpeechRecognitionModule ?? null;
+} catch (error) {
+  ExpoSpeechRecognitionModule = null;
+}
 
 interface ChatInputProps {
   value: string;
@@ -19,8 +65,11 @@ interface ChatInputProps {
   onAttachPress?: () => void;
 }
 
-export let activeFormDictationCallback: ((transcript: string) => void) | null = null;
-export const setActiveFormDictationCallback = (cb: ((transcript: string) => void) | null) => {
+export let activeFormDictationCallback: ((transcript: string) => void) | null =
+  null;
+export const setActiveFormDictationCallback = (
+  cb: ((transcript: string) => void) | null,
+) => {
   activeFormDictationCallback = cb;
 };
 
@@ -40,33 +89,62 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const insets = useSafeAreaInsets();
   const bottomPadding = useBottomBarPadding(0, 5);
   const sendScale = useSharedValue(0.0);
-  const [keyboardPadding, setKeyboardPadding] = useState(0);
+  // const [keyboardPadding, setKeyboardPadding] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const pulseScale = useSharedValue(1);
 
-  useSpeechRecognitionEvent("start", () => setIsListening(true));
-  useSpeechRecognitionEvent("end", () => setIsListening(false));
-  useSpeechRecognitionEvent("error", (e) => {
-    console.log("Voice Error:", e.error, e.message);
-    setIsListening(false);
-  });
-  useSpeechRecognitionEvent("result", (e) => {
-    if (e.results && e.results.length > 0) {
-      if (mode === "onboarding" && activeFormDictationCallback) {
-        activeFormDictationCallback(e.results[0].transcript);
-      } else {
-        console.log("Transcript :- ", e.results[0].transcript);
-        onChangeText(e.results[0].transcript);
-      }
+  useEffect(() => {
+    if (!ExpoSpeechRecognitionModule) {
+      return;
     }
-  });
+
+    const startSubscription = ExpoSpeechRecognitionModule.addListener(
+      "start",
+      () => {
+        setIsListening(true);
+      },
+    );
+    const endSubscription = ExpoSpeechRecognitionModule.addListener(
+      "end",
+      () => {
+        setIsListening(false);
+      },
+    );
+    const errorSubscription = ExpoSpeechRecognitionModule.addListener(
+      "error",
+      (e: SpeechRecognitionError) => {
+        console.log("Voice Error:", e.error, e.message);
+        setIsListening(false);
+      },
+    );
+    const resultSubscription = ExpoSpeechRecognitionModule.addListener(
+      "result",
+      (e: SpeechRecognitionResult) => {
+        if (e.results && e.results.length > 0) {
+          if (mode === "onboarding" && activeFormDictationCallback) {
+            activeFormDictationCallback(e.results[0].transcript);
+          } else {
+            console.log("Transcript :- ", e.results[0].transcript);
+            onChangeText(e.results[0].transcript);
+          }
+        }
+      },
+    );
+
+    return () => {
+      startSubscription.remove();
+      endSubscription.remove();
+      errorSubscription.remove();
+      resultSubscription.remove();
+    };
+  }, [mode, onChangeText]);
 
   useEffect(() => {
     if (isListening) {
       pulseScale.value = withRepeat(
         withTiming(1.2, { duration: 600 }),
         -1,
-        true
+        true,
       );
     } else {
       pulseScale.value = withTiming(1, { duration: 300 });
@@ -74,6 +152,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [isListening]);
 
   const toggleListening = async () => {
+    if (!ExpoSpeechRecognitionModule) {
+      console.warn(
+        "Voice input is unavailable in this build because expo-speech-recognition is not installed in the native app.",
+      );
+      return;
+    }
+
     if (isListening) {
       ExpoSpeechRecognitionModule.stop();
     } else {
@@ -84,7 +169,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         else if (pl === "gujarati" || pl === "gu") locale = "gu-IN";
         else if (pl === "marathi" || pl === "mr") locale = "mr-IN";
         else if (pl === "tamil" || pl === "ta") locale = "ta-IN";
-        
+
         await ExpoSpeechRecognitionModule.requestPermissionsAsync();
         ExpoSpeechRecognitionModule.start({ lang: locale });
       } catch (e) {
@@ -93,21 +178,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  useEffect(() => {
-    const showSubscription = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height + insets.bottom + 5)
-    );
-    const hideSubscription = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardPadding(0)
-    );
+  // useEffect(() => {
+  //   const showSubscription = Keyboard.addListener(
+  //     Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+  //     (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height - bottomPadding)
+  //   );
+  //   const hideSubscription = Keyboard.addListener(
+  //     Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+  //     () => setKeyboardPadding(0)
+  //   );
 
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
+  //   return () => {
+  //     showSubscription.remove();
+  //     hideSubscription.remove();
+  //   };
+  // }, []);
 
   useEffect(() => {
     sendScale.value = withSpring(value.trim() ? 1.0 : 0.0, {
@@ -127,7 +212,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const cardBgColor = isDark ? "#1e293b" : "#ffffff";
   const inputTextColor = isDark ? "#ffffff" : "#1e293b";
-  const placeholderColor = isDark ? "rgba(255,255,255,0.4)" : "rgba(30,41,59,0.4)";
+  const placeholderColor = isDark
+    ? "rgba(255,255,255,0.4)"
+    : "rgba(30,41,59,0.4)";
   const themePrimaryColor = "#5B4BFF";
 
   const pulseStyle = useAnimatedStyle(() => ({
@@ -142,17 +229,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           backgroundColor: cardBgColor,
           borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
           borderWidth: isDark ? 1 : 0,
-          marginBottom: keyboardPadding > 0 ? keyboardPadding : bottomPadding,
+          marginBottom: bottomPadding,
         },
-      ]}
-    >
+      ]}>
       {/* Attachment Button */}
       {onAttachPress && (
         <TouchableOpacity
           onPress={onAttachPress}
           style={styles.iconButton}
-          activeOpacity={0.7}
-        >
+          activeOpacity={0.7}>
           <Ionicons
             name="attach"
             size={24}
@@ -165,7 +250,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <TextInput
         style={[styles.textInput, { color: inputTextColor }]}
         placeholder={isListening ? "Listening..." : "Message Dr. Health..."}
-        placeholderTextColor={isListening ? themePrimaryColor : placeholderColor}
+        placeholderTextColor={
+          isListening ? themePrimaryColor : placeholderColor
+        }
         value={value}
         onChangeText={onChangeText}
         onFocus={() => {
@@ -185,13 +272,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {sendScale.value === 0 && !value.trim() && (
         <AnimatedTouch
           onPress={toggleListening}
-          style={[styles.iconButton, pulseStyle, { backgroundColor: isListening ? themePrimaryColor : "transparent" }]}
-          activeOpacity={0.7}
-        >
+          disabled={!ExpoSpeechRecognitionModule}
+          style={[
+            styles.iconButton,
+            pulseStyle,
+            {
+              backgroundColor: isListening ? themePrimaryColor : "transparent",
+            },
+          ]}
+          activeOpacity={0.7}>
           <Ionicons
             name="mic"
             size={22}
-            color={isListening ? "#fff" : (isDark ? "#94a3b8" : "#64748b")}
+            color={
+              !ExpoSpeechRecognitionModule
+                ? "#cbd5e1"
+                : isListening
+                  ? "#fff"
+                  : isDark
+                    ? "#94a3b8"
+                    : "#64748b"
+            }
           />
         </AnimatedTouch>
       )}
@@ -201,14 +302,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         disabled={!value.trim() || isSending}
         onPress={onSend}
         style={[styles.sendButtonContainer, sendStyle]}
-        activeOpacity={0.8}
-      >
+        activeOpacity={0.8}>
         <LinearGradient
           colors={["#5B4BFF", "#7C6CFF"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.sendGradient}
-        >
+          style={styles.sendGradient}>
           <Ionicons name="arrow-up" size={22} color="#ffffff" />
         </LinearGradient>
       </AnimatedTouch>

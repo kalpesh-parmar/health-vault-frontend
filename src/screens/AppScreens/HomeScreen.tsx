@@ -636,7 +636,7 @@ const HomeScreen = () => {
 
           <BottomSheetScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: bottomPadding }}
+            contentContainerStyle={{ paddingBottom: bottomPadding + 60 }}
           >
             {uploadingDocs.map((doc) => {
               const isCompleted = doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success";

@@ -71,6 +71,7 @@ import {
   HistoricalChips,
 } from "../../components/chat/widgets/HistoricalChips";
 import TypingIndicator from "../../components/chat/TypingIndicator";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 enum ChatMode {
   GENERAL_HEALTH = "GENERAL_HEALTH",
@@ -1707,7 +1708,7 @@ const AIChatScreen = ({ route }: any) => {
     <Container
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
     >
-      <StatusBar barStyle={"dark-content"} />
+        <StatusBar barStyle={"dark-content"} />
       {/* Sticky Premium AI Header */}
       <ChatHeader
         onBack={() => navigation.navigate("Home")}
@@ -2233,7 +2234,7 @@ const AIChatScreen = ({ route }: any) => {
             <ReadOnlyText>{t("onboardingArchive")}</ReadOnlyText>
           </ReadOnlyBanner>
         ) : (
-          <>
+          <SafeAreaView edges={["bottom"]}>
             {/* Suggested Chips above input */}
             <SuggestedQuestionChip
               questions={suggestedQuestions}
@@ -2254,7 +2255,7 @@ const AIChatScreen = ({ route }: any) => {
                 Keyboard.dismiss();
               }}
             />
-          </>
+          </SafeAreaView>
         )}
       </View>
 

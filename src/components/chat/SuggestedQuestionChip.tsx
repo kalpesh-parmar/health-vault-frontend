@@ -85,7 +85,7 @@ export const SuggestedQuestionChip: React.FC<SuggestedQuestionChipProps> = ({
 const styles = StyleSheet.create({
   scrollContainer: {
     width: "100%",
-    marginVertical: 4,
+    marginVertical: 8,
   },
   scrollContent: {
     paddingHorizontal: 16,

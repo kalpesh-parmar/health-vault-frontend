@@ -9,7 +9,7 @@ export default ({ config }) => ({
   ...config,
   ios: {
     ...config.ios,
-    bundleIdentifier: "com.anonymous.DocumentsVaultApp",
+    bundleIdentifier: "com.healthvault.trapp",
   },
   extra: {
     ...config.extra,

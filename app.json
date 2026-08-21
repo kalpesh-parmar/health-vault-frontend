@@ -16,7 +16,10 @@
       "backgroundColor": "#030a16"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.healthvault.trapp",
+      "usesAppleSignIn": true,
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "extra": {
       "eas": {
@@ -24,7 +27,7 @@
       }
     },
     "android": {
-      "package": "com.anonymous.DocumentsVaultApp",
+      "package": "com.healthvault.trapp",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/AppIconForeground.png",
@@ -37,6 +40,7 @@
       "favicon": "./assets/AppIconForeground.png"
     },
     "plugins": [
+      "expo-apple-authentication",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/messaging",
@@ -60,6 +64,10 @@
       [
         "expo-build-properties",
         {
+          "ios": {
+            "useFrameworks": "static",
+            "buildReactNativeFromSource": true
+          },
           "android": {
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,

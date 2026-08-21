@@ -13,13 +13,12 @@ import {
   Text,
   TouchableOpacity,
   View,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Toast from "react-native-toast-message";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../context/ContextAPI";
@@ -1779,7 +1778,7 @@ export default function OnboardingScreen() {
         </View>
 
         <View
-          style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
+          style={[styles.keyboardContainer]}
         >
           {/* Messages List */}
           <View style={styles.listWrapper}>
