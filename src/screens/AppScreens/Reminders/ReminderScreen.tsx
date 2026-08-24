@@ -172,12 +172,19 @@ const ReminderScreen = () => {
   const filterSheetRef = useRef<BottomSheetModal>(null);
 
   const filteredReminders = useMemo(() => {
-    return infiniteData?.pages.flatMap((page: any) => {
+    const rawList = infiniteData?.pages.flatMap((page: any) => {
       if (Array.isArray(page?.data)) return page.data;
       if (Array.isArray(page?.data?.data)) return page.data.data;
       if (Array.isArray(page?.data?.occurrences)) return page.data.occurrences;
       return [];
     }) || [];
+    const seen = new Set<string>();
+    return rawList.filter((item: any) => {
+      if (!item || !item.id) return true;
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
   }, [infiniteData]);
 
   const filteredData = useMemo(() => {
@@ -336,7 +343,7 @@ const ReminderScreen = () => {
 
       <FlatList
         data={filteredData}
-        keyExtractor={(item, index) => `${activeTab}-${item.id || index.toString()}`}
+        keyExtractor={(item, index) => `${activeTab}-${item.id || index}-${index}`}
         keyboardShouldPersistTaps="handled"
         renderItem={renderReminderCard}
         showsVerticalScrollIndicator={false}

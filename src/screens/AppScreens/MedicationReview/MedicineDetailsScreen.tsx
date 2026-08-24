@@ -24,6 +24,18 @@ type DetailsRouteProp = RouteProp<
   "MedicineDetails"
 >;
 
+const getTodayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export const MedicineDetailsScreen: React.FC = () => {
   const route = useRoute<DetailsRouteProp>();
   const navigation = useAppNavigation();
@@ -62,7 +74,7 @@ export const MedicineDetailsScreen: React.FC = () => {
     refill_alert: originalMedicine.refillAlert !== undefined ? originalMedicine.refillAlert : originalMedicine.refillAlertEnabled,
     total_quantity: originalMedicine.totalQuantity,
     foodContext: originalMedicine.foodFrequency || originalMedicine.timing,
-    startDate: originalMedicine.startDate,
+    startDate: originalMedicine.startDate && originalMedicine.startDate !== "None" ? originalMedicine.startDate : getTodayDateString(),
     medicationSchedule: originalMedicine.medicationSchedule,
   };
 
@@ -154,6 +166,7 @@ export const MedicineDetailsScreen: React.FC = () => {
       dosageDetails: formType === "TABLET" || formType === "CAPSULE" 
         ? { count: parseFloat(String(formCount)) || 0 } 
         : { value: parseFloat(String(formVal)) || 0, unit: formUnit },
+      startDate: startDate ? (startDate instanceof Date ? formatLocalDate(startDate) : startDate) : getTodayDateString(),
     };
 
     updateMedicineDraft(updatedMed);

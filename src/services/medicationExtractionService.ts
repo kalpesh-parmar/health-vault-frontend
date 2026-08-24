@@ -3,7 +3,6 @@ import { mapApiDocumentToProcessedDocument } from "../utils/medicationMappers";
 import { ProcessedDocument, ExtractedMedicine } from "../types/medicationReview";
 
 import { addMedication } from "./medicationservice";
-import { createMedicationReminder } from "./reminderService";
 import { queryClient } from "../config/queryClient";
 import { format } from "date-fns";
 import { AddOrEditMedication } from "../types";
@@ -35,6 +34,7 @@ const getMockDocumentResult = (jobId: string, fileName: string): ProcessedDocume
         reminderEnabled: true,
         reminderTime: "08:00 AM",
         medicationSchedule: ["08:00", "14:00", "20:00"],
+        startDate: format(new Date(), "yyyy-MM-dd"),
       },
       {
         id: `${jobId}-med-1`,
@@ -54,6 +54,7 @@ const getMockDocumentResult = (jobId: string, fileName: string): ProcessedDocume
         reminderEnabled: true,
         reminderTime: "08:00 AM",
         medicationSchedule: ["08:00", "20:00"],
+        startDate: format(new Date(), "yyyy-MM-dd"),
       },
     ];
   } else if (isBloodTest) {
@@ -78,6 +79,7 @@ const getMockDocumentResult = (jobId: string, fileName: string): ProcessedDocume
         reminderEnabled: true,
         reminderTime: "09:00 AM",
         medicationSchedule: ["08:00", "20:00"],
+        startDate: format(new Date(), "yyyy-MM-dd"),
       },
     ];
   }
@@ -118,8 +120,9 @@ export const MedicationExtractionService = {
     return results;
   },
 
-  confirmAndSaveMedicines: async (medicines: ExtractedMedicine[]): Promise<void> => {
+  confirmAndSaveMedicines: async (medicines: ExtractedMedicine[]): Promise<string[]> => {
     console.log("[MedicationExtractionService] Confirming & saving medicines in bulk:", medicines);
+    const duplicateIds: string[] = [];
 
     // Run creation for each medicine sequentially to avoid concurrent database conflicts
     for (const med of medicines) {
@@ -170,19 +173,15 @@ export const MedicationExtractionService = {
           medicationSchedule: scheduleObj,
           totalQuantity: med.totalQuantity || 10,
           notes: med.notes || "",
+          resolution: med.resolution,
+          replaceMedicationId: med.replaceMedicationId,
         };
 
-        const responseData = await addMedication(payload);
-        if (responseData?.data?.id) {
-          try {
-            await createMedicationReminder({
-              medicationId: responseData.data.id,
-            });
-          } catch (reminderErr) {
-            console.warn(`[MedicationExtractionService] Failed to create reminder for medicine ${med.name}:`, reminderErr);
-          }
+        await addMedication(payload);
+      } catch (medErr: any) {
+        if (medErr?.isDuplicate) {
+          duplicateIds.push(med.id);
         }
-      } catch (medErr) {
         console.error(`[MedicationExtractionService] Failed to add medicine ${med.name}:`, medErr);
       }
     }
@@ -194,5 +193,7 @@ export const MedicationExtractionService = {
     queryClient.invalidateQueries({ queryKey: ["reminders"] });
     queryClient.invalidateQueries({ queryKey: ["allReminders"] });
     queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+
+    return duplicateIds;
   },
 };

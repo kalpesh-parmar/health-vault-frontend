@@ -1,5 +1,10 @@
 import { ProcessedDocument, ExtractedMedicine } from "../types/medicationReview";
 
+const getTodayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 export const mapApiMedicineToExtractedMedicine = (
   apiMed: any,
   documentId: string,
@@ -117,6 +122,7 @@ export const mapApiMedicineToExtractedMedicine = (
     notes: apiMed.instructions || apiMed.notes || "",
     confidence,
     selected: confidence >= 0.8,
+    startDate: (apiMed.startDate && apiMed.startDate !== "None") ? apiMed.startDate : getTodayDateString(),
   };
 };
 

@@ -3,10 +3,10 @@ import styled from "styled-components/native";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
-import { BackHandler } from "react-native";
+import { BackHandler, View } from "react-native";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
-const BottomSheet = forwardRef(({ children, onChange }: any, ref: any) => {
+const BottomSheet = forwardRef(({ children, onChange, snapPoints }: any, ref: any) => {
   const { theme } = useAppTheme();
   const [sheetIndex, setSheetIndex] = useState(-1);
   const bottomPadding = useBottomBarPadding(15, 0);
@@ -41,6 +41,8 @@ const BottomSheet = forwardRef(({ children, onChange }: any, ref: any) => {
     return () => subscription.remove();
   }, [sheetIndex]);
 
+  const ContentContainer: any = snapPoints ? View : BottomSheetView;
+
   return (
     <BottomSheetModal
       ref={ref}
@@ -53,7 +55,8 @@ const BottomSheet = forwardRef(({ children, onChange }: any, ref: any) => {
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
-      enableDynamicSizing={true}
+      enableDynamicSizing={snapPoints ? false : true}
+      snapPoints={snapPoints}
       backgroundStyle={{
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
@@ -68,7 +71,7 @@ const BottomSheet = forwardRef(({ children, onChange }: any, ref: any) => {
       }}
       
     >
-      <BottomSheetView style={{ paddingBottom: bottomPadding }}>
+      <ContentContainer style={snapPoints ? { flex: 1, paddingBottom: bottomPadding } : { paddingBottom: bottomPadding }}>
         <CloseIconWrapper>
           <CloseIcon onPress={() => ref.current?.dismiss()}>
             <Ionicons name="close" size={24} color={theme.colors.background} />
@@ -76,7 +79,7 @@ const BottomSheet = forwardRef(({ children, onChange }: any, ref: any) => {
         </CloseIconWrapper>
 
         {children}
-      </BottomSheetView>
+      </ContentContainer>
     </BottomSheetModal>
   );
 });

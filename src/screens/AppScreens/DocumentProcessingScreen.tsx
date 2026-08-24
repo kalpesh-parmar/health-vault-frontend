@@ -2,8 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   ScrollView,
   StatusBar,
-  TouchableOpacity,
-  Text,
   View,
   ActivityIndicator,
   Modal,
@@ -14,15 +12,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRoute, RouteProp, useIsFocused } from "@react-navigation/native";
-import Toast from "react-native-toast-message";
 
 import { useAppNavigation } from "../../types/navigation";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/ContextAPI";
 import { queryClient } from "../../config/queryClient";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
-import { useOcrJobPolling, JobState } from "../../hooks/useOcrJobPolling";
-import { getOcrJobResult, OcrJobResult } from "../../services/documentService";
+import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
+import { OcrJobResult } from "../../services/documentService";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
 
 type DocumentProcessingRouteProp = RouteProp<
@@ -142,30 +139,6 @@ export const DocumentProcessingScreen = () => {
     return map;
   }, [filesInfo]);
 
-  const handleCardPress = async (job: JobState) => {
-    if (job.status !== "COMPLETED") return;
-
-    setIsLoadingResult(job.jobId);
-    try {
-      const response = await getOcrJobResult(job.jobId);
-      const resData = response?.data || response;
-      const fileName = filesMap[job.jobId]?.fileName || "Document Result";
-      setSelectedResult({
-        fileName,
-        result: resData,
-      });
-    } catch (error: any) {
-      console.error("[ProcessingScreen] Failed to fetch job result:", error);
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: error.message || "Failed to load document result details.",
-      });
-    } finally {
-      setIsLoadingResult(null);
-    }
-  };
-
   const isNonMedicalError = (errorStr?: string | null) => {
     if (!errorStr) return false;
     const lower = errorStr.toLowerCase();
@@ -227,7 +200,6 @@ export const DocumentProcessingScreen = () => {
                 status={job.status}
                 nonMedical={nonMedical}
                 activeOpacity={job.status === "COMPLETED" ? 0.8 : 1}
-                onPress={() => handleCardPress(job)}
               >
                 <JobCardHeader>
                   <FileIconBadge status={job.status} nonMedical={nonMedical}>
@@ -493,7 +465,7 @@ const SectionSubtitle = styled.Text`
   margin-bottom: 16px;
 `;
 
-const JobCard = styled.TouchableOpacity<{ status: string; nonMedical: boolean }>`
+const JobCard = styled.View<{ status: string; nonMedical: boolean }>`
   background-color: #ffffff;
   border-radius: 16px;
   padding: 16px;

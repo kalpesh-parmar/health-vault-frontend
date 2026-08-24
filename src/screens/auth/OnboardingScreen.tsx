@@ -1986,6 +1986,7 @@ export default function OnboardingScreen() {
                   borderWidth: 1,
                   padding: 10,
                   borderRadius: 14,
+                  overflow: "hidden",
                   position: "absolute",
                   left: 12,
                   right: 12,
@@ -1998,7 +1999,7 @@ export default function OnboardingScreen() {
                 },
                 ["uploading", "processing", "validating", "queued", "success"].includes(
                   uploadState,
-                ) && { top: 12 }
+                ) && { top: 24 }
               ]}
             >
               {/* COMPACT VIEW (Row layout) */}
@@ -2381,8 +2382,8 @@ export default function OnboardingScreen() {
                     right: 0,
                     height: 3,
                     backgroundColor: isDark ? "#334155" : "#e2e8f0",
-                    borderBottomLeftRadius: 14,
-                    borderBottomRightRadius: 14,
+                    borderBottomLeftRadius: 20,
+                    borderBottomRightRadius: 20,
                     overflow: "hidden",
                   }}
                 >

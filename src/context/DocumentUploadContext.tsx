@@ -63,6 +63,8 @@ interface DocumentUploadContextType {
   chatWizardState: ChatWizardState;
   setChatWizardState: React.Dispatch<React.SetStateAction<ChatWizardState>>;
   resetChatWizard: () => void;
+  processingError: { type: "failed" | "cancelled" | "interrupted"; message: string } | null;
+  clearProcessingError: () => void;
 }
 
 const DocumentUploadContext = createContext<DocumentUploadContextType | undefined>(undefined);
@@ -171,6 +173,15 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
   const clearCompletedBatch = useCallback(() => {
     setCompletedBatch(null);
+  }, []);
+
+  const [processingError, setProcessingError] = useState<{
+    type: "failed" | "cancelled" | "interrupted";
+    message: string;
+  } | null>(null);
+
+  const clearProcessingError = useCallback(() => {
+    setProcessingError(null);
   }, []);
 
   const isPollingRef = useRef(false);
@@ -323,6 +334,13 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
               (d) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
             ).length;
 
+            if (completedCount === 0 && failedCount > 0) {
+              setProcessingError({
+                type: "failed",
+                message: "Document processing failed. Please check the document format.",
+              });
+            }
+
             await Promise.all(
               computedNext.map(async (doc) => {
                 if (doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success") {
@@ -403,6 +421,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const startUpload = useCallback(async (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
     if (selectedFiles.length === 0) return;
     setIsUploading(true);
+    setProcessingError(null);
     
     // Populate uploadingDocs immediately for upload progress tracking
     const initialUploading = selectedFiles.map((file) => ({
@@ -437,6 +456,21 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       if (!uploadedList || uploadedList.length === 0) {
         throw new Error("No documents returned from server.");
       }
+
+      // Update uploadingDocs state with actual jobIds from the backend response
+      setUploadingDocs(
+        initialUploading.map((uDoc, index) => {
+          const matchedItem = uploadedList[index];
+          if (matchedItem && matchedItem.jobId) {
+            return {
+              ...uDoc,
+              id: matchedItem.jobId,
+              status: "QUEUED",
+            };
+          }
+          return uDoc;
+        })
+      );
 
       // 2. Start OCR Jobs in batch
       const jobIds: string[] = uploadedList.map((doc: any) => doc.jobId).filter(Boolean);
@@ -490,12 +524,19 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   }, [selectedFiles, clearSelectedFiles]);
 
   const cancelUpload = useCallback(() => {
+    if (uploadingDocs.length > 0) {
+      setProcessingError({
+        type: "cancelled",
+        message: "Document processing was cancelled or interrupted.",
+      });
+    }
     isPollingRef.current = false;
     setIsUploading(false);
     setUploadingDocs([]);
-  }, []);
+  }, [uploadingDocs]);
 
   const startBackgroundOcr = useCallback((jobIds: string[], filesInfo: any[], fromScreen?: string) => {
+    setProcessingError(null);
     if (fromScreen) {
       activeUploadFromScreenRef.current = fromScreen;
     }
@@ -583,6 +624,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         chatWizardState,
         setChatWizardState,
         resetChatWizard,
+        processingError,
+        clearProcessingError,
       }}
     >
       {children}

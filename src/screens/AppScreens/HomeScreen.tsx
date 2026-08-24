@@ -72,6 +72,8 @@ const HomeScreen = () => {
     uploadingDocs,
     completedBatch,
     clearCompletedBatch,
+    processingError,
+    clearProcessingError,
   } = useDocumentUpload();
 
   const [isBannerDismissed, setIsBannerDismissed] = React.useState(false);
@@ -423,6 +425,44 @@ const HomeScreen = () => {
               </SheetProgressPctText>
             </SheetProgressRow>
           </ProcessingCard>
+        )}
+
+        {/* Processing Error or Interrupted Warning Banner */}
+        {processingError !== null && (
+          <AnalysisCompleteBanner
+            style={{
+              marginHorizontal: 24,
+              marginTop: 15,
+              backgroundColor: isDark ? "#7f1d1d20" : "#fffbeb",
+              borderColor: isDark ? "#f8717150" : "#fef3c7",
+              borderWidth: 1,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "flex-start", flex: 1 }}>
+              <Ionicons
+                name="alert-circle"
+                size={22}
+                color={isDark ? "#f87171" : "#d97706"}
+                style={{ marginRight: 10, marginTop: 2 }}
+              />
+              <View style={{ flex: 1 }}>
+                <AnalysisCompleteTitle style={{ color: isDark ? "#f87171" : "#b45309" }}>
+                  Processing Failed or Interrupted
+                </AnalysisCompleteTitle>
+                <AnalysisCompleteSub style={{ color: isDark ? "#cbd5e1" : "#78350f", marginTop: 4, marginLeft: 0 }}>
+                  {processingError.type === "cancelled"
+                    ? "Document processing was stopped or interrupted."
+                    : "The document analysis failed. Please ensure the document is a valid medical report."}
+                </AnalysisCompleteSub>
+              </View>
+            </View>
+            <CloseBannerBtn
+              onPress={clearProcessingError}
+              style={{ alignSelf: "flex-start", padding: 2 }}
+            >
+              <Ionicons name="close" size={20} color={isDark ? "#f87171" : "#b45309"} />
+            </CloseBannerBtn>
+          </AnalysisCompleteBanner>
         )}
 
         {/* Analysis Complete Banner */}

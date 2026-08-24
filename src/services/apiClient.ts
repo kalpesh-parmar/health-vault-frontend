@@ -409,20 +409,19 @@ apiClient.interceptors.response.use(
     );
     const isDuplicate = isMedicationUrl && (
       error.response?.status === 409 ||
+      data?.errorCode === "CONFLICT" ||
       data?.errorCode === "MEDICINE_ALREADY_EXISTS" ||
       (typeof message === "string" && (
         message.toLowerCase().includes("already exists") ||
-        message.toLowerCase().includes("medicine already exists")
+        message.toLowerCase().includes("medicine already exists") ||
+        message.toLowerCase().includes("similar medication already exists")
       ))
     );
 
     if (isDuplicate) {
-      Toast.show({
-        type: "error",
-        text1: "Medicine already exists in your profile.",
-      });
-      const dupError = new Error("Medicine already exists in your profile.");
+      const dupError = new Error(message || "Medicine already exists in your profile.");
       (dupError as any).isDuplicate = true;
+      (dupError as any).responseData = data;
       return Promise.reject(dupError);
     }
 

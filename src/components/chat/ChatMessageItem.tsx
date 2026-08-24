@@ -112,6 +112,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   navigation,
   setChatWizardState,
 }) => {
+  const [clientMedId, setClientMedId] = React.useState<string | null>(null);
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
@@ -259,6 +260,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       item.action === "ADD_MEDICINE" ||
       item.action === "EDIT_MEDICINE"
     ) {
+      const isLatest = isLatestActiveMessage(item.id);
       const med = item.medicine || {};
       return renderAssistantPrompt(
         <AddMedicineCard
@@ -268,10 +270,16 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
-          currentClientMedId={null}
-          setCurrentClientMedId={() => {}}
-          onSave={() => {}}
-          readOnly={true}
+          currentClientMedId={clientMedId}
+          setCurrentClientMedId={setClientMedId}
+          onSave={(updatedMed) => {
+            handleGenericOptionPress({
+              label: `Add medicine: ${updatedMed.name}`,
+              value: { medicine: updatedMed },
+              actionType: "ADD_MEDICINE",
+            });
+          }}
+          readOnly={!isLatest}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,

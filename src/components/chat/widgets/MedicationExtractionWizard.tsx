@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import Toast from "react-native-toast-message";
 import {
   View,
   Text,
@@ -34,6 +35,18 @@ interface EditMedicineModalProps {
   onSave: (updated: ExtractedMedicine) => void;
 }
 
+const getTodayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }: EditMedicineModalProps) => {
   if (!medicine) return null;
 
@@ -53,7 +66,7 @@ const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }:
       refill_alert: medicine.refillAlert || false,
       total_quantity: medicine.totalQuantity || 10,
       foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
-      startDate: medicine.startDate || new Date().toISOString().split("T")[0],
+      startDate: medicine.startDate && medicine.startDate !== "None" ? medicine.startDate : getTodayDateString(),
       medicationSchedule: medicine.medicationSchedule || ["08:00"],
     };
   }, [medicine]);
@@ -131,7 +144,7 @@ const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }:
       refillAlert: formRefill,
       refillAlertEnabled: formRefill,
       medicationSchedule: selectedSlots,
-      startDate: startDate instanceof Date ? startDate.toISOString().split("T")[0] : startDate || new Date().toISOString().split("T")[0],
+      startDate: startDate instanceof Date ? formatLocalDate(startDate) : (startDate && startDate !== "None" ? startDate : getTodayDateString()),
     });
   };
 
@@ -170,7 +183,7 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
   isDark,
   theme,
 }) => {
-  const { chatWizardState, setChatWizardState, resetChatWizard } = useDocumentUpload();
+  const { chatWizardState, setChatWizardState, resetChatWizard, clearCompletedBatch } = useDocumentUpload();
 
   const t = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
@@ -302,10 +315,22 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
 
       const currentConflict = prev.conflicts[prev.currentConflictIndex];
 
+      if (resolution === "keep") {
+        Toast.show({
+          type: "info",
+          text1: `${currentConflict.extractedMedicine.name} already exists in your profile.`,
+          text2: "Incoming duplicate removed.",
+        });
+      }
+
       if (resolution === "replace") {
         nextReplaceList.push({
           existingId: currentConflict.existingMedication.id!,
-          extractedMedicine: currentConflict.extractedMedicine,
+          extractedMedicine: {
+            ...currentConflict.extractedMedicine,
+            resolution: "REPLACE",
+            replaceMedicationId: currentConflict.existingMedication.id,
+          },
         });
       } else if (resolution === "merge" && mergedPayload) {
         nextMergeList.push({
@@ -367,11 +392,13 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
       dosePerIntake: parseFloat(med.dosage || "1") || 1,
       frequency: freqLabel,
       foodFrequency: normalizedFoodFreq,
-      startDate: med.startDate ? med.startDate : new Date().toISOString().split("T")[0],
+      startDate: med.startDate && med.startDate !== "None" ? med.startDate : getTodayDateString(),
       ongoing: true,
       medicationSchedule: scheduleObj,
       totalQuantity: med.totalQuantity || 10,
       notes: med.notes || "",
+      resolution: med.resolution,
+      replaceMedicationId: med.replaceMedicationId,
     };
   };
 
@@ -380,13 +407,18 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
     try {
       // 1. Add all new non-conflict medicines
       const newMeds = chatWizardState.resolvedMedicines;
+      let duplicateIds: string[] = [];
       if (newMeds.length > 0) {
-        await MedicationReviewService.submitMedications(newMeds);
+        duplicateIds = await MedicationReviewService.submitMedications(newMeds);
       }
 
       // 2. Perform Replace updates
       for (const replaceItem of chatWizardState.replaceList) {
-        const payload = buildMedicationPayload(replaceItem.extractedMedicine);
+        const payload = {
+          ...buildMedicationPayload(replaceItem.extractedMedicine),
+          resolution: "REPLACE",
+          replaceMedicationId: replaceItem.existingId,
+        };
         await updateMedication({
           medicationId: replaceItem.existingId,
           data: payload,
@@ -406,17 +438,28 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
       queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
       queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
 
+      // Show duplicate toast if any were found
+      if (duplicateIds.length > 0) {
+        Toast.show({
+          type: "info",
+          text1: "Duplicates Found",
+          text2: `${duplicateIds.length} medicine${duplicateIds.length === 1 ? " already exists" : "s already exist"} in your profile.`,
+          visibilityTime: 4000,
+        });
+      }
+
       setChatWizardState((prev) => ({
         ...prev,
         step: "completed",
       }));
+      clearCompletedBatch();
     } catch (err: any) {
-      if (err?.isDuplicate) {
-        setIsSubmitting(false);
-        return;
-      }
       console.error("Failed to confirm and add medicines:", err);
-      Alert.alert("Error", "Failed to save medications. Please try again.");
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: err.message || "Failed to save medications. Please try again.",
+      });
     } finally {
       setIsSubmitting(false);
     }

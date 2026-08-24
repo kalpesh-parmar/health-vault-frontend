@@ -11,6 +11,7 @@ interface ExtractedMedicineCardProps {
   onToggle: () => void;
   isDuplicate?: boolean;
   duplicateHasDifference?: boolean;
+  isBackendDuplicate?: boolean;
 }
 
 export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
@@ -19,6 +20,7 @@ export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
   onToggle,
   isDuplicate = false,
   duplicateHasDifference = false,
+  isBackendDuplicate = false,
 }) => {
   const { isDark } = useAppTheme();
 
@@ -59,6 +61,15 @@ export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
                   {duplicateHasDifference ? "Different version found" : "Identical duplicate"}
                 </DuplicateBadgeText>
               </DuplicateBadge>
+            </BadgeRow>
+          )}
+
+          {(isBackendDuplicate || medicine.isBackendDuplicate) && (
+            <BadgeRow>
+              <BackendDuplicateBadge>
+                <Ionicons name="alert-circle" size={11} color="#c2410c" style={{ marginRight: 3 }} />
+                <BackendDuplicateBadgeText>Already in profile</BackendDuplicateBadgeText>
+              </BackendDuplicateBadge>
             </BadgeRow>
           )}
 
@@ -175,6 +186,23 @@ const EditButton = styled.TouchableOpacity<{ isDark: boolean }>`
   background-color: ${(props: any) => props.isDark ? "#334155" : "#f1f5f9"};
   justify-content: center;
   align-items: center;
+`;
+
+const BackendDuplicateBadge = styled.View`
+  background-color: #fff7ed;
+  padding-horizontal: 8px;
+  padding-vertical: 3px;
+  border-radius: 6px;
+  flex-direction: row;
+  align-items: center;
+  border-width: 1px;
+  border-color: #fed7aa;
+`;
+
+const BackendDuplicateBadgeText = styled.Text`
+  font-size: 10px;
+  font-weight: 700;
+  color: #c2410c;
 `;
 
 export default ExtractedMedicineCard;

@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { ScrollView, View, BackHandler } from "react-native";
 import styled from "styled-components/native";
 import { useRoute, RouteProp, useIsFocused } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 import { useAppTheme } from "../../../context/ThemeContext";
 import { useAppNavigation } from "../../../types/navigation";
 import { useMedicationReview } from "../../../context/MedicationReviewContext";
@@ -38,6 +38,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
     medicines,
     selectedMedicineIds,
     isLoading,
+    error,
     initializeReview,
     toggleMedicineSelection,
     clearReviewState,
@@ -52,6 +53,13 @@ export const ReviewMedicinesScreen: React.FC = () => {
       // Don't clear state on unmount, we want state preservation when moving between details and list
     };
   }, [jobIds]);
+
+  // Show any error via Toast
+  useEffect(() => {
+    if (error) {
+      Toast.show({ type: "error", text1: "Error", text2: error });
+    }
+  }, [error]);
 
   useEffect(() => {
     if (!isFocused) return;

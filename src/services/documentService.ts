@@ -195,11 +195,11 @@ export const getOcrBatchStatus = async (
   return response.data;
 };
 
-export const startOcrJob = async (
-  jobId: string,
-): Promise<any> => {
+export const startOcrJob = async (jobId: string): Promise<any> => {
   const response = await startOcrBatchJob([jobId]);
-  const startedJob = response?.data?.started?.find((j: any) => j.jobId === jobId) || response?.data?.started?.[0];
+  const startedJob =
+    response?.data?.started?.find((j: any) => j.jobId === jobId) ||
+    response?.data?.started?.[0];
   return {
     data: startedJob,
     status: response.status,
@@ -210,7 +210,8 @@ export const getOcrJob = async (
   jobId: string,
 ): Promise<ApiResponse<OcrJobStatus>> => {
   const response = await getOcrBatchStatus([jobId]);
-  const matchedJob = response?.data?.find((j: any) => j.jobId === jobId) || response?.data?.[0];
+  const matchedJob =
+    response?.data?.find((j: any) => j.jobId === jobId) || response?.data?.[0];
   return {
     data: matchedJob,
     status: response.status,
@@ -324,7 +325,7 @@ export const filterDocuments = async (payload: FilterDocumentsRequest) => {
 
 export const listDocument = async (): Promise<
   ApiResponse<MedicalDocument[]>
-> => {
+> => {  
   const response = await apiClient.get(DOCUMENT_ENDPOINTS.LIST_DOCUMENT);
   return response.data;
 };

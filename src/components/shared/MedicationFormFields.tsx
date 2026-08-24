@@ -184,6 +184,7 @@ interface MedicationFormFieldsProps {
   theme: any;
   preferredLang?: string;
   readOnly?: boolean;
+  isInBottomSheet?: boolean;
 }
 
 export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
@@ -192,6 +193,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
   theme,
   preferredLang = "english",
   readOnly = false,
+  isInBottomSheet = false,
 }) => {
   const {
     formName,
@@ -885,49 +887,96 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             {t("medicineType")}
           </Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: "row", marginVertical: 4 }}>
-          {["TABLET", "CAPSULE", "SYRUP", "INJECTION", "DROPS", "SPRAY", "INHALER"].map((tItem) => {
-            const isSelected = formType === tItem;
-            const label = t(`medicineType.${tItem}`);
-            return (
-              <TouchableOpacity
-                key={tItem}
-                style={[
-                  styles.typeChip,
-                  {
-                    backgroundColor: isSelected ? theme.colors.primary : isDark ? "#334155" : "#f1f5f9",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingHorizontal: 12,
-                    height: 40,
-                    borderRadius: 10,
-                    marginRight: 8,
-                  },
-                ]}
-                onPress={() => setFormType(tItem)}
-              >
-                <View style={{ marginRight: 6 }}>
-                  <MedicineIcon type={tItem} size={16} color={isSelected ? "#ffffff" : theme.colors.primary} />
-                </View>
-                <Text
+        {isInBottomSheet ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", marginVertical: 4 }}>
+            {["TABLET", "CAPSULE", "SYRUP", "INJECTION", "DROPS", "SPRAY", "INHALER"].map((tItem) => {
+              const isSelected = formType === tItem;
+              const label = t(`medicineType.${tItem}`);
+              return (
+                <TouchableOpacity
+                  key={tItem}
                   style={[
-                    styles.typeChipText,
+                    styles.typeChip,
                     {
-                      color: isSelected ? "#ffffff" : theme.colors.textPrimary,
-                      fontSize: 13,
-                      fontWeight: "600",
+                      backgroundColor: isSelected ? theme.colors.primary : isDark ? "#334155" : "#f1f5f9",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 12,
+                      height: 40,
+                      borderRadius: 10,
+                      marginRight: 8,
+                      marginBottom: 8,
                     },
                   ]}
+                  onPress={() => setFormType(tItem)}
                 >
-                  {label}
-                </Text>
-                {isSelected && (
-                  <Ionicons name="checkmark-circle" size={14} color="#ffffff" style={{ marginLeft: 6 }} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                  <View style={{ marginRight: 6 }}>
+                    <MedicineIcon type={tItem} size={16} color={isSelected ? "#ffffff" : theme.colors.primary} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.typeChipText,
+                      {
+                        color: isSelected ? "#ffffff" : theme.colors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: "600",
+                      },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={14} color="#ffffff" style={{ marginLeft: 6 }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: "row", marginVertical: 4 }}>
+            {["TABLET", "CAPSULE", "SYRUP", "INJECTION", "DROPS", "SPRAY", "INHALER"].map((tItem) => {
+              const isSelected = formType === tItem;
+              const label = t(`medicineType.${tItem}`);
+              return (
+                <TouchableOpacity
+                  key={tItem}
+                  style={[
+                    styles.typeChip,
+                    {
+                      backgroundColor: isSelected ? theme.colors.primary : isDark ? "#334155" : "#f1f5f9",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 12,
+                      height: 40,
+                      borderRadius: 10,
+                      marginRight: 8,
+                    },
+                  ]}
+                  onPress={() => setFormType(tItem)}
+                >
+                  <View style={{ marginRight: 6 }}>
+                    <MedicineIcon type={tItem} size={16} color={isSelected ? "#ffffff" : theme.colors.primary} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.typeChipText,
+                      {
+                        color: isSelected ? "#ffffff" : theme.colors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: "600",
+                      },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={14} color="#ffffff" style={{ marginLeft: 6 }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       {/* Dosage */}
@@ -1178,6 +1227,11 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
       <DateTimePickerModal
         isVisible={isStartDatePickerVisible}
         mode="date"
+        minimumDate={(() => {
+          const d = new Date();
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })()}
         onConfirm={(date: Date) => {
           setStartDatePickerVisible(false);
           setStartDate(date);

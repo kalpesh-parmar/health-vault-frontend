@@ -23,6 +23,7 @@ export interface AddMedicineCardProps {
   readOnly?: boolean;
   chosenVal?: string | null;
   chosenLabel?: string | null;
+  isInBottomSheet?: boolean;
 }
 
 export function AddMedicineCard({
@@ -38,6 +39,7 @@ export function AddMedicineCard({
   readOnly = false,
   chosenVal,
   chosenLabel,
+  isInBottomSheet = false,
 }: AddMedicineCardProps) {
   const formState = useMedicationFormState(med, preferredLang);
   const {
@@ -109,6 +111,26 @@ export function AddMedicineCard({
           ? "કુલ જથ્થો જરૂરી છે"
           : "Total Quantity is required"
       );
+    }
+
+    if (startDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sDate = new Date(startDate);
+      sDate.setHours(0, 0, 0, 0);
+      if (sDate < today) {
+        errors.push(
+          preferredLang === "gujarati"
+            ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
+            : preferredLang === "hindi"
+              ? "आरंभ तिथि भूतकाल में नहीं हो सकती"
+              : preferredLang === "marathi"
+                ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
+                : preferredLang === "tamil"
+                  ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
+                  : "Start Date cannot be in the past"
+        );
+      }
     }
 
     if (errors.length > 0) {
@@ -184,6 +206,7 @@ export function AddMedicineCard({
         theme={theme}
         preferredLang={preferredLang}
         readOnly={readOnly}
+        isInBottomSheet={isInBottomSheet}
       />
 
       {localErrors.length > 0 && (

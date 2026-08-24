@@ -45,6 +45,9 @@ export interface ExtractedMedicine {
   startDate?: string;
   medicationSchedule?: string[];
   dosageDetails?: { value?: number; unit?: string; count?: number };
+  resolution?: string;
+  replaceMedicationId?: string;
+  isBackendDuplicate?: boolean;
 }
 
 export interface MedicationReviewState {

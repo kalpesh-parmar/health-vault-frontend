@@ -13,6 +13,19 @@ const formatFood = (val: string, t: (k: string) => string) => {
   return val;
 };
 
+const isPastDate = (dateVal: any): boolean => {
+  if (!dateVal || dateVal === "None") return false;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(dateVal);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  } catch {
+    return false;
+  }
+};
+
 // ExtractedMedicinesCard component
 interface ExtractedMedicinesCardProps {
   medicines: ExtractedMedicine[];
@@ -623,6 +636,39 @@ export function MedicineDocumentAccordionCard({
     return freq;
   };
 
+  const isAnyCheckedMedMissingStartDate = isLatest && medicines
+    .some((m) => !m.startDate || m.startDate === "None");
+
+  const isAnyCheckedMedPastStartDate = isLatest && medicines
+    .some((m) => m.startDate && m.startDate !== "None" && isPastDate(m.startDate));
+
+  const areActionsDisabled = isLoading || isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate;
+
+  const getStartDateWarningText = () => {
+    const lang = preferredLang || "english";
+    if (isAnyCheckedMedMissingStartDate) {
+      const dict: Record<string, string> = {
+        english: "One or more medicines are missing a Start Date. Please edit them to add a Start Date.",
+        gujarati: "એક અથવા વધુ દવાઓમાં શરૂઆતની તારીખ ખૂટે છે. શરૂઆતની તારીખ ઉમેરવા માટે કૃપા કરીને તેને સંપાદિત કરો.",
+        hindi: "एक या अधिक दवाओं में आरंभ तिथि गायब है। कृपया आरंभ तिथि जोड़ने के लिए उन्हें संपादित करें।",
+        marathi: "निवડलेल्या औषधांपैकी एक किंवा अधिक औषधांना सुरू होण्याची तारीख नाही. सुरू होण्याची तारीख जोडण्यासाठी कृपया त्यांना संपादित करा.",
+        tamil: "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு தொடக்க தேதி இல்லை. தொடக்க தேதியை சேர்க்க அவற்றை திருத்தவும்.",
+      };
+      return dict[lang] || dict.english;
+    }
+    if (isAnyCheckedMedPastStartDate) {
+      const dict: Record<string, string> = {
+        english: "One or more medicines have a past Start Date. Please edit them to set a current or future Start Date.",
+        gujarati: "એક અથવા વધુ દવાઓમાં શરૂઆતની તારીખ ભૂતકાળની છે. કૃપા કરીને ચાલુ અથવા ભવિષ્યની શરૂઆતની તારીખ સેટ કરવા માટે તેને સંપાદિત કરો.",
+        hindi: "एक या अधिक दवाओं की आरंभ तिथि बीत चुकी है। कृपया वर्तमान या भविष्य की आरंभ तिथि सेट करने के लिए उन्हें संपादित करें।",
+        marathi: "निवડलेल्या औषधांपैकी एक किंवा अधिक औषधांना भूतकाळातील सुरू होण्याची तारीख आहे. कृपया चालू किंवा भविष्यातील सुरू होण्याची तारीख सेट करण्यासाठी त्यांना संपादित करा.",
+        tamil: "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு கடந்த கால தொடக்க தேதி உள்ளது. தற்போதைய அல்லது எதிர்கால தொடக்க தேதியை அமைக்க அவற்றை திருத்தவும்.",
+      };
+      return dict[lang] || dict.english;
+    }
+    return "";
+  };
+
   return (
     <View style={[styles.card, { backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: isDark ? "#334155" : "#e2e8f0" }]}>
       {documents.map((doc) => {
@@ -678,10 +724,10 @@ export function MedicineDocumentAccordionCard({
                               </TouchableOpacity>
                             )}
                             <Ionicons
-                              name={isMedExpanded ? "chevron-up" : "chevron-down"}
-                              size={16}
-                              color={isDark ? "#94a3b8" : "#64748b"}
-                              style={{ marginLeft: 8 }}
+                               name={isMedExpanded ? "chevron-up" : "chevron-down"}
+                               size={16}
+                               color={isDark ? "#94a3b8" : "#64748b"}
+                               style={{ marginLeft: 8 }}
                             />
                           </View>
                         </TouchableOpacity>
@@ -734,8 +780,52 @@ export function MedicineDocumentAccordionCard({
         );
       })}
 
+      {isLatest && (isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate) && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: isDark ? "rgba(220, 38, 38, 0.2)" : "#fef2f2",
+            borderColor: isDark ? "rgba(220, 38, 38, 0.4)" : "#fca5a5",
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 14,
+            marginTop: 4,
+          }}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={18}
+            color={isDark ? "#fca5a5" : "#ef4444"}
+            style={{ marginRight: 8 }}
+          />
+          <Text
+            style={{
+              fontSize: 12.5,
+              color: isDark ? "#fca5a5" : "#b91c1c",
+              fontWeight: "600",
+              flex: 1,
+              lineHeight: 17,
+            }}
+          >
+            {getStartDateWarningText()}
+          </Text>
+        </View>
+      )}
+
       {isLatest && (
-        <TouchableOpacity onPress={onContinue} disabled={isLoading} style={styles.primaryButton}>
+        <TouchableOpacity
+          onPress={onContinue}
+          disabled={areActionsDisabled}
+          style={[
+            styles.primaryButton,
+            {
+              backgroundColor: areActionsDisabled ? "#cbd5e1" : "#0f766e",
+              opacity: areActionsDisabled ? 0.55 : 1,
+            },
+          ]}
+        >
           {isLoading ? (
             <ActivityIndicator size="small" color="#ffffff" />
           ) : (

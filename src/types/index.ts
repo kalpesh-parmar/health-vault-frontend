@@ -201,6 +201,8 @@ export interface AddOrEditMedication {
   reminderBeforeMinutes?: number | null;
   refillAlert?: boolean;
   notes: string;
+  resolution?: string;
+  replaceMedicationId?: string;
 }
 
 export interface FilterMedicationsRequest {

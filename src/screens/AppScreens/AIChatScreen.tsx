@@ -42,7 +42,6 @@ import {
   checkMedicationDuplicate,
   addMedication,
 } from "../../services/medicationservice";
-import { createMedicationReminder } from "../../services/reminderService";
 import { ExtractedMedicine } from "../../types/medicationReview";
 import { AddOrEditMedication } from "../../types";
 import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
@@ -110,6 +109,7 @@ type ChatMessage = {
   documentSummary?: string;
   loginProvider?: string;
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
+  conflicts?: any[];
   createdAt?: string | Date;
 };
 
@@ -282,10 +282,23 @@ interface EditMedicineFormWrapperProps {
   onSave: (updated: ExtractedMedicine) => void;
 }
 
+const getTodayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const EditMedicineFormWrapper = ({
   medicine,
   preferredLang,
   isDark,
+  theme,
   onClose,
   onSave,
 }: EditMedicineFormWrapperProps) => {
@@ -305,7 +318,7 @@ const EditMedicineFormWrapper = ({
       refill_alert: medicine.refillAlert || false,
       total_quantity: medicine.totalQuantity || 10,
       foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
-      startDate: medicine.startDate || new Date().toISOString().split("T")[0],
+      startDate: medicine.startDate && medicine.startDate !== "None" ? medicine.startDate : getTodayDateString(),
       medicationSchedule: medicine.medicationSchedule || ["08:00"],
     };
   }, [medicine]);
@@ -363,6 +376,26 @@ const EditMedicineFormWrapper = ({
       errors.push("Total Quantity is required");
     }
 
+    if (startDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sDate = new Date(startDate);
+      sDate.setHours(0, 0, 0, 0);
+      if (sDate < today) {
+        errors.push(
+          preferredLang === "gujarati"
+            ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
+            : preferredLang === "hindi"
+              ? "आरंभ तिथि भूतकाल में नहीं हो सकती"
+              : preferredLang === "marathi"
+                ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
+                : preferredLang === "tamil"
+                  ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
+                  : "Start Date cannot be in the past"
+        );
+      }
+    }
+
     if (errors.length > 0) {
       setLocalErrors(errors);
       return;
@@ -393,14 +426,14 @@ const EditMedicineFormWrapper = ({
       medicationSchedule: selectedSlots,
       startDate: startDate
         ? startDate instanceof Date
-          ? startDate.toISOString().split("T")[0]
+          ? formatLocalDate(startDate)
           : startDate
-        : new Date().toISOString().split("T")[0],
+        : getTodayDateString(),
     });
   };
 
   return (
-    <View style={{ padding: 16 }}>
+    <View style={{ flex: 1, padding: 16 }}>
       <View
         style={{
           flexDirection: "row",
@@ -429,13 +462,14 @@ const EditMedicineFormWrapper = ({
       <BottomSheetScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        style={{ maxHeight: 350 }}
+        style={{ flex: 1 }}
       >
         <MedicationFormFields
           formState={formState}
           isDark={isDark}
-          theme={{}}
+          theme={theme}
           preferredLang={preferredLang}
+          isInBottomSheet={true}
         />
         {localErrors.length > 0 && (
           <View style={{ marginTop: 8, marginBottom: 12 }}>
@@ -687,6 +721,7 @@ const AIChatScreen = ({ route }: any) => {
 
   const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [chatCurrentClientMedId, setChatCurrentClientMedId] = useState<string | null>(null);
   const [medicineToEdit, setMedicineToEdit] =
     useState<ExtractedMedicine | null>(null);
   const editSheetRef = useRef<BottomSheetModal>(null);
@@ -852,11 +887,11 @@ const AIChatScreen = ({ route }: any) => {
   ]);
 
   const handleEditSave = (updated: ExtractedMedicine) => {
-    setChatWizardState((prev) => {
-      const updatedExtracted = prev.extractedMedicines.map((m) =>
-        m.id === updated.id ? updated : m,
-      );
+    const updatedExtracted = chatWizardState.extractedMedicines.map((m) =>
+      m.id === updated.id ? updated : m,
+    );
 
+    setChatWizardState((prev) => {
       const updatedConflicts = prev.conflicts.map((c) => {
         if (c.extractedMedicine.id === updated.id) {
           return {
@@ -875,17 +910,25 @@ const AIChatScreen = ({ route }: any) => {
     });
 
     setMessages((prev) =>
-      prev.map((msg) => {
-        if (msg.medicines) {
-          return {
-            ...msg,
-            medicines: msg.medicines.map((m) =>
-              m.id === updated.id ? updated : m,
-            ),
-          };
-        }
-        return msg;
-      }),
+      prev
+        .filter((msg) => msg.action !== "EDIT_MEDICINE")
+        .map((msg) => {
+          if (msg.medicines?.length) {
+            return {
+              ...msg,
+              medicines: msg.medicines.map((m) =>
+                m.id === updated.id ? updated : m,
+              ),
+            };
+          }
+          if (msg.action === "REVIEW_MEDICINES_LIST" || msg.action === "ADD_DOCUMENT") {
+            return {
+              ...msg,
+              medicines: updatedExtracted,
+            };
+          }
+          return msg;
+        }),
     );
 
     editSheetRef.current?.dismiss();
@@ -1081,7 +1124,15 @@ const AIChatScreen = ({ route }: any) => {
       chatWizardState.conflicts[chatWizardState.currentConflictIndex];
     if (!currentConflict) return;
 
-    // Update message history to deselect the medication if removed
+    if (resolution === "keep") {
+      Toast.show({
+        type: "info",
+        text1: `${currentConflict.extractedMedicine.name} already exists in your profile.`,
+        text2: "Incoming duplicate removed.",
+      });
+    }
+
+    // Update message history to deselect/remove the medication if Keep Existing or Remove New is chosen
     setMessages((prevMsg) =>
       prevMsg.map((msg) => {
         if (
@@ -1090,11 +1141,21 @@ const AIChatScreen = ({ route }: any) => {
             msg.action === "MEDICINE_REVIEW_ACCORDION") &&
           msg.medicines
         ) {
+          if (resolution === "keep" || resolution === "remove_new") {
+            return {
+              ...msg,
+              medicines: msg.medicines.map((m) =>
+                m.id === currentConflict.extractedMedicine.id
+                  ? { ...m, selected: false, resolution: "REMOVE_NEW" }
+                  : m
+              ),
+            };
+          }
           return {
             ...msg,
             medicines: msg.medicines.map((m) =>
               m.id === currentConflict.extractedMedicine.id
-                ? { ...m, selected: resolution !== "remove_new" }
+                ? { ...m, selected: true, resolution: "REPLACE" }
                 : m,
             ),
           };
@@ -1118,13 +1179,19 @@ const AIChatScreen = ({ route }: any) => {
         existingId: string;
         mergedMedication: AddOrEditMedication;
       }[] = [];
-      const nextResolvedMedicines = [...prev.resolvedMedicines];
+      const nextResolvedMedicines = prev.resolvedMedicines.filter(
+        (m) => m.id !== currentConflict.extractedMedicine.id
+      );
 
       updatedConflicts.forEach((c) => {
         if (c.resolvedAction === "replace") {
           nextReplaceList.push({
             existingId: c.existingMedication.id!,
-            extractedMedicine: c.extractedMedicine,
+            extractedMedicine: {
+              ...c.extractedMedicine,
+              resolution: "REPLACE",
+              replaceMedicationId: c.existingMedication.id,
+            },
           });
         } else if (c.resolvedAction === "merge") {
           // Use the merged payload if provided for the current conflict, or fall back to existing medication
@@ -1137,12 +1204,6 @@ const AIChatScreen = ({ route }: any) => {
             existingId: c.existingMedication.id!,
             mergedMedication: payload,
           });
-        } else if (c.resolvedAction === "keep") {
-          if (
-            !nextResolvedMedicines.some((m) => m.id === c.extractedMedicine.id)
-          ) {
-            nextResolvedMedicines.push(c.extractedMedicine);
-          }
         }
       });
 
@@ -1152,12 +1213,25 @@ const AIChatScreen = ({ route }: any) => {
       );
       const nextStep = allResolved ? "summary" : "conflicts";
 
-      const nextExtractedMedicines = prev.extractedMedicines.map((m) => {
-        if (m.id === currentConflict.extractedMedicine.id) {
-          return { ...m, selected: resolution !== "remove_new" };
-        }
-        return m;
-      });
+      const nextExtractedMedicines = prev.extractedMedicines
+        .map((m) => {
+          if (m.id === currentConflict.extractedMedicine.id) {
+            if (resolution === "keep" || resolution === "remove_new") {
+              return {
+                ...m,
+                selected: false,
+                resolution: "REMOVE_NEW",
+              };
+            }
+            return {
+              ...m,
+              selected: true,
+              resolution: "REPLACE",
+              replaceMedicationId: currentConflict.existingMedication.id,
+            };
+          }
+          return m;
+        });
 
       if (nextStep === "summary") {
         setTimeout(() => {
@@ -1313,13 +1387,15 @@ const AIChatScreen = ({ route }: any) => {
       dosePerIntake: parseFloat(med.dosage || "1") || 1,
       frequency: freqLabel,
       foodFrequency: normalizedFoodFreq,
-      startDate: med.startDate
+      startDate: med.startDate && med.startDate !== "None"
         ? med.startDate
-        : new Date().toISOString().split("T")[0],
+        : getTodayDateString(),
       ongoing: true,
       medicationSchedule: scheduleObj,
       totalQuantity: med.totalQuantity || 10,
       notes: med.notes || "",
+      resolution: med.resolution,
+      replaceMedicationId: med.replaceMedicationId,
     };
   };
 
@@ -1347,7 +1423,11 @@ const AIChatScreen = ({ route }: any) => {
         itemsToSubmit.push({
           type: "replace",
           med: replaceItem.extractedMedicine,
-          payload: buildMedicationPayload(replaceItem.extractedMedicine),
+          payload: {
+            ...buildMedicationPayload(replaceItem.extractedMedicine),
+            resolution: "REPLACE",
+            replaceMedicationId: replaceItem.existingId,
+          },
           existingId: replaceItem.existingId,
         });
       });
@@ -1399,47 +1479,17 @@ const AIChatScreen = ({ route }: any) => {
       const task = itemsToSubmit[i];
       try {
         if (task.type === "new") {
-          const response = await addMedication(task.payload);
-          const medId = response?.data?.id;
-          if (medId) {
-            try {
-              await createMedicationReminder({ medicationId: medId });
-            } catch (remErr) {
-              console.warn(
-                "Failed to create reminder for medicine:",
-                task.med.name,
-                remErr,
-              );
-            }
-          }
+          await addMedication(task.payload);
         } else if (task.type === "replace" && task.existingId) {
           await updateMedication({
             medicationId: task.existingId,
             data: task.payload,
           });
-          try {
-            await createMedicationReminder({ medicationId: task.existingId });
-          } catch (remErr) {
-            console.warn(
-              "Failed to recreate reminder for replace medicine:",
-              task.med.name,
-              remErr,
-            );
-          }
         } else if (task.type === "merge" && task.existingId) {
           await updateMedication({
             medicationId: task.existingId,
             data: task.payload,
           });
-          try {
-            await createMedicationReminder({ medicationId: task.existingId });
-          } catch (remErr) {
-            console.warn(
-              "Failed to recreate reminder for merge medicine:",
-              task.med.medicationName,
-              remErr,
-            );
-          }
         }
         successCount++;
       } catch (err) {
@@ -2124,12 +2174,6 @@ const AIChatScreen = ({ route }: any) => {
             >
               <ActivityIndicator size="large" color="#0f766e" />
             </View>
-          ) : mergedMessages.length === 0 ? (
-            <EmptyChatState
-              isDark={isDark}
-              suggestedQuestions={suggestedQuestions}
-              onPressQuestion={handleSend}
-            />
           ) : (
             <FlatList
               ref={flatListRef}
@@ -2240,6 +2284,7 @@ const AIChatScreen = ({ route }: any) => {
                     );
                   }
                   if (item.action === "ADD_MEDICINE") {
+                    const isLatest = isLatestActiveMessage(item.id);
                     const med = item.medicine || {};
                     return renderAssistantPrompt(
                       <AddMedicineCard
@@ -2249,10 +2294,16 @@ const AIChatScreen = ({ route }: any) => {
                         preferredLang={preferredLang}
                         isDark={isDark}
                         theme={theme}
-                        currentClientMedId={null}
-                        setCurrentClientMedId={() => {}}
-                        onSave={() => {}}
-                        readOnly={true}
+                        currentClientMedId={chatCurrentClientMedId}
+                        setCurrentClientMedId={setChatCurrentClientMedId}
+                        onSave={(updatedMed) => {
+                          handleGenericOptionPress({
+                            label: `Add medicine: ${updatedMed.name}`,
+                            value: { medicine: updatedMed },
+                            actionType: "ADD_MEDICINE",
+                          });
+                        }}
+                        readOnly={!isLatest}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
                       />,
@@ -2362,7 +2413,7 @@ const AIChatScreen = ({ route }: any) => {
                   }
                   if (item.action === "REVIEW_MEDICINES_LIST" || item.action === "ADD_DOCUMENT") {
                     const isLatest = isLatestActiveMessage(item.id);
-                    const isReadOnly = isHistorical || !isLatest;
+                    const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
                     const displayMeds = item.medicines?.length
                       ? item.medicines
                       : (isLatest ? chatWizardState.extractedMedicines : []);
@@ -2371,13 +2422,21 @@ const AIChatScreen = ({ route }: any) => {
                       <ReviewMedicinesListCard
                         localMedicines={displayMeds}
                         setLocalMedicines={(updater) => {
+                          const nextMeds =
+                            typeof updater === "function"
+                              ? updater(displayMeds)
+                              : updater;
+
+                          if (isLatest) {
+                            setChatWizardState((prev) => ({
+                              ...prev,
+                              extractedMedicines: nextMeds,
+                            }));
+                          }
+
                           setMessages((prev) =>
                             prev.map((msg) => {
                               if (msg.id === item.id) {
-                                const nextMeds =
-                                  typeof updater === "function"
-                                    ? updater(msg.medicines || [])
-                                    : updater;
                                 return {
                                   ...msg,
                                   medicines: nextMeds,
@@ -2457,16 +2516,10 @@ const AIChatScreen = ({ route }: any) => {
                           });
                         }}
                         onEdit={(med) => {
-                          const editMsg: ChatMessage = {
-                            id: `ai-edit-med-${Date.now()}`,
-                            role: "ai",
-                            text: "Please edit the medication details below:",
-                            action: "EDIT_MEDICINE",
-                            medicine: med,
-                            stepKey: item.id,
-                            createdAt: new Date().toISOString(),
-                          };
-                          setMessages((prev) => [...prev, editMsg]);
+                          setMedicineToEdit(med);
+                          setTimeout(() => {
+                            editSheetRef.current?.present();
+                          }, 100);
                         }}
                         readOnly={isReadOnly}
                         chosenVal={chosenVal}
@@ -2482,7 +2535,12 @@ const AIChatScreen = ({ route }: any) => {
                         isDark={isDark}
                         theme={theme}
                         onConfirm={() => {}}
-                        onEdit={() => {}}
+                        onEdit={(med) => {
+                          setMedicineToEdit(med);
+                          setTimeout(() => {
+                            editSheetRef.current?.present();
+                          }, 100);
+                        }}
                         readOnly={true}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
@@ -2876,8 +2934,8 @@ const AIChatScreen = ({ route }: any) => {
         isDark={isDark}
       />
 
-      <BottomSheet ref={editSheetRef}>
-        <View style={{ paddingBottom: bottomPadding }}>
+      <BottomSheet ref={editSheetRef} snapPoints={["85%"]}>
+        <View style={{ flex: 1, paddingBottom: bottomPadding }}>
           {medicineToEdit && (
             <EditMedicineFormWrapper
               medicine={medicineToEdit}
