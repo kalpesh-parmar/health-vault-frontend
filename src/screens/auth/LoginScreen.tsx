@@ -1,5 +1,17 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Keyboard, Platform, StatusBar, View } from "react-native";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+  View,
+} from "react-native";
 import styled from "styled-components/native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -9,12 +21,16 @@ import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import Toast from "react-native-toast-message";
-import auth, { getAuth, signInWithPhoneNumber } from "@react-native-firebase/auth";
+import auth, {
+  getAuth,
+  signInWithPhoneNumber,
+} from "@react-native-firebase/auth";
 import {
   setConfirmationResult,
   loginSocialWithFirebase,
   socialLogin,
   reportAuthFailure,
+  loginWithApple,
 } from "../../services/auth.service";
 import { statusCodes } from "@react-native-google-signin/google-signin";
 import { resetForceLogout } from "../../services/apiClient";
@@ -41,8 +57,7 @@ WebBrowser.maybeCompleteAuthSession();
 const microsoftDiscovery = {
   authorizationEndpoint:
     "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-  tokenEndpoint:
-    "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+  tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
 };
 
 const LoginScreen = () => {
@@ -53,7 +68,7 @@ const LoginScreen = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isFacebookLoading, setIsFacebookLoading] = useState(false);
   const [isMicrosoftLoading, setIsMicrosoftLoading] = useState(false);
-  const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
@@ -64,37 +79,31 @@ const LoginScreen = () => {
     console.log("[OTP_LOG] Component Mounted: LoginScreen");
     // Clear any stale force logout state from a previous session
     resetForceLogout();
-    const showSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => setKeyboardPadding(e.endCoordinates.height > 0 ? e.endCoordinates.height + 40 : 0),
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardPadding(0),
-    );
     return () => {
       console.log("[OTP_LOG] Component Unmounted: LoginScreen");
-      showSub.remove();
-      hideSub.remove();
     };
   }, []);
 
   const redirectUri = AuthSession.makeRedirectUri({
+    native: "health-vault://auth",
     scheme: "health-vault",
     path: "auth",
   });
 
-  const microsoftAuthConfig = useMemo(() => ({
-    clientId:
-      process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID || "PLACEHOLDER_CLIENT_ID",
-    scopes: ["openid", "profile", "email"],
-    redirectUri,
-    responseType: "code",
-    usePKCE: true,
-    extraParams: {
-      nonce: "defaultNonce",
-    },
-  }), [redirectUri]);
+  const microsoftAuthConfig = useMemo(
+    () => ({
+      clientId:
+        process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID || "PLACEHOLDER_CLIENT_ID",
+      scopes: ["openid", "profile", "email"],
+      redirectUri,
+      responseType: "code",
+      usePKCE: true,
+      extraParams: {
+        nonce: "defaultNonce",
+      },
+    }),
+    [redirectUri],
+  );
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     microsoftAuthConfig,
@@ -105,106 +114,156 @@ const LoginScreen = () => {
   console.log("Response :- ", response);
 
   useEffect(() => {
-    // Generate one redirectURI for redirecting the user as per the requirement
     console.log(
       "👉 MICROSOFT REDIRECT URI (Register this in Azure):",
       redirectUri,
     );
+  }, [redirectUri]);
 
-    const handleMicrosoftResponse = async () => {
-      if (response?.type === "success") {
-        const { code } = response.params;
+  const handleMicrosoftAuthResponse = useCallback(
+    async (authResponse: AuthSession.AuthSessionResult | null) => {
+      if (!authResponse) {
+        return;
+      }
 
-        if (code) {
-          setIsMicrosoftLoading(true);
-            let firebaseToken = "";
-            try {
-              const tokenResult = await AuthSession.exchangeCodeAsync(
-                {
-                  clientId:
-                    process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID ||
-                    "PLACEHOLDER_CLIENT_ID",
-                  code,
-                  redirectUri,
-                  extraParams: {
-                    code_verifier: request?.codeVerifier || "",
-                  },
-                },
-                microsoftDiscovery,
-              );
-            console.log("TOken result :- ", tokenResult);
+      if (authResponse.type === "dismiss" || authResponse.type === "cancel") {
+        setIsMicrosoftLoading(false);
+        return;
+      }
 
-            const { idToken } = tokenResult;
-
-            if (!idToken) {
-              throw new Error("No idToken received from Microsoft.");
-            }
-
-            const deviceToken = await SecureStore.getItemAsync("deviceToken");
-            console.log("Calling backend socialLogin for Microsoft...");
-            const backendResponse = await socialLogin(
-              "social",
-              "microsoft",
-              "", // no firebase token before backend call
-              idToken,
-              deviceToken,
-            );
-
-            if (backendResponse?.data?.user?.id) {
-              const firebaseCustomToken = backendResponse?.data?.firebaseCustomToken;
-              if (firebaseCustomToken) {
-                console.log("Signing in with Firebase Custom Token...");
-                await auth().signInWithCustomToken(firebaseCustomToken);
-              } else {
-                console.warn("No firebaseCustomToken returned from backend for Microsoft login.");
-              }
-
-              await authContextLogin({
-                accessToken: backendResponse?.data?.accessToken,
-                refreshToken: backendResponse?.data?.refreshToken,
-                userId: backendResponse?.data?.user?.id,
-                createdAt: new Date().toISOString(),
-              });
-              Toast.show({
-                type: "success",
-                text1: "Logged In Successfully! 🚀",
-                text2: "Welcome to your secure health vault.",
-              });
-            } else {
-              throw new Error("Backend login failed.");
-            }
-          } catch (error: any) {
-            const errorMsg = String(error.message || "").toLowerCase();
-            const isCancelled = errorMsg.includes("cancel");
-            const isNetwork = errorMsg.includes("network") || error.code === "auth/network-request-failed";
-            
-            if (!isCancelled && !isNetwork) {
-              reportAuthFailure({ identifier: firebaseToken,  provider: "microsoft", loginType: "social" });
-            }
-
-            Toast.show({
-              type: "error",
-              text1: "Microsoft Sign-In Failed",
-              text2: error.message || "An error occurred during sign in.",
-            });
-            console.log("Microsoft Error :- ", error.message);
-          } finally {
-            setIsMicrosoftLoading(false);
-          }
-        }
-      } else if (response?.type === "error") {
+      if (authResponse.type === "error") {
+        setIsMicrosoftLoading(false);
         Toast.show({
           type: "error",
           text1: "Microsoft Sign-In Failed",
-          text2: response.error?.message || "Something went wrong.",
+          text2: authResponse.error?.message || "Something went wrong.",
         });
+        return;
       }
-    };
 
-    if (response) {
-      handleMicrosoftResponse();
+      if (authResponse.type !== "success") {
+        setIsMicrosoftLoading(false);
+        return;
+      }
+
+      const { code } = authResponse.params;
+      if (!code) {
+        setIsMicrosoftLoading(false);
+        Toast.show({
+          type: "error",
+          text1: "Microsoft Sign-In Failed",
+          text2: "Authorization code was not returned.",
+        });
+        return;
+      }
+
+      let firebaseToken = "";
+      try {
+        const tokenResult = await AuthSession.exchangeCodeAsync(
+          {
+            clientId:
+              process.env.EXPO_PUBLIC_MICROSOFT_CLIENT_ID ||
+              "PLACEHOLDER_CLIENT_ID",
+            code,
+            redirectUri,
+            extraParams: {
+              code_verifier: request?.codeVerifier || "",
+            },
+          },
+          microsoftDiscovery,
+        );
+        console.log("TOken result :- ", tokenResult);
+
+        const { idToken } = tokenResult;
+
+        if (!idToken) {
+          throw new Error("No idToken received from Microsoft.");
+        }
+
+        const deviceToken = await SecureStore.getItemAsync("deviceToken");
+        console.log("Calling backend socialLogin for Microsoft...");
+        const backendResponse = await socialLogin(
+          "social",
+          "microsoft",
+          "",
+          idToken,
+          deviceToken,
+        );
+
+        if (backendResponse?.data?.user?.id) {
+          const firebaseCustomToken =
+            backendResponse?.data?.firebaseCustomToken;
+          if (firebaseCustomToken) {
+            console.log("Signing in with Firebase Custom Token...");
+            await auth().signInWithCustomToken(firebaseCustomToken);
+          } else {
+            console.warn(
+              "No firebaseCustomToken returned from backend for Microsoft login.",
+            );
+          }
+
+          await authContextLogin({
+            accessToken: backendResponse?.data?.accessToken,
+            refreshToken: backendResponse?.data?.refreshToken,
+            userId: backendResponse?.data?.user?.id,
+            createdAt: new Date().toISOString(),
+          });
+          Toast.show({
+            type: "success",
+            text1: "Logged In Successfully! 🚀",
+            text2: "Welcome to your secure health vault.",
+          });
+        } else {
+          throw new Error("Backend login failed.");
+        }
+      } catch (error: any) {
+        const errorMsg = String(error.message || "").toLowerCase();
+        const isCancelled = errorMsg.includes("cancel");
+        const isNetwork =
+          errorMsg.includes("network") ||
+          error.code === "auth/network-request-failed";
+
+        if (!isCancelled && !isNetwork) {
+          reportAuthFailure({
+            identifier: firebaseToken,
+            provider: "microsoft",
+            loginType: "social",
+          });
+        }
+
+        Toast.show({
+          type: "error",
+          text1: "Microsoft Sign-In Failed",
+          text2: error.message || "An error occurred during sign in.",
+        });
+        console.log("Microsoft Error :- ", error.message);
+      } finally {
+        setIsMicrosoftLoading(false);
+      }
+    },
+    [authContextLogin, redirectUri, request?.codeVerifier],
+  );
+
+  const handleMicrosoftSignIn = useCallback(async () => {
+    if (!request || isMicrosoftLoading) return;
+
+    setIsMicrosoftLoading(true);
+    try {
+      const result = await promptAsync({
+        showInRecents: true,
+        preferEphemeralSession: false,
+      });
+      console.log("Microsoft promptAsync result :- ", result);
+      await handleMicrosoftAuthResponse(result);
+    } catch (error: any) {
+      setIsMicrosoftLoading(false);
+      Toast.show({
+        type: "error",
+        text1: "Microsoft Sign-In Failed",
+        text2: error?.message || "Unable to open Microsoft sign-in.",
+      });
     }
-  }, [response, request]);
+  }, [handleMicrosoftAuthResponse, isMicrosoftLoading, promptAsync, request]);
 
   const handleContinue = useCallback(async () => {
     if (loading) return; // Prevent duplicate clicks
@@ -327,7 +386,11 @@ const LoginScreen = () => {
         error.code === "auth/network-request-failed";
 
       if (!isCancelled && !isNetwork) {
-        reportAuthFailure({ identifier: firebaseToken, provider: "google", loginType: "social" });
+        reportAuthFailure({
+          identifier: firebaseToken,
+          provider: "google",
+          loginType: "social",
+        });
       }
 
       Toast.show({
@@ -346,22 +409,41 @@ const LoginScreen = () => {
     let firebaseToken = "";
     try {
       const deviceToken = await SecureStore.getItemAsync("deviceToken");
-      const idToken = await loginWithFacebook();
-      console.log("Facebook Token :- ", idToken);
-      if (idToken) {
-        firebaseToken = await loginSocialWithFirebase(
-          "facebook",
-          idToken,
-        );
-        const backendResponse = await socialLogin(
-          "social",
-          "facebook",
-          firebaseToken,
-          idToken,
-          deviceToken,
-        );
-        console.log("Backend Response :- ", backendResponse?.data?.user?.id);
+      const facebookResult = await loginWithFacebook();
+      const providerToken = facebookResult.token;
+      console.log("Facebook Token Type :- ", facebookResult.tokenType);
 
+      if (providerToken) {
+        let backendResponse: any;
+
+        if (facebookResult.tokenType === "access") {
+          firebaseToken = await loginSocialWithFirebase(
+            "facebook",
+            providerToken,
+          );
+          backendResponse = await socialLogin(
+            "social",
+            "facebook",
+            firebaseToken,
+            providerToken,
+            deviceToken,
+          );
+        } else {
+          backendResponse = await socialLogin(
+            "social",
+            "facebook",
+            "",
+            providerToken,
+            deviceToken,
+          );
+
+          const firebaseCustomToken = backendResponse?.data?.firebaseCustomToken;
+          if (firebaseCustomToken) {
+            await auth().signInWithCustomToken(firebaseCustomToken);
+          }
+        }
+
+        console.log("Backend Response :- ", backendResponse?.data?.user?.id);
         if (backendResponse?.data?.user?.id) {
           await authContextLogin({
             accessToken: backendResponse?.data?.accessToken,
@@ -383,10 +465,16 @@ const LoginScreen = () => {
     } catch (error: any) {
       const errorMsg = String(error.message || "").toLowerCase();
       const isCancelled = errorMsg.includes("cancel");
-      const isNetwork = errorMsg.includes("network") || error.code === "auth/network-request-failed";
+      const isNetwork =
+        errorMsg.includes("network") ||
+        error.code === "auth/network-request-failed";
 
       if (!isCancelled && !isNetwork) {
-        reportAuthFailure({ identifier: firebaseToken, provider: "facebook", loginType: "social" });
+        reportAuthFailure({
+          identifier: firebaseToken,
+          provider: "facebook",
+          loginType: "social",
+        });
       }
 
       Toast.show({
@@ -398,18 +486,116 @@ const LoginScreen = () => {
       setIsFacebookLoading(false);
     }
   };
+  
+  const handleAppleSignIn = async () => {
+    console.log("Apple Sign-In initiated...");
+    if (isAppleLoading) return;
+    setIsAppleLoading(true);
+    let firebaseToken = "";
+    try {
+      const deviceToken = await SecureStore.getItemAsync("deviceToken");
+      const appleResult = await loginWithApple();
 
+      console.log({ appleResult });
+
+      if (!!appleResult?.identityToken) {
+        console.log("[APPLE] 1. identityToken exists");
+
+        try {
+          console.log("[APPLE] 2. Calling loginSocialWithFirebase");
+
+          firebaseToken = await loginSocialWithFirebase(
+            "apple",
+            appleResult.identityToken,
+          );
+
+          console.log("[APPLE] 3. Firebase token received:", !!firebaseToken);
+
+          console.log(
+            "APPLE REQUEST: --------",
+            "social",
+            "apple",
+            firebaseToken,
+            appleResult.identityToken,
+            deviceToken,
+            {
+              email: appleResult.email,
+              firstName: appleResult.fullName?.givenName,
+              lastName: appleResult.fullName?.familyName,
+            },
+          );
+
+          console.log("[APPLE] 4. Calling backend socialLogin");
+
+          const backendResponse = await socialLogin(
+            "social",
+            "apple",
+            firebaseToken,
+            appleResult.identityToken,
+            deviceToken,
+            {
+              email: appleResult.email,
+              firstName: appleResult.fullName?.givenName,
+              lastName: appleResult.fullName?.familyName,
+            },
+          );
+
+          console.log("[APPLE] 5. Backend response:", backendResponse);
+
+          if (backendResponse?.data?.user?.id) {
+            console.log("[APPLE] 6. Updating auth context...");
+
+            await authContextLogin({
+              accessToken: backendResponse.data.accessToken,
+              refreshToken: backendResponse.data.refreshToken,
+              userId: backendResponse.data.user.id,
+              createdAt: new Date().toISOString(),
+            });
+
+            console.log("[APPLE] 7. Auth context updated");
+
+            Toast.show({
+              type: "success",
+              text1: "Logged In Successfully! 🚀",
+              text2: "Welcome to your secure health vault.",
+            });
+          } else {
+            throw new Error("Apple backend login failed.");
+          }
+        } catch (error: any) {
+          console.error("====================================");
+          console.error("[APPLE] SIGN-IN ERROR");
+          console.error("[APPLE] error:", error);
+          console.error("[APPLE] message:", error?.message);
+          console.error("[APPLE] code:", error?.code);
+          console.error("[APPLE] stack:", error?.stack);
+          console.error("====================================");
+
+          Toast.show({
+            type: "error",
+            text1: "Apple Sign-In Failed",
+            text2: error?.message || "An error occurred during sign in.",
+          });
+        }
+      }
+    } finally {
+      setIsAppleLoading(false);
+    }
+  };
 
   return (
     <Container themeColor={theme.colors}>
       <StatusBar barStyle="light-content" />
 
-      <View style={{ flex: 1, paddingBottom: keyboardPadding }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
         <GradientBackground
           colors={["#0F2027", "#203A43", "#2C5364"]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
+          end={{ x: 1, y: 1 }}>
           <View style={{ flex: 1 }}>
             <InnerContainer>
               <TopSection>
@@ -417,8 +603,7 @@ const LoginScreen = () => {
                   <LinearGradient
                     colors={["#43E97B", "#38F9D7"]}
                     start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
+                    end={{ x: 1, y: 0 }}>
                     <Title style={{ opacity: 0 }}>HEALTHCARE</Title>
                   </LinearGradient>
                 </MaskedView>
@@ -467,12 +652,14 @@ const LoginScreen = () => {
                   loading={isGoogleLoading}
                   disabled={loading}
                 />
-                <SocialAuthButton
-                  provider="apple"
-                  label="Continue with Apple"
-                  onPress={() => {}}
-                  disabled={true}
-                />
+                {Platform.OS === "ios" && (
+                  <SocialAuthButton
+                    provider="apple"
+                    label="Continue with Apple"
+                    onPress={handleAppleSignIn}
+                    disabled={loading}
+                  />
+                )}
                 <SocialAuthButton
                   provider="facebook"
                   label="Continue with Facebook"
@@ -483,7 +670,7 @@ const LoginScreen = () => {
                 <SocialAuthButton
                   provider="microsoft"
                   label="Continue with Microsoft"
-                  onPress={() => promptAsync()}
+                  onPress={handleMicrosoftSignIn}
                   loading={isMicrosoftLoading}
                   disabled={loading || !request}
                 />
@@ -491,7 +678,7 @@ const LoginScreen = () => {
             </InnerContainer>
           </View>
         </GradientBackground>
-      </View>
+      </KeyboardAvoidingView>
     </Container>
   );
 };
@@ -510,7 +697,8 @@ const GradientBackground = styled(LinearGradient)`
 
 const InnerContainer = styled.ScrollView.attrs({
   contentContainerStyle: { flexGrow: 1 },
-  keyboardShouldPersistTaps: "handled"
+  keyboardShouldPersistTaps: "handled",
+  keyboardDismissMode: "interactive",
 })`
   flex: 1;
 `;

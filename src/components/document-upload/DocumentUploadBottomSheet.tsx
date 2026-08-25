@@ -414,14 +414,22 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
   };
 
   const handleOpenCamera = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    const currentPermission = await ImagePicker.getCameraPermissionsAsync();
+    let permission = currentPermission;
+
+    if (!currentPermission.granted) {
+      permission = await ImagePicker.requestCameraPermissionsAsync();
+    }
+
     if (permission.granted) {
       setIsCameraVisible(true);
     } else {
       Toast.show({
         type: "error",
         text1: "Permission Denied",
-        text2: "Camera permission is required.",
+        text2: permission.canAskAgain
+          ? "Camera permission is required."
+          : "Please enable camera access from iPhone Settings.",
       });
     }
   };

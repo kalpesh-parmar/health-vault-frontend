@@ -1,7 +1,7 @@
 import React from "react";
-import { Modal } from "react-native";
+import { ActivityIndicator, Modal } from "react-native";
 import styled from "styled-components/native";
-import { CameraView } from "expo-camera";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 
 interface CameraModalProps {
@@ -21,6 +21,7 @@ const CameraModal = ({
   cameraRef,
   fromRegisterScreen,
 }: CameraModalProps) => {
+  const [permission] = useCameraPermissions();
   if (!visible) return null;
 
   return (
@@ -30,21 +31,31 @@ const CameraModal = ({
       presentationStyle="fullScreen"
     >
       <CameraContainer style={{ opacity: isCapturing ? 0.8 : 1 }}>
-        <CameraView ref={cameraRef} facing="back" style={{ flex: 1 }}>
-          <CameraControls>
+        {permission?.granted ? (
+          <CameraView ref={cameraRef} facing="back" style={{ flex: 1 }}>
+            <CameraControls>
+              <CloseBtn onPress={onClose}>
+                <Ionicons name="close" size={28} color="white" />
+              </CloseBtn>
+
+              <CaptureBtn
+                onPress={async () =>
+                  await onCapture(cameraRef, fromRegisterScreen)
+                }
+              >
+                <CaptureInner />
+              </CaptureBtn>
+            </CameraControls>
+          </CameraView>
+        ) : (
+          <PermissionFallback>
             <CloseBtn onPress={onClose}>
               <Ionicons name="close" size={28} color="white" />
             </CloseBtn>
-
-            <CaptureBtn
-              onPress={async () =>
-                await onCapture(cameraRef, fromRegisterScreen)
-              }
-            >
-              <CaptureInner />
-            </CaptureBtn>
-          </CameraControls>
-        </CameraView>
+            {/* <ActivityIndicator color="#ffffff" size="large" /> */}
+            <FallbackText>Please allow camera access to use this feature.</FallbackText>
+          </PermissionFallback>
+        )}
       </CameraContainer>
     </Modal>
   );
@@ -66,6 +77,20 @@ const CameraControls = styled.View`
   flex: 1;
   justify-content: flex-end;
   padding-bottom: 50px;
+`;
+
+const PermissionFallback = styled.View`
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+`;
+
+const FallbackText = styled.Text`
+  color: white;
+  font-size: 16px;
+  margin-top: 16px;
+  text-align: center;
 `;
 
 const CloseBtn = styled.TouchableOpacity`

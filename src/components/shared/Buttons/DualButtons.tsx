@@ -78,7 +78,7 @@ const MainBtn = styled.TouchableOpacity`
 const SecondaryBtnText = styled.Text`
   font-size: 14px;
   font-weight: 600;
-  color: ${({ theme }: any) => theme.colors.textPrimary};
+  color: ${({ theme }: any) => theme.colors.background};
 `;
 
 const MainBtnText = styled.Text`

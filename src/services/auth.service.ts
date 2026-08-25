@@ -1,11 +1,17 @@
 import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import { AccessToken, LoginManager } from "react-native-fbsdk-next";
+import {
+  AccessToken,
+  AuthenticationToken,
+  LoginManager,
+} from "react-native-fbsdk-next";
+import { Platform } from "react-native";
 import Toast from "react-native-toast-message";
 import { configureGoogleSignIn } from "../config/googleConfig";
 import { AUTH_ENDPOINTS } from "../constants/endpoints";
 import apiClient from "./apiClient";
 import type { DummyConfirmationResult } from "./dummyAuth.service";
+import * as AppleAuthentication from "expo-apple-authentication";
 
 // Singleton storage to avoid passing non-serializable objects in React Navigation params
 let activeConfirmationResult: any = null;
@@ -76,7 +82,7 @@ export const socialLogin = async (
 };
 
 export const loginSocialWithFirebase = async (
-  provider: "google" | "facebook" | "microsoft" | "phone",
+  provider: "google" | "facebook" | "microsoft" | "phone" | "apple",
   token: string,
   accessToken?: string,
 ) => {
@@ -90,6 +96,12 @@ export const loginSocialWithFirebase = async (
       break;
     case "microsoft":
       credential = auth.OAuthProvider.credential(token, accessToken);
+      break;
+    case "apple":
+      credential = auth.AppleAuthProvider.credential(
+        token,
+        accessToken
+      );
       break;
     default:
       throw new Error("Invalid provider");
@@ -130,24 +142,55 @@ export const loginWithGoogle = async () => {
   }
 };
 
-export const loginWithFacebook = async () => {
+export const loginWithFacebook = async (): Promise<{
+  token: string;
+  tokenType: "access" | "authentication";
+}> => {
   try {
-    const result = await LoginManager.logInWithPermissions([
-      "public_profile",
-      "email",
-    ]);
+    const result =
+      Platform.OS === "ios"
+        ? await LoginManager.logInWithPermissions(
+            ["public_profile", "email"],
+            "limited",
+          )
+        : await LoginManager.logInWithPermissions([
+            "public_profile",
+            "email",
+          ]);
+
     if (result.isCancelled) {
       throw new Error("Facebook Sign-In cancelled.");
     }
+
+    if (Platform.OS === "ios") {
+      const authTokenResult =
+        await AuthenticationToken.getAuthenticationTokenIOS();
+      const authenticationToken = authTokenResult?.authenticationToken;
+
+      if (!authenticationToken) {
+        throw new Error("No Facebook authentication token returned.");
+      }
+
+      return {
+        token: authenticationToken,
+        tokenType: "authentication",
+      };
+    }
+
     const data = await AccessToken.getCurrentAccessToken();
-    if (!data) {
+    if (!data?.accessToken) {
       Toast.show({
         type: "error",
         text1: "Something went wrong! 😔",
         text2: "Please try again later.",
       });
+      throw new Error("No Facebook access token returned.");
     }
-    return data?.accessToken?.toString();
+
+    return {
+      token: data.accessToken.toString(),
+      tokenType: "access",
+    };
   } catch (error) {
     console.error("[AUTH] Facebook Sign-In Error:", error);
     throw error;
@@ -164,4 +207,34 @@ export const refreshAuthToken = async (refreshToken: string) => {
     refreshToken,
   });
   return response.data;
+};
+
+
+export const loginWithApple = async () => {
+  try {
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+
+    if (!credential.identityToken) {
+      throw new Error("No identity token returned from Apple.");
+    }
+
+    return {
+      identityToken: credential.identityToken,
+      authorizationCode: credential.authorizationCode,
+      fullName: credential.fullName,
+      email: credential.email,
+      user: credential.user,
+    };
+  } catch (e: any) {
+    if (e.code === "ERR_REQUEST_CANCELED") {
+      throw new Error("Apple Sign-In cancelled.");
+    }
+
+    throw e;
+  }
 };
