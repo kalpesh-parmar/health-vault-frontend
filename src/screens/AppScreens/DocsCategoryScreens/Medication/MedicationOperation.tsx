@@ -380,41 +380,41 @@ const MedicationOperation = ({
                 <ActivityIndicator size="large" color="#6366f1" style={{ marginVertical: 15 }} />
               ) : (
                 <View style={{ width: "100%", gap: 8 }}>
-                  {hasReplace && existingMed?.id && (
+                  {existingMed?.id && (
                     <ModalButton
                       style={{ backgroundColor: "#ef4444" }}
                       onPress={() => handleReplace(existingMed.id)}
                     >
-                      <ModalButtonText>Replace Existing Medication</ModalButtonText>
+                      <ModalButtonText>Replace</ModalButtonText>
                     </ModalButton>
                   )}
 
-                  {hasEdit && existingMed && (
+                  {/* {hasEdit && existingMed && (
                     <ModalButton
                       style={{ backgroundColor: "#3b82f6" }}
                       onPress={() => handleEditPrevious(existingMed)}
                     >
                       <ModalButtonText>Edit Existing Medication</ModalButtonText>
                     </ModalButton>
-                  )}
+                  )} */}
 
                   {hasKeepExisting && (
                     <ModalButton
                       style={{ backgroundColor: "#64748b" }}
                       onPress={handleKeepExisting}
                     >
-                      <ModalButtonText>Discard New & Keep Existing</ModalButtonText>
+                      <ModalButtonText>Keep Existing</ModalButtonText>
                     </ModalButton>
                   )}
 
-                  <ModalButton
+                  {/* <ModalButton
                     style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: isDark ? "#334155" : "#cbd5e1" }}
                     onPress={handleCancelModal}
                   >
                     <ModalButtonText style={{ color: isDark ? "#cbd5e1" : "#475569" }}>
                       Cancel & Edit Form
                     </ModalButtonText>
-                  </ModalButton>
+                  </ModalButton> */}
                 </View>
               )}
             </ModalFooter>

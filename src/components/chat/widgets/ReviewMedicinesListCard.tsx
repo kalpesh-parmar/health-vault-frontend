@@ -184,8 +184,13 @@ export function ReviewMedicinesListCard({
     } else {
       setCheckedMeds((prev) => [...prev, id]);
       setLocalMedicines((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, selected: true } : m)),
+        prev.map((m) => (m.id === id ? { ...m, selected: true, resolution: undefined } : m)),
       );
+      setResolutions((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 

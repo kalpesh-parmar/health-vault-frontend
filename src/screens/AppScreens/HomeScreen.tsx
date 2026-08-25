@@ -466,71 +466,174 @@ const HomeScreen = () => {
         )}
 
         {/* Analysis Complete Banner */}
-        {completedBatch && !isBannerDismissed && (
-          <AnalysisCompleteBanner style={{ marginHorizontal: 24, marginTop: 20 }}>
-            <View style={{ flexDirection: "row", alignItems: "flex-start", flex: 1 }}>
-              <Ionicons name="checkmark-circle" size={22} color="#10b981" style={{ marginRight: 10, marginTop: 2 }} />
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
-                  <AnalysisCompleteTitle>Analysis Complete!</AnalysisCompleteTitle>
-                  <AnalysisCompleteSub style={{ marginLeft: 6, marginTop: 0 }}>
-                    We found {completedBatch.medicineCount} medicine{completedBatch.medicineCount === 1 ? "" : "s"} in your documents.
-                  </AnalysisCompleteSub>
+        {completedBatch && !isBannerDismissed && (() => {
+          const docs = completedBatch.documents || [];
+          const completedDocs = docs.filter(
+            (d: any) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
+          ).length;
+          const failedDocs = docs.filter(
+            (d: any) => d.status === "FAILED" || d.status === "failed" || d.status === "error"
+          );
+          const rejectedDocs = docs.filter(
+            (d: any) => d.status === "REJECTED" || d.status === "rejected"
+          );
+          
+          const totalMedicines = completedBatch.medicineCount || 0;
+          const docsWithMedicines = docs.filter((d: any) => (d.medicineCount || 0) > 0).length;
+
+          return (
+            <View style={{
+              marginHorizontal: 24,
+              marginTop: 16,
+              borderRadius: 16,
+              backgroundColor: isDark ? "#1e293b" : "#ffffff",
+              borderWidth: 1,
+              borderColor: isDark ? "#334155" : "#e2e8f0",
+              padding: 16,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.05,
+              shadowRadius: 4,
+              elevation: 2,
+            }}>
+              {/* Header Row */}
+              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                <View style={{
+                  width: 32, height: 32, borderRadius: 16,
+                  backgroundColor: "#10b981",
+                  justifyContent: "center", alignItems: "center", marginRight: 12,
+                }}>
+                  <Ionicons name="checkmark" size={20} color="#ffffff" />
                 </View>
-
-                {completedBatch.documents && completedBatch.documents.length > 0 && (
-                  <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: isDark ? "#2d3748" : "#e2e8f0", paddingTop: 10 }}>
-                    {completedBatch.documents.map((doc) => {
-                      const isCompleted = doc.status === "COMPLETED" || doc.status === "completed" || doc.status === "success";
-                      return (
-                        <View key={doc.id} style={{ flexDirection: "row", alignItems: "flex-start", marginVertical: 4 }}>
-                          <Ionicons
-                            name={isCompleted ? "checkmark-circle" : "close-circle"}
-                            size={16}
-                            color={isCompleted ? "#10b981" : "#ef4444"}
-                            style={{ marginRight: 6, marginTop: 2 }}
-                          />
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#1e293b" }}>{doc.name}</Text>
-                            {isCompleted ? (
-                              <Text style={{ fontSize: 11, color: isDark ? "#94a3b8" : "#64748b" }}>
-                                Successfully processed • {doc.medicineCount || 0} medicines found
-                              </Text>
-                            ) : (
-                              <Text style={{ fontSize: 11, color: "#ef4444" }} numberOfLines={2}>
-                                Rejected: {doc.reason || "Failed to process"}
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                <ReviewNowBtn
-                  onPress={() => {
-                    if (completedBatch.fromScreen === "AIChat") {
-                      navigation.navigate("AIChat");
-                    } else {
-                      navigation.navigate("ReviewMedicines", {
-                        jobIds: completedBatch.jobIds,
-                        filesInfo: completedBatch.filesInfo,
-                      });
-                    }
-                  }}
-                  activeOpacity={0.8}
-                  style={{ alignSelf: "flex-start", marginTop: 12 }}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: isDark ? "#f8fafc" : "#0f172a" }}>
+                    Analysis Complete
+                  </Text>
+                  <Text style={{ fontSize: 12, marginTop: 2, color: isDark ? "#94a3b8" : "#64748b" }}>
+                    {completedDocs} of {docs.length} documents processed successfully
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => { setIsBannerDismissed(true); clearCompletedBatch(); }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <ReviewNowBtnText>Review Now</ReviewNowBtnText>
-                </ReviewNowBtn>
+                  <Ionicons name="close" size={18} color={isDark ? "#64748b" : "#94a3b8"} />
+                </TouchableOpacity>
               </View>
+
+              {/* Divider */}
+              <View style={{ height: 1, backgroundColor: isDark ? "#334155" : "#f1f5f9", marginVertical: 16 }} />
+
+              {/* Middle Section: Medicines Found & Documents with medicines */}
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline" }}>
+                  <Text style={{ fontSize: 24, fontWeight: "700", color: isDark ? "#f8fafc" : "#0f172a", marginRight: 8 }}>
+                    {totalMedicines}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>medicines found</Text>
+                </View>
+                
+                <View style={{ width: 1, height: "100%", backgroundColor: isDark ? "#334155" : "#e2e8f0", marginHorizontal: 12 }} />
+                
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline" }}>
+                  <Text style={{ fontSize: 24, fontWeight: "700", color: isDark ? "#f8fafc" : "#0f172a", marginRight: 8 }}>
+                    {docsWithMedicines}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>document with medicines</Text>
+                </View>
+              </View>
+
+              {/* Warnings (Optional - static for now based on design) */}
+              {/* <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+                <Ionicons name="warning-outline" size={16} color="#f59e0b" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 12, color: "#d97706" }}>1 document contains promotional content</Text>
+              </View> */}
+
+              {/* Divider before errors (only if there are errors) */}
+              {(failedDocs.length > 0 || rejectedDocs.length > 0) && (
+                <>
+                  <View style={{ height: 1, backgroundColor: isDark ? "#334155" : "#f1f5f9", marginBottom: 16 }} />
+                  
+                  {failedDocs.length > 0 && (
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#ef4444", justifyContent: "center", alignItems: "center", marginRight: 12 }}>
+                        <Ionicons name="close" size={14} color="#ffffff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "500", color: isDark ? "#f8fafc" : "#0f172a" }}>
+                          {failedDocs.length} document{failedDocs.length !== 1 ? 's' : ''} failed to process
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => {
+                          Toast.show({
+                            type: "info",
+                            text1: "Feature will be implemented soon",
+                          });
+                        }}
+                        style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: "#f87171" }}
+                      >
+                        <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "500" }}>Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {rejectedDocs.length > 0 && (
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+                      <Ionicons name="ban-outline" size={20} color={isDark ? "#94a3b8" : "#64748b"} style={{ marginRight: 12 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "500", color: isDark ? "#f8fafc" : "#0f172a" }}>
+                          {rejectedDocs.length} document{rejectedDocs.length !== 1 ? 's' : ''} was rejected
+                        </Text>
+                        <Text style={{ fontSize: 10, color: isDark ? "#94a3b8" : "#64748b" }}>Unsupported file type</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => {
+                          Toast.show({
+                            type: "info",
+                            text1: "Feature will be implemented soon",
+                          });
+                        }}
+                        style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: "#94a3b8" }}
+                      >
+                        <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>View Details</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Review Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  if (completedBatch.fromScreen === "AIChat") {
+                    navigation.navigate("AIChat");
+                  } else {
+                    navigation.navigate("ReviewMedicines", {
+                      jobIds: completedBatch.jobIds,
+                      filesInfo: completedBatch.filesInfo,
+                    });
+                  }
+                }}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: "#6366f1", // Purple-ish blue from design
+                  borderRadius: 8,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  marginTop: failedDocs.length === 0 && rejectedDocs.length === 0 ? 0 : 4,
+                }}
+              >
+                <Text style={{ color: "#ffffff", fontSize: 14, fontWeight: "600", marginRight: 8 }}>
+                  Review Results
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#ffffff" />
+              </TouchableOpacity>
             </View>
-            <CloseBannerBtn onPress={() => setIsBannerDismissed(true)} style={{ alignSelf: "flex-start", padding: 2 }}>
-              <Ionicons name="close" size={20} color="#166534" />
-            </CloseBannerBtn>
-          </AnalysisCompleteBanner>
-        )}
+          );
+        })()}
 
         {/* --- SECTION: UPCOMING REMINDERS --- */}
         <SectionHeader style={{ marginTop: 25 }}>

@@ -663,6 +663,7 @@ const AIChatScreen = ({ route }: any) => {
   const [keyboardPadding, setKeyboardPadding] = useState(0);
   const hasInitializedHistory = useRef(false);
   const [activeDateLabel, setActiveDateLabel] = useState<string>("");
+  const [showFloatingPanel, setShowFloatingPanel] = useState<boolean>(true);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems && viewableItems.length > 0) {
@@ -1731,6 +1732,7 @@ const AIChatScreen = ({ route }: any) => {
   const bottomPadding = useBottomBarPadding(40, 20);
 
   const handleOpenProgressSheet = () => {
+    setShowFloatingPanel(false);
     extractionSheetRef.current?.present();
     if (isAllTerminal) {
       setChatWizardState((prev) => ({
@@ -1738,6 +1740,10 @@ const AIChatScreen = ({ route }: any) => {
         hasViewedCompletedOcr: true,
       }));
     }
+  };
+
+  const handleExtractionSheetClose = () => {
+    setShowFloatingPanel(true);
   };
 
   // Fetch all documents
@@ -2125,9 +2131,10 @@ const AIChatScreen = ({ route }: any) => {
       />
 
       {/* Floating Background Progress Panel */}
-      {(isUploading ||
-        (chatWizardState.step !== "idle" &&
-          !chatWizardState.hasViewedCompletedOcr)) && (
+      {showFloatingPanel &&
+        (isUploading ||
+          (chatWizardState.step !== "idle" &&
+            !chatWizardState.hasViewedCompletedOcr)) && (
         <FloatingProgressPanel
           onOpenSheet={handleOpenProgressSheet}
           isDark={isDark}
@@ -2932,6 +2939,7 @@ const AIChatScreen = ({ route }: any) => {
         ref={extractionSheetRef}
         preferredLang={preferredLang}
         isDark={isDark}
+        onClose={handleExtractionSheetClose}
       />
 
       <BottomSheet ref={editSheetRef} snapPoints={["85%"]}>
