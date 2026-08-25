@@ -10,7 +10,6 @@ import {
   StyleSheet,
   View,
   Text,
-  ScrollView,
   StatusBar,
   BackHandler,
   TouchableOpacity,
@@ -66,7 +65,6 @@ import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 // Reusable Redesigned Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
 import { ChatInput } from "../../components/chat/ChatInput";
-import { EmptyChatState } from "../../components/chat/EmptyChatState";
 import { MessageBubble } from "../../components/chat/MessageBubble";
 import { SuggestedQuestionChip } from "../../components/chat/SuggestedQuestionChip";
 

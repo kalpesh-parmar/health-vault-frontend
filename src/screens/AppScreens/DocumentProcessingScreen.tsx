@@ -6,6 +6,8 @@ import {
   ActivityIndicator,
   Modal,
   BackHandler,
+  TouchableOpacity,
+  Text,
 } from "react-native";
 import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -39,8 +41,9 @@ export const DocumentProcessingScreen = () => {
   const { isDark } = useAppTheme();
   const { userId } = useAuth();
   const bottomPadding = useBottomBarPadding(20);
-  const { startBackgroundOcr, uploadingDocs } = useDocumentUpload();
+  const { startBackgroundOcr, retryDocument, uploadingDocs } = useDocumentUpload();
   const isFocused = useIsFocused();
+
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
   const [hasMovedToBackground, setHasMovedToBackground] = useState(false);
@@ -260,8 +263,31 @@ export const DocumentProcessingScreen = () => {
                     <RejectionReasonText style={{ color: "#ef4444" }}>
                       {job.error || "Processing failed"}
                     </RejectionReasonText>
+                    {!nonMedical && (
+                      <TouchableOpacity
+                        style={{
+                          marginTop: 8,
+                          paddingVertical: 6,
+                          paddingHorizontal: 12,
+                          backgroundColor: "#0d9488",
+                          borderRadius: 6,
+                          alignSelf: "flex-start",
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
+                        onPress={() => {
+                          const matchedFile = filesInfo.find((f) => f.jobId === job.jobId);
+                          const fileKey = matchedFile?.fileKey || job.jobId;
+                          retryDocument(fileKey);
+                        }}
+                      >
+                        <Ionicons name="refresh" size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                        <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "600" }}>Retry Extraction</Text>
+                      </TouchableOpacity>
+                    )}
                   </RejectionContainer>
                 )}
+
 
                 {/* Loading Result Spinner Overlay */}
                 {isLoadingResult === job.jobId && (

@@ -14,6 +14,8 @@ import { formatUTCDateTime } from "../../utils/dateFormatter";
 import { formatDocumentType } from "../shared/EditDocumentBottomSheet";
 interface Props {
   document: MedicalDocument;
+  selected?: boolean;
+  isSelectionMode?: boolean;
   onSelect?: (id: string) => void;
   onEdit?: (document: MedicalDocument) => void;
   onShare?: (document: MedicalDocument) => void;

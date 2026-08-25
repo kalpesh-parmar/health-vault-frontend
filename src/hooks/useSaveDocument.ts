@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
-import { documentUpload, runOcr, getOcrStatus, addDocument } from "../services/documentService";
+import { documentUpload, runOcr, addDocument } from "../services/documentService";
+import { connectSseStream, SseEventPayload } from "../services/streamService";
+import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
 
 export interface UploadedFile {
   fileName: string;
@@ -62,54 +64,68 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
 
       await runOcr({ fileKey, documentType });
 
-      // Step 3: Poll status
-      const maxRetries = 100;
-      const delayMs = 1500;
-      let job = null;
+      // Step 3: Stream progress via SSE (Zero polling)
+      const job: any = await new Promise((resolve, reject) => {
+        let terminalReceived = false;
+        const unsubscribe = connectSseStream({
+          endpoint: DOCUMENT_ENDPOINTS.SSE_FILE_STREAM(fileKey),
+          onEvent: (event: SseEventPayload) => {
+            const pct =
+              typeof event.percentage === "number"
+                ? event.percentage
+                : typeof event.progress === "number"
+                  ? event.progress
+                  : 50;
+            setProgressPercentage(pct);
+            if (event.message) {
+              setProgressMessage(event.message);
+            }
+            if (event.stage) {
+              setProgressStage(event.stage);
+            }
 
-      for (let i = 0; i < maxRetries; i++) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        const statusRes = await getOcrStatus(fileKey);
-        const jobData = statusRes?.data || statusRes;
+            const isCompleted =
+              event.stage === "COMPLETED" ||
+              event.stageStatus === "COMPLETED" ||
+              event.type === "document.completed" ||
+              (event.status === "SUCCESS" && pct === 100);
 
-        if (jobData?.stage === "OCR_QUEUED" || jobData?.stage === "OCR_STARTED") {
-          setProgressStage("VALIDATING");
-          setProgressPercentage(30);
-          setProgressMessage("Checking whether the document is medical.");
-        } else if (jobData?.stage === "VALIDATING") {
-          setProgressStage("VALIDATING");
-          setProgressPercentage(35);
-          setProgressMessage("Checking whether the document is medical.");
-        } else if (jobData?.stage === "EXTRACTING") {
-          setProgressStage("EXTRACTING");
-          setProgressPercentage(50);
-          setProgressMessage("Reading report contents.");
-        } else if (jobData?.stage === "ANALYZING") {
-          setProgressStage("ANALYZING");
-          setProgressPercentage(70);
-          setProgressMessage("Finding tests and medical values.");
-        } else if (jobData?.stage === "SUMMARIZING") {
-          setProgressStage("SUMMARIZING");
-          setProgressPercentage(90);
-          setProgressMessage("Preparing easy explanation.");
-        }
+            const isFailed =
+              event.stage === "FAILED" ||
+              event.stageStatus === "FAILED" ||
+              event.type === "document.failed" ||
+              event.status === "FAILED";
 
-        if (jobData?.status === "COMPLETED") {
-          setProgressStage("COMPLETED");
-          setProgressPercentage(100);
-          setProgressMessage("You can now ask questions.");
-          job = jobData;
-          break;
-        }
-
-        if (jobData?.status === "FAILED") {
-          throw new Error(jobData?.error || "OCR extraction failed");
-        }
-      }
-
-      if (!job) {
-        throw new Error("OCR job timed out");
-      }
+            if (isCompleted && !terminalReceived) {
+              terminalReceived = true;
+              unsubscribe();
+              resolve(event);
+            } else if (isFailed && !terminalReceived) {
+              terminalReceived = true;
+              unsubscribe();
+              reject(new Error(event.message || "Document analysis failed"));
+            }
+          },
+          onTerminal: (event: SseEventPayload) => {
+            if (!terminalReceived) {
+              terminalReceived = true;
+              unsubscribe();
+              if (event.stage === "COMPLETED" || event.stageStatus === "COMPLETED" || event.type === "document.completed") {
+                resolve(event);
+              } else {
+                reject(new Error(event.message || "Document analysis failed"));
+              }
+            }
+          },
+          onError: (err) => {
+            if (!terminalReceived) {
+              terminalReceived = true;
+              unsubscribe();
+              reject(err);
+            }
+          },
+        });
+      });
 
       console.log("filekey :- ", fileKey);
 
@@ -120,8 +136,8 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
         fileName,
         fileType: mimeType,
         s3bucket: uploadRes?.data?.s3Bucket,
-        rawOcrData: job.rawOcrData,
-        extractedStructuredData: job.extractedStructuredData,
+        rawOcrData: job.rawOcrData || job.extra || {},
+        extractedStructuredData: job.extractedStructuredData || job.summary || {},
         graphs: job.graphs || [],
         embeddingsGenerated: true
       });
@@ -140,7 +156,7 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
       queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
-      
+
       setTimeout(() => {
         Toast.show({
           type: "success",

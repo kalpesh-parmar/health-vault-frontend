@@ -18,6 +18,9 @@ export const PATIENT_ENDPOINTS = {
 export const DOCUMENT_ENDPOINTS = {
   UPLOAD_DOCUMENT: "/documents/upload",
   PATIENT_DOCUMENTS_UPLOAD: (patientId: string) => `/patient/${patientId}/documents/upload`,
+  RETRY_DOCUMENT: "/documents/retry",
+  SSE_BATCH_STREAM: (batchId: string) => `/sse/batches/${batchId}/stream`,
+  SSE_FILE_STREAM: (fileKey: string) => `/sse/files/${fileKey}/stream`,
   OCR_JOB_START: (jobId: string) => `/ocr/jobs/${jobId}/start`,
   OCR_JOB_STATUS: (jobId: string) => `/ocr/jobs/${jobId}`,
   OCR_JOB_RESULT: (jobId: string) => `/ocr/jobs/${jobId}/result`,
@@ -42,6 +45,7 @@ export const DOCUMENT_ENDPOINTS = {
   OCR_EXTRACT: "/v1/ocr/extract",
   OCR_STATUS: "/v1/ocr/status/{documentId}",
 } as const;
+
 
 export const MEDICATION_REMINDER_ENDPOINTS = {
   CREATE_MEDICATION_REMINDER: "/medication-reminders/create",

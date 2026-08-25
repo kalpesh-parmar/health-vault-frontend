@@ -39,8 +39,8 @@ import { getUser } from "../../services/userService";
 import {
   uploadPatientDocuments,
   startOcrJob,
-  getOcrJob,
 } from "../../services/documentService";
+import { connectSseStream, SseEventPayload } from "../../services/streamService";
 
 // Reusable Redesigned Components
 import { ChatInput } from "../../components/chat/ChatInput";
@@ -347,50 +347,8 @@ export default function OnboardingScreen() {
             "[ONBOARDING] Resuming pending job ID on startup:",
             pendingJobId,
           );
-          try {
-            const jobRes = await getOcrJob(pendingJobId);
-            const jobData = jobRes?.data || (jobRes as any);
-
-            if (jobData) {
-              if (jobData.status === "COMPLETED") {
-                await AsyncStorage.removeItem("onboarding_pending_job_id");
-                await AsyncStorage.removeItem("onboarding_pending_document_id");
-                setUploadState("success");
-                setTimeout(() => {
-                  setUploadState("idle");
-                }, 3000);
-                await handleCompletedJob(
-                  pendingDocId || pendingJobId,
-                  "report.pdf",
-                );
-              } else if (
-                jobData.status === "FAILED" ||
-                jobData.status === "CANCELLED"
-              ) {
-                await AsyncStorage.removeItem("onboarding_pending_job_id");
-                await AsyncStorage.removeItem("onboarding_pending_document_id");
-                setUploadState("idle");
-                Toast.show({
-                  type: "error",
-                  text1: "Analysis Failed",
-                  text2: jobData.error || "Document analysis failed.",
-                });
-              } else {
-                // QUEUED or RUNNING
-                setUploadState("processing");
-                startJobPolling(pendingJobId, pendingDocId || pendingJobId);
-              }
-            }
-          } catch (err: any) {
-            console.warn(
-              "[ONBOARDING] Failed to query pending job status on server:",
-              err.message,
-            );
-            if (err?.response?.status === 404) {
-              await AsyncStorage.removeItem("onboarding_pending_job_id");
-              await AsyncStorage.removeItem("onboarding_pending_document_id");
-            }
-          }
+          setUploadState("processing");
+          startJobPolling(pendingJobId, pendingDocId || pendingJobId);
         }
       } catch (err) {
         console.warn("[ONBOARDING] Failed to resume pending job:", err);
@@ -902,6 +860,7 @@ export default function OnboardingScreen() {
   };
 
   const uploadAbortControllerRef = useRef<AbortController | null>(null);
+  const sseUnsubRef = useRef<(() => void) | null>(null);
 
   const startJobPolling = async (jobId: string, documentId: string) => {
     pollActiveRef.current = true;
@@ -911,37 +870,36 @@ export default function OnboardingScreen() {
     setPollCurrentPage(1);
     setPollTotalPages(1);
 
-    let localElapsedTime = 0;
-    let autoRetryAttempts = 0;
-    const maxStatusRetries = 3;
+    if (sseUnsubRef.current) {
+      sseUnsubRef.current();
+      sseUnsubRef.current = null;
+    }
 
-    const runPoll = async () => {
-      if (!pollActiveRef.current) return;
+    const streamUrl = `/sse/files/${jobId}/stream`;
 
-      if (cancelRequestedRef.current) {
-        pollActiveRef.current = false;
-        await handleCancelJob(documentId);
-        return;
-      }
+    sseUnsubRef.current = connectSseStream({
+      endpoint: streamUrl,
+      onEvent: async (event: SseEventPayload) => {
+        if (!pollActiveRef.current || cancelRequestedRef.current) return;
 
-      if (isOfflineRef.current) {
-        setTimeout(runPoll, 2500);
-        return;
-      }
+        const isCompleted =
+          event.stage === "COMPLETED" ||
+          event.stageStatus === "COMPLETED" ||
+          event.type === "document.completed" ||
+          (event.status === "SUCCESS" && event.percentage === 100);
 
-      try {
-        const jobRes = await getOcrJob(jobId);
-        const jobData = jobRes?.data || (jobRes as any);
-        console.log(
-          "[ONBOARDING] Poll OCR Job Status:",
-          jobData?.status,
-          jobData?.stage,
-        );
+        const isFailed =
+          event.stage === "FAILED" ||
+          event.stageStatus === "FAILED" ||
+          event.type === "document.failed" ||
+          event.status === "FAILED";
 
-        autoRetryAttempts = 0;
-
-        if (jobData?.status === "COMPLETED") {
+        if (isCompleted) {
           pollActiveRef.current = false;
+          if (sseUnsubRef.current) {
+            sseUnsubRef.current();
+            sseUnsubRef.current = null;
+          }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("success");
@@ -953,70 +911,71 @@ export default function OnboardingScreen() {
             selectedFileRef.current?.name || "report.pdf",
           );
           return;
-        } else if (
-          jobData?.status === "FAILED" ||
-          jobData?.status === "CANCELLED"
-        ) {
+        }
+
+        if (isFailed) {
           pollActiveRef.current = false;
+          if (sseUnsubRef.current) {
+            sseUnsubRef.current();
+            sseUnsubRef.current = null;
+          }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("idle");
           Toast.show({
             type: "error",
             text1: "Analysis Failed",
-            text2: jobData.error || "Document analysis failed.",
+            text2: event.message || "Document analysis failed.",
           });
           return;
         }
 
-        // Processing or queued
         setUploadState("processing");
-        if (typeof jobData?.percentage === "number") {
-          setUploadPercent(jobData.percentage);
+        if (typeof event.percentage === "number") {
+          setUploadPercent(event.percentage);
+        } else if (typeof event.progress === "number") {
+          setUploadPercent(event.progress);
         }
-        if (jobData?.metadata?.pageCount) {
-          const total = jobData.metadata.pageCount;
-          setPollTotalPages(total);
-          const pct = jobData.percentage || 0;
-          const current = Math.min(
-            total,
-            Math.max(1, Math.ceil((pct / 100) * total)),
-          );
-          setPollCurrentPage(current);
+        if (event.extra?.totalPages) {
+          setPollTotalPages(event.extra.totalPages);
+          if (event.extra.page) {
+            setPollCurrentPage(event.extra.page);
+          }
         }
-
-        localElapsedTime += 2500;
-        setPollElapsedTime(localElapsedTime);
-
-        if (localElapsedTime >= 180000) {
-          console.warn("[ONBOARDING] Polling timeout reached (180s)");
-          pollActiveRef.current = false;
-          setUploadState("timed_out");
-          setActiveErrorCode("NETWORK_TIMEOUT");
-          return;
+      },
+      onTerminal: async (event: SseEventPayload) => {
+        if (!pollActiveRef.current || cancelRequestedRef.current) return;
+        pollActiveRef.current = false;
+        if (sseUnsubRef.current) {
+          sseUnsubRef.current();
+          sseUnsubRef.current = null;
         }
-      } catch (error: any) {
-        console.error("[ONBOARDING] Job status poll error:", error);
-
-        autoRetryAttempts++;
-        if (autoRetryAttempts <= maxStatusRetries) {
-          const backoffDelay = Math.pow(2, autoRetryAttempts) * 1000;
-          setTimeout(runPoll, backoffDelay);
-          return;
-        } else {
-          pollActiveRef.current = false;
+        if (event.stage === "COMPLETED" || event.stageStatus === "COMPLETED" || event.type === "document.completed") {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
-          setUploadState("failed");
-          setActiveErrorCode("SERVER_UNREACHABLE");
-          return;
+          setUploadState("success");
+          setTimeout(() => {
+            setUploadState("idle");
+          }, 3000);
+          await handleCompletedJob(
+            documentId,
+            selectedFileRef.current?.name || "report.pdf",
+          );
+        } else {
+          await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadState("idle");
+          Toast.show({
+            type: "error",
+            text1: "Analysis Failed",
+            text2: event.message || "Document analysis failed.",
+          });
         }
-      }
-
-      setTimeout(runPoll, 2500);
-    };
-
-    setTimeout(runPoll, 1000);
+      },
+      onError: (err) => {
+        console.warn("[ONBOARDING SSE Error]:", err.message);
+      },
+    });
   };
 
   const handleCancelJob = async (documentId: string) => {
@@ -1041,6 +1000,10 @@ export default function OnboardingScreen() {
   const cancelProcessing = async () => {
     cancelRequestedRef.current = true;
     pollActiveRef.current = false;
+    if (sseUnsubRef.current) {
+      sseUnsubRef.current();
+      sseUnsubRef.current = null;
+    }
     if (uploadAbortControllerRef.current) {
       uploadAbortControllerRef.current.abort();
       uploadAbortControllerRef.current = null;
@@ -1258,10 +1221,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(opt.value).toLowerCase() ===
-                  String(chosenVal).toLowerCase()) ||
+                String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(opt.label).toLowerCase() ===
-                    String(chosenLabel).toLowerCase()));
+                  String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1333,10 +1296,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(opt.value).toLowerCase() ===
-                  String(chosenVal).toLowerCase()) ||
+                String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(label).toLowerCase() ===
-                    String(chosenLabel).toLowerCase()));
+                  String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1471,14 +1434,14 @@ export default function OnboardingScreen() {
           const updatedMeds = localMedicines.map((m) =>
             (m.client_med_id || m.id) === (med.client_med_id || med.id)
               ? {
-                  ...m,
-                  ...updatedMed,
-                  subtitle:
-                    updatedMed.type === "TABLET" ||
+                ...m,
+                ...updatedMed,
+                subtitle:
+                  updatedMed.type === "TABLET" ||
                     updatedMed.type === "CAPSULE"
-                      ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
-                      : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
-                }
+                    ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
+                    : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
+              }
               : m,
           );
           setLocalMedicines(updatedMeds);
@@ -1548,11 +1511,11 @@ export default function OnboardingScreen() {
           onCancel={
             isEditingLocal
               ? () => {
-                  setActiveMedicineToEdit(null);
-                  setMessages((prev) =>
-                    prev.filter((m) => m.id !== activeMsg.id),
-                  );
-                }
+                setActiveMedicineToEdit(null);
+                setMessages((prev) =>
+                  prev.filter((m) => m.id !== activeMsg.id),
+                );
+              }
               : undefined
           }
           readOnly={isHistorical}
@@ -1568,14 +1531,12 @@ export default function OnboardingScreen() {
           prev.map((msg) =>
             msg.id === activeMsg.id
               ? {
-                  ...msg,
-                  medicines: (msg.medicines || localMedicines || []).map(
-                    (m) => ({
-                      ...m,
-                      selected: checkedMeds.includes(m.id),
-                    }),
-                  ),
-                }
+                ...msg,
+                medicines: (msg.medicines || localMedicines || []).map((m) => ({
+                  ...m,
+                  selected: checkedMeds.includes(m.id),
+                })),
+              }
               : msg,
           ),
         );
@@ -1737,10 +1698,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(value).toLowerCase() ===
-                  String(chosenVal).toLowerCase()) ||
+                String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(label).toLowerCase() ===
-                    String(chosenLabel).toLowerCase()));
+                  String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1904,16 +1865,16 @@ export default function OnboardingScreen() {
                 {
                   paddingBottom:
                     activeAction === "ADD_MEDICINE" ||
-                    activeAction === "EDIT_MEDICINE"
+                      activeAction === "EDIT_MEDICINE"
                       ? Math.max(insets.bottom, 16) + 16 + actualKeyboardHeight
                       : activeAction === "ASK_LANGUAGE" ||
-                          activeAction === "ASK_UPLOAD_OR_SKIP" ||
-                          activeAction === "ASK_GENDER" ||
-                          activeAction === "ASK_DOB" ||
-                          activeAction === "REVIEW_MEDICINES_LIST" ||
-                          activeAction === "CONFIRM_MEDICINE" ||
-                          activeAction === "MEDICINE_OPTIONS" ||
-                          activeAction === "POST_ONBOARDING"
+                        activeAction === "ASK_UPLOAD_OR_SKIP" ||
+                        activeAction === "ASK_GENDER" ||
+                        activeAction === "ASK_DOB" ||
+                        activeAction === "REVIEW_MEDICINES_LIST" ||
+                        activeAction === "CONFIRM_MEDICINE" ||
+                        activeAction === "MEDICINE_OPTIONS" ||
+                        activeAction === "POST_ONBOARDING"
                         ? Math.max(insets.bottom, 16) + 16
                         : 16,
                 },
@@ -2033,41 +1994,25 @@ export default function OnboardingScreen() {
                         ? "Uploading"
                         : uploadState === "processing"
                           ? (
-                              ONBOARDING_I18N[
-                                (
-                                  state.preferredLanguage || "english"
-                                ).toLowerCase()
-                              ]?.page_progress ||
-                              ONBOARDING_I18N.english.page_progress
-                            )
-                              .replace("Page", "Processing")
-                              .replace("પૃષ્ઠ", "Processing")
-                              .replace("पृष्ठ", "Processing")
-                              .replace("पान", "Processing")
-                              .replace("பக்கம்", "Processing")
-                              .replace("{current}", String(pollCurrentPage))
-                              .replace("{total}", String(pollTotalPages))
+                            ONBOARDING_I18N[
+                              (state.preferredLanguage || "english").toLowerCase()
+                            ]?.page_progress ||
+                            ONBOARDING_I18N.english.page_progress
+                          )
+                            .replace("Page", "Processing")
+                            .replace("પૃષ્ઠ", "Processing")
+                            .replace("पृष्ठ", "Processing")
+                            .replace("पान", "Processing")
+                            .replace("பக்கம்", "Processing")
+                            .replace("{current}", String(pollCurrentPage))
+                            .replace("{total}", String(pollTotalPages))
                           : uploadState === "validating"
                             ? "Validating"
                             : "Queued"}
                     </Text>
 
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        marginHorizontal: 6,
-                        fontSize: 13,
-                      }}
-                    >
-                      •
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        fontSize: 13,
-                      }}
-                      numberOfLines={1}
-                    >
+                    <Text style={{ color: theme.colors.textSecondary, marginHorizontal: 6, fontSize: 13 }}>•</Text>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }} numberOfLines={1}>
                       {uploadState === "uploading"
                         ? "Uploading"
                         : uploadState === "processing"
@@ -2159,12 +2104,37 @@ export default function OnboardingScreen() {
               )}
 
               {/* EXPANDED VIEW (Additional details) */}
-              {!isProgressCollapsed &&
-                (uploadState === "uploading" ||
-                  uploadState === "processing" ||
-                  uploadState === "validating" ||
-                  uploadState === "queued") && (
-                  <View
+              {!isProgressCollapsed && (uploadState === "uploading" || uploadState === "processing" || uploadState === "validating" || uploadState === "queued") && (
+                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? "#334155" : "#f1f5f9" }}>
+                  {uploadState === "processing" && (
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 11, fontStyle: "italic", flex: 1, marginRight: 8 }}>
+                        {ONBOARDING_I18N[
+                          (state.preferredLanguage || "english").toLowerCase()
+                        ]?.eta_hint || ONBOARDING_I18N.english.eta_hint}
+                      </Text>
+                      <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 12 }}>
+                        {Math.round(pollElapsedTime / 1000)}s
+                      </Text>
+                    </View>
+                  )}
+                  {uploadState === "uploading" && autoRetryCount > 0 && (
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginBottom: 8 }}>
+                      {(
+                        ONBOARDING_I18N[
+                          (state.preferredLanguage || "english").toLowerCase()
+                        ]?.retry_count || ONBOARDING_I18N.english.retry_count
+                      )
+                        .replace("{attempt}", String(autoRetryCount))
+                        .replace("{max}", "3")}
+                    </Text>
+                  )}
+
+                  {/* Cancel action button */}
+                  <TouchableOpacity
+                    accessibilityLabel="Cancel processing"
+                    accessibilityRole="button"
+                    onPress={cancelProcessing}
                     style={{
                       marginTop: 10,
                       paddingTop: 10,
@@ -2222,6 +2192,7 @@ export default function OnboardingScreen() {
                           .replace("{max}", "3")}
                       </Text>
                     )}
+                  </TouchableOpacity>
 
                     {/* Cancel action button */}
                     <TouchableOpacity
@@ -2288,13 +2259,11 @@ export default function OnboardingScreen() {
                   >
                     {uploadState === "timed_out"
                       ? ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.err_network_timeout ||
-                        ONBOARDING_I18N.english.err_network_timeout
+                        (state.preferredLanguage || "english").toLowerCase()
+                      ]?.err_network_timeout || ONBOARDING_I18N.english.err_network_timeout
                       : ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ][`err_${activeErrorCode?.toLowerCase()}`] ||
-                        ONBOARDING_I18N.english.err_unexpected_error}
+                      (state.preferredLanguage || "english").toLowerCase()
+                      ][`err_${activeErrorCode?.toLowerCase()}`] || ONBOARDING_I18N.english.err_unexpected_error}
                   </Text>
                   {__DEV__ && activeErrorDetails && (
                     <View
