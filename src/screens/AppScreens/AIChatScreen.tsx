@@ -52,6 +52,7 @@ import { ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { useTextToSpeech } from "../../hooks/useTextToSpeech";
+import { streamChatResponse } from "../../services/streamService";
 
 // Reusable Redesigned Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
@@ -81,6 +82,7 @@ type ChatMessage = {
   id: string;
   role: "ai" | "user";
   text: string;
+  sessionId?: string;
   mode?: ChatMode;
   emergency?: boolean;
   action?: string;
@@ -101,6 +103,12 @@ type ChatMessage = {
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
   createdAt?: string | Date;
 };
+
+const buildChatHistory = (messages: ChatMessage[]) =>
+  messages.map((m) => ({
+    role: m.role === "ai" ? "assistant" : "user",
+    content: m.text,
+  }));
 
 const I18N_CHAT_UI: Record<string, Record<string, string>> = {
   english: {
@@ -575,6 +583,8 @@ const AIChatScreen = ({ route }: any) => {
   const [medicineToEdit, setMedicineToEdit] = useState<ExtractedMedicine | null>(null);
   const editSheetRef = useRef<BottomSheetModal>(null);
   const [isConfirmingMeds, setIsConfirmingMeds] = useState(false);
+  const streamingAbortRef = useRef<AbortController | null>(null);
+  const streamingMessageIdRef = useRef<string | null>(null);
   const [failedSubmissions, setFailedSubmissions] = useState<{
     type: "new" | "replace" | "merge";
     med: any;
@@ -592,6 +602,112 @@ const AIChatScreen = ({ route }: any) => {
       });
     }
     return str;
+  };
+
+  const abortActiveStream = () => {
+    if (streamingAbortRef.current) {
+      streamingAbortRef.current.abort();
+      streamingAbortRef.current = null;
+    }
+    streamingMessageIdRef.current = null;
+  };
+
+  const upsertAssistantMessage = (
+    messageId: string,
+    updater: (current?: ChatMessage) => ChatMessage,
+  ) => {
+    setMessages((prev) => {
+      const index = prev.findIndex((msg) => msg.id === messageId);
+      if (index === -1) {
+        return [...prev, updater(undefined)];
+      }
+
+      const next = [...prev];
+      next[index] = updater(next[index]);
+      return next;
+    });
+  };
+
+  const streamNormalChat = async (payload: any) => {
+    abortActiveStream();
+    const controller = new AbortController();
+    streamingAbortRef.current = controller;
+
+    const messageId = `ai-stream-${Date.now()}`;
+    streamingMessageIdRef.current = messageId;
+    let hasChunk = false;
+
+    try {
+      await streamChatResponse(
+        "/v1/onboarding/chat",
+        payload,
+        {
+          onChunk: (chunkText) => {
+            if (!chunkText) return;
+            hasChunk = true;
+            upsertAssistantMessage(messageId, (current) => ({
+              ...(current || {
+                id: messageId,
+                role: "ai",
+                text: "",
+                createdAt: new Date().toISOString(),
+              }),
+              text: `${current?.text || ""}${chunkText}`,
+            }));
+          },
+          onFinish: (finalData) => {
+            const replyText = finalData?.reply || "";
+
+            upsertAssistantMessage(messageId, (current) => {
+              const baseMessage = current || {
+                id: messageId,
+                role: "ai",
+                text: "",
+                createdAt: new Date().toISOString(),
+              };
+
+              return {
+                ...baseMessage,
+                text: hasChunk
+                  ? baseMessage.text || replyText
+                  : replyText || baseMessage.text,
+                sessionId: finalData?.sessionId ?? baseMessage.sessionId,
+                mode: finalData?.mode ?? baseMessage.mode,
+                action:
+                  finalData?.actionType ||
+                  finalData?.action ||
+                  baseMessage.action ||
+                  "NORMAL_CHAT",
+                options: finalData?.options ?? baseMessage.options ?? [],
+                medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
+              };
+            });
+
+            if (finalData?.sessionId && !activeSessionId) {
+              setActiveSessionId(finalData.sessionId);
+              apiClient
+                .get("/chat/session", { params: { limit: 50 } })
+                .then((res) => {
+                  setSessions(res.data?.data?.items || res.data?.items || []);
+                })
+                .catch(() => {});
+            }
+          },
+          onError: (error) => {
+            if (error.message === "Stream cancelled") {
+              return;
+            }
+            console.warn("[AI_CHAT] Streaming request failed:", error.message);
+          },
+        },
+        { signal: controller.signal },
+      );
+    } finally {
+      if (streamingAbortRef.current === controller) {
+        streamingAbortRef.current = null;
+      }
+      streamingMessageIdRef.current = null;
+    }
   };
   
   useEffect(() => {
@@ -1393,6 +1509,7 @@ const AIChatScreen = ({ route }: any) => {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [onboardingMessages, setOnboardingMessages] = useState<any[]>([]);
+  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(false);
 
   // Fetch onboarding history once on mount
   useEffect(() => {
@@ -1407,6 +1524,20 @@ const AIChatScreen = ({ route }: any) => {
         } = response.data?.data || {};
         console.log("[CHAT SESSION ID] :- ", chatSessionId);
         setOnboardingSessionId(chatSessionId || null);
+
+        const completedFromState = Boolean(
+          resumableState?.isOnboardingCompleted ||
+            resumableState?.currentStep === "POST_ONBOARDING" ||
+            resumableState?.currentStep === "COMPLETE",
+        );
+        const completedFromHistory = Array.isArray(historyItems)
+          ? historyItems.some((dbMsg: any) => {
+              const action = dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
+              return action === "POST_ONBOARDING" || action === "COMPLETE";
+            })
+          : false;
+        setIsOnboardingCompleted(completedFromState || completedFromHistory);
+
         if (resumableState?.preferredLanguage) {
           setPreferredLang(resumableState.preferredLanguage);
         }
@@ -1431,8 +1562,8 @@ const AIChatScreen = ({ route }: any) => {
 
   const isOnboardingSession = useMemo(() => {
     const activeSess = sessions.find((s) => s.id === activeSessionId);
-    return activeSess?.metadata?.type === "ONBOARDING";
-  }, [sessions, activeSessionId]);
+    return !isOnboardingCompleted && activeSess?.metadata?.type === "ONBOARDING";
+  }, [sessions, activeSessionId, isOnboardingCompleted]);
 
   const uploadSheetRef = useRef<BottomSheetModal>(null);
   const extractionSheetRef = useRef<BottomSheetModal>(null);
@@ -1585,9 +1716,24 @@ const AIChatScreen = ({ route }: any) => {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      abortActiveStream();
+    };
+  }, []);
+
   const handleSend = async (customText?: string) => {
     const textToSubmit = (customText || input).trim();
     if (!textToSubmit) return;
+
+    if (!isOnboardingCompleted) {
+      Toast.show({
+        type: "info",
+        text1: "Complete onboarding first",
+        text2: "Normal chat becomes available after onboarding is complete.",
+      });
+      return;
+    }
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -1605,43 +1751,56 @@ const AIChatScreen = ({ route }: any) => {
 
     try {
       const payload = {
+        actionType: "NORMAL_CHAT",
         message: textToSubmit,
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
-        history: messages.map((m) => ({
-          role: m.role === "ai" ? "assistant" : "user",
-          content: m.text,
-        })),
+        history: buildChatHistory(messages),
         documentId: selectedDocument?.s3Key
           ? [selectedDocument.s3Key]
           : undefined,
+        stream: true,
       };
 
-      const response = await apiClient.post("/v1/onboarding/chat", payload);
-      const resData = response.data?.data;
+      if (payload.actionType === "NORMAL_CHAT" && payload.stream === true) {
+        console.log("[AI_CHAT] NORMAL_CHAT streaming branch selected.", {
+          sessionId: payload.sessionId,
+          preferredLanguage: payload.preferredLanguage,
+        });
+        await streamNormalChat(payload);
+      } else {
+        console.log("[AI_CHAT] Non-streaming branch selected.", {
+          actionType: payload.actionType,
+        });
+        const response = await apiClient.post("/v1/onboarding/chat", payload);
+        const resData = response.data?.data;
 
-      const aiMessage: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        role: "ai",
-        text: resData?.reply || "No reply from AI",
-        mode: resData?.mode as ChatMode,
-        action: resData?.actionType || resData?.action || "NORMAL_CHAT",
-        options: resData?.options || [],
-        createdAt: new Date().toISOString(),
-      };
+        const aiMessage: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: "ai",
+          text: resData?.reply || "No reply from AI",
+          mode: resData?.mode as ChatMode,
+          action: resData?.actionType || resData?.action || "NORMAL_CHAT",
+          options: resData?.options || [],
+          createdAt: new Date().toISOString(),
+        };
 
-      setMessages((prev) => [...prev, aiMessage]);
+        setMessages((prev) => [...prev, aiMessage]);
 
-      if (resData?.sessionId && !activeSessionId) {
-        setActiveSessionId(resData.sessionId);
-        apiClient
-          .get("/chat/session", { params: { limit: 50 } })
-          .then((res) => {
-            setSessions(res.data?.data?.items || res.data?.items || []);
-          })
-          .catch(() => {});
+        if (resData?.sessionId && !activeSessionId) {
+          setActiveSessionId(resData.sessionId);
+          apiClient
+            .get("/chat/session", { params: { limit: 50 } })
+            .then((res) => {
+              setSessions(res.data?.data?.items || res.data?.items || []);
+            })
+            .catch(() => {});
+        }
       }
     } catch (err: any) {
+      if (err?.message === "Stream cancelled") {
+        return;
+      }
       Toast.show({
         type: "error",
         text1: "Query Failed",
@@ -2405,7 +2564,12 @@ const AIChatScreen = ({ route }: any) => {
           )}
         </View>
 
-        {isOnboardingSession ? (
+        {!isOnboardingCompleted ? (
+          <ReadOnlyBanner>
+            <Ionicons name="lock-closed" size={16} color="#0f766e" />
+            <ReadOnlyText>{t("onboardingArchive")}</ReadOnlyText>
+          </ReadOnlyBanner>
+        ) : isOnboardingSession ? (
           <ReadOnlyBanner>
             <Ionicons name="lock-closed" size={16} color="#0f766e" />
             <ReadOnlyText>{t("onboardingArchive")}</ReadOnlyText>
