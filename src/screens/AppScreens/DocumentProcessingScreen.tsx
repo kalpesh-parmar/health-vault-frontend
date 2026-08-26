@@ -2,19 +2,18 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   ScrollView,
   StatusBar,
-  TouchableOpacity,
-  Text,
   View,
   ActivityIndicator,
   Modal,
   BackHandler,
+  TouchableOpacity,
+  Text,
 } from "react-native";
 import styled from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRoute, RouteProp, useIsFocused } from "@react-navigation/native";
-import Toast from "react-native-toast-message";
 
 import { useAppNavigation } from "../../types/navigation";
 import { useAppTheme } from "../../context/ThemeContext";
@@ -22,8 +21,9 @@ import { useAuth } from "../../context/ContextAPI";
 import { queryClient } from "../../config/queryClient";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { useOcrJobPolling, JobState } from "../../hooks/useOcrJobPolling";
-import { getOcrJobResult, OcrJobResult } from "../../services/documentService";
+import { getOcrStatus } from "../../services/documentService";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
+import Toast from "react-native-toast-message";
 
 type DocumentProcessingRouteProp = RouteProp<
   {
@@ -42,11 +42,23 @@ export const DocumentProcessingScreen = () => {
   const { isDark } = useAppTheme();
   const { userId } = useAuth();
   const bottomPadding = useBottomBarPadding(20);
-  const { startBackgroundOcr, retryDocument } = useDocumentUpload();
+  const { startBackgroundOcr, retryDocument, uploadingDocs } = useDocumentUpload();
   const isFocused = useIsFocused();
 
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
+  const [hasMovedToBackground, setHasMovedToBackground] = useState(false);
+
+  useEffect(() => {
+    if (jobIds && jobIds.length > 0 && uploadingDocs && uploadingDocs.length > 0) {
+      const alreadyInBackground = jobIds.some((id) =>
+        uploadingDocs.some((d) => d.id === id)
+      );
+      if (alreadyInBackground) {
+        setHasMovedToBackground(true);
+      }
+    }
+  }, [jobIds, uploadingDocs]);
 
   const {
     jobList,
@@ -69,6 +81,13 @@ export const DocumentProcessingScreen = () => {
         index: 0,
         routes: [{ name: "Home" as any }],
       });
+    }
+  };
+
+  const handleMoveToBackground = () => {
+    if (!isAllTerminal) {
+      startBackgroundOcr(jobIds, filesInfo);
+      setHasMovedToBackground(true);
     }
   };
 
@@ -102,7 +121,7 @@ export const DocumentProcessingScreen = () => {
 
   const [selectedResult, setSelectedResult] = useState<{
     fileName: string;
-    result: OcrJobResult;
+    result: any;
   } | null>(null);
 
   const [isLoadingResult, setIsLoadingResult] = useState<string | null>(null);
@@ -127,21 +146,22 @@ export const DocumentProcessingScreen = () => {
   const handleCardPress = async (job: JobState) => {
     if (job.status !== "COMPLETED") return;
 
+    const targetKey = job.fileKey || job.jobId;
     setIsLoadingResult(job.jobId);
     try {
-      const response = await getOcrJobResult(job.jobId);
+      const response = await getOcrStatus(targetKey);
       const resData = response?.data || response;
-      const fileName = filesMap[job.jobId]?.fileName || "Document Result";
+      const fileName = filesMap[job.jobId]?.fileName || filesMap[targetKey]?.fileName || job.fileName || "Document Result";
       setSelectedResult({
         fileName,
         result: resData,
       });
     } catch (error: any) {
-      console.error("[ProcessingScreen] Failed to fetch job result:", error);
+      console.error("[ProcessingScreen] Failed to fetch document details:", error);
       Toast.show({
         type: "error",
         text1: "Error",
-        text2: error.message || "Failed to load document result details.",
+        text2: error.message || "Failed to load document details.",
       });
     } finally {
       setIsLoadingResult(null);
@@ -209,7 +229,6 @@ export const DocumentProcessingScreen = () => {
                 status={job.status}
                 nonMedical={nonMedical}
                 activeOpacity={job.status === "COMPLETED" ? 0.8 : 1}
-                onPress={() => handleCardPress(job)}
               >
                 <JobCardHeader>
                   <FileIconBadge status={job.status} nonMedical={nonMedical}>
@@ -228,9 +247,7 @@ export const DocumentProcessingScreen = () => {
                       {job.status === "COMPLETED"
                         ? "Extraction Ready — Tap to view"
                         : job.status === "FAILED"
-                          ? nonMedical
-                            ? "Rejected: Non-Medical Document"
-                            : job.error || "Processing failed"
+                          ? `Rejected: ${job.error || "Processing failed"}`
                           : job.currentStep || "Processing..."}
                     </JobStepText>
                   </HeaderInfo>
@@ -269,7 +286,7 @@ export const DocumentProcessingScreen = () => {
                 {/* Error State & Retry Actions */}
                 {job.status === "FAILED" && (
                   <RejectionContainer>
-                    <RejectionReasonText>
+                    <RejectionReasonText style={{ color: "#ef4444" }}>
                       {nonMedical
                         ? "This file was detected as a non-medical record and could not be processed."
                         : job.error || "Document extraction failed."}
@@ -322,10 +339,24 @@ export const DocumentProcessingScreen = () => {
             </DoneBanner>
           )}
 
-          <BackgroundButton onPress={handleBackAction} activeOpacity={0.8}>
-            <Ionicons name="arrow-back-outline" size={16} color="white" style={{ marginRight: 8 }} />
-            <BackgroundButtonText>Move to Background</BackgroundButtonText>
-          </BackgroundButton>
+          {!isAllTerminal && (
+            hasMovedToBackground ? (
+              <InfoBoxContainer style={{ marginHorizontal: 20, marginTop: 15, marginBottom: 20 }}>
+                <Ionicons name="information-circle-outline" size={20} color="#4f46e5" style={{ marginRight: 8, marginTop: 1 }} />
+                <View style={{ flex: 1 }}>
+                  <InfoBoxTitle>Running in background</InfoBoxTitle>
+                  <InfoBoxText>
+                    You can safely navigate anywhere in the application. It will not affect the background document processing.
+                  </InfoBoxText>
+                </View>
+              </InfoBoxContainer>
+            ) : (
+              <BackgroundButton onPress={handleMoveToBackground} activeOpacity={0.8} style={{ marginBottom: 20 }}>
+                <Ionicons name="arrow-back-outline" size={16} color="white" style={{ marginRight: 8 }} />
+                <BackgroundButtonText>Move to Background</BackgroundButtonText>
+              </BackgroundButton>
+            )
+          )}
         </ScrollView>
       </ContentContainer>
 
@@ -349,28 +380,38 @@ export const DocumentProcessingScreen = () => {
               <ModalSectionHeader>English Summary</ModalSectionHeader>
               <ModalSummaryBox>
                 <ModalBodyText>
-                  {selectedResult?.result?.summaries?.summaryEnglish ||
-                    selectedResult?.result?.extractedStructuredData?.summaryEnglish ||
+                  {selectedResult?.result?.extractedStructuredData?.summaryEnglish ||
+                    selectedResult?.result?.structuredExtractedData?.summaryEnglish ||
+                    selectedResult?.result?.summaries?.summaryEnglish ||
+                    selectedResult?.result?.summary ||
                     "No English summary generated."}
                 </ModalBodyText>
               </ModalSummaryBox>
 
-              {Boolean(selectedResult?.result?.summaries?.summaryInPreferredLanguage) && (
-                <>
-                  <ModalSectionHeader>Localized Summary</ModalSectionHeader>
-                  <ModalSummaryBox>
-                    <ModalBodyText>
-                      {selectedResult?.result?.summaries?.summaryInPreferredLanguage}
-                    </ModalBodyText>
-                  </ModalSummaryBox>
-                </>
-              )}
+              {Boolean(
+                selectedResult?.result?.extractedStructuredData?.summaryInPreferredLanguage ||
+                selectedResult?.result?.structuredExtractedData?.summaryInPreferredLanguage ||
+                selectedResult?.result?.summaries?.summaryInPreferredLanguage,
+              ) && (
+                  <>
+                    <ModalSectionHeader>Localized Summary</ModalSectionHeader>
+                    <ModalSummaryBox>
+                      <ModalBodyText>
+                        {selectedResult?.result?.extractedStructuredData?.summaryInPreferredLanguage ||
+                          selectedResult?.result?.structuredExtractedData?.summaryInPreferredLanguage ||
+                          selectedResult?.result?.summaries?.summaryInPreferredLanguage}
+                      </ModalBodyText>
+                    </ModalSummaryBox>
+                  </>
+                )}
 
               <ModalSectionHeader>Extracted Medical Data</ModalSectionHeader>
               <RawJsonContainer>
                 <RawJsonText>
                   {JSON.stringify(
-                    selectedResult?.result?.extractedStructuredData || {},
+                    selectedResult?.result?.extractedStructuredData ||
+                    selectedResult?.result?.structuredExtractedData ||
+                    {},
                     null,
                     2,
                   )}
@@ -488,7 +529,7 @@ const SectionSubtitle = styled.Text`
   margin-bottom: 16px;
 `;
 
-const JobCard = styled.TouchableOpacity<{ status: string; nonMedical: boolean }>`
+const JobCard = styled.View<{ status: string; nonMedical: boolean }>`
   background-color: #ffffff;
   border-radius: 16px;
   padding: 16px;
@@ -816,4 +857,27 @@ const BackgroundButtonText = styled.Text`
   color: white;
   font-size: 15px;
   font-weight: 700;
+`;
+
+const InfoBoxContainer = styled.View`
+  flex-direction: row;
+  background-color: rgba(99, 102, 241, 0.08);
+  border-width: 1px;
+  border-color: rgba(99, 102, 241, 0.15);
+  border-radius: 12px;
+  padding: 14px;
+  align-items: flex-start;
+`;
+
+const InfoBoxTitle = styled.Text`
+  font-size: 14px;
+  font-weight: 700;
+  color: #4f46e5;
+  margin-bottom: 2px;
+`;
+
+const InfoBoxText = styled.Text`
+  font-size: 13px;
+  color: #4f46e5;
+  line-height: 18px;
 `;

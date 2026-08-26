@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import {
   MedicationFormFields,
@@ -15,6 +16,18 @@ interface EditMedicineFormWrapperProps {
   onClose: () => void;
   onSave: (updated: ExtractedMedicine) => void;
 }
+
+const getTodayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 export const EditMedicineFormWrapper = ({
   medicine,
@@ -40,7 +53,7 @@ export const EditMedicineFormWrapper = ({
       refill_alert: medicine.refillAlert || false,
       total_quantity: medicine.totalQuantity || 10,
       foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
-      startDate: medicine.startDate || new Date().toISOString().split("T")[0],
+      startDate: medicine.startDate && medicine.startDate !== "None" ? medicine.startDate : getTodayDateString(),
       medicationSchedule: medicine.medicationSchedule || ["08:00"],
     };
   }, [medicine]);
@@ -98,6 +111,26 @@ export const EditMedicineFormWrapper = ({
       errors.push("Total Quantity is required");
     }
 
+    if (startDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sDate = new Date(startDate);
+      sDate.setHours(0, 0, 0, 0);
+      if (sDate < today) {
+        errors.push(
+          preferredLang === "gujarati"
+            ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
+            : preferredLang === "hindi"
+              ? "आरंभ तिथि भूतकाल में नहीं हो सकती"
+              : preferredLang === "marathi"
+                ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
+                : preferredLang === "tamil"
+                  ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
+                  : "Start Date cannot be in the past"
+        );
+      }
+    }
+
     if (errors.length > 0) {
       setLocalErrors(errors);
       return;
@@ -118,20 +151,20 @@ export const EditMedicineFormWrapper = ({
       refillAlert: formRefill,
       refillAlertEnabled: formRefill,
       medicationSchedule: selectedSlots,
-      startDate: startDate ? (startDate instanceof Date ? startDate.toISOString().split("T")[0] : startDate) : new Date().toISOString().split("T")[0],
+      startDate: startDate ? (startDate instanceof Date ? formatLocalDate(startDate) : startDate) : getTodayDateString(),
     });
   };
 
   return (
-    <View style={{ padding: 16 }}>
+    <View style={{ flex: 1, padding: 16 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#f8fafc' : '#1e293b' }}>Edit Medicine</Text>
         <TouchableOpacity onPress={onClose}>
           <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#475569"} />
         </TouchableOpacity>
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 350 }}>
-        <MedicationFormFields formState={formState} isDark={isDark} theme={theme} preferredLang={preferredLang} />
+      <BottomSheetScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+        <MedicationFormFields formState={formState} isDark={isDark} theme={theme} preferredLang={preferredLang} isInBottomSheet={true} />
         {localErrors.length > 0 && (
           <View style={{ marginTop: 8, marginBottom: 12 }}>
             {localErrors.map((err, idx) => (
@@ -141,7 +174,7 @@ export const EditMedicineFormWrapper = ({
             ))}
           </View>
         )}
-      </ScrollView>
+      </BottomSheetScrollView>
       <TouchableOpacity
         onPress={handleSave}
         style={{

@@ -96,42 +96,6 @@ export interface BatchUploadItem {
   fileUrl?: string;
 }
 
-export interface OcrJobStatus {
-  id: string;
-  fileKey: string;
-  userId: string;
-  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
-  stage?: string;
-  percentage?: number;
-  currentStep?: string;
-  completedSteps?: number;
-  pendingSteps?: number;
-  message?: string | null;
-  metadata?: {
-    confidence?: number | null;
-    pageCount?: number;
-    processingSeconds?: number | null;
-    skippedPages?: (number | { pageNumber: number; reason?: string })[];
-    skipped_pages?: (number | { pageNumber: number; reason?: string })[];
-    [key: string]: any;
-  };
-  error?: string | null;
-  startedAt?: string;
-  completedAt?: string;
-}
-
-export interface OcrJobResult {
-  jobId: string;
-  fileKey: string;
-  status: string;
-  extractedStructuredData: any;
-  summaries: {
-    summaryEnglish: string;
-    summaryInPreferredLanguage: string;
-  };
-  graphs: any[];
-}
-
 export const documentUpload = async (
   formData: FormData,
 ): Promise<ApiResponse<UploadResponse>> => {
@@ -157,13 +121,6 @@ export interface UploadBatchResponse {
   }[];
 }
 
-export interface RetryDocumentResponse {
-  fileKey: string;
-  batchId?: string;
-  status: string;
-  streamUrl: string;
-}
-
 export const uploadDocumentsBatch = async (
   files: Array<{ uri: string; name: string; type: string }>,
   onUploadProgress?: (progressEvent: any) => void,
@@ -186,11 +143,46 @@ export const uploadDocumentsBatch = async (
   return response.data;
 };
 
-export const retryDocumentProcessing = async (payload: {
+export interface RetryDocumentPayload {
   fileKey: string;
   batchId?: string;
-}): Promise<ApiResponse<RetryDocumentResponse>> => {
-  const response = await apiClient.post(DOCUMENT_ENDPOINTS.RETRY_DOCUMENT, payload);
+  file?: { uri: string; name: string; type: string };
+}
+
+export interface RetryDocumentResponse {
+  fileKey: string;
+  batchId?: string;
+  status: string;
+  streamUrl: string;
+  resumeStage?: string;
+  progress?: number;
+}
+
+export const retryDocumentProcessing = async (
+  payload: RetryDocumentPayload,
+): Promise<ApiResponse<RetryDocumentResponse>> => {
+  let endpoint = `${DOCUMENT_ENDPOINTS.RETRY_DOCUMENT}?fileKey=${encodeURIComponent(payload.fileKey)}`;
+  if (payload.batchId) {
+    endpoint += `&batchId=${encodeURIComponent(payload.batchId)}`;
+  }
+
+  if (payload.file) {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: payload.file.uri,
+      name: payload.file.name,
+      type: payload.file.type,
+    } as any);
+
+    const response = await apiClient.post(endpoint, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  }
+
+  const response = await apiClient.post(endpoint);
   return response.data;
 };
 
@@ -216,50 +208,6 @@ export const uploadPatientDocuments = async (
     onUploadProgress,
   });
   return response.data;
-};
-
-
-export interface BatchOcrStartResponse {
-  started: {
-    jobId: string;
-    fileKey: string;
-    status: string;
-    stage: string;
-  }[];
-  failed: any[];
-}
-
-export const startOcrBatchJob = async (
-  jobIds: string[],
-): Promise<ApiResponse<BatchOcrStartResponse>> => {
-  const response = await apiClient.post(DOCUMENT_ENDPOINTS.OCR_BATCH_START, {
-    jobIds,
-  });
-  return response.data;
-};
-
-export const startOcrJob = async (
-  jobId: string,
-): Promise<any> => {
-  const response = await startOcrBatchJob([jobId]);
-  const startedJob = response?.data?.started?.find((j: any) => j.jobId === jobId) || response?.data?.started?.[0];
-  return {
-    data: startedJob,
-    status: response.status,
-  };
-};
-
-export const getOcrJobResult = async (
-  jobId: string,
-): Promise<ApiResponse<OcrJobResult>> => {
-  const endpoint = DOCUMENT_ENDPOINTS.OCR_JOB_RESULT(jobId);
-  try {
-    const response = await apiClient.get(endpoint);
-    return response.data;
-  } catch (error: any) {
-    // Re-throw structured error for 409 (Not ready) or 400 (Failed)
-    throw error;
-  }
 };
 
 export const getChatMessages = async (
@@ -534,4 +482,9 @@ export const getSharedLinks = async (
       },
     };
   }
+};
+
+export const getDocumentsSummary = async (): Promise<any> => {
+  const response = await apiClient.get(DOCUMENT_ENDPOINTS.DOCUMENTS_COUNT);
+  return response.data;
 };

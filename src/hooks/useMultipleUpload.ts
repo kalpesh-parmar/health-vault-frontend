@@ -121,10 +121,11 @@ export const useMultipleUpload = (onSuccessGlobal?: () => void) => {
             isPollingRef.current = false;
             setIsUploading(false);
 
-            // Invalidate query client queries to refresh Document components
+             // Invalidate query client queries to refresh Document components
             queryClient.invalidateQueries({ queryKey: ["documents"] });
             queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
             queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
+            queryClient.invalidateQueries({ queryKey: ["documentsSummary"] });
 
             onSuccessGlobal?.();
 

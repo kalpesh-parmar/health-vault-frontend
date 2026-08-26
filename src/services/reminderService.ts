@@ -38,3 +38,8 @@ export const updateReminderOccurrenceStatus = async ({
   const response = await apiClient.patch(endpoint, {status});
   return response.data;
 };
+
+export const listTodayOccurrencesCount = async (payload: { startDate: string; endDate: string }) => {
+  const response = await apiClient.post(MEDICATION_REMINDER_ENDPOINTS.LIST_TODAY_OCCURENCES_COUNT, payload);
+  return response.data;
+};

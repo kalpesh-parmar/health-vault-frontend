@@ -46,7 +46,24 @@ export const ConfirmMedicinesScreen: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      await saveReview();
+      const duplicateIds = await saveReview();
+
+      // If backend flagged some medicines as duplicates
+      if (duplicateIds.length > 0) {
+        const savedCount = selectedCount - duplicateIds.length;
+
+        Toast.show({
+          type: "info",
+          text1: "Duplicates Found",
+          text2: `${duplicateIds.length} medicine${duplicateIds.length === 1 ? " already exists" : "s already exist"} in your profile.${savedCount > 0 ? ` ${savedCount} saved successfully.` : ""}`,
+          visibilityTime: 4000,
+        });
+
+        // Navigate back to ReviewMedicines so user can see duplicate badges
+        setIsSubmitting(false);
+        navigation.goBack();
+        return;
+      }
       
       Toast.show({
         type: "success",

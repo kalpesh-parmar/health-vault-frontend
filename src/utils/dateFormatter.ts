@@ -54,3 +54,33 @@ export const formatUTCDateTime = (
 
   return targetDate.toUTCString();
 };
+
+/**
+ * Returns a relative date label (Today, Yesterday) or the formatted date (dd-MMM-yyyy).
+ */
+export const getRelativeDateLabel = (
+  dateStr: string | Date,
+  convertToIST: boolean = false
+): string => {
+  if (!dateStr) return "";
+  
+  // Format the target date
+  const targetFormatted = formatUTCDateTime(dateStr, "dd-MMM-yyyy", convertToIST);
+  
+  // Format today
+  const today = new Date();
+  const todayFormatted = formatUTCDateTime(today, "dd-MMM-yyyy", convertToIST);
+  
+  // Format yesterday
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayFormatted = formatUTCDateTime(yesterday, "dd-MMM-yyyy", convertToIST);
+  
+  if (targetFormatted === todayFormatted) {
+    return "Today";
+  } else if (targetFormatted === yesterdayFormatted) {
+    return "Yesterday";
+  }
+  
+  return targetFormatted;
+};

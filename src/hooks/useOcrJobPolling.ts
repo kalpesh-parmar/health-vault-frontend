@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useDocumentUpload, UploadingDoc } from "../context/DocumentUploadContext";
-import { OcrJobStatus } from "../services/documentService";
 
 export interface JobState {
   jobId: string;
@@ -12,7 +11,6 @@ export interface JobState {
   currentStep: string;
   skippedPages: (number | { pageNumber: number; reason?: string })[];
   error: string | null;
-  rawData?: OcrJobStatus;
   isLoading: boolean;
   isError: boolean;
 }

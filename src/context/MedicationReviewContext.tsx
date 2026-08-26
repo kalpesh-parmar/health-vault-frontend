@@ -13,7 +13,7 @@ interface MedicationReviewContextType {
   initializeReview: (jobIds: string[], filesInfo?: any[]) => Promise<void>;
   toggleMedicineSelection: (id: string) => void;
   updateMedicineDraft: (medicine: ExtractedMedicine) => void;
-  saveReview: () => Promise<void>;
+  saveReview: () => Promise<string[]>;
   clearReviewState: () => void;
 }
 
@@ -86,75 +86,67 @@ export const MedicationReviewProvider: React.FC<{ children: React.ReactNode }> =
           m.timing === targetMed.timing
       );
 
+      const identicalIds = identicalMeds.map((im) => im.id);
+
+      // Defer dependent state updates to escape active state batching phase
+      setTimeout(() => {
+        setSelectedMedicineIds((prevSelected) => {
+          const otherSelected = prevSelected.filter(
+            (sid) => !identicalIds.includes(sid)
+          );
+          if (newSelectedState) {
+            return [...otherSelected, ...identicalIds];
+          }
+          return otherSelected;
+        });
+
+        setDocuments((prevDocs) =>
+          prevDocs.map((doc) => ({
+            ...doc,
+            medicines: doc.medicines.map((m) => {
+              if (identicalIds.includes(m.id)) {
+                return { ...m, selected: newSelectedState };
+              }
+              return m;
+            }),
+          }))
+        );
+      }, 0);
+
       // Update the selection state of the medicine(s)
-      const updatedMeds = prevMeds.map((m) => {
-        const isIdentical = identicalMeds.some((im) => im.id === m.id);
-        if (isIdentical) {
+      return prevMeds.map((m) => {
+        if (identicalIds.includes(m.id)) {
           return { ...m, selected: newSelectedState };
         }
         return m;
       });
-
-      // Synchronize selectedMedicineIds array
-      setSelectedMedicineIds((prevSelected) => {
-        const otherSelected = prevSelected.filter(
-          (sid) => !identicalMeds.some((im) => im.id === sid)
-        );
-        if (newSelectedState) {
-          return [...otherSelected, ...identicalMeds.map((im) => im.id)];
-        }
-        return otherSelected;
-      });
-
-      // Keep documents list in sync
-      setDocuments((prevDocs) =>
-        prevDocs.map((doc) => ({
-          ...doc,
-          medicines: doc.medicines.map((m) => {
-            const isIdentical = identicalMeds.some((im) => im.id === m.id);
-            if (isIdentical) {
-              return { ...m, selected: newSelectedState };
-            }
-            return m;
-          }),
-        }))
-      );
-
-      return updatedMeds;
     });
   }, []);
 
   // Update a single medicine fields (Screen 7 edit save)
   const updateMedicineDraft = useCallback((updatedMedicine: ExtractedMedicine) => {
-    setMedicines((prevMeds) => {
-      const nextMeds = prevMeds.map((m) => {
-        if (m.id === updatedMedicine.id) {
-          return { ...updatedMedicine };
+    setMedicines((prevMeds) =>
+      prevMeds.map((m) => (m.id === updatedMedicine.id ? { ...updatedMedicine } : m))
+    );
+
+    // Keep documents list in sync sequentially
+    setDocuments((prevDocs) =>
+      prevDocs.map((doc) => {
+        if (doc.id === updatedMedicine.documentId) {
+          return {
+            ...doc,
+            medicines: doc.medicines.map((m) =>
+              m.id === updatedMedicine.id ? { ...updatedMedicine } : m
+            ),
+          };
         }
-        return m;
-      });
-
-      // Keep documents list in sync
-      setDocuments((prevDocs) =>
-        prevDocs.map((doc) => {
-          if (doc.id === updatedMedicine.documentId) {
-            return {
-              ...doc,
-              medicines: doc.medicines.map((m) =>
-                m.id === updatedMedicine.id ? { ...updatedMedicine } : m
-              ),
-            };
-          }
-          return doc;
-        })
-      );
-
-      return nextMeds;
-    });
+        return doc;
+      })
+    );
   }, []);
 
   // Bulk confirm and save to backend
-  const saveReview = useCallback(async () => {
+  const saveReview = useCallback(async (): Promise<string[]> => {
     setIsSaving(true);
     setError(null);
     try {
@@ -170,7 +162,23 @@ export const MedicationReviewProvider: React.FC<{ children: React.ReactNode }> =
       });
       const uniqueMedsToSave = Object.values(uniqueMedicinesMap);
 
-      await MedicationReviewService.submitMedications(uniqueMedsToSave);
+      const duplicateIds = await MedicationReviewService.submitMedications(uniqueMedsToSave);
+
+      // If backend flagged some as duplicates, mark them in state and deselect
+      if (duplicateIds.length > 0) {
+        setMedicines((prev) =>
+          prev.map((m) =>
+            duplicateIds.includes(m.id)
+              ? { ...m, isBackendDuplicate: true, selected: false }
+              : m
+          )
+        );
+        setSelectedMedicineIds((prev) =>
+          prev.filter((id) => !duplicateIds.includes(id))
+        );
+      }
+
+      return duplicateIds;
     } catch (err: any) {
       console.error("[MedicationReviewContext] Failed to save review:", err);
       setError(err.message || "Failed to save medications.");

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, LayoutAnimation, Platform, UIManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { widgetStyles as styles } from "./WidgetStyles";
+import Toast from "react-native-toast-message";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 import { parseChosenJson } from "./MedicineHelpers";
 
@@ -23,6 +24,19 @@ const formatStartDate = (val: any): string => {
     return `${day}-${month}-${year}`;
   } catch {
     return String(val);
+  }
+};
+
+const isPastDate = (dateVal: any): boolean => {
+  if (!dateVal || dateVal === "None") return false;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(dateVal);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  } catch {
+    return false;
   }
 };
 
@@ -83,7 +97,9 @@ export function ReviewMedicinesListCard({
   const [resolutions, setResolutions] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     (localMedicines || []).forEach((m) => {
-      if (!m.duplicateInfo?.hasDuplicate) {
+      if (m.resolution) {
+        initial[m.id] = m.resolution;
+      } else if (!m.duplicateInfo?.hasDuplicate) {
         initial[m.id] = "KEEP_NEW";
       }
     });
@@ -95,7 +111,9 @@ export function ReviewMedicinesListCard({
     setResolutions((prev) => {
       const next = { ...prev };
       (localMedicines || []).forEach((m) => {
-        if (!m.duplicateInfo?.hasDuplicate && next[m.id] === undefined) {
+        if (m.resolution && next[m.id] === undefined) {
+          next[m.id] = m.resolution;
+        } else if (!m.duplicateInfo?.hasDuplicate && next[m.id] === undefined) {
           next[m.id] = "KEEP_NEW";
         }
       });
@@ -104,14 +122,42 @@ export function ReviewMedicinesListCard({
   }, [localMedicines]);
 
   const safeLocalMedicines = localMedicines || [];
-  const conflictingMeds = safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined);
-  const [viewMode, setViewMode] = useState<"conflicts" | "list">(() => {
-    return conflictingMeds.length > 0 ? "conflicts" : "list";
-  });
+
+  // Ensure startDate defaults to today for any medicine lacking it
+  useEffect(() => {
+    const missingStart = (localMedicines || []).some(
+      (m) => !m.startDate || m.startDate === "None",
+    );
+    if (missingStart) {
+      const today = new Date().toISOString().split("T")[0];
+      setLocalMedicines((prev) =>
+        prev.map((m) => ({
+          ...m,
+          startDate:
+            m.startDate && m.startDate !== "None" ? m.startDate : today,
+        })),
+      );
+    }
+  }, [localMedicines]);
+  const conflictingMeds = readOnly
+    ? []
+    : safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined);
+  const [viewMode, setViewMode] = useState<"conflicts" | "list">("list");
+
+  useEffect(() => {
+    if (!readOnly && conflictingMeds.length > 0) {
+      setViewMode("conflicts");
+    } else {
+      setViewMode("list");
+    }
+  }, [conflictingMeds.length, readOnly]);
+
   const [currentConflictIdx, setCurrentConflictIdx] = useState(0);
 
   const autoAdvance = () => {
-    const remainingCount = safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined).length;
+    const remainingCount = readOnly
+      ? 0
+      : safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined).length;
     if (remainingCount === 0) {
       setViewMode("list");
     } else if (currentConflictIdx >= remainingCount) {
@@ -138,8 +184,13 @@ export function ReviewMedicinesListCard({
     } else {
       setCheckedMeds((prev) => [...prev, id]);
       setLocalMedicines((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, selected: true } : m)),
+        prev.map((m) => (m.id === id ? { ...m, selected: true, resolution: undefined } : m)),
       );
+      setResolutions((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 
@@ -223,6 +274,12 @@ export function ReviewMedicinesListCard({
           dose: { count: doseCount },
           foodFrequency: String(m.foodFrequency || m.foodContext || "AFTER_FOOD").toUpperCase(),
           resolution: resValue,
+          startDate: m.startDate || new Date().toISOString().split("T")[0],
+          notes: m.notes || "",
+          prescribedBy: m.prescribedBy || m.prescribed_by || "",
+          totalQuantity: m.total_quantity !== undefined ? m.total_quantity : (m.totalQuantity || 10),
+          refillAlert: m.refill_alert !== undefined ? m.refill_alert : (m.refillAlert || false),
+          medicationSchedule: m.medicationSchedule || m.schedule || m.times || [],
         };
 
         if (resValue === "REPLACE" && matchedMed?.id) {
@@ -241,6 +298,41 @@ export function ReviewMedicinesListCard({
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
     return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
   };
+
+  const getStartDateWarningText = () => {
+    const lang = preferredLang || "english";
+    if (isAnyCheckedMedMissingStartDate) {
+      const dict: Record<string, string> = {
+        english: "One or more selected medicines are missing a Start Date. Please edit them to add a Start Date.",
+        gujarati: "એક અથવા વધુ પસંદ કરેલી દવાઓમાં શરૂઆતની તારીખ ખૂટે છે. શરૂઆતની તારીખ ઉમેરવા માટે કૃપા કરીને તેને સંપાદિત કરો.",
+        hindi: "एक या अधिक चयनित दवाओं में आरंभ तिथि गायब है। कृपया आरंभ तिथि जोड़ने के लिए उन्हें संपादित करें।",
+        marathi: "निवडलेल्या औषधांपैकी एक किंवा अधिक औषधांना सुरू होण्याची तारीख नाही. सुरू होण्याची तारीख जोडण्यासाठी कृपया त्यांना संपादित करा.",
+        tamil: "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு தொடக்க தேதி இல்லை. தொடக்க தேதியை சேர்க்க அவற்றை திருத்தவும்.",
+      };
+      return dict[lang] || dict.english;
+    }
+    if (isAnyCheckedMedPastStartDate) {
+      const dict: Record<string, string> = {
+        english: "One or more selected medicines have a past Start Date. Please edit them to set a current or future Start Date.",
+        gujarati: "એક અથવા વધુ પસંદ કરેલી દવાઓમાં શરૂઆતની તારીખ ભૂતકાળની છે. કૃપા કરીને ચાલુ અથવા ભવિષ્યની શરૂઆતની તારીખ સેટ કરવા માટે તેને સંપાદિત કરો.",
+        hindi: "एक या अधिक चयनित दवाओं की आरंभ तिथि बीत चुकी है। कृपया वर्तमान या भविष्य की आरंभ तिथि सेट करने के लिए उन्हें संपादित करें।",
+        marathi: "निवडलेल्या औषधांपैकी एक किंवा अधिक औषधांना भूतकाळातील सुरू होण्याची तारीख आहे. कृपया चालू किंवा भविष्यातील सुरू होण्याची तारीख सेट करण्यासाठी त्यांना संपादित करा.",
+        tamil: "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு கடந்த கால தொடக்க தேதி உள்ளது. தற்போதைய அல்லது எதிர்கால தொடக்க தேதியை அமைக்க அவற்றை திருத்தவும்.",
+      };
+      return dict[lang] || dict.english;
+    }
+    return "";
+  };
+
+  const isAnyCheckedMedMissingStartDate = !readOnly && safeLocalMedicines
+    .filter((m) => checkedMeds.includes(m.id))
+    .some((m) => !m.startDate || m.startDate === "None");
+
+  const isAnyCheckedMedPastStartDate = !readOnly && safeLocalMedicines
+    .filter((m) => checkedMeds.includes(m.id))
+    .some((m) => m.startDate && m.startDate !== "None" && isPastDate(m.startDate));
+
+  const areActionsDisabled = readOnly || conflictingMeds.length > 0 || isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate;
 
 
 
@@ -370,7 +462,26 @@ export function ReviewMedicinesListCard({
               disabled={readOnly}
               onPress={() => {
                 setResolutions((prev) => ({ ...prev, [med.id]: "REMOVE_NEW" }));
-                autoAdvance();
+                const nextMeds = safeLocalMedicines.map((m) =>
+                  m.id === med.id ? { ...m, selected: false, resolution: "REMOVE_NEW" } : m
+                );
+                setLocalMedicines(nextMeds);
+                setCheckedMeds((prev) => prev.filter((id) => id !== med.id));
+                
+                Toast.show({
+                  type: "info",
+                  text1: `${med.name || med.medicationName || "Medicine"} already exists in your profile.`,
+                  text2: "Incoming duplicate removed.",
+                });
+
+                // Compute next remaining conflicts
+                const nextResolutions: Record<string, string> = { ...resolutions, [med.id]: "REMOVE_NEW" };
+                const nextConflicting = nextMeds.filter((m) => m.duplicateInfo?.hasDuplicate && nextResolutions[m.id] === undefined);
+                if (nextConflicting.length === 0) {
+                  setViewMode("list");
+                } else if (currentConflictIdx >= nextConflicting.length) {
+                  setCurrentConflictIdx(nextConflicting.length - 1);
+                }
               }}
               style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
             >
@@ -382,37 +493,26 @@ export function ReviewMedicinesListCard({
               disabled={readOnly}
               onPress={() => {
                 setResolutions((prev) => ({ ...prev, [med.id]: "REPLACE" }));
+                
+                const matchedMed = med.duplicateInfo?.matchedMedication || med.duplicateInfo?.matchedMedications?.[0];
+                setLocalMedicines((prev) =>
+                  prev.map((m) =>
+                    m.id === med.id
+                      ? {
+                          ...m,
+                          resolution: "REPLACE",
+                          replaceMedicationId: matchedMed?.id,
+                        }
+                      : m
+                  )
+                );
+                
                 autoAdvance();
               }}
               style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
             >
               <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
                 Replace
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Row 2 */}
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            <TouchableOpacity
-              disabled={readOnly}
-              onPress={() => onEdit(med)}
-              style={{ flex: 1, borderColor: "#2563eb", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
-            >
-              <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 12 }}>
-                Edit
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              disabled={readOnly}
-              onPress={() => {
-                setResolutions((prev) => ({ ...prev, [med.id]: "REMOVE_NEW" }));
-                autoAdvance();
-              }}
-              style={{ flex: 1.2, borderColor: "#fca5a5", borderWidth: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
-            >
-              <Text style={{ color: "#ef4444", fontWeight: "bold", fontSize: 12 }}>
-                Remove New
               </Text>
             </TouchableOpacity>
           </View>
@@ -442,7 +542,9 @@ export function ReviewMedicinesListCard({
         </View>
       </View>
     );
-  }
+  }  const displayedMedicines = readOnly
+    ? safeLocalMedicines.filter((m) => checkedMeds.includes(m.id))
+    : safeLocalMedicines;
 
   return (
     <View
@@ -493,7 +595,7 @@ export function ReviewMedicinesListCard({
       </Text>
 
       <View style={{ marginVertical: 12 }}>
-        {(isExpanded ? safeLocalMedicines : safeLocalMedicines.slice(0, 3)).map((rawMed) => {
+        {(isExpanded ? displayedMedicines : displayedMedicines.slice(0, 3)).map((rawMed) => {
           const med = {
             ...rawMed,
             name: rawMed.name || rawMed.medicationName || "Unknown",
@@ -568,7 +670,7 @@ export function ReviewMedicinesListCard({
                         </Text>
                         {med.duplicateInfo?.hasDuplicate && (
                           (() => {
-                            const isSolved = resolutions[med.id] !== undefined;
+                            const isSolved = readOnly || resolutions[med.id] !== undefined || med.resolution !== undefined;
                             return (
                               <View
                                 style={{
@@ -757,7 +859,7 @@ export function ReviewMedicinesListCard({
         })}
 
         {/* Show All / Hide All Button for medication items > 3 */}
-        {safeLocalMedicines.length > 3 && (
+        {displayedMedicines.length > 3 && (
           <TouchableOpacity
             onPress={() => {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -794,6 +896,40 @@ export function ReviewMedicinesListCard({
         )}
       </View>
 
+      {(isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate) && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: isDark ? "rgba(220, 38, 38, 0.2)" : "#fef2f2",
+            borderColor: isDark ? "rgba(220, 38, 38, 0.4)" : "#fca5a5",
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 14,
+            marginTop: 4,
+          }}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={18}
+            color={isDark ? "#fca5a5" : "#ef4444"}
+            style={{ marginRight: 8 }}
+          />
+          <Text
+            style={{
+              fontSize: 12.5,
+              color: isDark ? "#fca5a5" : "#b91c1c",
+              fontWeight: "600",
+              flex: 1,
+              lineHeight: 17,
+            }}
+          >
+            {getStartDateWarningText()}
+          </Text>
+        </View>
+      )}
+
       {!readOnly && conflictingMeds.length > 0 && (
         <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
           <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "600", textAlign: "center" }}>
@@ -811,7 +947,7 @@ export function ReviewMedicinesListCard({
         pointerEvents={readOnly ? "none" : "auto"}
       >
         <TouchableOpacity
-          disabled={readOnly || conflictingMeds.length > 0}
+          disabled={areActionsDisabled}
           style={[
             styles.bigActionButtonSide,
             {
@@ -821,10 +957,10 @@ export function ReviewMedicinesListCard({
                   : isDark
                     ? "#334155"
                     : "#e2e8f0"
-                : (conflictingMeds.length > 0 ? "#cbd5e1" : theme.colors.primary),
+                : (areActionsDisabled ? "#cbd5e1" : theme.colors.primary),
               flex: 1,
               marginRight: 6,
-              opacity: (readOnly || conflictingMeds.length > 0) ? 0.55 : confirmOpacity,
+              opacity: areActionsDisabled ? 0.55 : confirmOpacity,
               borderWidth: isConfirmChosen ? 2 : 0,
               borderColor: isConfirmChosen ? "#ffffff" : "transparent",
             },
@@ -862,13 +998,13 @@ export function ReviewMedicinesListCard({
           </View>
         </TouchableOpacity>
         <TouchableOpacity
-          disabled={readOnly || conflictingMeds.length > 0}
+          disabled={areActionsDisabled}
           style={[
             styles.bigActionButtonSide,
             {
               backgroundColor: isDark ? "#334155" : "#e2e8f0",
               flex: 0.5,
-              opacity: (readOnly || conflictingMeds.length > 0) ? 0.55 : addNewOpacity,
+              opacity: areActionsDisabled ? 0.55 : addNewOpacity,
               borderWidth: isAddNewChosen ? 2 : 0,
               borderColor: isAddNewChosen
                 ? isDark
@@ -907,11 +1043,11 @@ export function ReviewMedicinesListCard({
       </View>
 
       <TouchableOpacity
-        disabled={readOnly || conflictingMeds.length > 0}
+        disabled={areActionsDisabled}
         style={[
           styles.skipListButton,
           {
-            opacity: (readOnly || conflictingMeds.length > 0) ? 0.55 : skipAllOpacity,
+            opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
             alignSelf: "center",
             marginTop: 10,
             borderWidth: isSkipAllChosen ? 1 : 0,

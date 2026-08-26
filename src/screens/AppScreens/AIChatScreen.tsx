@@ -18,20 +18,30 @@ import {
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
-import { format } from "date-fns";
-import { formatUTCDateTime } from "../../utils/dateFormatter";
+import { formatUTCDateTime, getRelativeDateLabel } from "../../utils/dateFormatter";
+import { ChatDateHeader } from "../../components/chat/ChatDateHeader";
 
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import BottomSheet from "../../components/shared/BottomSheet";
 import { queryClient } from "../../config/queryClient";
 import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
-import { ErrorScreen, LoadingScreen } from "../../components/shared/DefensiveStates";
-import { listDocument, sendChatMessage } from "../../services/documentService";
-import { useMedicationFormState, MedicationFormFields } from "../../components/shared/MedicationFormFields";
+import {
+  ErrorScreen,
+  LoadingScreen,
+} from "../../components/shared/DefensiveStates";
+import { listDocument } from "../../services/documentService";
+import {
+  useMedicationFormState,
+  MedicationFormFields,
+} from "../../components/shared/MedicationFormFields";
 import { MedicationReviewService } from "../../services/medicationReviewService";
-import { listMedications, updateMedication, checkMedicationDuplicate, addMedication } from "../../services/medicationservice";
-import { createMedicationReminder } from "../../services/reminderService";
+import {
+  listMedications,
+  updateMedication,
+  checkMedicationDuplicate,
+  addMedication,
+} from "../../services/medicationservice";
 import { ExtractedMedicine } from "../../types/medicationReview";
 import { AddOrEditMedication } from "../../types";
 import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
@@ -46,7 +56,7 @@ import {
 import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
 import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
 import type { MedicalDocument } from "../../types";
-import { safeFilter, safeMap } from "../../utils/arrayUtils";
+import { safeFilter } from "../../utils/arrayUtils";
 import apiClient from "../../services/apiClient";
 import { ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -99,6 +109,7 @@ type ChatMessage = {
   documentSummary?: string;
   loginProvider?: string;
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
+  conflicts?: any[];
   createdAt?: string | Date;
 };
 
@@ -271,10 +282,23 @@ interface EditMedicineFormWrapperProps {
   onSave: (updated: ExtractedMedicine) => void;
 }
 
+const getTodayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const EditMedicineFormWrapper = ({
   medicine,
   preferredLang,
   isDark,
+  theme,
   onClose,
   onSave,
 }: EditMedicineFormWrapperProps) => {
@@ -294,7 +318,7 @@ const EditMedicineFormWrapper = ({
       refill_alert: medicine.refillAlert || false,
       total_quantity: medicine.totalQuantity || 10,
       foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
-      startDate: medicine.startDate || new Date().toISOString().split("T")[0],
+      startDate: medicine.startDate && medicine.startDate !== "None" ? medicine.startDate : getTodayDateString(),
       medicationSchedule: medicine.medicationSchedule || ["08:00"],
     };
   }, [medicine]);
@@ -352,6 +376,26 @@ const EditMedicineFormWrapper = ({
       errors.push("Total Quantity is required");
     }
 
+    if (startDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sDate = new Date(startDate);
+      sDate.setHours(0, 0, 0, 0);
+      if (sDate < today) {
+        errors.push(
+          preferredLang === "gujarati"
+            ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
+            : preferredLang === "hindi"
+              ? "आरंभ तिथि भूतकाल में नहीं हो सकती"
+              : preferredLang === "marathi"
+                ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
+                : preferredLang === "tamil"
+                  ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
+                  : "Start Date cannot be in the past"
+        );
+      }
+    }
+
     if (errors.length > 0) {
       setLocalErrors(errors);
       return;
@@ -361,8 +405,16 @@ const EditMedicineFormWrapper = ({
       ...medicine,
       name: formName.trim(),
       medicineType: formType,
-      dosage: formType === "TABLET" || formType === "CAPSULE" ? String(formCount) : String(formVal),
-      dosageUnit: formType === "TABLET" || formType === "CAPSULE" ? (formType === "TABLET" ? "tablet" : "capsule") : formUnit,
+      dosage:
+        formType === "TABLET" || formType === "CAPSULE"
+          ? String(formCount)
+          : String(formVal),
+      dosageUnit:
+        formType === "TABLET" || formType === "CAPSULE"
+          ? formType === "TABLET"
+            ? "tablet"
+            : "capsule"
+          : formUnit,
       frequency: formFreq,
       foodFrequency: formFoodFreq,
       timing: formFoodFreq === "BEFORE_FOOD" ? "Before Food" : "After Food",
@@ -372,20 +424,53 @@ const EditMedicineFormWrapper = ({
       refillAlert: formRefill,
       refillAlertEnabled: formRefill,
       medicationSchedule: selectedSlots,
-      startDate: startDate ? (startDate instanceof Date ? startDate.toISOString().split("T")[0] : startDate) : new Date().toISOString().split("T")[0],
+      startDate: startDate
+        ? startDate instanceof Date
+          ? formatLocalDate(startDate)
+          : startDate
+        : getTodayDateString(),
     });
   };
 
   return (
-    <View style={{ padding: 16 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#f8fafc' : '#1e293b' }}>Edit Medicine</Text>
+    <View style={{ flex: 1, padding: 16 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 18,
+            fontWeight: "800",
+            color: isDark ? "#f8fafc" : "#1e293b",
+          }}
+        >
+          Edit Medicine
+        </Text>
         <TouchableOpacity onPress={onClose}>
-          <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#475569"} />
+          <Ionicons
+            name="close"
+            size={24}
+            color={isDark ? "#cbd5e1" : "#475569"}
+          />
         </TouchableOpacity>
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 350 }}>
-        <MedicationFormFields formState={formState} isDark={isDark} theme={{}} preferredLang={preferredLang} />
+      <BottomSheetScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+      >
+        <MedicationFormFields
+          formState={formState}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          isInBottomSheet={true}
+        />
         {localErrors.length > 0 && (
           <View style={{ marginTop: 8, marginBottom: 12 }}>
             {localErrors.map((err, idx) => (
@@ -395,19 +480,21 @@ const EditMedicineFormWrapper = ({
             ))}
           </View>
         )}
-      </ScrollView>
+      </BottomSheetScrollView>
       <TouchableOpacity
         onPress={handleSave}
         style={{
-          backgroundColor: '#0f766e',
+          backgroundColor: "#0f766e",
           borderRadius: 14,
           padding: 14,
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems: "center",
+          justifyContent: "center",
           marginTop: 16,
         }}
       >
-        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>Save Changes</Text>
+        <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 15 }}>
+          Save Changes
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -415,11 +502,14 @@ const EditMedicineFormWrapper = ({
 
 // Floating Progress Panel Component
 const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
-  const { chatWizardState, resetChatWizard, uploadingDocs, isUploading } = useDocumentUpload();
+  const { uploadingDocs, isUploading } = useDocumentUpload();
 
   const avgProgress = useMemo(() => {
     if (!uploadingDocs || uploadingDocs.length === 0) return 0;
-    const sum = uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0);
+    const sum = uploadingDocs.reduce(
+      (acc, doc) => acc + (doc.progress || 0),
+      0,
+    );
     return Math.round(sum / uploadingDocs.length);
   }, [uploadingDocs]);
 
@@ -432,7 +522,7 @@ const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
         doc.status === "CANCELLED" ||
         doc.status === "done" ||
         doc.status === "completed" ||
-        doc.status === "success"
+        doc.status === "success",
     ).length;
   }, [uploadingDocs]);
 
@@ -462,13 +552,28 @@ const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
       }}
     >
       {/* Left side: Info */}
-      <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
-        <Text style={{ color: isDark ? "#f1f5f9" : "#0f172a", fontWeight: "bold", fontSize: 13 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          flex: 1,
+          marginRight: 8,
+        }}
+      >
+        <Text
+          style={{
+            color: isDark ? "#f1f5f9" : "#0f172a",
+            fontWeight: "bold",
+            fontSize: 13,
+          }}
+        >
           {isUploading
             ? "Uploading"
             : `Processing ${completedJobsCount} of ${docCount}`}
         </Text>
-        <Text style={{ color: "#64748b", marginHorizontal: 6, fontSize: 13 }}>•</Text>
+        <Text style={{ color: "#64748b", marginHorizontal: 6, fontSize: 13 }}>
+          •
+        </Text>
         <Text style={{ color: "#64748b", fontSize: 13 }} numberOfLines={1}>
           {isUploading ? "Uploading files" : "Analyzing"}
         </Text>
@@ -476,7 +581,14 @@ const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
 
       {/* Right side: Actions */}
       <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={{ color: "#0f766e", fontWeight: "bold", fontSize: 13, marginRight: 12 }}>
+        <Text
+          style={{
+            color: "#0f766e",
+            fontWeight: "bold",
+            fontSize: 13,
+            marginRight: 12,
+          }}
+        >
           {avgProgress}%
         </Text>
 
@@ -491,7 +603,13 @@ const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
             backgroundColor: isDark ? "#334155" : "#f1f5f9",
           }}
         >
-          <Text style={{ color: isDark ? "#f1f5f9" : "#0f172a", fontSize: 12, fontWeight: "500" }}>
+          <Text
+            style={{
+              color: isDark ? "#f1f5f9" : "#0f172a",
+              fontSize: 12,
+              fontWeight: "500",
+            }}
+          >
             View
           </Text>
         </TouchableOpacity>
@@ -544,6 +662,33 @@ const AIChatScreen = ({ route }: any) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
   const hasInitializedHistory = useRef(false);
+  const [activeDateLabel, setActiveDateLabel] = useState<string>("");
+  const [showFloatingPanel, setShowFloatingPanel] = useState<boolean>(true);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems && viewableItems.length > 0) {
+      let topItem = viewableItems[0];
+      for (const item of viewableItems) {
+        if (item.index > topItem.index) {
+          topItem = item;
+        }
+      }
+      
+      const message = topItem.item;
+      if (message) {
+        if (message.isDateHeader) {
+          setActiveDateLabel(message.dateLabel);
+        } else if (message.createdAt) {
+          const label = getRelativeDateLabel(message.createdAt, true);
+          setActiveDateLabel(label);
+        }
+      }
+    }
+  });
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 10,
+  });
 
   const {
     chatWizardState,
@@ -570,19 +715,31 @@ const AIChatScreen = ({ route }: any) => {
     startBackgroundOcr(jobIds, filesInfo, "AIChat");
   };
 
+  const handleUploadStart = () => {
+    uploadSheetRef.current?.dismiss();
+    extractionSheetRef.current?.present();
+  };
+
   const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
-  const [medicineToEdit, setMedicineToEdit] = useState<ExtractedMedicine | null>(null);
+  const [chatCurrentClientMedId, setChatCurrentClientMedId] = useState<string | null>(null);
+  const [medicineToEdit, setMedicineToEdit] =
+    useState<ExtractedMedicine | null>(null);
   const editSheetRef = useRef<BottomSheetModal>(null);
   const [isConfirmingMeds, setIsConfirmingMeds] = useState(false);
-  const [failedSubmissions, setFailedSubmissions] = useState<{
-    type: "new" | "replace" | "merge";
-    med: any;
-    payload: any;
-    existingId?: string;
-  }[]>([]);
+  const [failedSubmissions, setFailedSubmissions] = useState<
+    {
+      type: "new" | "replace" | "merge";
+      med: any;
+      payload: any;
+      existingId?: string;
+    }[]
+  >([]);
 
-  const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
+  const tOnboarding = (
+    key: string,
+    replacements?: Record<string, string | number>,
+  ) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
     let str = dict[key] || I18N_ONBOARDING_UI.english[key] || key;
@@ -593,15 +750,20 @@ const AIChatScreen = ({ route }: any) => {
     }
     return str;
   };
-  
+
   useEffect(() => {
-    if (chatWizardState.step === "processing" && isAllTerminal && chatWizardState.jobIds.length > 0 && !isLoadingResults) {
+    if (
+      chatWizardState.step === "processing" &&
+      isAllTerminal &&
+      chatWizardState.jobIds.length > 0 &&
+      !isLoadingResults
+    ) {
       const getResults = async () => {
         setIsLoadingResults(true);
         try {
           const data = await MedicationReviewService.fetchExtractedMedicines(
             chatWizardState.jobIds,
-            chatWizardState.filesInfo
+            chatWizardState.filesInfo,
           );
           const flatMeds: ExtractedMedicine[] = [];
           data.forEach((doc) => {
@@ -616,7 +778,10 @@ const AIChatScreen = ({ route }: any) => {
 
           const summariesList = data.map((doc) => ({
             docName: doc.name || "Report",
-            summary: doc.summaryPreferred || doc.summaryEnglish || "No summary generated.",
+            summary:
+              doc.summaryPreferred ||
+              doc.summaryEnglish ||
+              "No summary generated.",
           }));
 
           setChatWizardState((prev) => ({
@@ -630,7 +795,9 @@ const AIChatScreen = ({ route }: any) => {
           extractionSheetRef.current?.dismiss();
 
           // 1. Show user message with file names in the chat only when all documents are processed successfully
-          const docNames = chatWizardState.filesInfo.map((f) => f.fileName).join(", ");
+          const docNames = chatWizardState.filesInfo
+            .map((f) => f.fileName)
+            .join(", ");
           const userMsg: ChatMessage = {
             id: `user-upload-${Date.now()}`,
             role: "user",
@@ -643,19 +810,22 @@ const AIChatScreen = ({ route }: any) => {
           const filesPayload = chatWizardState.filesInfo.map((f: any) => ({
             fileKey: f.fileKey || f.s3Key || "",
             fileName: f.fileName,
-            mimeType: f.mimeType || "application/octet-stream"
+            mimeType: f.mimeType || "application/octet-stream",
           }));
 
           const payload = {
             actionType: "ADD_DOCUMENT",
             sessionId: activeSessionId || onboardingSessionId || undefined,
             actionData: {
-              files: filesPayload
-            }
+              files: filesPayload,
+            },
           };
 
           try {
-            const response = await apiClient.post("/v1/onboarding/chat", payload);
+            const response = await apiClient.post(
+              "/v1/onboarding/chat",
+              payload,
+            );
             const resData = response.data?.data;
             if (resData?.reply) {
               const aiMsg: ChatMessage = {
@@ -680,55 +850,22 @@ const AIChatScreen = ({ route }: any) => {
                 .catch(() => {});
             }
           } catch (err: any) {
-            console.warn("Failed to notify chatbot about document upload:", err);
+            console.warn(
+              "Failed to notify chatbot about document upload:",
+              err,
+            );
             Toast.show({
               type: "error",
               text1: "Chatbot Error",
-              text2: err.message || "Failed to notify chatbot of document upload.",
+              text2:
+                err.message || "Failed to notify chatbot of document upload.",
             });
           }
-
-          // Show Toast notification about process completion (instead of appending message to chat)
-          const toastBodyMap: Record<string, string> = {
-            english: `Successfully extracted ${flatMeds.length} medicine(s).`,
-            gujarati: `સફળતાપૂર્વક ${flatMeds.length} દવા(ઓ) કાઢવામાં આવી.`,
-            hindi: `सफलतापूर्वक ${flatMeds.length} दवाएं निकाली गईं।`,
-            marathi: `यशस्वीरित्या ${flatMeds.length} औषधे काढली गेली.`,
-            tamil: `வெற்றிகரமாக ${flatMeds.length} மருந்து(கள்) பிரித்தெடுக்கப்பட்டது.`,
-          };
-          const toastBody = toastBodyMap[preferredLang] || toastBodyMap.english;
-
-          const reviewNowMap: Record<string, string> = {
-            english: "Review Now",
-            gujarati: "હમણાં સમીક્ષા કરો",
-            hindi: "अभी समीक्षा करें",
-            marathi: "आता पुनरावलोकन करा",
-            tamil: "இப்போது மதிப்பாய்வு செய்யவும்",
-          };
-          const reviewNowText = reviewNowMap[preferredLang] || reviewNowMap.english;
-
-          Toast.show({
-            type: "success",
-            text1: tOnboarding("success"),
-            text2: toastBody,
-            autoHide: false,
-            props: {
-              buttonText: reviewNowText,
-              onPressButton: () => {
-                Toast.hide();
-                navigation.navigate("Home", {
-                  screen: "ReviewMedicines",
-                  params: {
-                    jobIds: chatWizardState.jobIds,
-                    filesInfo: chatWizardState.filesInfo,
-                    fromScreen: "AIChat",
-                  }
-                });
-              }
-            }
-          });
         } catch (err) {
-          console.error("Failed to load extracted medicines in conversational chat:", err);
+          console.error(
+            "Failed to load extracted medicines in conversational chat:",
+            err,
+          );
           setChatWizardState((prev) => ({
             ...prev,
             step: "results",
@@ -741,14 +878,21 @@ const AIChatScreen = ({ route }: any) => {
       };
       getResults();
     }
-  }, [chatWizardState.step, isAllTerminal, chatWizardState.jobIds, activeSessionId, onboardingSessionId, preferredLang]);
+  }, [
+    chatWizardState.step,
+    isAllTerminal,
+    chatWizardState.jobIds,
+    activeSessionId,
+    onboardingSessionId,
+    preferredLang,
+  ]);
 
   const handleEditSave = (updated: ExtractedMedicine) => {
+    const updatedExtracted = chatWizardState.extractedMedicines.map((m) =>
+      m.id === updated.id ? updated : m,
+    );
+
     setChatWizardState((prev) => {
-      const updatedExtracted = prev.extractedMedicines.map((m) =>
-        m.id === updated.id ? updated : m
-      );
-  
       const updatedConflicts = prev.conflicts.map((c) => {
         if (c.extractedMedicine.id === updated.id) {
           return {
@@ -767,15 +911,25 @@ const AIChatScreen = ({ route }: any) => {
     });
 
     setMessages((prev) =>
-      prev.map((msg) => {
-        if ((msg.action === "EXTRACTED_MEDICINES" || msg.action === "REVIEW_MEDICINES_LIST") && msg.medicines) {
-          return {
-            ...msg,
-            medicines: msg.medicines.map((m) => (m.id === updated.id ? updated : m)),
-          };
-        }
-        return msg;
-      })
+      prev
+        .filter((msg) => msg.action !== "EDIT_MEDICINE")
+        .map((msg) => {
+          if (msg.medicines?.length) {
+            return {
+              ...msg,
+              medicines: msg.medicines.map((m) =>
+                m.id === updated.id ? updated : m,
+              ),
+            };
+          }
+          if (msg.action === "REVIEW_MEDICINES_LIST" || msg.action === "ADD_DOCUMENT") {
+            return {
+              ...msg,
+              medicines: updatedExtracted,
+            };
+          }
+          return msg;
+        }),
     );
 
     editSheetRef.current?.dismiss();
@@ -790,7 +944,7 @@ const AIChatScreen = ({ route }: any) => {
 
   const handleConfirmSelection = async () => {
     setIsLoadingResults(true);
-    
+
     // Add user message "Continue"
     const userMsg: ChatMessage = {
       id: `user-continue-${Date.now()}`,
@@ -798,7 +952,7 @@ const AIChatScreen = ({ route }: any) => {
       text: "Continue",
       createdAt: new Date().toISOString(),
     };
-    
+
     // Add progress message in chat
     const checkingMsgId = `ai-checking-${Date.now()}`;
     const checkingMsg: ChatMessage = {
@@ -808,9 +962,9 @@ const AIChatScreen = ({ route }: any) => {
       action: "CHECKING_DUPLICATES",
       createdAt: new Date().toISOString(),
     };
-    
+
     setMessages((prev) => [...prev, userMsg, checkingMsg]);
-    
+
     try {
       const existingRes = await listMedications();
       const existingMeds = existingRes.data || existingRes || [];
@@ -821,20 +975,27 @@ const AIChatScreen = ({ route }: any) => {
 
       for (let i = 0; i < total; i++) {
         const med = chatWizardState.extractedMedicines[i];
-        
+
         // Normalize medication type
         const typeStr = (med.medicineType || "TABLET").toUpperCase();
         const normalizedType = typeStr === "DROP" ? "DROPS" : typeStr;
-        
+
         try {
           const duplicateRes = await checkMedicationDuplicate({
             medicationName: med.name,
             medicationType: normalizedType,
           });
           const dupData = duplicateRes?.data || duplicateRes || {};
-          
+
           if (dupData.hasDuplicate) {
-            const match = dupData.matchedMedication || dupData.matchedMedications?.[0] || existingMeds.find((em: any) => em.medicationName.trim().toLowerCase() === med.name.trim().toLowerCase());
+            const match =
+              dupData.matchedMedication ||
+              dupData.matchedMedications?.[0] ||
+              existingMeds.find(
+                (em: any) =>
+                  em.medicationName.trim().toLowerCase() ===
+                  med.name.trim().toLowerCase(),
+              );
             conflictsList.push({
               extractedMedicine: med,
               existingMedication: match,
@@ -843,9 +1004,14 @@ const AIChatScreen = ({ route }: any) => {
             newMedsList.push(med);
           }
         } catch (apiErr) {
-          console.warn(`Duplicate check failed for ${med.name}, falling back to local check:`, apiErr);
-          const duplicateLocal = existingMeds.find((existing: any) => 
-            existing.medicationName.trim().toLowerCase() === med.name.trim().toLowerCase()
+          console.warn(
+            `Duplicate check failed for ${med.name}, falling back to local check:`,
+            apiErr,
+          );
+          const duplicateLocal = existingMeds.find(
+            (existing: any) =>
+              existing.medicationName.trim().toLowerCase() ===
+              med.name.trim().toLowerCase(),
           );
           if (duplicateLocal) {
             conflictsList.push({
@@ -856,14 +1022,17 @@ const AIChatScreen = ({ route }: any) => {
             newMedsList.push(med);
           }
         }
-        
+
         // Update progress in chat
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === checkingMsgId
-              ? { ...msg, text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed` }
-              : msg
-          )
+              ? {
+                  ...msg,
+                  text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed`,
+                }
+              : msg,
+          ),
         );
       }
 
@@ -881,9 +1050,12 @@ const AIChatScreen = ({ route }: any) => {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === checkingMsgId
-              ? { ...msg, text: `I detected duplicate conflicts with your existing medications. Let's resolve them.` }
-              : msg
-          )
+              ? {
+                  ...msg,
+                  text: `I detected duplicate conflicts with your existing medications. Let's resolve them.`,
+                }
+              : msg,
+          ),
         );
 
         const conflictMsg: ChatMessage = {
@@ -904,9 +1076,12 @@ const AIChatScreen = ({ route }: any) => {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === checkingMsgId
-              ? { ...msg, text: `No duplicates found. All medicines are ready to be added.` }
-              : msg
-          )
+              ? {
+                  ...msg,
+                  text: `No duplicates found. All medicines are ready to be added.`,
+                }
+              : msg,
+          ),
         );
 
         const confirmMsg: ChatMessage = {
@@ -925,9 +1100,12 @@ const AIChatScreen = ({ route }: any) => {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === checkingMsgId
-            ? { ...msg, text: `We couldn't check your medicines for duplicates. Please try again.` }
-            : msg
-        )
+            ? {
+                ...msg,
+                text: `We couldn't check your medicines for duplicates. Please try again.`,
+              }
+            : msg,
+        ),
       );
       Toast.show({
         type: "error",
@@ -941,45 +1119,120 @@ const AIChatScreen = ({ route }: any) => {
 
   const resolveCurrentConflict = (
     resolution: "keep" | "replace" | "merge" | "remove_new",
-    mergedPayload?: AddOrEditMedication
+    mergedPayload?: AddOrEditMedication,
   ) => {
-    const currentConflict = chatWizardState.conflicts[chatWizardState.currentConflictIndex];
+    const currentConflict =
+      chatWizardState.conflicts[chatWizardState.currentConflictIndex];
     if (!currentConflict) return;
+
+    if (resolution === "keep") {
+      Toast.show({
+        type: "info",
+        text1: `${currentConflict.extractedMedicine.name} already exists in your profile.`,
+        text2: "Incoming duplicate removed.",
+      });
+    }
+
+    // Update message history to deselect/remove the medication if Keep Existing or Remove New is chosen
+    setMessages((prevMsg) =>
+      prevMsg.map((msg) => {
+        if (
+          (msg.action === "EXTRACTED_MEDICINES" ||
+            msg.action === "REVIEW_MEDICINES_LIST" ||
+            msg.action === "MEDICINE_REVIEW_ACCORDION") &&
+          msg.medicines
+        ) {
+          if (resolution === "keep" || resolution === "remove_new") {
+            return {
+              ...msg,
+              medicines: msg.medicines.map((m) =>
+                m.id === currentConflict.extractedMedicine.id
+                  ? { ...m, selected: false, resolution: "REMOVE_NEW" }
+                  : m
+              ),
+            };
+          }
+          return {
+            ...msg,
+            medicines: msg.medicines.map((m) =>
+              m.id === currentConflict.extractedMedicine.id
+                ? { ...m, selected: true, resolution: "REPLACE" }
+                : m,
+            ),
+          };
+        }
+        return msg;
+      }),
+    );
 
     setChatWizardState((prev) => {
       const updatedConflicts = prev.conflicts.map((c, idx) =>
-        idx === prev.currentConflictIndex ? { ...c, resolvedAction: resolution } : c
+        idx === prev.currentConflictIndex
+          ? { ...c, resolvedAction: resolution }
+          : c,
       );
 
-      const nextReplaceList: { existingId: string; extractedMedicine: ExtractedMedicine }[] = [];
-      const nextMergeList: { existingId: string; mergedMedication: AddOrEditMedication }[] = [];
-      const nextResolvedMedicines = [...prev.resolvedMedicines];
+      const nextReplaceList: {
+        existingId: string;
+        extractedMedicine: ExtractedMedicine;
+      }[] = [];
+      const nextMergeList: {
+        existingId: string;
+        mergedMedication: AddOrEditMedication;
+      }[] = [];
+      const nextResolvedMedicines = prev.resolvedMedicines.filter(
+        (m) => m.id !== currentConflict.extractedMedicine.id
+      );
 
       updatedConflicts.forEach((c) => {
         if (c.resolvedAction === "replace") {
           nextReplaceList.push({
             existingId: c.existingMedication.id!,
-            extractedMedicine: c.extractedMedicine,
+            extractedMedicine: {
+              ...c.extractedMedicine,
+              resolution: "REPLACE",
+              replaceMedicationId: c.existingMedication.id,
+            },
           });
         } else if (c.resolvedAction === "merge") {
           // Use the merged payload if provided for the current conflict, or fall back to existing medication
-          const payload = c.extractedMedicine.id === currentConflict.extractedMedicine.id && mergedPayload
-            ? mergedPayload
-            : buildMedicationPayload(c.extractedMedicine);
+          const payload =
+            c.extractedMedicine.id === currentConflict.extractedMedicine.id &&
+            mergedPayload
+              ? mergedPayload
+              : buildMedicationPayload(c.extractedMedicine);
           nextMergeList.push({
             existingId: c.existingMedication.id!,
             mergedMedication: payload,
           });
-        } else if (c.resolvedAction === "keep") {
-          if (!nextResolvedMedicines.some((m) => m.id === c.extractedMedicine.id)) {
-            nextResolvedMedicines.push(c.extractedMedicine);
-          }
         }
       });
 
       const nextIndex = prev.currentConflictIndex + 1;
-      const allResolved = updatedConflicts.every((c) => c.resolvedAction !== undefined);
+      const allResolved = updatedConflicts.every(
+        (c) => c.resolvedAction !== undefined,
+      );
       const nextStep = allResolved ? "summary" : "conflicts";
+
+      const nextExtractedMedicines = prev.extractedMedicines
+        .map((m) => {
+          if (m.id === currentConflict.extractedMedicine.id) {
+            if (resolution === "keep" || resolution === "remove_new") {
+              return {
+                ...m,
+                selected: false,
+                resolution: "REMOVE_NEW",
+              };
+            }
+            return {
+              ...m,
+              selected: true,
+              resolution: "REPLACE",
+              replaceMedicationId: currentConflict.existingMedication.id,
+            };
+          }
+          return m;
+        });
 
       if (nextStep === "summary") {
         setTimeout(() => {
@@ -988,7 +1241,10 @@ const AIChatScreen = ({ route }: any) => {
             role: "ai",
             text: tOnboarding("aiConfirmIntro"),
             action: "EXTRACTED_MEDICINES_CONFIRM",
-            medicinesCount: nextResolvedMedicines.length + nextReplaceList.length + nextMergeList.length,
+            medicinesCount:
+              nextResolvedMedicines.length +
+              nextReplaceList.length +
+              nextMergeList.length,
             docsCount: chatWizardState.filesInfo.length,
             createdAt: new Date().toISOString(),
           };
@@ -999,11 +1255,15 @@ const AIChatScreen = ({ route }: any) => {
       return {
         ...prev,
         conflicts: updatedConflicts,
-        currentConflictIndex: nextIndex === prev.conflicts.length ? prev.currentConflictIndex : nextIndex,
+        currentConflictIndex:
+          nextIndex === prev.conflicts.length
+            ? prev.currentConflictIndex
+            : nextIndex,
         step: nextStep,
         replaceList: nextReplaceList,
         mergeList: nextMergeList,
         resolvedMedicines: nextResolvedMedicines,
+        extractedMedicines: nextExtractedMedicines,
       };
     });
   };
@@ -1012,7 +1272,8 @@ const AIChatScreen = ({ route }: any) => {
     setChatWizardState((prev) => {
       let nextIdx = prev.currentConflictIndex;
       if (direction === "prev" && nextIdx > 0) nextIdx--;
-      if (direction === "next" && nextIdx < prev.conflicts.length - 1) nextIdx++;
+      if (direction === "next" && nextIdx < prev.conflicts.length - 1)
+        nextIdx++;
       return {
         ...prev,
         currentConflictIndex: nextIdx,
@@ -1022,9 +1283,11 @@ const AIChatScreen = ({ route }: any) => {
 
   const handleContinueAnyway = () => {
     setChatWizardState((prev) => {
-      const remainingNew = prev.conflicts.slice(prev.currentConflictIndex).map(c => c.extractedMedicine);
+      const remainingNew = prev.conflicts
+        .slice(prev.currentConflictIndex)
+        .map((c) => c.extractedMedicine);
       const nextResolved = [...prev.resolvedMedicines, ...remainingNew];
-      
+
       setTimeout(() => {
         const confirmMsg: ChatMessage = {
           id: `ai-confirm-${Date.now()}`,
@@ -1054,7 +1317,7 @@ const AIChatScreen = ({ route }: any) => {
       text: "Review Medicines",
       createdAt: new Date().toISOString(),
     };
-    
+
     // Append AI message for review:
     const aiReviewMsg: ChatMessage = {
       id: `ai-review-accordion-${Date.now()}`,
@@ -1062,13 +1325,15 @@ const AIChatScreen = ({ route }: any) => {
       text: "I've analyzed the medicines extracted from your documents. Please review them before I add them to your Health Vault.",
       action: "MEDICINE_REVIEW_ACCORDION",
       medicines: chatWizardState.extractedMedicines,
-      documents: chatWizardState.filesInfo.map(f => {
-        const m = chatWizardState.extractedMedicines.filter(x => x.documentId === f.jobId);
+      documents: chatWizardState.filesInfo.map((f) => {
+        const m = chatWizardState.extractedMedicines.filter(
+          (x) => x.documentId === f.jobId,
+        );
         return { id: f.jobId, fileName: f.fileName, medicinesCount: m.length };
       }),
       createdAt: new Date().toISOString(),
     };
-    
+
     setMessages((prev) => [...prev, userMsg, aiReviewMsg]);
     setChatWizardState((prev) => ({ ...prev, step: "results" }));
 
@@ -1077,7 +1342,9 @@ const AIChatScreen = ({ route }: any) => {
     }, 100);
   };
 
-  const buildMedicationPayload = (med: ExtractedMedicine): AddOrEditMedication => {
+  const buildMedicationPayload = (
+    med: ExtractedMedicine,
+  ): AddOrEditMedication => {
     const scheduleObj: Record<string, any> = {};
     const times = med.medicationSchedule || [];
     times.forEach((timeStr) => {
@@ -1085,7 +1352,7 @@ const AIChatScreen = ({ route }: any) => {
       if (timeStr === "08:00") key = "MORNING";
       else if (timeStr === "14:00") key = "NOON";
       else if (timeStr === "20:00") key = "NIGHT";
-      
+
       const timeWithSec = `${timeStr}:00`;
       if (scheduleObj[key]) {
         if (Array.isArray(scheduleObj[key])) {
@@ -1099,11 +1366,17 @@ const AIChatScreen = ({ route }: any) => {
     });
 
     let freqLabel = "Once Daily";
-    if (med.frequency === "TWICE" || med.frequency === "Twice Daily") freqLabel = "Twice Daily";
-    else if (med.frequency === "THRICE" || med.frequency === "3x Daily") freqLabel = "3x Daily";
+    if (med.frequency === "TWICE" || med.frequency === "Twice Daily")
+      freqLabel = "Twice Daily";
+    else if (med.frequency === "THRICE" || med.frequency === "3x Daily")
+      freqLabel = "3x Daily";
 
     let normalizedFoodFreq = "AFTER_FOOD";
-    const rawFood = (med.foodFrequency || med.timing || "AFTER_FOOD").toUpperCase();
+    const rawFood = (
+      med.foodFrequency ||
+      med.timing ||
+      "AFTER_FOOD"
+    ).toUpperCase();
     if (rawFood.includes("BEFORE") || rawFood.includes("PRE")) {
       normalizedFoodFreq = "BEFORE_FOOD";
     }
@@ -1115,23 +1388,27 @@ const AIChatScreen = ({ route }: any) => {
       dosePerIntake: parseFloat(med.dosage || "1") || 1,
       frequency: freqLabel,
       foodFrequency: normalizedFoodFreq,
-      startDate: med.startDate ? med.startDate : new Date().toISOString().split("T")[0],
+      startDate: med.startDate && med.startDate !== "None"
+        ? med.startDate
+        : getTodayDateString(),
       ongoing: true,
       medicationSchedule: scheduleObj,
       totalQuantity: med.totalQuantity || 10,
       notes: med.notes || "",
+      resolution: med.resolution,
+      replaceMedicationId: med.replaceMedicationId,
     };
   };
 
   const handleConfirmAndAddMeds = async (retryOnly = false) => {
     setIsConfirmingMeds(true);
-    
+
     if (!retryOnly) {
       setFailedSubmissions([]);
     }
 
     const itemsToSubmit: typeof failedSubmissions = [];
-    
+
     if (retryOnly) {
       itemsToSubmit.push(...failedSubmissions);
     } else {
@@ -1147,7 +1424,11 @@ const AIChatScreen = ({ route }: any) => {
         itemsToSubmit.push({
           type: "replace",
           med: replaceItem.extractedMedicine,
-          payload: buildMedicationPayload(replaceItem.extractedMedicine),
+          payload: {
+            ...buildMedicationPayload(replaceItem.extractedMedicine),
+            resolution: "REPLACE",
+            replaceMedicationId: replaceItem.existingId,
+          },
           existingId: replaceItem.existingId,
         });
       });
@@ -1165,12 +1446,20 @@ const AIChatScreen = ({ route }: any) => {
     const failed: typeof failedSubmissions = [];
     let successCount = 0;
 
-    const addingProgressMap: Record<string, (done: number, total: number) => string> = {
-      english: (done, total) => `Adding medicines to your profile... ${done} / ${total} completed`,
-      gujarati: (done, total) => `તમારા પ્રોફાઇલમાં દવાઓ ઉમેરી રહ્યા છે... ${done} / ${total} પૂર્ણ થયું`,
-      hindi: (done, total) => `आपकी प्रोफाइल में दवाएं जोड़ी जा रही हैं... ${done} / ${total} पूर्ण`,
-      marathi: (done, total) => `तुमच्या प्रोफाइलमध्ये औषधे जोडत आहे... ${done} / ${total} પૂર્ણ झाले`,
-      tamil: (done, total) => `உங்கள் சுயவிவரத்தில் மருந்துகள் சேர்க்கப்படுகின்றன... ${done} / ${total} முடிந்தது`,
+    const addingProgressMap: Record<
+      string,
+      (done: number, total: number) => string
+    > = {
+      english: (done, total) =>
+        `Adding medicines to your profile... ${done} / ${total} completed`,
+      gujarati: (done, total) =>
+        `તમારા પ્રોફાઇલમાં દવાઓ ઉમેરી રહ્યા છે... ${done} / ${total} પૂર્ણ થયું`,
+      hindi: (done, total) =>
+        `आपकी प्रोफाइल में दवाएं जोड़ी जा रही हैं... ${done} / ${total} पूर्ण`,
+      marathi: (done, total) =>
+        `तुमच्या प्रोफाइलमध्ये औषधे जोडत आहे... ${done} / ${total} પૂર્ણ झाले`,
+      tamil: (done, total) =>
+        `உங்கள் சுயவிவரத்தில் மருந்துகள் சேர்க்கப்படுகின்றன... ${done} / ${total} முடிந்தது`,
     };
     const getAddingProgressMsg = (done: number, total: number) => {
       const fn = addingProgressMap[preferredLang] || addingProgressMap.english;
@@ -1191,48 +1480,36 @@ const AIChatScreen = ({ route }: any) => {
       const task = itemsToSubmit[i];
       try {
         if (task.type === "new") {
-          const response = await addMedication(task.payload);
-          const medId = response?.data?.id;
-          if (medId) {
-            try {
-              await createMedicationReminder({ medicationId: medId });
-            } catch (remErr) {
-              console.warn("Failed to create reminder for medicine:", task.med.name, remErr);
-            }
-          }
+          await addMedication(task.payload);
         } else if (task.type === "replace" && task.existingId) {
           await updateMedication({
             medicationId: task.existingId,
             data: task.payload,
           });
-          try {
-            await createMedicationReminder({ medicationId: task.existingId });
-          } catch (remErr) {
-            console.warn("Failed to recreate reminder for replace medicine:", task.med.name, remErr);
-          }
         } else if (task.type === "merge" && task.existingId) {
           await updateMedication({
             medicationId: task.existingId,
             data: task.payload,
           });
-          try {
-            await createMedicationReminder({ medicationId: task.existingId });
-          } catch (remErr) {
-            console.warn("Failed to recreate reminder for merge medicine:", task.med.medicationName, remErr);
-          }
         }
         successCount++;
       } catch (err) {
-        console.error(`Failed to submit item: ${task.med.name || task.med.medicationName || "Medication"}`, err);
+        console.error(
+          `Failed to submit item: ${task.med.name || task.med.medicationName || "Medication"}`,
+          err,
+        );
         failed.push(task);
       }
 
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === progressMsgId
-            ? { ...msg, text: getAddingProgressMsg(i + 1, itemsToSubmit.length) }
-            : msg
-        )
+            ? {
+                ...msg,
+                text: getAddingProgressMsg(i + 1, itemsToSubmit.length),
+              }
+            : msg,
+        ),
       );
     }
 
@@ -1245,25 +1522,37 @@ const AIChatScreen = ({ route }: any) => {
 
     if (failed.length > 0) {
       setFailedSubmissions(failed);
-      
-      const partialFailureMap: Record<string, (success: number, fail: number) => string> = {
-        english: (success, fail) => `Operation partially failed. Successfully added ${success} medicines, but ${fail} failed. Please retry.`,
-        gujarati: (success, fail) => `પ્રક્રિયા અંશતઃ નિષ્ફળ રહી. ${success} દવાઓ સફળતાપૂર્વક ઉમેરાઈ, પરંતુ ${fail} નિષ્ફળ ગઈ. કૃપા કરીને ફરી પ્રયાસ કરો.`,
-        hindi: (success, fail) => `ऑपरेशन आंशिक रूप से विफल रहा। ${success} दवाएं सफलतापूर्वक जोड़ी गईं, लेकिन ${fail} विफल रहीं। कृपया पुनः प्रयास करें।`,
-        marathi: (success, fail) => `क्रिया अंशतः अपयशी ठरली. ${success} औषधे यशस्वीरित्या जोडली गेली, परंतु ${fail} अपयशी ठरली. कृपया पुन्हा प्रयत्न करा.`,
-        tamil: (success, fail) => `செயல்பாடு ஓரளவு தோல்வியடைந்தது. ${success} மருந்துகள் வெற்றிகரமாக சேர்க்கப்பட்டன, ஆனால் ${fail} தோல்வியடைந்தன. மீண்டும் முயற்சிக்கவும்.`,
+
+      const partialFailureMap: Record<
+        string,
+        (success: number, fail: number) => string
+      > = {
+        english: (success, fail) =>
+          `Operation partially failed. Successfully added ${success} medicines, but ${fail} failed. Please retry.`,
+        gujarati: (success, fail) =>
+          `પ્રક્રિયા અંશતઃ નિષ્ફળ રહી. ${success} દવાઓ સફળતાપૂર્વક ઉમેરાઈ, પરંતુ ${fail} નિષ્ફળ ગઈ. કૃપા કરીને ફરી પ્રયાસ કરો.`,
+        hindi: (success, fail) =>
+          `ऑपरेशन आंशिक रूप से विफल रहा। ${success} दवाएं सफलतापूर्वक जोड़ी गईं, लेकिन ${fail} विफल रहीं। कृपया पुनः प्रयास करें।`,
+        marathi: (success, fail) =>
+          `क्रिया अंशतः अपयशी ठरली. ${success} औषधे यशस्वीरित्या जोडली गेली, परंतु ${fail} अपयशी ठरली. कृपया पुन्हा प्रयत्न करा.`,
+        tamil: (success, fail) =>
+          `செயல்பாடு ஓரளவு தோல்வியடைந்தது. ${success} மருந்துகள் வெற்றிகரமாக சேர்க்கப்பட்டன, ஆனால் ${fail} தோல்வியடைந்தன. மீண்டும் முயற்சிக்கவும்.`,
       };
       const getPartialFailureMsg = (success: number, fail: number) => {
-        const fn = partialFailureMap[preferredLang] || partialFailureMap.english;
+        const fn =
+          partialFailureMap[preferredLang] || partialFailureMap.english;
         return fn(success, fail);
       };
 
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === progressMsgId
-            ? { ...msg, text: getPartialFailureMsg(successCount, failed.length) }
-            : msg
-        )
+            ? {
+                ...msg,
+                text: getPartialFailureMsg(successCount, failed.length),
+              }
+            : msg,
+        ),
       );
 
       const errorSummaryMap: Record<string, string> = {
@@ -1273,7 +1562,8 @@ const AIChatScreen = ({ route }: any) => {
         marathi: "काही औषधे तुमच्या प्रोफाइलमध्ये जोडली जाऊ शकली नाहीत.",
         tamil: "சில மருந்துகளை உங்கள் சுயவிவரத்தில் சேர்க்க முடியவில்லை.",
       };
-      const errorSummaryMsg = errorSummaryMap[preferredLang] || errorSummaryMap.english;
+      const errorSummaryMsg =
+        errorSummaryMap[preferredLang] || errorSummaryMap.english;
 
       const errorMsg: ChatMessage = {
         id: `ai-failure-summary-${Date.now()}`,
@@ -1295,17 +1585,18 @@ const AIChatScreen = ({ route }: any) => {
         english: "All medicines have been successfully added to your profile!",
         gujarati: "બધી દવાઓ તમારા પ્રોફાઇલમાં સફળતાપૂર્વક ઉમેરવામાં આવી છે!",
         hindi: "सभी दवाएं आपकी प्रोफाइल में सफलतापूर्वक जोड़ दी गई हैं!",
-        marathi: "सर्व औषधे तुमच्या प्रोफाइलमध्ये यशस्वीरित्या जोडली गेली आहेत!",
-        tamil: "அனைத்து மருந்துகளும் உங்கள் சுயவிவரத்தில் வெற்றிகரமாக சேர்க்கப்பட்டன!",
+        marathi:
+          "सर्व औषधे तुमच्या प्रोफाइलमध्ये यशस्वीरित्या जोडली गेली आहेत!",
+        tamil:
+          "அனைத்து மருந்துகளும் உங்கள் சுயவிவரத்தில் வெற்றிகரமாக சேர்க்கப்பட்டன!",
       };
-      const successProgressMsg = successProgressMap[preferredLang] || successProgressMap.english;
+      const successProgressMsg =
+        successProgressMap[preferredLang] || successProgressMap.english;
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === progressMsgId
-            ? { ...msg, text: successProgressMsg }
-            : msg
-        )
+          msg.id === progressMsgId ? { ...msg, text: successProgressMsg } : msg,
+        ),
       );
 
       const totalAdded = retryOnly ? successCount : itemsToSubmit.length;
@@ -1366,7 +1657,7 @@ const AIChatScreen = ({ route }: any) => {
 
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
 
     return () => subscription.remove();
@@ -1388,7 +1679,7 @@ const AIChatScreen = ({ route }: any) => {
     };
   }, []);
 
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [sessions, setSessions] = useState<any[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -1418,6 +1709,7 @@ const AIChatScreen = ({ route }: any) => {
             text: dbMsg.content,
             sessionId: chatSessionId,
             createdAt: dbMsg.createdAt,
+            action: (dbMsg.metadata || {}).action || (dbMsg.metadata || {}).actionType || "NORMAL_CHAT",
           }));
           setOnboardingMessages(mapped);
         }
@@ -1440,6 +1732,7 @@ const AIChatScreen = ({ route }: any) => {
   const bottomPadding = useBottomBarPadding(40, 20);
 
   const handleOpenProgressSheet = () => {
+    setShowFloatingPanel(false);
     extractionSheetRef.current?.present();
     if (isAllTerminal) {
       setChatWizardState((prev) => ({
@@ -1447,6 +1740,10 @@ const AIChatScreen = ({ route }: any) => {
         hasViewedCompletedOcr: true,
       }));
     }
+  };
+
+  const handleExtractionSheetClose = () => {
+    setShowFloatingPanel(true);
   };
 
   // Fetch all documents
@@ -1524,15 +1821,28 @@ const AIChatScreen = ({ route }: any) => {
             null;
           setNextCursor(newCursor);
 
-          const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => ({
-            ...(dbMsg.metadata || {}),
-            id: dbMsg.id,
-            role: dbMsg.role === "assistant" ? "ai" : "user",
-            text: dbMsg.content,
-            mode: dbMsg.metadata?.mode as ChatMode,
-            emergency: !!dbMsg.metadata?.emergency,
-            createdAt: dbMsg.createdAt,
-          }));
+          const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => {
+            let meta = dbMsg.metadata;
+            if (typeof meta === "string") {
+              try { meta = JSON.parse(meta); } catch (e) { meta = {}; }
+            } else {
+              meta = meta || {};
+            }
+            return {
+              ...meta,
+              id: dbMsg.id,
+              role: dbMsg.role === "assistant" ? "ai" : "user",
+              text: dbMsg.content,
+              mode: meta.mode as ChatMode,
+              emergency: !!meta.emergency,
+              createdAt: dbMsg.createdAt,
+              action: meta.action || meta.actionType || "NORMAL_CHAT",
+              medicines: meta.medicines || [],
+              conflicts: meta.conflicts || [],
+              documents: meta.documents || [],
+              options: meta.options || [],
+            };
+          });
 
           setMessages(mapped);
         } else {
@@ -1566,15 +1876,28 @@ const AIChatScreen = ({ route }: any) => {
       const newCursor =
         response.data?.data?.nextCursor || response.data?.nextCursor || null;
 
-      const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => ({
-        ...(dbMsg.metadata || {}),
-        id: dbMsg.id,
-        role: dbMsg.role === "assistant" ? "ai" : "user",
-        text: dbMsg.content,
-        mode: dbMsg.metadata?.mode as ChatMode,
-        emergency: !!dbMsg.metadata?.emergency,
-        createdAt: dbMsg.createdAt,
-      }));
+      const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => {
+        let meta = dbMsg.metadata;
+        if (typeof meta === "string") {
+          try { meta = JSON.parse(meta); } catch (e) { meta = {}; }
+        } else {
+          meta = meta || {};
+        }
+        return {
+          ...meta,
+          id: dbMsg.id,
+          role: dbMsg.role === "assistant" ? "ai" : "user",
+          text: dbMsg.content,
+          mode: meta.mode as ChatMode,
+          emergency: !!meta.emergency,
+          createdAt: dbMsg.createdAt,
+          action: meta.action || meta.actionType || "NORMAL_CHAT",
+          medicines: meta.medicines || [],
+          conflicts: meta.conflicts || [],
+          documents: meta.documents || [],
+          options: meta.options || [],
+        };
+      });
 
       setMessages((prev) => [...mapped, ...prev]);
       setNextCursor(newCursor);
@@ -1663,12 +1986,18 @@ const AIChatScreen = ({ route }: any) => {
     setMessages((prev) => [...prev, userMsg]);
 
     // 2. Perform actions based on value/actionType
-    if (option.actionType === "ADD_DOCUMENT" || option.value === "ADD_DOCUMENT") {
+    if (
+      option.actionType === "ADD_DOCUMENT" ||
+      option.value === "ADD_DOCUMENT"
+    ) {
       uploadSheetRef.current?.present();
       return;
     }
 
-    if (option.actionType === "ADD_MEDICINE" || option.value === "ADD_MEDICINE") {
+    if (
+      option.actionType === "ADD_MEDICINE" ||
+      option.value === "ADD_MEDICINE"
+    ) {
       navigation.navigate("MEDICATION");
       return;
     }
@@ -1689,7 +2018,10 @@ const AIChatScreen = ({ route }: any) => {
         payload.actionType = "CONFIRM_MEDICINES";
         payload.actionData = option.value;
       } else {
-        payload.message = typeof option.value === "object" ? JSON.stringify(option.value) : option.value;
+        payload.message =
+          typeof option.value === "object"
+            ? JSON.stringify(option.value)
+            : option.value;
       }
 
       const response = await apiClient.post("/v1/onboarding/chat", payload);
@@ -1733,11 +2065,43 @@ const AIChatScreen = ({ route }: any) => {
     return [...liveNewestFirst, ...onboardingNewestFirst];
   }, [messages, onboardingMessages]);
 
+  const displayMessages = useMemo(() => {
+    const displayArr: any[] = [];
+
+    for (let i = 0; i < mergedMessages.length; i++) {
+       const item = mergedMessages[i];
+       displayArr.push(item);
+
+       const nextItem = mergedMessages[i + 1];
+       let showDateHeader = false;
+       if (!nextItem) {
+         showDateHeader = true;
+       } else if (item.createdAt && nextItem.createdAt) {
+         const currentDate = formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true);
+         const prevDate = formatUTCDateTime(nextItem.createdAt, "dd-MMM-yyyy", true);
+         if (currentDate !== prevDate) {
+           showDateHeader = true;
+         }
+       }
+
+       if (showDateHeader && item.createdAt) {
+         const label = getRelativeDateLabel(item.createdAt, true);
+         displayArr.push({
+           isDateHeader: true,
+           id: `date-header-${item.id || i}`,
+           dateLabel: label,
+         });
+       }
+    }
+
+    return displayArr;
+  }, [mergedMessages]);
+
   const isLatestActiveMessage = (msgId: string) => {
     return mergedMessages[0]?.id === msgId;
   };
 
-  if (isLoadingDocs) {
+  if (isLoadingDocs || isLoadingHistory) {
     return <LoadingScreen />;
   }
 
@@ -1767,7 +2131,10 @@ const AIChatScreen = ({ route }: any) => {
       />
 
       {/* Floating Background Progress Panel */}
-      {(isUploading || (chatWizardState.step !== "idle" && !chatWizardState.hasViewedCompletedOcr)) && (
+      {showFloatingPanel &&
+        (isUploading ||
+          (chatWizardState.step !== "idle" &&
+            !chatWizardState.hasViewedCompletedOcr)) && (
         <FloatingProgressPanel
           onOpenSheet={handleOpenProgressSheet}
           isDark={isDark}
@@ -1790,6 +2157,20 @@ const AIChatScreen = ({ route }: any) => {
 
         {/* Messages List / Welcome Empty State */}
         <View style={styles.contentWrapper}>
+          {activeDateLabel ? (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 99,
+              }}
+              pointerEvents="none"
+            >
+              <ChatDateHeader dateLabel={activeDateLabel} isDark={isDark} />
+            </View>
+          ) : null}
           {isLoadingHistory ? (
             <View
               style={{
@@ -1800,68 +2181,22 @@ const AIChatScreen = ({ route }: any) => {
             >
               <ActivityIndicator size="large" color="#0f766e" />
             </View>
-          ) : mergedMessages.length === 0 ? (
-            <EmptyChatState
-              isDark={isDark}
-              suggestedQuestions={suggestedQuestions}
-              onPressQuestion={handleSend}
-            />
           ) : (
             <FlatList
               ref={flatListRef}
-              data={mergedMessages}
+              data={displayMessages}
               keyExtractor={(item: any, index: number) =>
                 item.id || String(index)
               }
               inverted
-              renderItem={({ item, index }) => {
-                const nextItem = mergedMessages[index + 1];
-                let showDateHeader = false;
-                if (!nextItem) {
-                  showDateHeader = true;
-                } else if (item.createdAt && nextItem.createdAt) {
-                  const currentDate = formatUTCDateTime(
-                    item.createdAt,
-                    "dd-MMM-yyyy",
-                    true
+              onViewableItemsChanged={onViewableItemsChanged.current}
+              viewabilityConfig={viewabilityConfig.current}
+              renderItem={({ item }) => {
+                if (item.isDateHeader) {
+                  return (
+                    <ChatDateHeader dateLabel={item.dateLabel} isDark={isDark} />
                   );
-                  const prevDate = formatUTCDateTime(
-                    nextItem.createdAt,
-                    "dd-MMM-yyyy",
-                    true
-                  );
-                  if (currentDate !== prevDate) {
-                    showDateHeader = true;
-                  }
-                } else if (item.createdAt && !nextItem.createdAt) {
-                  showDateHeader = true;
                 }
-
-                const dateHeader =
-                  showDateHeader && item.createdAt ? (
-                    <View style={{ alignItems: "center", marginVertical: 16 }}>
-                      <View
-                        style={{
-                          backgroundColor: isDark
-                            ? "rgba(255,255,255,0.1)"
-                            : "#e2e8f0",
-                          paddingHorizontal: 12,
-                          paddingVertical: 4,
-                          borderRadius: 12,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "600",
-                            color: isDark ? "#cbd5e1" : "#64748b",
-                          }}
-                        >
-                          {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true)}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : null;
 
                 const isHistorical = item.sessionId === onboardingSessionId;
                 const { chosenVal, chosenLabel } = isHistorical
@@ -1875,6 +2210,7 @@ const AIChatScreen = ({ route }: any) => {
                   item.action === "ADD_MEDICINE" ||
                   item.action === "EDIT_MEDICINE" ||
                   item.action === "REVIEW_MEDICINES_LIST" ||
+                  item.action === "ADD_DOCUMENT" ||
                   item.action === "CONFIRM_MEDICINE" ||
                   item.action === "EXTRACTED_MEDICINES" ||
                   item.action === "EXTRACTED_MEDICINES_CONFLICTS" ||
@@ -1906,12 +2242,14 @@ const AIChatScreen = ({ route }: any) => {
                   const hasText = item.text && item.text.trim().length > 0;
                   return (
                     <View style={{ width: "100%" }}>
-                      {dateHeader}
+
                       {hasText && (
                         <MessageBubble
                           message={item}
                           isDark={isDark}
-                          onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                          onSpeak={() =>
+                            speakMessage(item.id, item.text, preferredLang)
+                          }
                           isSpeaking={speakingMessageId === item.id}
                         />
                       )}
@@ -1953,6 +2291,7 @@ const AIChatScreen = ({ route }: any) => {
                     );
                   }
                   if (item.action === "ADD_MEDICINE") {
+                    const isLatest = isLatestActiveMessage(item.id);
                     const med = item.medicine || {};
                     return renderAssistantPrompt(
                       <AddMedicineCard
@@ -1962,10 +2301,16 @@ const AIChatScreen = ({ route }: any) => {
                         preferredLang={preferredLang}
                         isDark={isDark}
                         theme={theme}
-                        currentClientMedId={null}
-                        setCurrentClientMedId={() => {}}
-                        onSave={() => {}}
-                        readOnly={true}
+                        currentClientMedId={chatCurrentClientMedId}
+                        setCurrentClientMedId={setChatCurrentClientMedId}
+                        onSave={(updatedMed) => {
+                          handleGenericOptionPress({
+                            label: `Add medicine: ${updatedMed.name}`,
+                            value: { medicine: updatedMed },
+                            actionType: "ADD_MEDICINE",
+                          });
+                        }}
+                        readOnly={!isLatest}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
                       />,
@@ -1975,145 +2320,215 @@ const AIChatScreen = ({ route }: any) => {
                     const isLatest = isLatestActiveMessage(item.id);
                     const med = item.medicine || {};
                     return renderAssistantPrompt(
-                      <AddMedicineCard
-                        key={item.id}
-                        med={med}
-                        isEditingLocal={true}
-                        preferredLang={preferredLang}
-                        isDark={isDark}
-                        theme={theme}
-                        currentClientMedId={null}
-                        setCurrentClientMedId={() => {}}
-                        onSave={(updatedMed) => {
-                          setMessages((prev) =>
-                            prev
-                              .map((msg) => {
-                                if (msg.id === item.stepKey) {
-                                  const updatedMeds = (msg.medicines || []).map((m) =>
-                                    m.id === updatedMed.id
-                                      ? {
-                                          ...m,
-                                          ...updatedMed,
-                                          medicationName: updatedMed.name || updatedMed.medicationName,
-                                          medicationType: updatedMed.medicineType || updatedMed.medicationType || updatedMed.type,
-                                          instructions: updatedMed.notes || updatedMed.instructions,
-                                        }
-                                      : m
-                                  );
-                                  return {
-                                    ...msg,
-                                    medicines: updatedMeds,
-                                  };
-                                }
-                                return msg;
-                              })
-                              .filter((msg) => msg.id !== item.id)
-                          );
+                      <View
+                        style={{
+                          backgroundColor: isDark ? "#1e293b" : "#ffffff",
+                          borderRadius: 16,
+                          padding: 16,
+                          marginTop: 8,
+                          borderWidth: 1,
+                          borderColor: isDark ? "#334155" : "#e2e8f0",
+                          opacity: !isLatest ? 0.6 : 1,
                         }}
-                        onCancel={
-                          isLatest
-                            ? () => {
-                                setMessages((prev) =>
-                                  prev.filter((msg) => msg.id !== item.id)
-                                );
-                              }
-                            : undefined
-                        }
-                        readOnly={!isLatest}
-                        chosenVal={chosenVal}
-                        chosenLabel={chosenLabel}
-                      />,
+                      >
+                        <Text
+                          style={{
+                            fontSize: 16,
+                            fontWeight: "600",
+                            color: theme.colors.textPrimary,
+                            marginBottom: 12,
+                          }}
+                        >
+                          {med.name || med.medicationName || "Unknown Medicine"}
+                        </Text>
+
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                fontSize: 13,
+                                color: isDark ? "#cbd5e1" : "#475569",
+                              }}
+                            >
+                              {med.dosage
+                                ? `${med.dosage} ${med.dosageUnit || ""}`.trim()
+                                : "No dosage specified"}
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: 13,
+                                color: isDark ? "#94a3b8" : "#64748b",
+                                marginTop: 4,
+                              }}
+                            >
+                              {med.frequency
+                                ? med.frequency === "ONCE"
+                                  ? t("frequency.ONCE")
+                                  : med.frequency === "TWICE"
+                                    ? t("frequency.TWICE")
+                                    : med.frequency === "THRICE"
+                                      ? t("frequency.THRICE")
+                                      : med.frequency
+                                : "No frequency specified"}
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            disabled={!isLatest}
+                            onPress={() => {
+                              setMedicineToEdit(med);
+                              setTimeout(() => {
+                                editSheetRef.current?.present();
+                              }, 100);
+                            }}
+                            style={{
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.1)"
+                                : "#f1f5f9",
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 20,
+                              flexDirection: "row",
+                              alignItems: "center",
+                            }}
+                          >
+                            <Ionicons
+                              name="pencil"
+                              size={16}
+                              color={theme.colors.primary}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text
+                              style={{
+                                color: theme.colors.primary,
+                                fontWeight: "600",
+                                fontSize: 14,
+                              }}
+                            >
+                              Edit
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>,
                     );
                   }
-                  if (item.action === "REVIEW_MEDICINES_LIST") {
+                  if (item.action === "REVIEW_MEDICINES_LIST" || item.action === "ADD_DOCUMENT") {
                     const isLatest = isLatestActiveMessage(item.id);
+                    const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
+                    const displayMeds = item.medicines?.length
+                      ? item.medicines
+                      : (isLatest ? chatWizardState.extractedMedicines : []);
+
                     return renderAssistantPrompt(
                       <ReviewMedicinesListCard
-                        localMedicines={item.medicines || []}
+                        localMedicines={displayMeds}
                         setLocalMedicines={(updater) => {
+                          const nextMeds =
+                            typeof updater === "function"
+                              ? updater(displayMeds)
+                              : updater;
+
+                          if (isLatest) {
+                            setChatWizardState((prev) => ({
+                              ...prev,
+                              extractedMedicines: nextMeds,
+                            }));
+                          }
+
                           setMessages((prev) =>
                             prev.map((msg) => {
                               if (msg.id === item.id) {
-                                const nextMeds = typeof updater === "function" ? updater(msg.medicines || []) : updater;
                                 return {
                                   ...msg,
                                   medicines: nextMeds,
                                 };
                               }
                               return msg;
-                            })
+                            }),
                           );
                         }}
                         preferredLang={preferredLang}
                         isDark={isDark}
                         theme={theme}
-                        onConfirm={(checkedMeds, formattedMeds) => {
+                        onConfirm={(formattedMeds) => {
                           const displayLabel =
-                            preferredLang === "gujarati" || preferredLang === "gu"
+                            preferredLang === "gujarati" ||
+                            preferredLang === "gu"
                               ? "પસંદ કરેલ પુષ્ટિ કરો"
-                              : preferredLang === "hindi" || preferredLang === "hi"
+                              : preferredLang === "hindi" ||
+                                  preferredLang === "hi"
                                 ? "चयनित की पुष्टि करें"
-                                : preferredLang === "marathi" || preferredLang === "mr"
+                                : preferredLang === "marathi" ||
+                                    preferredLang === "mr"
                                   ? "निवडलेले निश्चित करा"
-                                  : preferredLang === "tamil" || preferredLang === "ta"
+                                  : preferredLang === "tamil" ||
+                                      preferredLang === "ta"
                                     ? "தேர்ந்தெடுக்கப்பட்டதை உறுதிப்படுத்தவும்"
                                     : "Confirm Selection";
 
                           handleGenericOptionPress({
                             label: displayLabel,
                             value: { medicines: formattedMeds || [] },
-                            actionType: "CONFIRM_MEDICINES"
+                            actionType: "CONFIRM_MEDICINES",
                           });
                         }}
                         onAddNew={() => {
                           const displayLabel =
-                            preferredLang === "gujarati" || preferredLang === "gu"
+                            preferredLang === "gujarati" ||
+                            preferredLang === "gu"
                               ? "નવું ઉમેરો"
-                              : preferredLang === "hindi" || preferredLang === "hi"
+                              : preferredLang === "hindi" ||
+                                  preferredLang === "hi"
                                 ? "नया जोड़ें"
-                                : preferredLang === "marathi" || preferredLang === "mr"
+                                : preferredLang === "marathi" ||
+                                    preferredLang === "mr"
                                   ? "नवीन जोडा"
-                                  : preferredLang === "tamil" || preferredLang === "ta"
+                                  : preferredLang === "tamil" ||
+                                      preferredLang === "ta"
                                     ? "புதியதைச் சேர்க்கவும்"
                                     : "Add New";
 
                           handleGenericOptionPress({
                             label: displayLabel,
                             value: { addNew: true },
-                            actionType: "ADD_MEDICINE"
+                            actionType: "ADD_MEDICINE",
                           });
                         }}
                         onSkipAll={() => {
                           const displayLabel =
-                            preferredLang === "gujarati" || preferredLang === "gu"
+                            preferredLang === "gujarati" ||
+                            preferredLang === "gu"
                               ? "બધા છોડી દો"
-                              : preferredLang === "hindi" || preferredLang === "hi"
+                              : preferredLang === "hindi" ||
+                                  preferredLang === "hi"
                                 ? "सभी छोड़ें"
-                                : preferredLang === "marathi" || preferredLang === "mr"
+                                : preferredLang === "marathi" ||
+                                    preferredLang === "mr"
                                   ? "सर्व वगळा"
-                                  : preferredLang === "tamil" || preferredLang === "ta"
+                                  : preferredLang === "tamil" ||
+                                      preferredLang === "ta"
                                     ? "அனைத்தையும் தவிர்க்கவும்"
                                     : "Skip All";
 
                           handleGenericOptionPress({
                             label: displayLabel,
                             value: { skipAll: true },
-                            actionType: "SKIP_MEDICINES"
+                            actionType: "SKIP_MEDICINES",
                           });
                         }}
                         onEdit={(med) => {
-                          const editMsg: ChatMessage = {
-                            id: `ai-edit-med-${Date.now()}`,
-                            role: "ai",
-                            text: "Please edit the medication details below:",
-                            action: "EDIT_MEDICINE",
-                            medicine: med,
-                            stepKey: item.id,
-                            createdAt: new Date().toISOString(),
-                          };
-                          setMessages((prev) => [...prev, editMsg]);
+                          setMedicineToEdit(med);
+                          setTimeout(() => {
+                            editSheetRef.current?.present();
+                          }, 100);
                         }}
-                        readOnly={!isLatest}
+                        readOnly={isReadOnly}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
                       />,
@@ -2127,7 +2542,12 @@ const AIChatScreen = ({ route }: any) => {
                         isDark={isDark}
                         theme={theme}
                         onConfirm={() => {}}
-                        onEdit={() => {}}
+                        onEdit={(med) => {
+                          setMedicineToEdit(med);
+                          setTimeout(() => {
+                            editSheetRef.current?.present();
+                          }, 100);
+                        }}
                         readOnly={true}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
@@ -2164,16 +2584,19 @@ const AIChatScreen = ({ route }: any) => {
                         onConfirm={handleConfirmSelection}
                         isLoading={isLoadingResults}
                         preferredLang={preferredLang}
-                      />
+                      />,
                     );
                   }
 
                   if (item.action === "EXTRACTED_MEDICINES_CONFLICTS") {
                     const isLatest = isLatestActiveMessage(item.id);
+                    const displayConflicts = item.conflicts?.length
+                      ? item.conflicts
+                      : (isLatest ? chatWizardState.conflicts : []);
                     return renderAssistantPrompt(
                       <ConflictCarouselCard
-                        conflicts={chatWizardState.conflicts || []}
-                        currentIndex={chatWizardState.currentConflictIndex}
+                        conflicts={displayConflicts}
+                        currentIndex={isLatest ? chatWizardState.currentConflictIndex : 0}
                         isDark={isDark}
                         isLatest={isLatest}
                         onResolve={resolveCurrentConflict}
@@ -2187,7 +2610,7 @@ const AIChatScreen = ({ route }: any) => {
                           }, 100);
                         }}
                         preferredLang={preferredLang}
-                      />
+                      />,
                     );
                   }
 
@@ -2195,20 +2618,32 @@ const AIChatScreen = ({ route }: any) => {
                     const isLatest = isLatestActiveMessage(item.id);
                     return renderAssistantPrompt(
                       <ConfirmMedicinesCard
-                        docsCount={item.docsCount || chatWizardState.filesInfo.length}
-                        extractedCount={chatWizardState.extractedMedicines.length}
-                        conflictsResolvedCount={chatWizardState.conflicts.length}
-                        toBeAddedCount={item.medicinesCount !== undefined ? item.medicinesCount : (
-                          chatWizardState.resolvedMedicines.length +
-                          chatWizardState.replaceList.length +
-                          chatWizardState.mergeList.length
-                        )}
+                        docsCount={
+                          item.docsCount !== undefined
+                            ? item.docsCount
+                            : chatWizardState.filesInfo.length
+                        }
+                        extractedCount={
+                          item.medicinesCount !== undefined
+                            ? item.medicinesCount
+                            : chatWizardState.extractedMedicines.length
+                        }
+                        conflictsResolvedCount={
+                          chatWizardState.conflicts.length
+                        }
+                        toBeAddedCount={
+                          item.medicinesCount !== undefined
+                            ? item.medicinesCount
+                            : chatWizardState.resolvedMedicines.length +
+                              chatWizardState.replaceList.length +
+                              chatWizardState.mergeList.length
+                        }
                         isDark={isDark}
                         isLatest={isLatest}
                         onConfirm={handleConfirmAndAddMeds}
                         isLoading={isConfirmingMeds}
                         preferredLang={preferredLang}
-                      />
+                      />,
                     );
                   }
 
@@ -2217,9 +2652,11 @@ const AIChatScreen = ({ route }: any) => {
                       <SuccessCard
                         count={item.medicinesCount || 0}
                         isDark={isDark}
-                        onViewMedicines={() => navigation.navigate("MEDICATION")}
+                        onViewMedicines={() =>
+                          navigation.navigate("MEDICATION")
+                        }
                         preferredLang={preferredLang}
-                      />
+                      />,
                     );
                   }
 
@@ -2231,7 +2668,7 @@ const AIChatScreen = ({ route }: any) => {
                         isDark={isDark}
                         isLatest={isLatest}
                         onReview={handleReviewMedicines}
-                      />
+                      />,
                     );
                   }
 
@@ -2252,37 +2689,79 @@ const AIChatScreen = ({ route }: any) => {
                         onContinue={handleConfirmSelection}
                         isLoading={isLoadingResults}
                         preferredLang={preferredLang}
-                      />
+                      />,
                     );
                   }
 
                   if (item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE") {
                     const isLatest = isLatestActiveMessage(item.id);
                     return renderAssistantPrompt(
-                      <View style={{ backgroundColor: isDark ? "#1e293b" : "#ffffff", borderColor: "#ef4444", padding: 16, borderRadius: 16, borderWidth: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
-                          <Ionicons name="warning" size={24} color="#ef4444" style={{ marginRight: 8 }} />
-                          <Text style={{ fontSize: 16, fontWeight: "700", color: isDark ? "#f8fafc" : "#1e293b" }}>
+                      <View
+                        style={{
+                          backgroundColor: isDark ? "#1e293b" : "#ffffff",
+                          borderColor: "#ef4444",
+                          padding: 16,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginBottom: 12,
+                          }}
+                        >
+                          <Ionicons
+                            name="warning"
+                            size={24}
+                            color="#ef4444"
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 16,
+                              fontWeight: "700",
+                              color: isDark ? "#f8fafc" : "#1e293b",
+                            }}
+                          >
                             Some Additions Failed
                           </Text>
                         </View>
-                        <Text style={{ fontSize: 13, color: isDark ? "#cbd5e1" : "#475569", marginBottom: 16 }}>
-                          Successfully added {item.successCount || 0} medicine(s), but {item.failedCount || 0} failed due to a network error.
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            color: isDark ? "#cbd5e1" : "#475569",
+                            marginBottom: 16,
+                          }}
+                        >
+                          Successfully added {item.successCount || 0}{" "}
+                          medicine(s), but {item.failedCount || 0} failed due to
+                          a network error.
                         </Text>
                         {isLatest && (
                           <TouchableOpacity
                             onPress={() => handleConfirmAndAddMeds(true)}
                             disabled={isConfirmingMeds}
-                            style={{ backgroundColor: "#ef4444", padding: 12, borderRadius: 12, alignItems: "center" }}
+                            style={{
+                              backgroundColor: "#ef4444",
+                              padding: 12,
+                              borderRadius: 12,
+                              alignItems: "center",
+                            }}
                           >
                             {isConfirmingMeds ? (
                               <ActivityIndicator size="small" color="#ffffff" />
                             ) : (
-                              <Text style={{ color: "#ffffff", fontWeight: "700" }}>Retry Failed</Text>
+                              <Text
+                                style={{ color: "#ffffff", fontWeight: "700" }}
+                              >
+                                Retry Failed
+                              </Text>
                             )}
                           </TouchableOpacity>
                         )}
-                      </View>
+                      </View>,
                     );
                   }
                 }
@@ -2290,11 +2769,12 @@ const AIChatScreen = ({ route }: any) => {
                 if (isHistorical && isChipStep) {
                   return (
                     <View style={{ width: "100%" }}>
-                      {dateHeader}
                       <MessageBubble
                         message={item}
                         isDark={isDark}
-                        onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                        onSpeak={() =>
+                          speakMessage(item.id, item.text, preferredLang)
+                        }
                         isSpeaking={speakingMessageId === item.id}
                       />
                       <View style={styles.optionsWrapper}>
@@ -2313,16 +2793,24 @@ const AIChatScreen = ({ route }: any) => {
 
                 return (
                   <View style={{ width: "100%" }}>
-                    {dateHeader}
                     <MessageBubble
                       message={item}
                       isDark={isDark}
-                      onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                      onSpeak={() =>
+                        speakMessage(item.id, item.text, preferredLang)
+                      }
                       isSpeaking={speakingMessageId === item.id}
                     />
                     {showChips && (
                       <View style={styles.optionsWrapper}>
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            marginTop: 8,
+                          }}
+                        >
                           {item.options.map((opt: any, idx: number) => {
                             const isLatest = isLatestActiveMessage(item.id);
                             return (
@@ -2331,7 +2819,9 @@ const AIChatScreen = ({ route }: any) => {
                                 disabled={!isLatest}
                                 onPress={() => handleGenericOptionPress(opt)}
                                 style={{
-                                  backgroundColor: isDark ? "#1e2d2f" : "#ccfbf1",
+                                  backgroundColor: isDark
+                                    ? "#1e2d2f"
+                                    : "#ccfbf1",
                                   borderColor: isDark ? "#2d4d4f" : "#99f6e4",
                                   borderWidth: 1,
                                   borderRadius: 12,
@@ -2340,11 +2830,13 @@ const AIChatScreen = ({ route }: any) => {
                                   opacity: isLatest ? 1 : 0.6,
                                 }}
                               >
-                                <Text style={{
-                                  color: isDark ? "#2dd4bf" : "#0f766e",
-                                  fontWeight: "600",
-                                  fontSize: 13,
-                                }}>
+                                <Text
+                                  style={{
+                                    color: isDark ? "#2dd4bf" : "#0f766e",
+                                    fontWeight: "600",
+                                    fontSize: 13,
+                                  }}
+                                >
                                   {opt.label}
                                 </Text>
                               </TouchableOpacity>
@@ -2440,16 +2932,18 @@ const AIChatScreen = ({ route }: any) => {
         ref={uploadSheetRef}
         fromScreen="AIChat"
         onSuccess={handleUploadSuccess}
+        onUploadStart={handleUploadStart}
       />
 
       <MedicineExtractionBottomSheet
         ref={extractionSheetRef}
         preferredLang={preferredLang}
         isDark={isDark}
+        onClose={handleExtractionSheetClose}
       />
 
-      <BottomSheet ref={editSheetRef}>
-        <View style={{ paddingBottom: bottomPadding }}>
+      <BottomSheet ref={editSheetRef} snapPoints={["85%"]}>
+        <View style={{ flex: 1, paddingBottom: bottomPadding }}>
           {medicineToEdit && (
             <EditMedicineFormWrapper
               medicine={medicineToEdit}
@@ -2521,80 +3015,6 @@ const EmergencyText = styled.Text`
   font-size: 12.5px;
   line-height: 17px;
   font-weight: 600;
-`;
-
-const FloatingPanelCard = styled.View<{ isDark: boolean }>`
-  flex-direction: row;
-  align-items: center;
-  margin-horizontal: 16px;
-  margin-top: 10px;
-  margin-bottom: 6px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background-color: ${(props: any) => (props.isDark ? "#1e293b" : "#ffffff")};
-  shadow-color: #0f172a;
-  shadow-offset: 0px 6px;
-  shadow-opacity: 0.08;
-  shadow-radius: 12px;
-`;
-
-const PanelInfo = styled.View`
-  flex: 1;
-  margin-left: 12px;
-`;
-
-const PanelTitle = styled.Text<{ isDark: boolean }>`
-  font-size: 14px;
-  font-weight: 700;
-  color: ${(props: any) => (props.isDark ? "#f1f5f9" : "#0f172a")};
-`;
-
-const PanelSubtitle = styled.Text`
-  font-size: 11px;
-  color: #64748b;
-  margin-top: 1px;
-`;
-
-const ProgressLabel = styled.Text`
-  font-size: 11px;
-  color: #64748b;
-  margin-top: 4px;
-`;
-
-const ProgressBarRow = styled.View`
-  flex-direction: row;
-  align-items: center;
-  margin-top: 2px;
-`;
-
-const ProgressBarFillBlocks = styled.Text`
-  font-size: 12px;
-  color: #0f766e;
-  letter-spacing: 1px;
-`;
-
-const ProgressPercentText = styled.Text`
-  font-size: 11px;
-  font-weight: 700;
-  color: #0f766e;
-  margin-left: 8px;
-`;
-
-const PanelActions = styled.View`
-  margin-left: 12px;
-`;
-
-const ActionLink = styled.TouchableOpacity`
-  background-color: #0f766e;
-  padding-horizontal: 12px;
-  padding-vertical: 6px;
-  border-radius: 20px;
-`;
-
-const ActionLinkText = styled.Text`
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
 `;
 
 const styles = StyleSheet.create({

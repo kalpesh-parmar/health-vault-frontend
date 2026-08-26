@@ -951,16 +951,6 @@ export function ResolveProfileSourceCard({
         </View>
       )}
 
-      {/* Explainer box */}
-      {mode === "CONFLICT" && (
-        <View style={[styles.explainerBox, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
-          <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} style={{ marginRight: 8, marginTop: 2 }} />
-          <Text style={[styles.explainerText, { color: theme.colors.textSecondary }]}>
-            {activeMsg?.explainer || ""}
-          </Text>
-        </View>
-      )}
-
       {/* Large Action Buttons Side-by-Side */}
       {(() => {
         if (mode === "CONFIRM") {

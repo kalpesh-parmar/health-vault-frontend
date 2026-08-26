@@ -10,7 +10,6 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
-  runOnJS,
 } from "react-native-reanimated";
 
 import * as SecureStore from "expo-secure-store";

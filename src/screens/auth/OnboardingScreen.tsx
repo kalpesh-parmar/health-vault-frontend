@@ -2,8 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { formatUTCDateTime } from "../../utils/dateFormatter";
-import React, { useEffect, useRef, useState } from "react";
+import {
+  formatUTCDateTime,
+  getRelativeDateLabel,
+} from "../../utils/dateFormatter";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   FlatList,
   Keyboard,
@@ -34,15 +37,13 @@ import {
   pickDocumentAsset,
 } from "../../services/mediaServices";
 import { getUser } from "../../services/userService";
-import {
-  uploadPatientDocuments,
-  startOcrJob,
-} from "../../services/documentService";
+import { uploadPatientDocuments } from "../../services/documentService";
 import { connectSseStream, SseEventPayload } from "../../services/streamService";
 
 // Reusable Redesigned Components
 import { ChatInput } from "../../components/chat/ChatInput";
 import { MessageBubble } from "../../components/chat/MessageBubble";
+import { ChatDateHeader } from "../../components/chat/ChatDateHeader";
 import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 import TypingIndicator from "../../components/chat/TypingIndicator";
 import UploadBottomSheet from "../../components/upload/UploadBottomSheet";
@@ -126,6 +127,31 @@ export default function OnboardingScreen() {
   const [keyboardPadding, setKeyboardPadding] = useState(0);
   const [isProgressCollapsed, setIsProgressCollapsed] = useState(true);
   const [actualKeyboardHeight, setActualKeyboardHeight] = useState(0);
+  const [activeDateLabel, setActiveDateLabel] = useState<string>("");
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems && viewableItems.length > 0) {
+      let topItem = viewableItems[0];
+      for (const item of viewableItems) {
+        if (item.index < topItem.index) {
+          topItem = item;
+        }
+      }
+      const message = topItem.item;
+      if (message) {
+        if (message.isDateHeader) {
+          setActiveDateLabel(message.dateLabel);
+        } else if (message.createdAt) {
+          const label = getRelativeDateLabel(message.createdAt, true);
+          setActiveDateLabel(label);
+        }
+      }
+    }
+  });
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 10,
+  });
 
   // State Machine states for OCR Redesign
   const [uploadState, setUploadState] = useState<
@@ -591,7 +617,8 @@ export default function OnboardingScreen() {
           aiRes.medicinesConfirmed !== undefined
             ? aiRes.medicinesConfirmed
             : finalState.medicinesConfirmed,
-        medicinesToAdd: aiRes.medicinesToAdd || aiRes.medicines || finalState.medicinesToAdd,
+        medicinesToAdd:
+          aiRes.medicinesToAdd || aiRes.medicines || finalState.medicinesToAdd,
         currentMedicineIndex:
           aiRes.currentMedicineIndex !== undefined
             ? aiRes.currentMedicineIndex
@@ -604,7 +631,9 @@ export default function OnboardingScreen() {
       };
     }
 
-    finalState.preferredLanguage = getNormalizedLang(finalState.preferredLanguage);
+    finalState.preferredLanguage = getNormalizedLang(
+      finalState.preferredLanguage,
+    );
     setState(finalState);
 
     if (finalState.documentExtracted) {
@@ -1069,10 +1098,6 @@ export default function OnboardingScreen() {
         docId,
       );
 
-      // Start the OCR job explicitly (Required for QUEUED jobs)
-      await startOcrJob(jobId);
-      console.log("[ONBOARDING] OCR Job Started:", jobId);
-
       await AsyncStorage.setItem("onboarding_pending_job_id", jobId);
       await AsyncStorage.setItem("onboarding_pending_document_id", docId);
 
@@ -1209,7 +1234,10 @@ export default function OnboardingScreen() {
                   },
                 ]}
                 onPress={() => {
-                  const newState = { ...state, preferredLanguage: getNormalizedLang(opt.value) };
+                  const newState = {
+                    ...state,
+                    preferredLanguage: getNormalizedLang(opt.value),
+                  };
                   setState(newState);
                   sendMessage(opt.value, newState, opt.label);
                 }}
@@ -1233,6 +1261,7 @@ export default function OnboardingScreen() {
     }
 
     if (activeMsg.action === "ASK_UPLOAD_OR_SKIP") {
+      const isProcessingOrSuccess = ["uploading", "processing", "validating", "queued", "success"].includes(uploadState);
       return (
         <AskUploadOrSkipCard
           activeMsg={activeMsg}
@@ -1242,7 +1271,7 @@ export default function OnboardingScreen() {
           setState={setState}
           sendMessage={sendMessage}
           handleDocumentUpload={handleDocumentUpload}
-          isHistorical={isHistorical}
+          isHistorical={isHistorical || isProcessingOrSuccess}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />
@@ -1496,12 +1525,14 @@ export default function OnboardingScreen() {
           prev.map((msg) =>
             msg.id === activeMsg.id
               ? {
-                ...msg,
-                medicines: (msg.medicines || localMedicines || []).map((m) => ({
-                  ...m,
-                  selected: checkedMeds.includes(m.id),
-                })),
-              }
+                  ...msg,
+                  medicines: (msg.medicines || localMedicines || []).map(
+                    (m) => ({
+                      ...m,
+                      selected: checkedMeds.includes(m.id),
+                    }),
+                  ),
+                }
               : msg,
           ),
         );
@@ -1626,7 +1657,10 @@ export default function OnboardingScreen() {
     //   );
     // }
 
-    if (activeMsg.action === "MEDICINE_OPTIONS" || activeMsg.action === "CONFIRM_MEDICINE") {
+    if (
+      activeMsg.action === "MEDICINE_OPTIONS" ||
+      activeMsg.action === "CONFIRM_MEDICINE"
+    ) {
       return (
         <MedicineOptionsPanel
           optionsList={activeMsg.options || []}
@@ -1706,6 +1740,49 @@ export default function OnboardingScreen() {
     return null;
   };
 
+  const displayMessages = useMemo(() => {
+    const displayArr: any[] = [];
+
+    for (let i = 0; i < messages.length; i++) {
+      const item = messages[i];
+      const prevMsg = i > 0 ? messages[i - 1] : null;
+
+      let showDateHeader = false;
+      if (!item.createdAt) {
+        showDateHeader = false;
+      } else if (!prevMsg || !prevMsg.createdAt) {
+        showDateHeader = true;
+      } else {
+        const currentDate = formatUTCDateTime(
+          item.createdAt,
+          "dd-MMM-yyyy",
+          true,
+        );
+        const prevDate = formatUTCDateTime(
+          prevMsg.createdAt,
+          "dd-MMM-yyyy",
+          true,
+        );
+        if (currentDate !== prevDate) {
+          showDateHeader = true;
+        }
+      }
+
+      if (showDateHeader && item.createdAt) {
+        const label = getRelativeDateLabel(item.createdAt, true);
+        displayArr.push({
+          isDateHeader: true,
+          id: `date-header-${item.id || i}`,
+          dateLabel: label,
+        });
+      }
+
+      displayArr.push(item);
+    }
+
+    return displayArr;
+  }, [messages]);
+
   const activeAction = messages[messages.length - 1]?.action;
 
   return (
@@ -1760,10 +1837,26 @@ export default function OnboardingScreen() {
         >
           {/* Messages List */}
           <View style={styles.listWrapper}>
+            {activeDateLabel ? (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  zIndex: 99,
+                }}
+                pointerEvents="none"
+              >
+                <ChatDateHeader dateLabel={activeDateLabel} isDark={isDark} />
+              </View>
+            ) : null}
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={displayMessages}
               keyExtractor={(item) => item.id}
+              onViewableItemsChanged={onViewableItemsChanged.current}
+              viewabilityConfig={viewabilityConfig.current}
               contentContainerStyle={[
                 styles.listContent,
                 {
@@ -1786,10 +1879,16 @@ export default function OnboardingScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
+                if (item.isDateHeader) {
+                  return (
+                    <ChatDateHeader dateLabel={item.dateLabel} isDark={isDark} />
+                  );
+                }
+
                 // console.log("Message Item : ", item);
                 const isAi = item.role === "assistant";
                 const mappedMsg = {
-                  id: item.id,
+                  ...item,
                   role: isAi ? ("ai" as const) : ("user" as const),
                   text: item.content,
                 };
@@ -1799,67 +1898,25 @@ export default function OnboardingScreen() {
                 const isJson =
                   item.content && item.content.trim().startsWith("{");
 
-                // Check if date changed from previous message
-                const prevMsg =
-                  item.id !== messages[0]?.id
-                    ? messages[messages.findIndex((m) => m.id === item.id) - 1]
-                    : null;
-                const showDateHeader = (() => {
-                  if (!item.createdAt) return false;
-                  if (!prevMsg || !prevMsg.createdAt) return true;
-                  const currentDate = formatUTCDateTime(
-                    item.createdAt,
-                    "dd-MMM-yyyy",
-                    true
-                  );
-                  const prevDate = formatUTCDateTime(
-                    prevMsg.createdAt,
-                    "dd-MMM-yyyy",
-                    true
-                  );
-                  return currentDate !== prevDate;
-                })();
-
                 return (
                   <View style={{ width: "100%" }}>
-                    {showDateHeader && item.createdAt && (
-                      <View
-                        style={{ alignItems: "center", marginVertical: 12 }}
-                      >
-                        <View
-                          style={{
-                            backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                            paddingHorizontal: 12,
-                            paddingVertical: 4,
-                            borderRadius: 12,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: theme.colors.textSecondary,
-                              fontWeight: "600",
-                            }}
-                          >
-                            {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true)}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
                     {!isJson && (
                       <MessageBubble
                         message={{ ...mappedMsg, createdAt: item.createdAt }}
                         isDark={isDark}
-                        onSpeak={() => speakMessage(mappedMsg.id, mappedMsg.text, state.preferredLanguage || undefined)}
+                        onSpeak={() =>
+                          speakMessage(
+                            mappedMsg.id,
+                            mappedMsg.text,
+                            state.preferredLanguage || undefined,
+                          )
+                        }
                         isSpeaking={speakingMessageId === mappedMsg.id}
                       />
                     )}
                     {isAi && options !== null && (
                       <View
-                        style={[
-                          styles.optionsWrapper,
-                          { opacity: 1 },
-                        ]}
+                        style={[styles.optionsWrapper, { opacity: 1 }]}
                         pointerEvents={isLast ? "auto" : "none"}
                       >
                         {options}
@@ -1885,8 +1942,8 @@ export default function OnboardingScreen() {
                   borderWidth: 1,
                   padding: 10,
                   borderRadius: 14,
+                  overflow: "hidden",
                   position: "absolute",
-                  bottom: 80,
                   left: 12,
                   right: 12,
                   alignItems: "stretch",
@@ -1895,39 +1952,80 @@ export default function OnboardingScreen() {
                   shadowOpacity: 0.1,
                   shadowRadius: 4,
                   elevation: 4,
-                  top: undefined,
                 },
+                ["uploading", "processing", "validating", "queued", "success"].includes(
+                  uploadState,
+                ) && { top: 24 }
               ]}
             >
               {/* COMPACT VIEW (Row layout) */}
-              {(uploadState === "uploading" || uploadState === "processing" || uploadState === "validating" || uploadState === "queued") && (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 }}>
+              {(uploadState === "uploading" ||
+                uploadState === "processing" ||
+                uploadState === "validating" ||
+                uploadState === "queued") && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 4,
+                  }}
+                >
                   {/* Left Side: Bold Status & Secondary Text */}
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
-                    <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 13 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flex: 1,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: theme.colors.textPrimary,
+                        fontWeight: "bold",
+                        fontSize: 13,
+                      }}
+                    >
                       {uploadState === "uploading"
                         ? "Uploading"
                         : uploadState === "processing"
                           ? (
-                            ONBOARDING_I18N[
-                              (state.preferredLanguage || "english").toLowerCase()
-                            ]?.page_progress ||
-                            ONBOARDING_I18N.english.page_progress
-                          )
-                            .replace("Page", "Processing")
-                            .replace("પૃષ્ઠ", "Processing")
-                            .replace("पृष्ठ", "Processing")
-                            .replace("पान", "Processing")
-                            .replace("பக்கம்", "Processing")
-                            .replace("{current}", String(pollCurrentPage))
-                            .replace("{total}", String(pollTotalPages))
+                              ONBOARDING_I18N[
+                                (
+                                  state.preferredLanguage || "english"
+                                ).toLowerCase()
+                              ]?.page_progress ||
+                              ONBOARDING_I18N.english.page_progress
+                            )
+                              .replace("Page", "Processing")
+                              .replace("પૃષ્ઠ", "Processing")
+                              .replace("पृष्ठ", "Processing")
+                              .replace("पान", "Processing")
+                              .replace("பக்கம்", "Processing")
+                              .replace("{current}", String(pollCurrentPage))
+                              .replace("{total}", String(pollTotalPages))
                           : uploadState === "validating"
                             ? "Validating"
                             : "Queued"}
                     </Text>
 
-                    <Text style={{ color: theme.colors.textSecondary, marginHorizontal: 6, fontSize: 13 }}>•</Text>
-                    <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }} numberOfLines={1}>
+                    <Text
+                      style={{
+                        color: theme.colors.textSecondary,
+                        marginHorizontal: 6,
+                        fontSize: 13,
+                      }}
+                    >
+                      •
+                    </Text>
+                    <Text
+                      style={{
+                        color: theme.colors.textSecondary,
+                        fontSize: 13,
+                      }}
+                      numberOfLines={1}
+                    >
                       {uploadState === "uploading"
                         ? "Uploading"
                         : uploadState === "processing"
@@ -1942,7 +2040,14 @@ export default function OnboardingScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     {/* Percentage */}
                     {["uploading", "processing"].includes(uploadState) && (
-                      <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 13, marginRight: 12 }}>
+                      <Text
+                        style={{
+                          color: theme.colors.primary,
+                          fontWeight: "bold",
+                          fontSize: 13,
+                          marginRight: 12,
+                        }}
+                      >
                         {`${uploadPercent}%`}
                       </Text>
                     )}
@@ -1950,13 +2055,29 @@ export default function OnboardingScreen() {
                     {/* Toggle button */}
                     <TouchableOpacity
                       onPress={() => setIsProgressCollapsed((prev) => !prev)}
-                      style={{ flexDirection: "row", alignItems: "center", paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: isDark ? "#334155" : "#f1f5f9" }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: 4,
+                        paddingHorizontal: 8,
+                        borderRadius: 8,
+                        backgroundColor: isDark ? "#334155" : "#f1f5f9",
+                      }}
                     >
-                      <Text style={{ color: theme.colors.textPrimary, fontSize: 12, fontWeight: "500", marginRight: 2 }}>
+                      <Text
+                        style={{
+                          color: theme.colors.textPrimary,
+                          fontSize: 12,
+                          fontWeight: "500",
+                          marginRight: 2,
+                        }}
+                      >
                         {isProgressCollapsed ? "View" : "Hide"}
                       </Text>
                       <Ionicons
-                        name={isProgressCollapsed ? "chevron-down" : "chevron-up"}
+                        name={
+                          isProgressCollapsed ? "chevron-down" : "chevron-up"
+                        }
                         size={12}
                         color={theme.colors.textPrimary}
                       />
@@ -1967,9 +2088,27 @@ export default function OnboardingScreen() {
 
               {/* Success View */}
               {uploadState === "success" && (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 4 }}>
-                  <Ionicons name="checkmark-circle" size={20} color="#10b981" style={{ marginRight: 6 }} />
-                  <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 13 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color="#10b981"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      fontWeight: "bold",
+                      fontSize: 13,
+                    }}
+                  >
                     {ONBOARDING_I18N[
                       (state.preferredLanguage || "english").toLowerCase()
                     ]?.success || "Analysis Complete"}
@@ -1978,75 +2117,161 @@ export default function OnboardingScreen() {
               )}
 
               {/* EXPANDED VIEW (Additional details) */}
-              {!isProgressCollapsed && (uploadState === "uploading" || uploadState === "processing" || uploadState === "validating" || uploadState === "queued") && (
-                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? "#334155" : "#f1f5f9" }}>
-                  {uploadState === "processing" && (
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <Text style={{ color: theme.colors.textSecondary, fontSize: 11, fontStyle: "italic", flex: 1, marginRight: 8 }}>
-                        {ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.eta_hint || ONBOARDING_I18N.english.eta_hint}
-                      </Text>
-                      <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 12 }}>
-                        {Math.round(pollElapsedTime / 1000)}s
-                      </Text>
-                    </View>
-                  )}
-                  {uploadState === "uploading" && autoRetryCount > 0 && (
-                    <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginBottom: 8 }}>
-                      {(
-                        ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.retry_count || ONBOARDING_I18N.english.retry_count
-                      )
-                        .replace("{attempt}", String(autoRetryCount))
-                        .replace("{max}", "3")}
-                    </Text>
-                  )}
-
-                  {/* Cancel action button */}
-                  <TouchableOpacity
-                    accessibilityLabel="Cancel processing"
-                    accessibilityRole="button"
-                    onPress={cancelProcessing}
+              {!isProgressCollapsed &&
+                (uploadState === "uploading" ||
+                  uploadState === "processing" ||
+                  uploadState === "validating" ||
+                  uploadState === "queued") && (
+                  <View
                     style={{
-                      alignSelf: "flex-end",
-                      paddingHorizontal: 16,
-                      paddingVertical: 6,
-                      borderRadius: 12,
-                      backgroundColor: isDark ? "#475569" : "#e2e8f0",
+                      marginTop: 10,
+                      paddingTop: 10,
+                      borderTopWidth: 1,
+                      borderTopColor: isDark ? "#334155" : "#f1f5f9",
                     }}
                   >
-                    <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 12 }}>
-                      {ONBOARDING_I18N[
-                        (state.preferredLanguage || "english").toLowerCase()
-                      ]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+                    {uploadState === "processing" && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: theme.colors.textSecondary,
+                            fontSize: 11,
+                            fontStyle: "italic",
+                            flex: 1,
+                            marginRight: 8,
+                          }}
+                        >
+                          {ONBOARDING_I18N[
+                            (state.preferredLanguage || "english").toLowerCase()
+                          ]?.eta_hint || ONBOARDING_I18N.english.eta_hint}
+                        </Text>
+                        <Text
+                          style={{
+                            color: theme.colors.textPrimary,
+                            fontWeight: "bold",
+                            fontSize: 12,
+                          }}
+                        >
+                          {Math.round(pollElapsedTime / 1000)}s
+                        </Text>
+                      </View>
+                    )}
+                    {uploadState === "uploading" && autoRetryCount > 0 && (
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontSize: 11,
+                          marginBottom: 8,
+                        }}
+                      >
+                        {(
+                          ONBOARDING_I18N[
+                            (state.preferredLanguage || "english").toLowerCase()
+                          ]?.retry_count || ONBOARDING_I18N.english.retry_count
+                        )
+                          .replace("{attempt}", String(autoRetryCount))
+                          .replace("{max}", "3")}
+                      </Text>
+                    )}
+
+                    {/* Cancel action button */}
+                    <TouchableOpacity
+                      accessibilityLabel="Cancel processing"
+                      accessibilityRole="button"
+                      onPress={cancelProcessing}
+                      style={{
+                        alignSelf: "flex-end",
+                        paddingHorizontal: 16,
+                        paddingVertical: 6,
+                        borderRadius: 12,
+                        backgroundColor: isDark ? "#475569" : "#e2e8f0",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: theme.colors.primary,
+                          fontWeight: "bold",
+                          fontSize: 12,
+                        }}
+                      >
+                        {ONBOARDING_I18N[
+                          (state.preferredLanguage || "english").toLowerCase()
+                        ]?.btn_cancel || ONBOARDING_I18N.english.btn_cancel}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
               {/* Failure / Timeout Card */}
               {(uploadState === "failed" || uploadState === "timed_out") && (
                 <View style={{ width: "100%" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                    <Ionicons name="alert-circle" size={20} color="#ef4444" style={{ marginRight: 6 }} />
-                    <Text style={{ color: "#ef4444", fontWeight: "bold", fontSize: 14 }}>
-                      {uploadState === "timed_out" ? "Analysis Timeout" : "Analysis Failed"}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Ionicons
+                      name="alert-circle"
+                      size={20}
+                      color="#ef4444"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={{
+                        color: "#ef4444",
+                        fontWeight: "bold",
+                        fontSize: 14,
+                      }}
+                    >
+                      {uploadState === "timed_out"
+                        ? "Analysis Timeout"
+                        : "Analysis Failed"}
                     </Text>
                   </View>
-                  <Text style={{ color: theme.colors.textPrimary, marginBottom: 12, fontSize: 13 }}>
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      marginBottom: 12,
+                      fontSize: 13,
+                    }}
+                  >
                     {uploadState === "timed_out"
                       ? ONBOARDING_I18N[
-                        (state.preferredLanguage || "english").toLowerCase()
-                      ]?.err_network_timeout || ONBOARDING_I18N.english.err_network_timeout
+                          (state.preferredLanguage || "english").toLowerCase()
+                        ]?.err_network_timeout ||
+                        ONBOARDING_I18N.english.err_network_timeout
                       : ONBOARDING_I18N[
-                      (state.preferredLanguage || "english").toLowerCase()
-                      ][`err_${activeErrorCode?.toLowerCase()}`] || ONBOARDING_I18N.english.err_unexpected_error}
+                          (state.preferredLanguage || "english").toLowerCase()
+                        ][`err_${activeErrorCode?.toLowerCase()}`] ||
+                        ONBOARDING_I18N.english.err_unexpected_error}
                   </Text>
                   {__DEV__ && activeErrorDetails && (
-                    <View style={{ backgroundColor: isDark ? "#0f172a" : "#f8fafc", padding: 6, borderRadius: 6, marginBottom: 12 }}>
-                      <Text style={{ color: "#ef4444", fontFamily: Platform.OS === "ios" ? "Courier" : "monospace", fontSize: 10 }} numberOfLines={3}>
+                    <View
+                      style={{
+                        backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                        padding: 6,
+                        borderRadius: 6,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#ef4444",
+                          fontFamily:
+                            Platform.OS === "ios" ? "Courier" : "monospace",
+                          fontSize: 10,
+                        }}
+                        numberOfLines={3}
+                      >
                         {activeErrorDetails}
                       </Text>
                     </View>
@@ -2054,22 +2279,49 @@ export default function OnboardingScreen() {
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <TouchableOpacity
                       onPress={() => uploadSelectedFile(selectedFile)}
-                      style={{ flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: "center" }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                        backgroundColor: theme.colors.primary,
+                        alignItems: "center",
+                      }}
                     >
-                      <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 12 }}>
+                      <Text
+                        style={{
+                          color: "#ffffff",
+                          fontWeight: "bold",
+                          fontSize: 12,
+                        }}
+                      >
                         {ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_try_again || ONBOARDING_I18N.english.btn_try_again}
+                        ]?.btn_try_again ||
+                          ONBOARDING_I18N.english.btn_try_again}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleChooseDifferentFile}
-                      style={{ flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.primary, alignItems: "center" }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.colors.primary,
+                        alignItems: "center",
+                      }}
                     >
-                      <Text style={{ color: theme.colors.primary, fontWeight: "bold", fontSize: 12 }}>
+                      <Text
+                        style={{
+                          color: theme.colors.primary,
+                          fontWeight: "bold",
+                          fontSize: 12,
+                        }}
+                      >
                         {ONBOARDING_I18N[
                           (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_choose_different || ONBOARDING_I18N.english.btn_choose_different}
+                        ]?.btn_choose_different ||
+                          ONBOARDING_I18N.english.btn_choose_different}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -2086,8 +2338,8 @@ export default function OnboardingScreen() {
                     right: 0,
                     height: 3,
                     backgroundColor: isDark ? "#334155" : "#e2e8f0",
-                    borderBottomLeftRadius: 14,
-                    borderBottomRightRadius: 14,
+                    borderBottomLeftRadius: 20,
+                    borderBottomRightRadius: 20,
                     overflow: "hidden",
                   }}
                 >
@@ -2103,7 +2355,7 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          {/* Selected Document Preview */}
+          {/* Selected Document Preview
           {selectedFile && (
             <DocumentPreview
               fileName={selectedFile.name}
@@ -2112,7 +2364,7 @@ export default function OnboardingScreen() {
               fileType={selectedFile.fileType}
               onRemove={handleRemoveFile}
             />
-          )}
+          )} */}
 
           {/* Floating Input Capsule */}
           {activeAction !== "ASK_LANGUAGE" &&

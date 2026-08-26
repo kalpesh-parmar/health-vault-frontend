@@ -16,7 +16,7 @@ export const MedicationReviewService = {
     return MedicationExtractionService.getExtractedMedicines(jobIds, filesInfo);
   },
 
-  submitMedications: async (medicines: ExtractedMedicine[]): Promise<void> => {
+  submitMedications: async (medicines: ExtractedMedicine[]): Promise<string[]> => {
     return MedicationExtractionService.confirmAndSaveMedicines(medicines);
   },
 

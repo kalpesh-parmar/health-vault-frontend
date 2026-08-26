@@ -1,95 +1,11 @@
-import { getOcrJobResult } from "./documentService";
+import { getOcrStatus } from "./documentService";
 import { mapApiDocumentToProcessedDocument } from "../utils/medicationMappers";
 import { ProcessedDocument, ExtractedMedicine } from "../types/medicationReview";
 
 import { addMedication } from "./medicationservice";
-import { createMedicationReminder } from "./reminderService";
 import { queryClient } from "../config/queryClient";
 import { format } from "date-fns";
 import { AddOrEditMedication } from "../types";
-
-const getMockDocumentResult = (jobId: string, fileName: string): ProcessedDocument => {
-  const nameLower = fileName.toLowerCase();
-  const isPrescription = nameLower.includes("prescription") || nameLower.includes("shah") || nameLower.includes("clinic");
-  const isBloodTest = nameLower.includes("blood") || nameLower.includes("test") || nameLower.includes("report");
-
-  let medicines: ExtractedMedicine[] = [];
-
-  if (isPrescription) {
-    medicines = [
-      {
-        id: `${jobId}-med-0`,
-        documentId: jobId,
-        documentName: fileName,
-        name: "Crocin 650",
-        confidence: 0.95,
-        medicineType: "TABLET",
-        dosage: "1",
-        dosageUnit: "tablet",
-        frequency: "THRICE",
-        timing: "AFTER_FOOD",
-        foodFrequency: "AFTER_FOOD",
-        prescribedBy: "Dr. Ananya Sharma",
-        totalQuantity: 30,
-        selected: true,
-        reminderEnabled: true,
-        reminderTime: "08:00 AM",
-        medicationSchedule: ["08:00", "14:00", "20:00"],
-      },
-      {
-        id: `${jobId}-med-1`,
-        documentId: jobId,
-        documentName: fileName,
-        name: "Metformin 500",
-        confidence: 0.88,
-        medicineType: "TABLET",
-        dosage: "1",
-        dosageUnit: "tablet",
-        frequency: "TWICE",
-        timing: "BEFORE_FOOD",
-        foodFrequency: "BEFORE_FOOD",
-        prescribedBy: "Dr. Ananya Sharma",
-        totalQuantity: 60,
-        selected: true,
-        reminderEnabled: true,
-        reminderTime: "08:00 AM",
-        medicationSchedule: ["08:00", "20:00"],
-      },
-    ];
-  } else if (isBloodTest) {
-    medicines = [];
-  } else {
-    medicines = [
-      {
-        id: `${jobId}-med-generic`,
-        documentId: jobId,
-        documentName: fileName,
-        name: "Amoxicillin 500",
-        confidence: 0.72,
-        medicineType: "CAPSULE",
-        dosage: "1",
-        dosageUnit: "capsule",
-        frequency: "TWICE",
-        timing: "AFTER_FOOD",
-        foodFrequency: "AFTER_FOOD",
-        prescribedBy: "Dr. K. Patel",
-        totalQuantity: 14,
-        selected: false,
-        reminderEnabled: true,
-        reminderTime: "09:00 AM",
-        medicationSchedule: ["08:00", "20:00"],
-      },
-    ];
-  }
-
-  return {
-    id: jobId,
-    name: fileName,
-    type: isPrescription ? "Prescription" : isBloodTest ? "Blood Test" : "Medical Report",
-    status: "COMPLETED",
-    medicines,
-  };
-};
 
 export const MedicationExtractionService = {
   getExtractedMedicines: async (
@@ -97,20 +13,29 @@ export const MedicationExtractionService = {
     filesInfo?: { jobId: string; fileName: string; fileKey: string }[]
   ): Promise<ProcessedDocument[]> => {
     const results = await Promise.all(
-      jobIds.map(async (jobId) => {
-        const fileInfo = filesInfo?.find((f) => f.jobId === jobId) || {
+      jobIds.map(async (jobId): Promise<ProcessedDocument> => {
+        const fileInfo = filesInfo?.find((f) => f.jobId === jobId || f.fileKey === jobId) || {
           jobId,
           fileName: `Document_${jobId.slice(0, 6)}.png`,
-          fileKey: "",
+          fileKey: jobId,
         };
 
+        const targetKey = fileInfo.fileKey || jobId;
         try {
-          const response = await getOcrJobResult(jobId);
+          const response = await getOcrStatus(targetKey);
           const data = response?.data || response;
           return mapApiDocumentToProcessedDocument(data, fileInfo);
         } catch (error) {
-          console.warn(`[MedicationExtractionService] Error fetching job result for ${jobId}, using mock fallback:`, error);
-          return getMockDocumentResult(jobId, fileInfo.fileName);
+          console.warn(`[MedicationExtractionService] Failed to load extraction for ${targetKey}:`, error);
+          return {
+            id: jobId,
+            name: fileInfo.fileName,
+            type: "Document",
+            status: "FAILED",
+            medicines: [],
+            summaryEnglish: "",
+            summaryPreferred: "",
+          };
         }
       })
     );
@@ -118,8 +43,9 @@ export const MedicationExtractionService = {
     return results;
   },
 
-  confirmAndSaveMedicines: async (medicines: ExtractedMedicine[]): Promise<void> => {
+  confirmAndSaveMedicines: async (medicines: ExtractedMedicine[]): Promise<string[]> => {
     console.log("[MedicationExtractionService] Confirming & saving medicines in bulk:", medicines);
+    const duplicateIds: string[] = [];
 
     // Run creation for each medicine sequentially to avoid concurrent database conflicts
     for (const med of medicines) {
@@ -132,7 +58,7 @@ export const MedicationExtractionService = {
           if (timeStr === "08:00") key = "MORNING";
           else if (timeStr === "14:00") key = "NOON";
           else if (timeStr === "20:00") key = "NIGHT";
-          
+
           const timeWithSec = `${timeStr}:00`;
           if (scheduleObj[key]) {
             if (Array.isArray(scheduleObj[key])) {
@@ -170,19 +96,15 @@ export const MedicationExtractionService = {
           medicationSchedule: scheduleObj,
           totalQuantity: med.totalQuantity || 10,
           notes: med.notes || "",
+          resolution: med.resolution,
+          replaceMedicationId: med.replaceMedicationId,
         };
 
-        const responseData = await addMedication(payload);
-        if (responseData?.data?.id) {
-          try {
-            await createMedicationReminder({
-              medicationId: responseData.data.id,
-            });
-          } catch (reminderErr) {
-            console.warn(`[MedicationExtractionService] Failed to create reminder for medicine ${med.name}:`, reminderErr);
-          }
+        await addMedication(payload);
+      } catch (medErr: any) {
+        if (medErr?.isDuplicate) {
+          duplicateIds.push(med.id);
         }
-      } catch (medErr) {
         console.error(`[MedicationExtractionService] Failed to add medicine ${med.name}:`, medErr);
       }
     }
@@ -194,5 +116,7 @@ export const MedicationExtractionService = {
     queryClient.invalidateQueries({ queryKey: ["reminders"] });
     queryClient.invalidateQueries({ queryKey: ["allReminders"] });
     queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+
+    return duplicateIds;
   },
 };
