@@ -1,238 +1,287 @@
 import * as SecureStore from "expo-secure-store";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { BASE_URL } from "../config/api";
 
-export interface SseEventPayload {
-  eventId?: number;
-  type?: string;
-  stage?: string;
-  stageStatus?: string;
-  fileKey?: string | null;
-  batchId?: string | null;
-  fileName?: string | null;
-  patientId?: string | null;
-  processName?: string | null;
-  progress?: number;
-  percentage?: number;
-  status?: string;
-  message?: string | null;
-  errorCode?: string | null;
-  retryable?: boolean;
-  documentId?: string | null;
-  completed?: number;
-  total?: number;
-  failed?: number;
-  pending?: string[];
-  isComplete?: boolean;
-  summary?: any;
-  timestamp?: string;
-  elapsedMs?: number;
-  extra?: {
-    page?: number;
-    totalPages?: number;
-    skippedPages?: (number | { pageNumber: number; reason?: string })[];
-    [key: string]: any;
-  };
-  [key: string]: any;
-}
-
 export interface StreamCallbacks {
-  onEvent: (event: SseEventPayload) => void;
-  onTerminal?: (event: SseEventPayload) => void;
-  onError?: (error: Error) => void;
-  onConnected?: () => void;
+  onChunk: (chunkText: string) => void;
+  onFinish: (finalData: any) => void;
+  onError: (error: Error) => void;
 }
 
-export interface SseStreamOptions extends StreamCallbacks {
-  endpoint: string;
-  lastEventId?: number | string | null;
-}
+type StreamOptions = {
+  signal?: AbortSignal;
+};
 
-/**
- * Connects to an SSE stream endpoint (individual file or batch) using incremental XMLHttpRequest.
- * Supports React Native streaming with automatic token injection, Last-Event-ID replay, and robust buffering.
- * Returns an unsubscribe / abort function.
- */
-export const connectSseStream = (options: SseStreamOptions): (() => void) => {
-  const { endpoint, lastEventId, onEvent, onTerminal, onError, onConnected } = options;
-  let isClosed = false;
-  let xhr: XMLHttpRequest | null = null;
+const resolveUrl = (endpoint: string) => {
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+    return endpoint;
+  }
+  return `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+};
 
-  const runStream = async () => {
+const extractTextChunk = (data: any): string => {
+  if (typeof data === "string") return data;
+  if (!data || typeof data !== "object") return "";
+
+  return (
+    data.reply ??
+    data.delta ??
+    data.text ??
+    data.content ??
+    data.message ??
+    data.chunk ??
+    ""
+  );
+};
+
+const processChunkBuffer = (
+  buffer: string,
+  onChunk: (chunkText: string) => void,
+  onFinalData: (data: any) => void,
+  finalData: any,
+) => {
+  const lines = buffer.split(/\r?\n/);
+  const remainder = lines.pop() || "";
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (
+      line === "[DONE]" ||
+      line === "data: [DONE]" ||
+      line === "data:[DONE]"
+    ) {
+      continue;
+    }
+
+    if (line.startsWith("data:")) {
+      const dataStr = line.replace(/^data:\s*/, "");
+      if (dataStr === "[DONE]") continue;
+
+      try {
+        const parsed = JSON.parse(dataStr);
+        const chunkText = extractTextChunk(parsed);
+        if (chunkText) onChunk(chunkText);
+        if (parsed && typeof parsed === "object") {
+          Object.assign(finalData, parsed);
+        }
+      } catch {
+        if (dataStr) onChunk(dataStr);
+      }
+      continue;
+    }
+
+    if (line.startsWith("event:") || line.startsWith("id:")) {
+      continue;
+    }
+
     try {
-      let token = await SecureStore.getItemAsync("ACCESS_TOKEN");
-      if (!token) {
-        token = await AsyncStorage.getItem("ACCESS_TOKEN");
+      const parsed = JSON.parse(line);
+      const chunkText = extractTextChunk(parsed);
+      if (chunkText) onChunk(chunkText);
+      if (parsed && typeof parsed === "object") {
+        Object.assign(finalData, parsed);
       }
+    } catch {
+      onChunk(line);
+    }
+  }
 
-      if (isClosed) return;
+  return remainder;
+};
 
-      let fullUrl = endpoint;
-      if (!fullUrl.startsWith("http://") && !fullUrl.startsWith("https://")) {
-        const base = (BASE_URL || "").replace(/\/$/, "");
-        const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-        fullUrl = `${base}${path}`;
-      }
+const toHeaderEntries = (headers: Record<string, string>) =>
+  Object.entries(headers).filter(([, value]) => value !== undefined && value !== null);
 
-      console.log(`[SSE:CONNECT] Initiating stream connection to: ${fullUrl} | Last-Event-ID: ${lastEventId ?? "none"}`);
+export const streamChatResponse = async (
+  endpoint: string,
+  payload: any,
+  callbacks: StreamCallbacks,
+  options: StreamOptions = {},
+) => {
+  const { onChunk, onFinish, onError } = callbacks;
+  const url = resolveUrl(endpoint);
+  const startedAt = Date.now();
 
-      xhr = new XMLHttpRequest();
-      xhr.open("GET", fullUrl, true);
+  try {
+    const token = await SecureStore.getItemAsync("accessToken");
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "ngrok-skip-browser-warning": "true",
+      "Bypass-Tunnel-Reminder": "true",
+    };
 
-      xhr.setRequestHeader("Accept", "text/event-stream");
-      xhr.setRequestHeader("Cache-Control", "no-cache");
-      xhr.setRequestHeader("ngrok-skip-browser-warning", "true");
-      xhr.setRequestHeader("Bypass-Tunnel-Reminder", "true");
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
 
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      }
-      if (lastEventId !== undefined && lastEventId !== null) {
-        xhr.setRequestHeader("Last-Event-ID", String(lastEventId));
-      }
+    console.log(
+      `[API LOG] OUTGOING REQUEST:\n${JSON.stringify(
+        {
+          type: "OUTGOING_REQUEST",
+          timestamp: new Date().toISOString(),
+          method: "POST",
+          url,
+          queryParams: {},
+          headers: {
+            ...headers,
+            Authorization: token ? "Bearer ***" : undefined,
+          },
+          body: payload,
+        },
+        null,
+        2,
+      )}`,
+    );
+    console.log("[STREAM] Request started:", url);
 
-      let lastProcessedIndex = 0;
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let lastLength = 0;
       let buffer = "";
-      let currentEventName = "message";
-      let currentEventId: number | string | undefined;
-      let currentDataLines: string[] = [];
-      let connectedFired = false;
+      let finalData: any = {};
+      let accumulatedText = "";
+      let sawFirstChunk = false;
+      let settled = false;
 
-      const processText = () => {
-        if (isClosed || !xhr) return;
-        const responseText = xhr.responseText || "";
-        if (responseText.length <= lastProcessedIndex) return;
+      const finishOnce = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
 
-        const newChunk = responseText.substring(lastProcessedIndex);
-        lastProcessedIndex = responseText.length;
-        buffer += newChunk;
+      const failOnce = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
 
-        console.log(`[SSE:CHUNK] Received ${newChunk.length} bytes (total: ${lastProcessedIndex})`);
+      const pushChunk = (chunkText: string) => {
+        if (!chunkText) return;
+        if (!sawFirstChunk) {
+          sawFirstChunk = true;
+          console.log("[STREAM] First chunk received from backend.");
+        }
+        accumulatedText += chunkText;
+        onChunk(chunkText);
+      };
 
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? "";
-
-        for (const rawLine of lines) {
-          const line = rawLine.trimEnd();
-
-          if (line === "") {
-            // Empty line marks completion of an SSE message block
-            if (currentDataLines.length > 0) {
-              const fullData = currentDataLines.join("\n").trim();
-              currentDataLines = [];
-
-              if (fullData === "[DONE]") {
-                console.log("[SSE:TERMINAL] Stream completed via [DONE]");
-                onTerminal?.({ type: "stream.done", stage: "COMPLETED", progress: 100 });
-                return;
-              }
-
-              try {
-                const parsed: SseEventPayload = JSON.parse(fullData);
-                if (currentEventId !== undefined) {
-                  parsed.eventId = Number(currentEventId) || parsed.eventId;
-                }
-                if (!parsed.type || parsed.type === "message") {
-                  parsed.type = currentEventName !== "message" ? currentEventName : (parsed.type || "progress");
-                }
-
-                console.log(`[SSE:EVENT] Parsed: type=${parsed.type} | fileKey=${parsed.fileKey ?? "none"} | stage=${parsed.stage ?? parsed.stageStatus ?? "none"} | pct=${parsed.percentage ?? parsed.progress ?? 0}%`);
-
-                onEvent(parsed);
-
-                const isTerminal =
-                  parsed.type === "batch.completed" ||
-                  parsed.type === "document.completed" ||
-                  parsed.type === "document.failed" ||
-                  parsed.stage === "COMPLETED" ||
-                  parsed.stage === "FAILED" ||
-                  parsed.stageStatus === "COMPLETED" ||
-                  parsed.stageStatus === "FAILED" ||
-                  parsed.stage === "BATCH_COMPLETED";
-
-                if (isTerminal) {
-                  console.log(`[SSE:TERMINAL] Terminal event reached: type=${parsed.type} | fileKey=${parsed.fileKey}`);
-                  onTerminal?.(parsed);
-                }
-              } catch (err) {
-                console.warn("[SSE:PARSE_ERROR] Could not parse event data JSON:", fullData, err);
-              }
-            }
-            currentEventName = "message";
-            continue;
-          }
-
-          if (line.startsWith(":")) {
-            // Heartbeat or comment line
-            continue;
-          }
-
-          if (line.startsWith("event:")) {
-            currentEventName = line.slice(6).trim();
-          } else if (line.startsWith("id:")) {
-            currentEventId = line.slice(3).trim();
-          } else if (line.startsWith("data:")) {
-            currentDataLines.push(line.slice(5).trim());
-          }
+      const collectFinalData = (data: any) => {
+        if (data && typeof data === "object") {
+          finalData = { ...finalData, ...data };
         }
       };
 
-      xhr.onreadystatechange = () => {
-        if (isClosed || !xhr) return;
+      xhr.open("POST", url, true);
+      xhr.responseType = "text";
 
-        if (xhr.readyState >= 2 && xhr.status >= 200 && xhr.status < 300) {
-          if (!connectedFired) {
-            connectedFired = true;
-            console.log(`[SSE:OPEN] SSE connection opened successfully (status ${xhr.status})`);
-            onConnected?.();
-          }
+      for (const [key, value] of toHeaderEntries(headers)) {
+        xhr.setRequestHeader(key, value);
+      }
+
+      if (options.signal) {
+        if (options.signal.aborted) {
+          xhr.abort();
+          failOnce(new Error("Stream cancelled"));
+          return;
         }
 
-        if (xhr.readyState === 3 || xhr.readyState === 4) {
-          processText();
-        }
+        const abortListener = () => {
+          xhr.abort();
+          failOnce(new Error("Stream cancelled"));
+        };
 
-        if (xhr.readyState === 4) {
-          processText();
-          if (xhr.status >= 400 && !isClosed) {
-            console.error(`[SSE:ERROR] Connection closed with HTTP status ${xhr.status}`);
-            onError?.(new Error(`SSE connection failed with HTTP status ${xhr.status}`));
-          } else {
-            console.log(`[SSE:CLOSE] Stream connection closed normally (status ${xhr.status})`);
-          }
-        }
-      };
+        options.signal.addEventListener("abort", abortListener, { once: true });
+
+        xhr.onloadend = () => {
+          options.signal?.removeEventListener("abort", abortListener);
+        };
+      }
 
       xhr.onprogress = () => {
-        processText();
+        const text = xhr.responseText || "";
+        const nextChunk = text.slice(lastLength);
+        lastLength = text.length;
+
+        if (!nextChunk) return;
+
+        buffer += nextChunk;
+        buffer = processChunkBuffer(buffer, pushChunk, collectFinalData, finalData);
       };
 
       xhr.onerror = () => {
-        if (!isClosed) {
-          console.error("[SSE:ERROR] XMLHttpRequest network error occurred");
-          onError?.(new Error("SSE XMLHttpRequest network error"));
+        failOnce(new Error("Network error while streaming response"));
+      };
+
+      xhr.onabort = () => {
+        failOnce(new Error("Stream cancelled"));
+      };
+
+      xhr.onload = () => {
+        try {
+          const text = xhr.responseText || "";
+          const tail = text.slice(lastLength);
+          if (tail) {
+            buffer += tail;
+            buffer = processChunkBuffer(buffer, pushChunk, collectFinalData, finalData);
+          }
+
+          if (buffer.trim()) {
+            try {
+              const parsed = JSON.parse(buffer.trim());
+              const chunkText = extractTextChunk(parsed);
+              if (chunkText) pushChunk(chunkText);
+              collectFinalData(parsed);
+            } catch {
+              pushChunk(buffer.trim());
+            }
+          }
+
+          if (!finalData.reply && accumulatedText) {
+            finalData.reply = accumulatedText;
+          }
+
+          console.log(
+            `[API LOG] OUTGOING RESPONSE:\n${JSON.stringify(
+              {
+                type: "OUTGOING_RESPONSE",
+                timestamp: new Date().toISOString(),
+                method: "POST",
+                url,
+                statusCode: xhr.status,
+                responseTimeMs: `${Date.now() - startedAt}ms`,
+                responseBody: finalData,
+              },
+              null,
+              2,
+            )}`,
+          );
+          console.log("[STREAM] Request finished.", {
+            receivedChunks: sawFirstChunk,
+            responseTimeMs: `${Date.now() - startedAt}ms`,
+          });
+
+          onFinish(finalData);
+          finishOnce();
+        } catch (error: any) {
+          failOnce(error instanceof Error ? error : new Error(String(error)));
         }
       };
 
-      xhr.send();
-    } catch (err: any) {
-      if (!isClosed) {
-        console.error("[SSE:ERROR] Stream initialization failure:", err.message);
-        onError?.(err);
-      }
+      xhr.send(JSON.stringify(payload));
+    });
+  } catch (error: any) {
+    if (error?.message === "Stream cancelled") {
+      onError(new Error("Stream cancelled"));
+      throw error;
     }
-  };
 
-  runStream();
-
-  return () => {
-    isClosed = true;
-    if (xhr) {
-      console.log("[SSE:ABORT] Aborting SSE stream connection");
-      try {
-        xhr.abort();
-      } catch { }
-      xhr = null;
-    }
-  };
+    console.error("[STREAM] Error:", error);
+    const normalizedError =
+      error instanceof Error ? error : new Error(String(error));
+    onError(normalizedError);
+    throw normalizedError;
+  }
 };
