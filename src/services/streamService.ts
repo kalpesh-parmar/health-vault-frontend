@@ -2,6 +2,28 @@ import * as SecureStore from "expo-secure-store";
 
 import { BASE_URL } from "../config/api";
 
+export type SseEventPayload = {
+  event?: string;
+  type?: string;
+  id?: string;
+  data?: any;
+  rawData?: string;
+  message?: string;
+  stage?: string;
+  stageStatus?: string;
+  status?: string;
+  percentage?: number;
+  progress?: number;
+  fileKey?: string;
+  jobId?: string;
+  sessionId?: string;
+  completed?: number;
+  failed?: number;
+  total?: number;
+  extra?: any;
+  [key: string]: any;
+};
+
 export interface StreamCallbacks {
   onChunk: (chunkText: string) => void;
   onFinish: (finalData: any) => void;
@@ -9,6 +31,17 @@ export interface StreamCallbacks {
 }
 
 type StreamOptions = {
+  signal?: AbortSignal;
+};
+
+type ConnectSseOptions = {
+  endpoint: string;
+  method?: "GET" | "POST";
+  body?: any;
+  headers?: Record<string, string>;
+  onEvent: (event: SseEventPayload) => void;
+  onTerminal?: (event: SseEventPayload) => void;
+  onError?: (error: Error) => void;
   signal?: AbortSignal;
 };
 
@@ -93,6 +126,241 @@ const processChunkBuffer = (
 
 const toHeaderEntries = (headers: Record<string, string>) =>
   Object.entries(headers).filter(([, value]) => value !== undefined && value !== null);
+
+const parseMaybeJson = (value: string) => {
+  if (!value) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
+const isTerminalEvent = (event: SseEventPayload) => {
+  const type = String(event.type || event.event || "").toLowerCase();
+  const stage = String(event.stage || "").toUpperCase();
+  const stageStatus = String(event.stageStatus || "").toUpperCase();
+  const status = String(event.status || "").toUpperCase();
+
+  return (
+    type.includes("completed") ||
+    type.includes("finished") ||
+    type.includes("terminal") ||
+    stage === "COMPLETED" ||
+    stage === "FAILED" ||
+    stage === "BATCH_COMPLETED" ||
+    stageStatus === "COMPLETED" ||
+    stageStatus === "FAILED" ||
+    status === "SUCCESS" ||
+    status === "FAILED"
+  );
+};
+
+const parseSseBlock = (block: string) => {
+  const event: SseEventPayload = {};
+  const dataLines: string[] = [];
+
+  for (const rawLine of block.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (!line) continue;
+    if (line.startsWith(":")) continue;
+
+    const separatorIndex = line.indexOf(":");
+    const field = separatorIndex >= 0 ? line.slice(0, separatorIndex).trim() : line.trim();
+    const value = separatorIndex >= 0 ? line.slice(separatorIndex + 1).replace(/^\s/, "") : "";
+
+    if (field === "event") {
+      event.event = value;
+      continue;
+    }
+
+    if (field === "id") {
+      event.id = value;
+      continue;
+    }
+
+    if (field === "data") {
+      dataLines.push(value);
+      continue;
+    }
+
+    if (field === "retry") {
+      event.retry = Number(value);
+      continue;
+    }
+
+    if (!event.rawData) {
+      event.rawData = block;
+    }
+  }
+
+  const rawData = dataLines.join("\n").trim();
+  event.rawData = event.rawData || block;
+
+  if (rawData) {
+    const parsed = parseMaybeJson(rawData);
+    event.data = parsed;
+
+    if (parsed && typeof parsed === "object") {
+      Object.assign(event, parsed);
+    } else {
+      event.message = String(parsed);
+    }
+  }
+
+  if (!event.type) {
+    event.type = event.event || (typeof event.data === "object" && event.data?.type) || undefined;
+  }
+
+  return event;
+};
+
+export const connectSseStream = ({
+  endpoint,
+  method = "GET",
+  body,
+  headers = {},
+  onEvent,
+  onTerminal,
+  onError,
+  signal,
+}: ConnectSseOptions) => {
+  const url = resolveUrl(endpoint);
+  const xhr = new XMLHttpRequest();
+  let lastLength = 0;
+  let buffer = "";
+  let settled = false;
+  let manuallyClosed = false;
+
+  const safeError = (error: unknown) => {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    if (onError) onError(normalized);
+  };
+
+  const unsubscribe = () => {
+    manuallyClosed = true;
+    try {
+      xhr.abort();
+    } catch {
+      // no-op
+    }
+  };
+
+  const headersToSend: Record<string, string> = {
+    Accept: "text/event-stream",
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+    "Bypass-Tunnel-Reminder": "true",
+    ...headers,
+  };
+
+  const start = async () => {
+    const token = await SecureStore.getItemAsync("accessToken");
+    if (token && !headersToSend.Authorization) {
+      headersToSend.Authorization = `Bearer ${token}`;
+    }
+
+    console.log(
+      `[API LOG] OUTGOING REQUEST:\n${JSON.stringify(
+        {
+          type: "OUTGOING_REQUEST",
+          timestamp: new Date().toISOString(),
+          method,
+          url,
+          queryParams: {},
+          headers: {
+            ...headersToSend,
+            Authorization: token ? "Bearer ***" : headersToSend.Authorization,
+          },
+          body,
+        },
+        null,
+        2,
+      )}`,
+    );
+
+    xhr.open(method, url, true);
+    xhr.responseType = "text";
+
+    Object.entries(headersToSend).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        xhr.setRequestHeader(key, value);
+      }
+    });
+
+    if (signal) {
+      if (signal.aborted) {
+        xhr.abort();
+        safeError(new Error("Stream cancelled"));
+        return;
+      }
+
+      const abortListener = () => xhr.abort();
+      signal.addEventListener("abort", abortListener, { once: true });
+      xhr.onloadend = () => signal.removeEventListener("abort", abortListener);
+    }
+
+    xhr.onprogress = () => {
+      const text = xhr.responseText || "";
+      const nextChunk = text.slice(lastLength);
+      lastLength = text.length;
+      if (!nextChunk) return;
+
+      buffer += nextChunk;
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || "";
+
+      for (const block of blocks) {
+        const trimmed = block.trim();
+        if (!trimmed) continue;
+        const event = parseSseBlock(trimmed);
+        onEvent(event);
+        if (isTerminalEvent(event) && onTerminal) {
+          onTerminal(event);
+        }
+      }
+    };
+
+    xhr.onerror = () => safeError(new Error("Network error while streaming response"));
+    xhr.onabort = () => {
+      if (manuallyClosed) return;
+      safeError(new Error("Stream cancelled"));
+    };
+
+    xhr.onload = () => {
+      if (settled) return;
+      settled = true;
+
+      const text = xhr.responseText || "";
+      const tail = text.slice(lastLength);
+      if (tail) {
+        buffer += tail;
+      }
+
+      if (buffer.trim()) {
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        for (const block of blocks) {
+          const trimmed = block.trim();
+          if (!trimmed) continue;
+          const event = parseSseBlock(trimmed);
+          onEvent(event);
+          if (isTerminalEvent(event) && onTerminal) {
+            onTerminal(event);
+          }
+        }
+      }
+    };
+
+    if (method === "GET") {
+      xhr.send();
+    } else {
+      xhr.send(body ? JSON.stringify(body) : null);
+    }
+  };
+
+  start().catch((error) => safeError(error));
+  return unsubscribe;
+};
 
 export const streamChatResponse = async (
   endpoint: string,

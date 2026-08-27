@@ -72,12 +72,49 @@ const HomeScreen = () => {
     uploadingDocs,
     completedBatch,
     clearCompletedBatch,
+    retryDocument,
     processingError,
     clearProcessingError,
   } = useDocumentUpload();
 
   const [isBannerDismissed, setIsBannerDismissed] = React.useState(false);
   const lastBatchIdRef = useRef<string | null>(null);
+  const [retryingKeys, setRetryingKeys] = React.useState<Set<string>>(new Set());
+
+  const avgProgress = useMemo(() => {
+    if (uploadingDocs.length === 0) return 0;
+    const totalProgress = uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0);
+    return Math.round(totalProgress / uploadingDocs.length);
+  }, [uploadingDocs]);
+
+  const handleRetryFailed = useCallback(async () => {
+    if (!completedBatch?.documents) return;
+    const failedDocs = completedBatch.documents.filter(
+      (d) => (d.status === "FAILED" || d.status === "failed" || d.status === "error") && d.retryable !== false
+    );
+    if (failedDocs.length === 0) return;
+
+    const keys = new Set(failedDocs.map((d) => d.fileKey || d.id));
+    setRetryingKeys(keys);
+
+    try {
+      await Promise.all(
+        failedDocs.map((doc) => {
+          const fileKey = doc.fileKey || doc.id;
+          if (fileKey) {
+            return retryDocument(fileKey);
+          }
+          return Promise.resolve();
+        })
+      );
+    } catch (err) {
+      console.error("[handleRetryFailed Error]", err);
+    } finally {
+      setRetryingKeys(new Set());
+      setIsBannerDismissed(true);
+      clearCompletedBatch();
+    }
+  }, [completedBatch, retryDocument, clearCompletedBatch]);
 
   React.useEffect(() => {
     if (completedBatch) {
@@ -373,7 +410,7 @@ const HomeScreen = () => {
         </ActionsRow>
 
         {/* Inline Processing Documents Card */}
-        {uploadingDocs.length > 0 && (
+        {uploadingDocs.length > 0 && avgProgress < 100 && (
           <ProcessingCard style={{ marginHorizontal: 24, marginTop: 15, paddingBottom: 15 }}>
             <SheetHeaderRow style={{ flexWrap: "nowrap", marginBottom: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8, flexShrink: 1 }}>
@@ -412,16 +449,12 @@ const HomeScreen = () => {
                 <SheetProgressBarFill
                   style={{
                     backgroundColor: "#6366f1",
-                    width: `${Math.round(
-                      uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0) / uploadingDocs.length
-                    )}%`
+                    width: `${avgProgress}%`
                   }}
                 />
               </SheetProgressBarBg>
               <SheetProgressPctText>
-                {Math.round(
-                  uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0) / uploadingDocs.length
-                )}%
+                {avgProgress}%
               </SheetProgressPctText>
             </SheetProgressRow>
           </ProcessingCard>
@@ -564,17 +597,29 @@ const HomeScreen = () => {
                           {failedDocs.length} document{failedDocs.length !== 1 ? 's' : ''} failed to process
                         </Text>
                       </View>
-                      <TouchableOpacity
-                        onPress={() => {
-                          Toast.show({
-                            type: "info",
-                            text1: "Feature will be implemented soon",
-                          });
-                        }}
-                        style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: "#f87171" }}
-                      >
-                        <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "500" }}>Retry</Text>
-                      </TouchableOpacity>
+                      {failedDocs.some((d: any) => d.retryable !== false) && (
+                        <TouchableOpacity
+                          onPress={handleRetryFailed}
+                          disabled={retryingKeys.size > 0}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            paddingHorizontal: 12,
+                            paddingVertical: 4,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: retryingKeys.size > 0 ? (isDark ? "#475569" : "#cbd5e1") : "#f87171",
+                            opacity: retryingKeys.size > 0 ? 0.6 : 1,
+                          }}
+                        >
+                          {retryingKeys.size > 0 ? (
+                            <ActivityIndicator size={12} color="#ef4444" style={{ marginRight: 6 }} />
+                          ) : (
+                            <Ionicons name="refresh" size={12} color="#ef4444" style={{ marginRight: 4 }} />
+                          )}
+                          <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "500" }}>Retry Failed</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
 

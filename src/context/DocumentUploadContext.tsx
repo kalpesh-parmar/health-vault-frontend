@@ -6,6 +6,7 @@ import {
   uploadDocumentsBatch,
   retryDocumentProcessing,
   cancelOcr,
+  getOcrStatus,
 } from "../services/documentService";
 import { connectSseStream, SseEventPayload } from "../services/streamService";
 import { ExtractedMedicine } from "../types/medicationReview";
@@ -73,7 +74,7 @@ interface DocumentUploadContextType {
     failedCount: number;
     medicineCount: number;
     fromScreen?: string;
-    documents?: { id: string; name: string; status: string; reason: string | null; medicineCount?: number }[];
+    documents?: { id: string; name: string; status: string; reason: string | null; fileKey?: string; medicineCount?: number; retryable?: boolean }[];
   } | null;
   clearCompletedBatch: () => void;
   isPillHidden: boolean;
@@ -154,7 +155,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     failedCount: number;
     medicineCount: number;
     fromScreen?: string;
-    documents?: { id: string; name: string; status: string; reason: string | null; medicineCount?: number }[];
+    documents?: { id: string; name: string; status: string; reason: string | null; fileKey?: string; medicineCount?: number; retryable?: boolean }[];
   } | null>(null);
   const [isPillHidden, setIsPillHidden] = useState(false);
 
@@ -204,6 +205,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
   const isPollingRef = useRef(false);
   const activeSseUnsubRef = useRef<(() => void) | null>(null);
+  const hasHandledBatchFinishedRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -377,6 +379,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       if (fromScreen) {
         activeUploadFromScreenRef.current = fromScreen;
       }
+      hasHandledBatchFinishedRef.current = false;
 
       try {
         const filesPayload = selectedFiles.map((file) => {
@@ -433,6 +436,11 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         }
 
         const handleBatchFinished = async (currentDocs: UploadingDoc[], event?: SseEventPayload) => {
+          if (hasHandledBatchFinishedRef.current) {
+            return;
+          }
+          hasHandledBatchFinishedRef.current = true;
+
           queryClient.invalidateQueries({ queryKey: ["documents"] });
           queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
           queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
@@ -460,7 +468,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             currentDocs.map(async (doc) => {
               if (doc.status === "COMPLETED" || doc.progress === 100 || doc.percentage === 100) {
                 try {
-                  const res = await getOcrJobResult(doc.jobId || doc.id);
+                  const res = await getOcrStatus(doc.fileKey || doc.jobId || doc.id);
                   const data = res?.data || res;
                   const meds = data?.extractedStructuredData?.medications || data?.extractedStructuredData?.medicines;
                   if (Array.isArray(meds)) {
@@ -490,7 +498,9 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
               name: d.name,
               status: d.status,
               reason: d.reason || null,
+              fileKey: d.fileKey || d.id,
               medicineCount: d.medicineCount || 0,
+              retryable: d.retryable ?? true,
             })),
           });
 

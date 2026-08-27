@@ -704,7 +704,17 @@ const AIChatScreen = ({ route }: any) => {
     resetChatWizard,
     startBackgroundOcr,
     isUploading,
+    uploadingDocs,
   } = useDocumentUpload();
+
+  const avgProgress = useMemo(() => {
+    if (!uploadingDocs || uploadingDocs.length === 0) return 0;
+    const sum = uploadingDocs.reduce(
+      (acc: any, doc: any) => acc + (doc.progress || 0),
+      0,
+    );
+    return Math.round(sum / uploadingDocs.length);
+  }, [uploadingDocs]);
 
   const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
     setChatWizardState({
@@ -2292,6 +2302,7 @@ const AIChatScreen = ({ route }: any) => {
       {/* Floating Background Progress Panel */}
       {showFloatingPanel &&
         (isUploading ||
+          (uploadingDocs?.length > 0 && avgProgress < 100) ||
           (chatWizardState.step !== "idle" &&
             !chatWizardState.hasViewedCompletedOcr)) && (
         <FloatingProgressPanel
