@@ -21,7 +21,10 @@ import {
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Toast from "react-native-toast-message";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../context/ContextAPI";
@@ -37,10 +40,13 @@ import {
 } from "../../services/mediaServices";
 import { getUser } from "../../services/userService";
 import {
-  uploadPatientDocuments,
-  startOcrJob,
+  uploadDocumentsBatch,
+  retryDocumentProcessing,
 } from "../../services/documentService";
-import { connectSseStream, SseEventPayload } from "../../services/streamService";
+import {
+  connectSseStream,
+  SseEventPayload,
+} from "../../services/streamService";
 
 // Reusable Redesigned Components
 import { ChatInput } from "../../components/chat/ChatInput";
@@ -164,6 +170,7 @@ export default function OnboardingScreen() {
     | "processing"
     | "success"
     | "failed"
+    | "rejected"
     | "timed_out"
     | "cancelled"
   >("idle");
@@ -773,6 +780,7 @@ export default function OnboardingScreen() {
     if (!asset) return;
 
     const uriParts = asset.uri.split(".");
+    console.log("[ONBOARDING] FILE URI :- ", asset?.uri);
     const ext = uriParts[uriParts.length - 1] || "jpg";
     const name = `report_${Date.now()}.${ext}`;
 
@@ -808,6 +816,7 @@ export default function OnboardingScreen() {
     if (!asset) return;
 
     const uriParts = asset.uri.split(".");
+    console.log("[ONBOARDING] ASSET :- ", asset);
     const ext = uriParts[uriParts.length - 1] || "jpg";
     const name = asset.fileName || `report_${Date.now()}.${ext}`;
 
@@ -861,8 +870,13 @@ export default function OnboardingScreen() {
 
   const uploadAbortControllerRef = useRef<AbortController | null>(null);
   const sseUnsubRef = useRef<(() => void) | null>(null);
+  const currentDocIdRef = useRef<string | null>(null);
 
-  const startJobPolling = async (jobId: string, documentId: string) => {
+  const startJobPolling = async (
+    jobId: string,
+    documentId: string,
+    streamUrlOverride?: string,
+  ) => {
     pollActiveRef.current = true;
     cancelRequestedRef.current = false;
     setUploadState("queued");
@@ -875,7 +889,7 @@ export default function OnboardingScreen() {
       sseUnsubRef.current = null;
     }
 
-    const streamUrl = `/sse/files/${jobId}/stream`;
+    const streamUrl = streamUrlOverride || `/sse/files/${jobId}/stream`;
 
     sseUnsubRef.current = connectSseStream({
       endpoint: streamUrl,
@@ -893,6 +907,13 @@ export default function OnboardingScreen() {
           event.stageStatus === "FAILED" ||
           event.type === "document.failed" ||
           event.status === "FAILED";
+
+        const isRejected =
+          event.stage === "REJECTED" ||
+          event.stageStatus === "REJECTED" ||
+          event.type === "document.rejected" ||
+          event.status === "REJECTED" ||
+          (event.message && event.message.toLowerCase().includes("reject"));
 
         if (isCompleted) {
           pollActiveRef.current = false;
@@ -913,6 +934,23 @@ export default function OnboardingScreen() {
           return;
         }
 
+        if (isRejected) {
+          pollActiveRef.current = false;
+          if (sseUnsubRef.current) {
+            sseUnsubRef.current();
+            sseUnsubRef.current = null;
+          }
+          await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadState("rejected");
+          Toast.show({
+            type: "error",
+            text1: "Document Rejected",
+            text2: event.message || "Document was rejected.",
+          });
+          return;
+        }
+
         if (isFailed) {
           pollActiveRef.current = false;
           if (sseUnsubRef.current) {
@@ -921,7 +959,7 @@ export default function OnboardingScreen() {
           }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
-          setUploadState("idle");
+          setUploadState("failed");
           Toast.show({
             type: "error",
             text1: "Analysis Failed",
@@ -945,12 +983,38 @@ export default function OnboardingScreen() {
       },
       onTerminal: async (event: SseEventPayload) => {
         if (!pollActiveRef.current || cancelRequestedRef.current) return;
+
+        const isCompleted =
+          event.stage === "COMPLETED" ||
+          event.stageStatus === "COMPLETED" ||
+          event.type === "document.completed" ||
+          (event.status === "SUCCESS" && event.percentage === 100);
+
+        const isFailed =
+          event.stage === "FAILED" ||
+          event.stageStatus === "FAILED" ||
+          event.type === "document.failed" ||
+          event.status === "FAILED";
+
+        const isRejected =
+          event.stage === "REJECTED" ||
+          event.stageStatus === "REJECTED" ||
+          event.type === "document.rejected" ||
+          event.status === "REJECTED" ||
+          (event.message && event.message.toLowerCase().includes("reject"));
+
+        if (!isCompleted && !isFailed && !isRejected) {
+          // Ignore false positive terminal events (e.g. status: SUCCESS but percentage !== 100)
+          return;
+        }
+
         pollActiveRef.current = false;
         if (sseUnsubRef.current) {
           sseUnsubRef.current();
           sseUnsubRef.current = null;
         }
-        if (event.stage === "COMPLETED" || event.stageStatus === "COMPLETED" || event.type === "document.completed") {
+
+        if (isCompleted) {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("success");
@@ -961,10 +1025,19 @@ export default function OnboardingScreen() {
             documentId,
             selectedFileRef.current?.name || "report.pdf",
           );
+        } else if (isRejected) {
+          await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadState("rejected");
+          Toast.show({
+            type: "error",
+            text1: "Document Rejected",
+            text2: event.message || "Document was rejected.",
+          });
         } else {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
-          setUploadState("idle");
+          setUploadState("failed");
           Toast.show({
             type: "error",
             text1: "Analysis Failed",
@@ -976,6 +1049,31 @@ export default function OnboardingScreen() {
         console.warn("[ONBOARDING SSE Error]:", err.message);
       },
     });
+  };
+
+  const handleRetryJob = async () => {
+    const docId = currentDocIdRef.current;
+    if (!docId) return;
+
+    setUploadState("queued");
+    setUploadPercent(0);
+    try {
+      const response = await retryDocumentProcessing({ fileKey: docId });
+      const streamUrl = response.data?.streamUrl;
+      const jobId = response.data?.fileKey || docId;
+
+      await AsyncStorage.setItem("onboarding_pending_job_id", jobId);
+      await AsyncStorage.setItem("onboarding_pending_document_id", docId);
+
+      startJobPolling(jobId, docId, streamUrl);
+    } catch (err: any) {
+      setUploadState("failed");
+      Toast.show({
+        type: "error",
+        text1: "Retry Failed",
+        text2: err.message || "Failed to retry document.",
+      });
+    }
   };
 
   const handleCancelJob = async (documentId: string) => {
@@ -1083,15 +1181,19 @@ export default function OnboardingScreen() {
 
     try {
       setUploadState("uploading");
-      const uploadRes = await uploadPatientDocuments(patientId, [fileToUpload]);
-      const createdItem = uploadRes.data?.[0];
+      const uploadRes = await uploadDocumentsBatch([fileToUpload]);
+      const responseData = (uploadRes as any)?.data || uploadRes;
+      const documents = responseData?.documents;
+      const createdItem = documents?.[0];
 
-      if (!createdItem || !createdItem.jobId) {
+      if (!createdItem || (!createdItem.jobId && !createdItem.fileKey)) {
         throw new Error("Upload failed: No job ID returned from server.");
       }
 
-      const jobId = createdItem.jobId;
-      const docId = createdItem.id;
+      const jobId = createdItem.jobId || createdItem.fileKey;
+      const docId = createdItem.fileKey || createdItem.jobId;
+      const streamUrl = createdItem.streamUrl;
+      currentDocIdRef.current = docId;
 
       console.log(
         "[ONBOARDING] File uploaded successfully. JobId:",
@@ -1100,14 +1202,10 @@ export default function OnboardingScreen() {
         docId,
       );
 
-      // Start the OCR job explicitly (Required for QUEUED jobs)
-      await startOcrJob(jobId);
-      console.log("[ONBOARDING] OCR Job Started:", jobId);
-
       await AsyncStorage.setItem("onboarding_pending_job_id", jobId);
       await AsyncStorage.setItem("onboarding_pending_document_id", docId);
 
-      startJobPolling(jobId, docId);
+      startJobPolling(jobId, docId, streamUrl);
     } catch (error: any) {
       console.error("[ONBOARDING] Document upload sequence failed:", error);
       setUploadState("idle");
@@ -1221,10 +1319,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(opt.value).toLowerCase() ===
-                String(chosenVal).toLowerCase()) ||
+                  String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(opt.label).toLowerCase() ===
-                  String(chosenLabel).toLowerCase()));
+                    String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1267,7 +1365,13 @@ export default function OnboardingScreen() {
     }
 
     if (activeMsg.action === "ASK_UPLOAD_OR_SKIP") {
-      const isProcessingOrSuccess = ["uploading", "processing", "validating", "queued", "success"].includes(uploadState);
+      const isProcessingOrSuccess = [
+        "uploading",
+        "processing",
+        "validating",
+        "queued",
+        "success",
+      ].includes(uploadState);
       return (
         <AskUploadOrSkipCard
           activeMsg={activeMsg}
@@ -1296,10 +1400,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(opt.value).toLowerCase() ===
-                String(chosenVal).toLowerCase()) ||
+                  String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(label).toLowerCase() ===
-                  String(chosenLabel).toLowerCase()));
+                    String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1434,14 +1538,14 @@ export default function OnboardingScreen() {
           const updatedMeds = localMedicines.map((m) =>
             (m.client_med_id || m.id) === (med.client_med_id || med.id)
               ? {
-                ...m,
-                ...updatedMed,
-                subtitle:
-                  updatedMed.type === "TABLET" ||
+                  ...m,
+                  ...updatedMed,
+                  subtitle:
+                    updatedMed.type === "TABLET" ||
                     updatedMed.type === "CAPSULE"
-                    ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
-                    : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
-              }
+                      ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
+                      : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
+                }
               : m,
           );
           setLocalMedicines(updatedMeds);
@@ -1511,11 +1615,11 @@ export default function OnboardingScreen() {
           onCancel={
             isEditingLocal
               ? () => {
-                setActiveMedicineToEdit(null);
-                setMessages((prev) =>
-                  prev.filter((m) => m.id !== activeMsg.id),
-                );
-              }
+                  setActiveMedicineToEdit(null);
+                  setMessages((prev) =>
+                    prev.filter((m) => m.id !== activeMsg.id),
+                  );
+                }
               : undefined
           }
           readOnly={isHistorical}
@@ -1531,12 +1635,14 @@ export default function OnboardingScreen() {
           prev.map((msg) =>
             msg.id === activeMsg.id
               ? {
-                ...msg,
-                medicines: (msg.medicines || localMedicines || []).map((m) => ({
-                  ...m,
-                  selected: checkedMeds.includes(m.id),
-                })),
-              }
+                  ...msg,
+                  medicines: (msg.medicines || localMedicines || []).map(
+                    (m) => ({
+                      ...m,
+                      selected: checkedMeds.includes(m.id),
+                    }),
+                  ),
+                }
               : msg,
           ),
         );
@@ -1698,10 +1804,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(value).toLowerCase() ===
-                String(chosenVal).toLowerCase()) ||
+                  String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(label).toLowerCase() ===
-                  String(chosenLabel).toLowerCase()));
+                    String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1835,9 +1941,7 @@ export default function OnboardingScreen() {
           </View>
         </View>
 
-        <View
-          style={[styles.keyboardContainer]}
-        >
+        <View style={[styles.keyboardContainer]}>
           {/* Messages List */}
           <View style={styles.listWrapper}>
             {activeDateLabel ? (
@@ -1865,16 +1969,16 @@ export default function OnboardingScreen() {
                 {
                   paddingBottom:
                     activeAction === "ADD_MEDICINE" ||
-                      activeAction === "EDIT_MEDICINE"
+                    activeAction === "EDIT_MEDICINE"
                       ? Math.max(insets.bottom, 16) + 16 + actualKeyboardHeight
                       : activeAction === "ASK_LANGUAGE" ||
-                        activeAction === "ASK_UPLOAD_OR_SKIP" ||
-                        activeAction === "ASK_GENDER" ||
-                        activeAction === "ASK_DOB" ||
-                        activeAction === "REVIEW_MEDICINES_LIST" ||
-                        activeAction === "CONFIRM_MEDICINE" ||
-                        activeAction === "MEDICINE_OPTIONS" ||
-                        activeAction === "POST_ONBOARDING"
+                          activeAction === "ASK_UPLOAD_OR_SKIP" ||
+                          activeAction === "ASK_GENDER" ||
+                          activeAction === "ASK_DOB" ||
+                          activeAction === "REVIEW_MEDICINES_LIST" ||
+                          activeAction === "CONFIRM_MEDICINE" ||
+                          activeAction === "MEDICINE_OPTIONS" ||
+                          activeAction === "POST_ONBOARDING"
                         ? Math.max(insets.bottom, 16) + 16
                         : 16,
                 },
@@ -1884,7 +1988,10 @@ export default function OnboardingScreen() {
               renderItem={({ item }) => {
                 if (item.isDateHeader) {
                   return (
-                    <ChatDateHeader dateLabel={item.dateLabel} isDark={isDark} />
+                    <ChatDateHeader
+                      dateLabel={item.dateLabel}
+                      isDark={isDark}
+                    />
                   );
                 }
 
@@ -1956,16 +2063,26 @@ export default function OnboardingScreen() {
                   shadowRadius: 4,
                   elevation: 4,
                 },
-                ["uploading", "processing", "validating", "queued", "success"].includes(
-                  uploadState,
-                ) && { top: 24 }
+                [
+                  "uploading",
+                  "processing",
+                  "validating",
+                  "queued",
+                  "success",
+                  "failed",
+                  "rejected"
+                ].includes(uploadState) && { top: 24 },
               ]}
             >
               {/* COMPACT VIEW (Row layout) */}
               {(uploadState === "uploading" ||
                 uploadState === "processing" ||
                 uploadState === "validating" ||
-                uploadState === "queued") && (
+                uploadState === "queued" ||
+                uploadState === "failed" ||
+                uploadState === "timed_out" ||
+                uploadState === "rejected" ||
+                uploadState === "success") && (
                 <View
                   style={{
                     flexDirection: "row",
@@ -1985,7 +2102,11 @@ export default function OnboardingScreen() {
                   >
                     <Text
                       style={{
-                        color: theme.colors.textPrimary,
+                        color: ["failed", "timed_out", "rejected"].includes(
+                          uploadState,
+                        )
+                          ? "#ef4444"
+                          : theme.colors.textPrimary,
                         fontWeight: "bold",
                         fontSize: 13,
                       }}
@@ -1994,42 +2115,81 @@ export default function OnboardingScreen() {
                         ? "Uploading"
                         : uploadState === "processing"
                           ? (
-                            ONBOARDING_I18N[
-                              (state.preferredLanguage || "english").toLowerCase()
-                            ]?.page_progress ||
-                            ONBOARDING_I18N.english.page_progress
-                          )
-                            .replace("Page", "Processing")
-                            .replace("પૃષ્ઠ", "Processing")
-                            .replace("पृष्ठ", "Processing")
-                            .replace("पान", "Processing")
-                            .replace("பக்கம்", "Processing")
-                            .replace("{current}", String(pollCurrentPage))
-                            .replace("{total}", String(pollTotalPages))
+                              ONBOARDING_I18N[
+                                (
+                                  state.preferredLanguage || "english"
+                                ).toLowerCase()
+                              ]?.page_progress ||
+                              ONBOARDING_I18N.english.page_progress
+                            )
+                              .replace("Page", "Processing")
+                              .replace("પૃષ્ઠ", "Processing")
+                              .replace("पृष्ठ", "Processing")
+                              .replace("पान", "Processing")
+                              .replace("பக்கம்", "Processing")
+                              .replace("{current}", String(pollCurrentPage))
+                              .replace("{total}", String(pollTotalPages))
                           : uploadState === "validating"
                             ? "Validating"
-                            : "Queued"}
+                            : uploadState === "failed" ||
+                                uploadState === "timed_out"
+                              ? "Analysis Failed"
+                              : uploadState === "rejected"
+                                ? "Document Rejected"
+                                : uploadState === "success"
+                                  ? (ONBOARDING_I18N[(state.preferredLanguage || "english").toLowerCase()]?.success || "Analysis Complete")
+                                  : "Queued"}
                     </Text>
 
-                    <Text style={{ color: theme.colors.textSecondary, marginHorizontal: 6, fontSize: 13 }}>•</Text>
-                    <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }} numberOfLines={1}>
+                    <Text
+                      style={{
+                        color: theme.colors.textSecondary,
+                        marginHorizontal: 6,
+                        fontSize: 13,
+                      }}
+                    >
+                      •
+                    </Text>
+                    <Text
+                      style={{
+                        color: theme.colors.textSecondary,
+                        fontSize: 13,
+                      }}
+                      numberOfLines={1}
+                    >
                       {uploadState === "uploading"
                         ? "Uploading"
                         : uploadState === "processing"
                           ? "Analyzing"
                           : uploadState === "validating"
                             ? "Validating"
-                            : "Waiting"}
+                            : ["failed", "timed_out", "rejected"].includes(
+                                  uploadState,
+                                )
+                              ? "Error"
+                              : uploadState === "success"
+                                ? "Done"
+                                : "Waiting"}
                     </Text>
                   </View>
 
-                  {/* Right Side: Percentage & Collapse Toggle */}
+                  {/* Right Side: Percentage & Toggle/Retry/Close */}
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     {/* Percentage */}
-                    {["uploading", "processing"].includes(uploadState) && (
+                    {[
+                      "uploading",
+                      "processing",
+                      "failed",
+                      "timed_out",
+                      "success",
+                    ].includes(uploadState) && (
                       <Text
                         style={{
-                          color: theme.colors.primary,
+                          color: ["failed", "timed_out"].includes(uploadState)
+                            ? "#ef4444"
+                            : uploadState === "success"
+                              ? "#10b981"
+                              : theme.colors.primary,
                           fontWeight: "bold",
                           fontSize: 13,
                           marginRight: 12,
@@ -2039,102 +2199,98 @@ export default function OnboardingScreen() {
                       </Text>
                     )}
 
-                    {/* Toggle button */}
-                    <TouchableOpacity
-                      onPress={() => setIsProgressCollapsed((prev) => !prev)}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingVertical: 4,
-                        paddingHorizontal: 8,
-                        borderRadius: 8,
-                        backgroundColor: isDark ? "#334155" : "#f1f5f9",
-                      }}
-                    >
-                      <Text
+                    {/* Action buttons */}
+                    {["failed", "timed_out"].includes(uploadState) ? (
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center" }}
+                      >
+                        <TouchableOpacity
+                          onPress={handleRetryJob}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: theme.colors.primary,
+                            marginRight: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#fff",
+                              fontSize: 12,
+                              fontWeight: "bold",
+                            }}
+                          >
+                            Retry
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setUploadState("idle")}
+                        >
+                          <Ionicons
+                            name="close-circle"
+                            size={24}
+                            color={isDark ? "#475569" : "#94a3b8"}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ) : uploadState === "rejected" ? (
+                      <TouchableOpacity onPress={() => setUploadState("idle")}>
+                        <Ionicons
+                          name="close-circle"
+                          size={24}
+                          color={isDark ? "#475569" : "#94a3b8"}
+                        />
+                      </TouchableOpacity>
+                    ) : uploadState === "success" ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color="#10b981"
+                        style={{ marginLeft: 4 }}
+                      />
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => setIsProgressCollapsed((prev) => !prev)}
                         style={{
-                          color: theme.colors.textPrimary,
-                          fontSize: 12,
-                          fontWeight: "500",
-                          marginRight: 2,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          paddingVertical: 4,
+                          paddingHorizontal: 8,
+                          borderRadius: 8,
+                          backgroundColor: isDark ? "#334155" : "#f1f5f9",
                         }}
                       >
-                        {isProgressCollapsed ? "View" : "Hide"}
-                      </Text>
-                      <Ionicons
-                        name={
-                          isProgressCollapsed ? "chevron-down" : "chevron-up"
-                        }
-                        size={12}
-                        color={theme.colors.textPrimary}
-                      />
-                    </TouchableOpacity>
+                        <Text
+                          style={{
+                            color: theme.colors.textPrimary,
+                            fontSize: 12,
+                            fontWeight: "500",
+                            marginRight: 2,
+                          }}
+                        >
+                          {isProgressCollapsed ? "View" : "Hide"}
+                        </Text>
+                        <Ionicons
+                          name={
+                            isProgressCollapsed ? "chevron-down" : "chevron-up"
+                          }
+                          size={12}
+                          color={theme.colors.textPrimary}
+                        />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               )}
 
-              {/* Success View */}
-              {uploadState === "success" && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingVertical: 4,
-                  }}
-                >
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color="#10b981"
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      fontWeight: "bold",
-                      fontSize: 13,
-                    }}
-                  >
-                    {ONBOARDING_I18N[
-                      (state.preferredLanguage || "english").toLowerCase()
-                    ]?.success || "Analysis Complete"}
-                  </Text>
-                </View>
-              )}
-
               {/* EXPANDED VIEW (Additional details) */}
-              {!isProgressCollapsed && (uploadState === "uploading" || uploadState === "processing" || uploadState === "validating" || uploadState === "queued") && (
-                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? "#334155" : "#f1f5f9" }}>
-                  {uploadState === "processing" && (
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <Text style={{ color: theme.colors.textSecondary, fontSize: 11, fontStyle: "italic", flex: 1, marginRight: 8 }}>
-                        {ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.eta_hint || ONBOARDING_I18N.english.eta_hint}
-                      </Text>
-                      <Text style={{ color: theme.colors.textPrimary, fontWeight: "bold", fontSize: 12 }}>
-                        {Math.round(pollElapsedTime / 1000)}s
-                      </Text>
-                    </View>
-                  )}
-                  {uploadState === "uploading" && autoRetryCount > 0 && (
-                    <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginBottom: 8 }}>
-                      {(
-                        ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.retry_count || ONBOARDING_I18N.english.retry_count
-                      )
-                        .replace("{attempt}", String(autoRetryCount))
-                        .replace("{max}", "3")}
-                    </Text>
-                  )}
-
-                  {/* Cancel action button */}
-                  <TouchableOpacity
-                    accessibilityLabel="Cancel processing"
-                    accessibilityRole="button"
-                    onPress={cancelProcessing}
+              {!isProgressCollapsed &&
+                (uploadState === "uploading" ||
+                  uploadState === "processing" ||
+                  uploadState === "validating" ||
+                  uploadState === "queued") && (
+                  <View
                     style={{
                       marginTop: 10,
                       paddingTop: 10,
@@ -2192,7 +2348,6 @@ export default function OnboardingScreen() {
                           .replace("{max}", "3")}
                       </Text>
                     )}
-                  </TouchableOpacity>
 
                     {/* Cancel action button */}
                     <TouchableOpacity
@@ -2222,125 +2377,17 @@ export default function OnboardingScreen() {
                   </View>
                 )}
 
-              {/* Failure / Timeout Card */}
-              {(uploadState === "failed" || uploadState === "timed_out") && (
-                <View style={{ width: "100%" }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Ionicons
-                      name="alert-circle"
-                      size={20}
-                      color="#ef4444"
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={{
-                        color: "#ef4444",
-                        fontWeight: "bold",
-                        fontSize: 14,
-                      }}
-                    >
-                      {uploadState === "timed_out"
-                        ? "Analysis Timeout"
-                        : "Analysis Failed"}
-                    </Text>
-                  </View>
-                  <Text
-                    style={{
-                      color: theme.colors.textPrimary,
-                      marginBottom: 12,
-                      fontSize: 13,
-                    }}
-                  >
-                    {uploadState === "timed_out"
-                      ? ONBOARDING_I18N[
-                        (state.preferredLanguage || "english").toLowerCase()
-                      ]?.err_network_timeout || ONBOARDING_I18N.english.err_network_timeout
-                      : ONBOARDING_I18N[
-                      (state.preferredLanguage || "english").toLowerCase()
-                      ][`err_${activeErrorCode?.toLowerCase()}`] || ONBOARDING_I18N.english.err_unexpected_error}
-                  </Text>
-                  {__DEV__ && activeErrorDetails && (
-                    <View
-                      style={{
-                        backgroundColor: isDark ? "#0f172a" : "#f8fafc",
-                        padding: 6,
-                        borderRadius: 6,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#ef4444",
-                          fontFamily:
-                            Platform.OS === "ios" ? "Courier" : "monospace",
-                          fontSize: 10,
-                        }}
-                        numberOfLines={3}
-                      >
-                        {activeErrorDetails}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => uploadSelectedFile(selectedFile)}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 8,
-                        borderRadius: 8,
-                        backgroundColor: theme.colors.primary,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#ffffff",
-                          fontWeight: "bold",
-                          fontSize: 12,
-                        }}
-                      >
-                        {ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_try_again ||
-                          ONBOARDING_I18N.english.btn_try_again}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleChooseDifferentFile}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 8,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: theme.colors.primary,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: theme.colors.primary,
-                          fontWeight: "bold",
-                          fontSize: 12,
-                        }}
-                      >
-                        {ONBOARDING_I18N[
-                          (state.preferredLanguage || "english").toLowerCase()
-                        ]?.btn_choose_different ||
-                          ONBOARDING_I18N.english.btn_choose_different}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
               {/* Progress bar at the bottom edge */}
-              {["uploading", "processing", "success"].includes(uploadState) && (
+              {[
+                "uploading",
+                "processing",
+                "failed",
+                "timed_out",
+                "rejected",
+                "queued",
+                "validating",
+                "success",
+              ].includes(uploadState) && (
                 <View
                   style={{
                     position: "absolute",
@@ -2357,8 +2404,14 @@ export default function OnboardingScreen() {
                   <View
                     style={{
                       height: "100%",
-                      width: `${uploadState === "success" ? 100 : uploadPercent}%`,
-                      backgroundColor: theme.colors.primary,
+                      width: `${uploadPercent}%`,
+                      backgroundColor: [
+                        "failed",
+                        "timed_out",
+                        "rejected",
+                      ].includes(uploadState)
+                        ? "#ef4444"
+                        : theme.colors.primary,
                     }}
                   />
                 </View>

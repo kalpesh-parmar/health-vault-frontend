@@ -6,7 +6,7 @@ import {
   uploadDocumentsBatch,
   retryDocumentProcessing,
   cancelOcr,
-  getOcrJobResult,
+  getOcrStatus,
 } from "../services/documentService";
 import { connectSseStream, SseEventPayload } from "../services/streamService";
 import { ExtractedMedicine } from "../types/medicationReview";
@@ -74,7 +74,7 @@ interface DocumentUploadContextType {
     failedCount: number;
     medicineCount: number;
     fromScreen?: string;
-    documents?: { id: string; name: string; status: string; reason: string | null; medicineCount?: number }[];
+    documents?: { id: string; name: string; status: string; reason: string | null; fileKey?: string; medicineCount?: number; retryable?: boolean }[];
   } | null;
   clearCompletedBatch: () => void;
   isPillHidden: boolean;
@@ -155,7 +155,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     failedCount: number;
     medicineCount: number;
     fromScreen?: string;
-    documents?: { id: string; name: string; status: string; reason: string | null; medicineCount?: number }[];
+    documents?: { id: string; name: string; status: string; reason: string | null; fileKey?: string; medicineCount?: number; retryable?: boolean }[];
   } | null>(null);
   const [isPillHidden, setIsPillHidden] = useState(false);
 
@@ -205,6 +205,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
   const isPollingRef = useRef(false);
   const activeSseUnsubRef = useRef<(() => void) | null>(null);
+  const hasHandledBatchFinishedRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -359,6 +360,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     async (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
       if (selectedFiles.length === 0) return;
       setIsUploading(true);
+      setProcessingError(null);
 
       const initialUploading: UploadingDoc[] = selectedFiles.map((file) => ({
         id: file.id,
@@ -377,6 +379,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       if (fromScreen) {
         activeUploadFromScreenRef.current = fromScreen;
       }
+      hasHandledBatchFinishedRef.current = false;
 
       try {
         const filesPayload = selectedFiles.map((file) => {
@@ -399,7 +402,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         const batchUrl = DOCUMENT_ENDPOINTS.SSE_BATCH_STREAM(batchId);
 
         const mappedDocs: UploadingDoc[] = batchData.documents.map((doc: any) => ({
-          id: doc.fileKey,
+          id: doc.jobId || doc.fileKey,
           fileKey: doc.fileKey,
           jobId: doc.jobId || doc.fileKey,
           name: doc.fileName || "Document",
@@ -432,30 +435,123 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           activeSseUnsubRef.current();
         }
 
+        const handleBatchFinished = async (currentDocs: UploadingDoc[], event?: SseEventPayload) => {
+          if (hasHandledBatchFinishedRef.current) {
+            return;
+          }
+          hasHandledBatchFinishedRef.current = true;
+
+          queryClient.invalidateQueries({ queryKey: ["documents"] });
+          queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
+          queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
+          queryClient.invalidateQueries({ queryKey: ["documentsSummary"] });
+
+          const completedDocs = currentDocs.filter(
+            (d) => d.status === "COMPLETED" || d.progress === 100 || d.percentage === 100
+          );
+          const failedDocs = currentDocs.filter(
+            (d) => d.status === "FAILED"
+          );
+
+          const completedCount = event?.completed ?? completedDocs.length;
+          const failedCount = event?.failed ?? failedDocs.length;
+
+          if (completedCount === 0 && failedCount > 0) {
+            setProcessingError({
+              type: "failed",
+              message: "Document processing failed. Please check the document format.",
+            });
+          }
+
+          let medicineCount = 0;
+          await Promise.all(
+            currentDocs.map(async (doc) => {
+              if (doc.status === "COMPLETED" || doc.progress === 100 || doc.percentage === 100) {
+                try {
+                  const res = await getOcrStatus(doc.fileKey || doc.jobId || doc.id);
+                  const data = res?.data || res;
+                  const meds = data?.extractedStructuredData?.medications || data?.extractedStructuredData?.medicines;
+                  if (Array.isArray(meds)) {
+                    medicineCount += meds.length;
+                    doc.medicineCount = meds.length;
+                  }
+                } catch (e) {
+                  console.log("Failed to fetch medicine count for job", doc.jobId || doc.id, e);
+                }
+              }
+            })
+          );
+
+          setCompletedBatch({
+            jobIds: currentDocs.map((d) => d.jobId || d.id),
+            filesInfo: currentDocs.map((d) => ({
+              jobId: d.jobId || d.id,
+              fileName: d.name.replace(/%20/g, " "),
+              fileKey: d.fileKey || d.id,
+            })),
+            completedCount,
+            failedCount,
+            medicineCount,
+            fromScreen: activeUploadFromScreenRef.current,
+            documents: currentDocs.map((d) => ({
+              id: d.jobId || d.id,
+              name: d.name,
+              status: d.status,
+              reason: d.reason || null,
+              fileKey: d.fileKey || d.id,
+              medicineCount: d.medicineCount || 0,
+              retryable: d.retryable ?? true,
+            })),
+          });
+
+          if (activeUploadFromScreenRef.current !== "AIChat") {
+            if (failedCount > 0 && completedCount === 0) {
+              Toast.show({
+                type: "error",
+                text1: "Processing Failed",
+                text2: "Documents failed to process.",
+              });
+            } else {
+              Toast.show({
+                type: "success",
+                text1: "Analysis Complete!",
+                text2: failedCount > 0
+                  ? `Processed with some errors. Found ${medicineCount} medicine(s).`
+                  : `We found ${medicineCount} medicine${medicineCount === 1 ? "" : "s"} in your documents.`,
+                props: {
+                  buttonText: "Review Now",
+                  onPressButton: () => {
+                    const { navigationRef } = require("../navigation/RootNavigator");
+                    if (navigationRef.isReady()) {
+                      navigationRef.navigate("HOME", {
+                        screen: "Home",
+                        params: {
+                          screen: "ReviewMedicines",
+                          params: {
+                            jobIds: currentDocs.map((d) => d.jobId || d.id),
+                            filesInfo: currentDocs.map((d) => ({
+                              jobId: d.jobId || d.id,
+                              fileName: d.name.replace(/%20/g, " "),
+                              fileKey: d.fileKey || d.id,
+                            })),
+                            fromScreen: activeUploadFromScreenRef.current,
+                          },
+                        },
+                      });
+                    }
+                  },
+                },
+              });
+            }
+          }
+        };
+
         activeSseUnsubRef.current = connectSseStream({
           endpoint: batchUrl,
           onEvent: (event: SseEventPayload) => {
             if (event.type === "batch.completed" || event.stage === "BATCH_COMPLETED") {
-              queryClient.invalidateQueries({ queryKey: ["documents"] });
-              queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
-              queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
-
               setUploadingDocs((currentDocs) => {
-                const completedCount = event.completed ?? currentDocs.filter((d) => d.status === "COMPLETED").length;
-                const failedCount = event.failed ?? currentDocs.filter((d) => d.status === "FAILED").length;
-
-                setCompletedBatch({
-                  jobIds: currentDocs.map((d) => d.jobId || d.id),
-                  filesInfo: currentDocs.map((d) => ({
-                    jobId: d.jobId || d.id,
-                    fileName: d.name,
-                    fileKey: d.fileKey || d.id,
-                  })),
-                  completedCount,
-                  failedCount,
-                  medicineCount: 0,
-                });
-
+                handleBatchFinished(currentDocs, event);
                 return currentDocs;
               });
               return;
@@ -512,46 +608,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             }
           },
           onTerminal: (event: SseEventPayload) => {
-            queryClient.invalidateQueries({ queryKey: ["documents"] });
-            queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
-            queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
-
             setUploadingDocs((currentDocs) => {
-              const completedCount = event.completed ?? currentDocs.filter((d) => d.status === "COMPLETED" || d.progress === 100).length;
-              const failedCount = event.failed ?? currentDocs.filter((d) => d.status === "FAILED").length;
-
-              setCompletedBatch({
-                jobIds: currentDocs.map((d) => d.jobId || d.id),
-                filesInfo: currentDocs.map((d) => ({
-                  jobId: d.jobId || d.id,
-                  fileName: d.name,
-                  fileKey: d.fileKey || d.id,
-                })),
-                completedCount,
-                failedCount,
-                medicineCount: 0,
-              });
-
-              if (failedCount > 0 && completedCount === 0) {
-                Toast.show({
-                  type: "error",
-                  text1: "Processing Failed",
-                  text2: "Documents failed to process.",
-                });
-              } else if (failedCount > 0) {
-                Toast.show({
-                  type: "info",
-                  text1: "Batch Finished Partially",
-                  text2: `${completedCount} succeeded, ${failedCount} failed.`,
-                });
-              } else {
-                Toast.show({
-                  type: "success",
-                  text1: "Analysis Complete!",
-                  text2: "All documents processed successfully.",
-                });
-              }
-
+              handleBatchFinished(currentDocs, event);
               return currentDocs;
             });
           },
@@ -568,7 +626,9 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           text2: err.message || "Failed to upload documents.",
         });
       }
-    }, [selectedFiles, clearSelectedFiles]);
+    },
+    [selectedFiles, clearSelectedFiles],
+  );
 
   const cancelUpload = useCallback(() => {
     if (uploadingDocs.length > 0) {

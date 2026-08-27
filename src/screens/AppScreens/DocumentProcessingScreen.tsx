@@ -20,9 +20,10 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/ContextAPI";
 import { queryClient } from "../../config/queryClient";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
-import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
-import { OcrJobResult } from "../../services/documentService";
+import { useOcrJobPolling, JobState } from "../../hooks/useOcrJobPolling";
+import { getOcrStatus } from "../../services/documentService";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
+import Toast from "react-native-toast-message";
 
 type DocumentProcessingRouteProp = RouteProp<
   {
@@ -119,7 +120,7 @@ export const DocumentProcessingScreen = () => {
 
   const [selectedResult, setSelectedResult] = useState<{
     fileName: string;
-    result: OcrJobResult;
+    result: any;
   } | null>(null);
 
   const [isLoadingResult, setIsLoadingResult] = useState<string | null>(null);
@@ -140,6 +141,31 @@ export const DocumentProcessingScreen = () => {
     });
     return map;
   }, [filesInfo]);
+
+  const handleCardPress = async (job: JobState) => {
+    if (job.status !== "COMPLETED") return;
+
+    const targetKey = job.fileKey || job.jobId;
+    setIsLoadingResult(job.jobId);
+    try {
+      const response = await getOcrStatus(targetKey);
+      const resData = response?.data || response;
+      const fileName = filesMap[job.jobId]?.fileName || filesMap[targetKey]?.fileName || job.fileName || "Document Result";
+      setSelectedResult({
+        fileName,
+        result: resData,
+      });
+    } catch (error: any) {
+      console.error("[ProcessingScreen] Failed to fetch document details:", error);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message || "Failed to load document details.",
+      });
+    } finally {
+      setIsLoadingResult(null);
+    }
+  };
 
   const isNonMedicalError = (errorStr?: string | null) => {
     if (!errorStr) return false;
@@ -256,11 +282,13 @@ export const DocumentProcessingScreen = () => {
                   </AdSkipBanner>
                 )}
 
-                {/* Rejection Error State Reason */}
+                {/* Error State & Retry Actions */}
                 {job.status === "FAILED" && (
                   <RejectionContainer>
                     <RejectionReasonText style={{ color: "#ef4444" }}>
-                      {job.error || "Processing failed"}
+                      {nonMedical
+                        ? "This file was detected as a non-medical record and could not be processed."
+                        : job.error || "Document extraction failed."}
                     </RejectionReasonText>
                     {!nonMedical && (
                       <TouchableOpacity
@@ -351,28 +379,38 @@ export const DocumentProcessingScreen = () => {
               <ModalSectionHeader>English Summary</ModalSectionHeader>
               <ModalSummaryBox>
                 <ModalBodyText>
-                  {selectedResult?.result?.summaries?.summaryEnglish ||
-                    selectedResult?.result?.extractedStructuredData?.summaryEnglish ||
+                  {selectedResult?.result?.extractedStructuredData?.summaryEnglish ||
+                    selectedResult?.result?.structuredExtractedData?.summaryEnglish ||
+                    selectedResult?.result?.summaries?.summaryEnglish ||
+                    selectedResult?.result?.summary ||
                     "No English summary generated."}
                 </ModalBodyText>
               </ModalSummaryBox>
 
-              {Boolean(selectedResult?.result?.summaries?.summaryInPreferredLanguage) && (
-                <>
-                  <ModalSectionHeader>Localized Summary</ModalSectionHeader>
-                  <ModalSummaryBox>
-                    <ModalBodyText>
-                      {selectedResult?.result?.summaries?.summaryInPreferredLanguage}
-                    </ModalBodyText>
-                  </ModalSummaryBox>
-                </>
-              )}
+              {Boolean(
+                selectedResult?.result?.extractedStructuredData?.summaryInPreferredLanguage ||
+                selectedResult?.result?.structuredExtractedData?.summaryInPreferredLanguage ||
+                selectedResult?.result?.summaries?.summaryInPreferredLanguage,
+              ) && (
+                  <>
+                    <ModalSectionHeader>Localized Summary</ModalSectionHeader>
+                    <ModalSummaryBox>
+                      <ModalBodyText>
+                        {selectedResult?.result?.extractedStructuredData?.summaryInPreferredLanguage ||
+                          selectedResult?.result?.structuredExtractedData?.summaryInPreferredLanguage ||
+                          selectedResult?.result?.summaries?.summaryInPreferredLanguage}
+                      </ModalBodyText>
+                    </ModalSummaryBox>
+                  </>
+                )}
 
               <ModalSectionHeader>Extracted Medical Data</ModalSectionHeader>
               <RawJsonContainer>
                 <RawJsonText>
                   {JSON.stringify(
-                    selectedResult?.result?.extractedStructuredData || {},
+                    selectedResult?.result?.extractedStructuredData ||
+                    selectedResult?.result?.structuredExtractedData ||
+                    {},
                     null,
                     2,
                   )}

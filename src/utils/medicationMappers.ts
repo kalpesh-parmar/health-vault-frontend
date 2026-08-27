@@ -143,6 +143,8 @@ export const mapApiDocumentToProcessedDocument = (
   const rawMeds =
     apiJobResult.extractedStructuredData?.medications ||
     apiJobResult.extractedStructuredData?.medicines ||
+    apiJobResult.structuredExtractedData?.medications ||
+    apiJobResult.structuredExtractedData?.medicines ||
     apiJobResult.medications ||
     [];
 
@@ -158,7 +160,19 @@ export const mapApiDocumentToProcessedDocument = (
     type: "Document",
     status,
     medicines: medications,
-    summaryEnglish: apiJobResult?.summaries?.summaryEnglish || apiJobResult?.extractedStructuredData?.summaryEnglish || "",
-    summaryPreferred: apiJobResult?.summaries?.summaryInPreferredLanguage || "",
+    summaryEnglish:
+      apiJobResult?.extractedStructuredData?.summaryEnglish ||
+      apiJobResult?.structuredExtractedData?.summaryEnglish ||
+      apiJobResult?.summaries?.summaryEnglish ||
+      apiJobResult?.summaryEnglish ||
+      apiJobResult?.summary ||
+      "",
+    summaryPreferred:
+      apiJobResult?.extractedStructuredData?.summaryInPreferredLanguage ||
+      apiJobResult?.structuredExtractedData?.summaryInPreferredLanguage ||
+      apiJobResult?.summaries?.summaryInPreferredLanguage ||
+      apiJobResult?.summaryInPreferredLanguage ||
+      apiJobResult?.summaryPreferred ||
+      "",
   };
 };

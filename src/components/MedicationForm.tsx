@@ -129,7 +129,7 @@ const MedicationForm = ({
       return ma - mb;
     });
 
-    sortedTimes.forEach((timeStr) => {
+    sortedTimes.forEach((timeStr, index) => {
       let key = "CUSTOM";
       if (timeStr === "08:00") key = "MORNING";
       else if (timeStr === "14:00") key = "NOON";

@@ -18,7 +18,7 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/ContextAPI";
 import { useDocumentMedia, PickedFile } from "../../hooks/useDocumentMedia";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
-import { uploadPatientDocuments, startOcrJob, startOcrBatchJob } from "../../services/documentService";
+import { uploadPatientDocuments } from "../../services/documentService";
 
 interface SelectedFile extends PickedFile {
   originalName: string;
@@ -192,18 +192,6 @@ export const MultiUploadScreen = () => {
       const items = uploadRes?.data || [];
       if (!Array.isArray(items) || items.length === 0) {
         throw new Error("Failed to receive document processing records from server.");
-      }
-
-      setCurrentActionText("Initiating background OCR jobs...");
-
-      // 2. Start OCR jobs in batch
-      const jobIds = items.map((item) => item.jobId).filter(Boolean);
-      if (jobIds.length > 0) {
-        try {
-          await startOcrBatchJob(jobIds);
-        } catch (err: any) {
-          console.warn(`[MultiUpload] Failed to trigger batch OCR start:`, err.message);
-        }
       }
 
       const jobList: { jobId: string; fileName: string; fileKey: string }[] = [];
