@@ -44,7 +44,6 @@ export const DocumentProcessingScreen = () => {
   const { startBackgroundOcr, retryDocument, uploadingDocs } = useDocumentUpload();
   const isFocused = useIsFocused();
 
-
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
   const [hasMovedToBackground, setHasMovedToBackground] = useState(false);
 

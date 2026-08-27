@@ -193,6 +193,8 @@ let forceLogoutHandler: ForceLogoutCallback | null = null;
 let isForceLoggedOut = false;
 const pendingRequestControllers = new Set<AbortController>();
 
+import { jwtDecode } from "jwt-decode";
+
 export const registerForceLogoutHandler = (handler: ForceLogoutCallback) => {
   forceLogoutHandler = handler;
 };
@@ -200,6 +202,18 @@ export const registerForceLogoutHandler = (handler: ForceLogoutCallback) => {
 export const resetForceLogout = () => {
   isForceLoggedOut = false;
 };
+
+function isTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const decoded = jwtDecode<{ exp: number }>(token);
+    if (!decoded.exp) return false;
+    // 10 second buffer to avoid race conditions
+    return decoded.exp * 1000 < Date.now() + 10000;
+  } catch (e) {
+    return true; // Assume expired if it fails to decode
+  }
+}
 
 export const triggerForceLogout = async () => {
   if (isForceLoggedOut) return;
@@ -259,6 +273,18 @@ export const triggerForceLogout = async () => {
   }
 };
 
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const onRerefreshed = (token: string) => {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+};
+
+const addRefreshSubscriber = (cb: (token: string) => void) => {
+  refreshSubscribers.push(cb);
+};
+
 apiClient.interceptors.request.use(
   async (config) => {
     if (config.url && config.url.includes("/ocr/extract")) {
@@ -286,8 +312,64 @@ apiClient.interceptors.request.use(
     pendingRequestControllers.add(controller);
     (config as any).abortController = controller;
 
-    // Add auth token if present
-    const token = await SecureStore.getItemAsync("accessToken");
+    let token = await SecureStore.getItemAsync("accessToken");
+
+    // Local Token Expiration Check
+    if (token && !isAuthRequest && isTokenExpired(token)) {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        try {
+          const refreshToken = await SecureStore.getItemAsync("authToken"); // refreshToken is stored as authToken
+
+          // If no refresh token or it's also expired, log out immediately without API call
+          if (!refreshToken || isTokenExpired(refreshToken)) {
+            await triggerForceLogout();
+            controller.abort();
+            return config;
+          }
+
+          const refreshUrl = resolveFullUrl(config.baseURL, "/auth/refresh-token");
+          
+          const refreshResponse = await axios.post(refreshUrl, {
+            refreshToken
+          }, {
+            headers: {
+              "Content-Type": "application/json",
+              "ngrok-skip-browser-warning": "true",
+              "Bypass-Tunnel-Reminder": "true"
+            }
+          });
+
+          const newAccessToken = refreshResponse.data?.data?.accessToken || refreshResponse.data?.accessToken;
+          const newRefreshToken = refreshResponse.data?.data?.refreshToken || refreshResponse.data?.refreshToken;
+
+          if (newAccessToken && newRefreshToken) {
+            await SecureStore.setItemAsync("accessToken", String(newAccessToken));
+            await SecureStore.setItemAsync("authToken", String(newRefreshToken));
+            
+            isRefreshing = false;
+            token = newAccessToken; // Update token for the current request
+            onRerefreshed(newAccessToken);
+          } else {
+            isRefreshing = false;
+            await triggerForceLogout();
+            controller.abort();
+            return config;
+          }
+        } catch (refreshErr) {
+          isRefreshing = false;
+          await triggerForceLogout();
+          controller.abort();
+          return config;
+        }
+      } else {
+        // Wait for the ongoing refresh process to finish
+        token = await new Promise<string>((resolve) => {
+          addRefreshSubscriber((newToken: string) => resolve(newToken));
+        });
+      }
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -334,17 +416,17 @@ apiClient.interceptors.request.use(
   }
 );
 
-let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+// let isRefreshing = false;
+// let refreshSubscribers: ((token: string) => void)[] = [];
 
-const onRerefreshed = (token: string) => {
-  refreshSubscribers.forEach((cb) => cb(token));
-  refreshSubscribers = [];
-};
+// const onRerefreshed = (token: string) => {
+//   refreshSubscribers.forEach((cb) => cb(token));
+//   refreshSubscribers = [];
+// };
 
-const addRefreshSubscriber = (cb: (token: string) => void) => {
-  refreshSubscribers.push(cb);
-};
+// const addRefreshSubscriber = (cb: (token: string) => void) => {
+//   refreshSubscribers.push(cb);
+// };
 
 apiClient.interceptors.response.use(
   (response) => {

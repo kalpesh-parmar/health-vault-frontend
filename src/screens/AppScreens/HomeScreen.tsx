@@ -206,8 +206,6 @@ const HomeScreen = () => {
     <Container isDark={isDark}>
       <StatusBar style="light" />
 
-
-
       {/* --- BACKGROUND HEADER REGION --- */}
       <HeaderGradient
         colors={headerColors}

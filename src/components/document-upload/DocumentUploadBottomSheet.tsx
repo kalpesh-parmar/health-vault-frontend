@@ -276,7 +276,6 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
     updateSelectedFile,
     startUpload,
     isUploading,
-    isBottomSheetVisible,
     setIsBottomSheetVisible,
   } = useDocumentUpload();
 

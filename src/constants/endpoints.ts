@@ -20,13 +20,13 @@ export const DOCUMENT_ENDPOINTS = {
   PATIENT_DOCUMENTS_UPLOAD: (patientId: string) => `/patient/${patientId}/documents/upload`,
   RETRY_DOCUMENT: "/documents/retry",
   SSE_BATCH_STREAM: (batchId: string) => `/sse/batches/${batchId}/stream`,
-  SSE_FILE_STREAM: (fileKey: string) => `/sse/files/${fileKey}/stream`,
-  OCR_JOB_START: (jobId: string) => `/ocr/jobs/${jobId}/start`,
-  OCR_JOB_STATUS: (jobId: string) => `/ocr/jobs/${jobId}`,
+  SSE_FILE_STREAM: (fileKey: string) => `/sse/files/${fileKey}/stream`, // Get Progress for Particular File.
+  // OCR_JOB_START: (jobId: string) => `/ocr/jobs/${jobId}/start`,
+  // OCR_JOB_STATUS: (jobId: string) => `/ocr/jobs/${jobId}`,
   OCR_JOB_RESULT: (jobId: string) => `/ocr/jobs/${jobId}/result`,
   OCR_BATCH_START: "/ocr/jobs/batch-start",
   DOCUMENTS_COUNT: "/documents/summary",
-  OCR_BATCH_STATUS: "/ocr/jobs/batch-status",
+  // OCR_BATCH_STATUS: "/ocr/jobs/batch-status",
   RUN_OCR: "/documents/run-ocr",
   OCR_PROGRESS: "/documents/run-ocr-status/{fileKey}",
   ADD_DOCUMENT: "/documents/add",
@@ -45,7 +45,6 @@ export const DOCUMENT_ENDPOINTS = {
   OCR_EXTRACT: "/v1/ocr/extract",
   OCR_STATUS: "/v1/ocr/status/{documentId}",
 } as const;
-
 
 export const MEDICATION_REMINDER_ENDPOINTS = {
   CREATE_MEDICATION_REMINDER: "/medication-reminders/create",
