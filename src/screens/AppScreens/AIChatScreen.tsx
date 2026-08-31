@@ -12,8 +12,10 @@ import {
   Text,
   StatusBar,
   BackHandler,
+  LayoutAnimation,
   TouchableOpacity,
 } from "react-native";
+import Animated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
@@ -110,8 +112,33 @@ type ChatMessage = {
   documentSummary?: string;
   loginProvider?: string;
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
+  documentIds?: string[];
   conflicts?: any[];
   createdAt?: string | Date;
+};
+
+const normalizeDocumentIds = (...sources: any[]): string[] | undefined => {
+  const ids = sources
+    .flatMap((source) => {
+      if (!source) return [];
+      if (Array.isArray(source)) return source;
+      return [source];
+    })
+    .flatMap((item) => {
+      if (!item) return [];
+      if (typeof item === "string") return [item];
+      if (Array.isArray(item.documentId)) return item.documentId;
+      if (Array.isArray(item.documentIds)) return item.documentIds;
+      if (item.documentId) return [item.documentId];
+      if (item.id) return [item.id];
+      if (item.fileKey) return [item.fileKey];
+      if (item.s3Key) return [item.s3Key];
+      return [];
+    })
+    .map((id) => String(id).trim())
+    .filter(Boolean);
+
+  return ids.length ? Array.from(new Set(ids)) : undefined;
 };
 
 const buildChatHistory = (messages: ChatMessage[]) =>
@@ -667,7 +694,6 @@ const AIChatScreen = ({ route }: any) => {
     useState<MedicalDocument | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [keyboardPadding, setKeyboardPadding] = useState(0);
   const hasInitializedHistory = useRef(false);
   const [activeDateLabel, setActiveDateLabel] = useState<string>("");
   const [showFloatingPanel, setShowFloatingPanel] = useState<boolean>(true);
@@ -680,7 +706,7 @@ const AIChatScreen = ({ route }: any) => {
           topItem = item;
         }
       }
-      
+
       const message = topItem.item;
       if (message) {
         if (message.isDateHeader) {
@@ -846,6 +872,13 @@ const AIChatScreen = ({ route }: any) => {
                   "NORMAL_CHAT",
                 options: finalData?.options ?? baseMessage.options ?? [],
                 medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
+                documents: finalData?.documents ?? baseMessage.documents,
+                documentIds:
+                  normalizeDocumentIds(
+                    finalData?.documentId,
+                    finalData?.documentIds,
+                    finalData?.documents,
+                  ) ?? baseMessage.documentIds,
               };
             });
 
@@ -941,6 +974,7 @@ const AIChatScreen = ({ route }: any) => {
           const payload = {
             actionType: "ADD_DOCUMENT",
             sessionId: activeSessionId || onboardingSessionId || undefined,
+            documentId: normalizeDocumentIds(chatWizardState.filesInfo),
             actionData: {
               files: filesPayload,
             },
@@ -1788,21 +1822,7 @@ const AIChatScreen = ({ route }: any) => {
     return () => subscription.remove();
   }, [navigation, isFocused]);
 
-  useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e: KeyboardEvent) =>
-        setKeyboardPadding(Platform.OS === "ios" ? e.endCoordinates.height : 0),
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardPadding(0),
-    );
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+
 
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -1869,7 +1889,15 @@ const AIChatScreen = ({ route }: any) => {
   const uploadSheetRef = useRef<BottomSheetModal>(null);
   const extractionSheetRef = useRef<BottomSheetModal>(null);
   const flatListRef = useRef<FlatList>(null);
-  const bottomPadding = useBottomBarPadding(40, 20);
+  const bottomPadding = useBottomBarPadding(0, 0);
+
+  const keyboard = useAnimatedKeyboard();
+
+  const animatedKeyboardStyle = useAnimatedStyle(() => {
+    return {
+      paddingBottom: Math.max(keyboard.height.value, bottomPadding),
+    };
+  });
 
   const handleOpenProgressSheet = () => {
     setShowFloatingPanel(false);
@@ -2088,9 +2116,11 @@ const AIChatScreen = ({ route }: any) => {
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
         history: buildChatHistory(messages),
-        documentId: selectedDocument?.s3Key
-          ? [selectedDocument.s3Key]
-          : undefined,
+        documentId:
+          normalizeDocumentIds(
+            selectedDocument?.s3Key,
+            selectedDocument?.id,
+          ) ?? normalizeDocumentIds(chatWizardState.filesInfo),
         stream: true,
       };
 
@@ -2173,6 +2203,10 @@ const AIChatScreen = ({ route }: any) => {
     // 3. Otherwise, send the selected value to /v1/onboarding/chat
     setIsSending(true);
     try {
+      const latestAssistantMessage = [...messages]
+        .reverse()
+        .find((msg) => msg.role === "ai");
+
       const payload: any = {
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
@@ -2180,6 +2214,12 @@ const AIChatScreen = ({ route }: any) => {
           role: m.role === "ai" ? "assistant" : "user",
           content: m.text,
         })),
+        documentId:
+          normalizeDocumentIds(
+            latestAssistantMessage?.documentIds,
+            latestAssistantMessage?.documents,
+            chatWizardState.filesInfo,
+          ),
       };
 
       if (option.actionType === "CONFIRM_MEDICINES") {
@@ -2202,6 +2242,12 @@ const AIChatScreen = ({ route }: any) => {
           action: resData.actionType || resData.action || "NORMAL_CHAT",
           options: resData.options || [],
           medicines: resData.medicines || [],
+          documents: resData.documents || [],
+          documentIds: normalizeDocumentIds(
+            resData.documentId,
+            resData.documentIds,
+            resData.documents,
+          ),
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, aiMsg]);
@@ -2310,9 +2356,7 @@ const AIChatScreen = ({ route }: any) => {
         />
       )}
 
-      <View
-        style={[styles.keyboardContainer, { paddingBottom: keyboardPadding }]}
-      >
+      <View style={styles.keyboardContainer}>
         {/* Emergency Card Display */}
         {hasEmergency && (
           <EmergencyCard>
@@ -3066,40 +3110,28 @@ const AIChatScreen = ({ route }: any) => {
           )}
         </View>
 
-        {!isOnboardingCompleted ? (
-          <ReadOnlyBanner>
-            <Ionicons name="lock-closed" size={16} color="#0f766e" />
-            <ReadOnlyText>{t("onboardingArchive")}</ReadOnlyText>
-          </ReadOnlyBanner>
-        ) : isOnboardingSession ? (
-          <ReadOnlyBanner>
-            <Ionicons name="lock-closed" size={16} color="#0f766e" />
-            <ReadOnlyText>{t("onboardingArchive")}</ReadOnlyText>
-          </ReadOnlyBanner>
-        ) : (
-          <SafeAreaView edges={["bottom"]}>
-            {/* Suggested Chips above input */}
-            <SuggestedQuestionChip
-              questions={suggestedQuestions}
-              onPressQuestion={handleSend}
-              isDark={isDark}
-            />
+        <Animated.View style={animatedKeyboardStyle}>
+          {/* Suggested Chips above input */}
+          <SuggestedQuestionChip
+            questions={suggestedQuestions}
+            onPressQuestion={handleSend}
+            isDark={isDark}
+          />
 
-            {/* Floating Input Capsule */}
-            <ChatInput
-              value={input}
-              onChangeText={setInput}
-              onSend={() => handleSend()}
-              isSending={isSending}
-              isDark={isDark}
-              preferredLanguage={preferredLang}
-              onAttachPress={() => {
-                uploadSheetRef.current?.present();
-                Keyboard.dismiss();
-              }}
-            />
-          </SafeAreaView>
-        )}
+          {/* Floating Input Capsule */}
+          <ChatInput
+            value={input}
+            onChangeText={setInput}
+            onSend={() => handleSend()}
+            isSending={isSending}
+            isDark={isDark}
+            preferredLanguage={preferredLang}
+            onAttachPress={() => {
+              uploadSheetRef.current?.present();
+              Keyboard.dismiss();
+            }}
+          />
+        </Animated.View>
       </View>
 
       <DocumentUploadBottomSheet

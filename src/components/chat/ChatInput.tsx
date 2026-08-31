@@ -87,9 +87,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onAttachPress,
 }) => {
   const insets = useSafeAreaInsets();
-  const bottomPadding = useBottomBarPadding(0, 5);
   const sendScale = useSharedValue(0.0);
-  // const [keyboardPadding, setKeyboardPadding] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const pulseScale = useSharedValue(1);
 
@@ -178,21 +176,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // useEffect(() => {
-  //   const showSubscription = Keyboard.addListener(
-  //     Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-  //     (e: KeyboardEvent) => setKeyboardPadding(e.endCoordinates.height - bottomPadding)
-  //   );
-  //   const hideSubscription = Keyboard.addListener(
-  //     Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-  //     () => setKeyboardPadding(0)
-  //   );
 
-  //   return () => {
-  //     showSubscription.remove();
-  //     hideSubscription.remove();
-  //   };
-  // }, []);
 
   useEffect(() => {
     sendScale.value = withSpring(value.trim() ? 1.0 : 0.0, {
@@ -229,7 +213,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           backgroundColor: cardBgColor,
           borderColor: isDark ? "rgba(255,255,255,0.06)" : "transparent",
           borderWidth: isDark ? 1 : 0,
-          marginBottom: bottomPadding,
         },
       ]}>
       {/* Attachment Button */}
@@ -324,6 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     paddingHorizontal: 12,
     paddingVertical: Platform.OS === "ios" ? 8 : 4,
+    marginBottom: 5,
     ...Platform.select({
       ios: {
         shadowColor: "#000",

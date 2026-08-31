@@ -141,6 +141,83 @@ const getFileNameWithExtension = (displayName: string, originalName: string) => 
   return `${displayName}.${ext}`;
 };
 
+const normalizeStatus = (event: any) => {
+  const stage = String(event?.stage || event?.stageStatus || event?.status || event?.type || "").toUpperCase();
+
+  if (
+    stage.includes("FAILED") ||
+    stage.includes("ERROR") ||
+    stage.includes("REJECTED") ||
+    stage.includes("CANCELLED")
+  ) {
+    return "FAILED";
+  }
+
+  if (
+    stage.includes("COMPLETED") ||
+    stage.includes("DONE") ||
+    stage === "SUCCESS"
+  ) {
+    return "COMPLETED";
+  }
+
+  if (stage.includes("UPLOAD")) {
+    return "UPLOADING";
+  }
+
+  if (stage.includes("QUEUE") || stage.includes("PENDING")) {
+    return "QUEUED";
+  }
+
+  return "RUNNING";
+};
+
+const extractEventProgress = (event: any) => {
+  if (typeof event?.percentage === "number") return Math.round(event.percentage);
+  if (typeof event?.progress === "number") {
+    return event.progress <= 1 ? Math.round(event.progress * 100) : Math.round(event.progress);
+  }
+  if (typeof event?.data?.percentage === "number") return Math.round(event.data.percentage);
+  if (typeof event?.data?.progress === "number") {
+    return event.data.progress <= 1
+      ? Math.round(event.data.progress * 100)
+      : Math.round(event.data.progress);
+  }
+  return undefined;
+};
+
+const extractBatchDocumentEvents = (event: any): any[] => {
+  const candidates = [
+    event?.documents,
+    event?.data?.documents,
+    event?.files,
+    event?.data?.files,
+    event?.items,
+    event?.data?.items,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
+
+const getBatchCounts = (event: any, docs: UploadingDoc[]) => {
+  const completed =
+    typeof event?.completed === "number"
+      ? event.completed
+      : docs.filter((d) => d.status === "COMPLETED").length;
+  const failed =
+    typeof event?.failed === "number"
+      ? event.failed
+      : docs.filter((d) => d.status === "FAILED").length;
+
+  return { completed, failed };
+};
+
 export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [selectedFiles, setSelectedFiles] = useState<SelectedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -206,6 +283,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const isPollingRef = useRef(false);
   const activeSseUnsubRef = useRef<(() => void) | null>(null);
   const hasHandledBatchFinishedRef = useRef(false);
+  const activeBatchIdRef = useRef<string | null>(null);
+  const lastBatchEventIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -380,6 +459,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         activeUploadFromScreenRef.current = fromScreen;
       }
       hasHandledBatchFinishedRef.current = false;
+      activeBatchIdRef.current = null;
+      lastBatchEventIdRef.current = null;
 
       try {
         const filesPayload = selectedFiles.map((file) => {
@@ -400,6 +481,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
         const batchId = batchData.batchId;
         const batchUrl = DOCUMENT_ENDPOINTS.SSE_BATCH_STREAM(batchId);
+        activeBatchIdRef.current = batchId;
+        lastBatchEventIdRef.current = null;
 
         const mappedDocs: UploadingDoc[] = batchData.documents.map((doc: any) => ({
           id: doc.jobId || doc.fileKey,
@@ -548,69 +631,184 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
         activeSseUnsubRef.current = connectSseStream({
           endpoint: batchUrl,
+          method: "POST",
+          body: {
+            batchId,
+            "Last-Event-ID": lastBatchEventIdRef.current,
+            lastEventId: lastBatchEventIdRef.current,
+          },
           onEvent: (event: SseEventPayload) => {
-            if (event.type === "batch.completed" || event.stage === "BATCH_COMPLETED") {
-              setUploadingDocs((currentDocs) => {
-                handleBatchFinished(currentDocs, event);
-                return currentDocs;
-              });
-              return;
+            if (event.id) {
+              lastBatchEventIdRef.current = event.id;
             }
 
-            if (event.fileKey) {
-              setUploadingDocs((prev) =>
-                prev.map((d) => {
-                  if (d.fileKey === event.fileKey || d.id === event.fileKey) {
-                    const isCompleted =
-                      event.type === "document.completed" ||
-                      event.stage === "COMPLETED" ||
-                      event.stageStatus === "COMPLETED" ||
-                      (event.status === "SUCCESS" && (event.percentage === 100 || event.progress === 100));
+            setUploadingDocs((prev) => {
+              let nextDocs = [...prev];
+              const docEvents = extractBatchDocumentEvents(event);
 
-                    const isFailed =
-                      event.type === "document.failed" ||
-                      event.stage === "FAILED" ||
-                      event.stageStatus === "FAILED" ||
-                      event.status === "FAILED";
+              if (docEvents.length > 0) {
+                nextDocs = nextDocs.map((doc) => {
+                  const matchedEvent = docEvents.find((item) => {
+                    const candidateIds = [
+                      item?.fileKey,
+                      item?.jobId,
+                      item?.id,
+                      item?.documentId,
+                      item?.data?.fileKey,
+                      item?.data?.jobId,
+                      item?.data?.id,
+                    ].filter(Boolean);
 
-                    const status = isCompleted ? "COMPLETED" : isFailed ? "FAILED" : "RUNNING";
-                    const pct = isCompleted
-                      ? 100
-                      : typeof event.percentage === "number"
-                        ? event.percentage
-                        : typeof event.progress === "number"
-                          ? event.progress
-                          : mapStatusToProgress(event);
+                    return candidateIds.some(
+                      (candidate) =>
+                        candidate === doc.fileKey ||
+                        candidate === doc.jobId ||
+                        candidate === doc.id,
+                    );
+                  });
 
-                    const stage = event.stage || d.stage;
-                    const currentStep = event.message || stage || d.currentStep;
-                    const reason = isFailed ? (event.message || event.error || (event.errorCode === "NON_MEDICAL_DOCUMENT" ? "Non-medical document rejected" : "Processing failed")) : null;
-                    const errorCode = event.errorCode || d.errorCode;
-                    const retryable = isFailed && errorCode !== "NON_MEDICAL_DOCUMENT";
-                    const skippedPages = event.extra?.skippedPages || d.skippedPages;
-
-                    return {
-                      ...d,
-                      progress: pct,
-                      percentage: pct,
-                      status,
-                      stage,
-                      currentStep,
-                      reason,
-                      errorCode,
-                      retryable,
-                      skippedPages,
-                    };
+                  if (!matchedEvent) {
+                    return doc;
                   }
-                  return d;
-                }),
-              );
-            }
+
+                  const status = normalizeStatus(matchedEvent);
+                  const pct =
+                    status === "COMPLETED"
+                      ? 100
+                      : extractEventProgress(matchedEvent) ?? mapStatusToProgress(matchedEvent);
+                  const stage = matchedEvent.stage || matchedEvent.stageStatus || matchedEvent.status || doc.stage;
+                  const currentStep = matchedEvent.message || matchedEvent.data?.message || stage || doc.currentStep;
+                  const errorCode = matchedEvent.errorCode || matchedEvent.data?.errorCode || doc.errorCode;
+                  const reason =
+                    status === "FAILED"
+                      ? matchedEvent.message ||
+                        matchedEvent.error ||
+                        matchedEvent.data?.message ||
+                        (errorCode === "NON_MEDICAL_DOCUMENT"
+                          ? "Non-medical document rejected"
+                          : "Processing failed")
+                      : null;
+
+                  return {
+                    ...doc,
+                    progress: pct,
+                    percentage: pct,
+                    status,
+                    stage,
+                    currentStep,
+                    reason,
+                    errorCode,
+                    retryable: status === "FAILED" && errorCode !== "NON_MEDICAL_DOCUMENT",
+                    skippedPages: matchedEvent.extra?.skippedPages || matchedEvent.data?.extra?.skippedPages || doc.skippedPages,
+                  };
+                });
+              } else if (event.fileKey || event.jobId || event.documentId) {
+                const eventKey = event.fileKey || event.jobId || event.documentId;
+                nextDocs = nextDocs.map((doc) => {
+                  if (doc.fileKey !== eventKey && doc.jobId !== eventKey && doc.id !== eventKey) {
+                    return doc;
+                  }
+
+                  const status = normalizeStatus(event);
+                  const pct =
+                    status === "COMPLETED"
+                      ? 100
+                      : extractEventProgress(event) ?? mapStatusToProgress(event);
+                  const stage = event.stage || event.stageStatus || event.status || doc.stage;
+                  const currentStep = event.message || stage || doc.currentStep;
+                  const errorCode = event.errorCode || doc.errorCode;
+                  const reason =
+                    status === "FAILED"
+                      ? event.message ||
+                        event.error ||
+                        (errorCode === "NON_MEDICAL_DOCUMENT"
+                          ? "Non-medical document rejected"
+                          : "Processing failed")
+                      : null;
+
+                  return {
+                    ...doc,
+                    progress: pct,
+                    percentage: pct,
+                    status,
+                    stage,
+                    currentStep,
+                    reason,
+                    errorCode,
+                    retryable: status === "FAILED" && errorCode !== "NON_MEDICAL_DOCUMENT",
+                    skippedPages: event.extra?.skippedPages || doc.skippedPages,
+                  };
+                });
+              }
+
+              const batchProgress = extractEventProgress(event);
+              if (typeof batchProgress === "number" && nextDocs.length > 0) {
+                const unfinishedDocs = nextDocs.filter(
+                  (doc) => doc.status !== "COMPLETED" && doc.status !== "FAILED" && doc.status !== "CANCELLED",
+                );
+
+                if (unfinishedDocs.length > 0) {
+                  const currentAverage = Math.round(
+                    nextDocs.reduce((acc, doc) => acc + Math.max(0, doc.progress || 0), 0) / nextDocs.length,
+                  );
+
+                  if (batchProgress > currentAverage) {
+                    const delta = batchProgress - currentAverage;
+                    nextDocs = nextDocs.map((doc) => {
+                      if (doc.status === "COMPLETED" || doc.status === "FAILED" || doc.status === "CANCELLED") {
+                        return doc;
+                      }
+
+                      const nextProgress = Math.min(99, Math.max(doc.progress || 0, (doc.progress || 0) + delta));
+                      return {
+                        ...doc,
+                        progress: nextProgress,
+                        percentage: nextProgress,
+                      };
+                    });
+                  }
+                }
+              }
+
+              if (event.type === "batch.completed" || event.stage === "BATCH_COMPLETED") {
+                handleBatchFinished(nextDocs, {
+                  ...event,
+                  ...getBatchCounts(event, nextDocs),
+                });
+              }
+
+              return nextDocs;
+            });
           },
           onTerminal: (event: SseEventPayload) => {
+            if (event.id) {
+              lastBatchEventIdRef.current = event.id;
+            }
+
             setUploadingDocs((currentDocs) => {
-              handleBatchFinished(currentDocs, event);
-              return currentDocs;
+              const finalizedDocs = currentDocs.map((doc) => {
+                if (doc.status === "COMPLETED" || doc.status === "FAILED" || doc.status === "CANCELLED") {
+                  return doc;
+                }
+                return {
+                  ...doc,
+                  progress: doc.progress >= 100 ? 100 : doc.progress,
+                  percentage:
+                    typeof doc.percentage === "number"
+                      ? doc.percentage >= 100
+                        ? 100
+                        : doc.percentage
+                      : doc.progress >= 100
+                        ? 100
+                        : doc.progress,
+                };
+              });
+
+              handleBatchFinished(finalizedDocs, {
+                ...event,
+                ...getBatchCounts(event, finalizedDocs),
+              });
+              return finalizedDocs;
             });
           },
           onError: (err) => {
@@ -643,6 +841,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       activeSseUnsubRef.current = null;
     }
     setIsUploading(false);
+    activeBatchIdRef.current = null;
+    lastBatchEventIdRef.current = null;
     setUploadingDocs([]);
   }, [uploadingDocs]);
 
@@ -672,6 +872,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     setUploadingDocs(docs);
     setIsPillHidden(false);
     setCompletedBatch(null);
+    activeBatchIdRef.current = null;
+    lastBatchEventIdRef.current = null;
   }, []);
 
   const cancelAllProcessing = useCallback(async () => {
