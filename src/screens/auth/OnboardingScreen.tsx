@@ -167,6 +167,7 @@ export default function OnboardingScreen() {
   const bottomPadding = useBottomBarPadding(0);
   const [activeDateLabel, setActiveDateLabel] = useState<string>("");
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(false);
+  const [canSkip, setCanSkip] = useState(false);
 
   const keyboard = useAnimatedKeyboard();
 
@@ -444,6 +445,7 @@ export default function OnboardingScreen() {
             chatSessionId,
             messages: historyItems,
             resumableState,
+            canSkip: historyCanSkip,
           } = response.data?.data || {};
 
           let mergedState = { ...newState };
@@ -455,6 +457,13 @@ export default function OnboardingScreen() {
           }
 
           setState(mergedState);
+          setCanSkip(
+            Boolean(
+              historyCanSkip ??
+                resumableState?.canSkip ??
+                response.data?.data?.canSkip,
+            ),
+          );
 
           if (
             chatSessionId &&
@@ -508,6 +517,7 @@ export default function OnboardingScreen() {
         message: "hello",
         history: [],
         state: currentState,
+        fromScreen: "Onboarding",
         documentId: normalizeDocumentIds(currentState?.documentId),
         stream: false,
       };
@@ -542,6 +552,12 @@ export default function OnboardingScreen() {
       aiRes.onboardingState?.isOnboardingCompleted ??
         aiRes.state?.isOnboardingCompleted ??
         aiRes.isOnboardingCompleted,
+    );
+    const resolvedCanSkip = Boolean(
+      aiRes.canSkip ??
+        aiRes.onboardingState?.canSkip ??
+        aiRes.state?.canSkip ??
+        aiRes.resumableState?.canSkip,
     );
 
     const newMsg: Message = {
@@ -675,6 +691,7 @@ export default function OnboardingScreen() {
     );
     setState(finalState);
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
+    setCanSkip(resolvedCanSkip);
 
     if (finalState.documentExtracted) {
       setUploadProgress(null);
@@ -729,6 +746,7 @@ export default function OnboardingScreen() {
         history,
         state: updatedState,
         displayLabel,
+        fromScreen: "Onboarding",
         documentId: normalizeDocumentIds(
           updatedState?.documentId,
           latestAssistantMessage?.documentIds,
@@ -825,6 +843,7 @@ export default function OnboardingScreen() {
         history,
         state,
         actionType: "SKIP_ONBOARDING",
+        fromScreen: "Onboarding",
         documentId: normalizeDocumentIds(
           state?.documentId,
           latestAssistantMessage?.documentIds,
@@ -836,6 +855,10 @@ export default function OnboardingScreen() {
         timeout: 90000,
       });
 
+      if (res?.data?.success === false) {
+        throw new Error(res?.data?.message || "Failed to skip onboarding.");
+      }
+
       const skipCompleted = Boolean(
         res?.data?.data?.onboardingState?.isOnboardingCompleted ??
           res?.data?.data?.state?.isOnboardingCompleted ??
@@ -845,21 +868,26 @@ export default function OnboardingScreen() {
 
       setIsOnboardingCompleted(skipCompleted);
 
-      // Optimistically update profile to trigger navigation to dashboard
+      // Update profile cache after successful server response
       queryClient.setQueryData(["profile"], (old: any) => {
         if (!old) return old;
         return {
           ...old,
+          onboardingCompleted: true,
           firstName:
             old.firstName === "User" || !old.firstName
-              ? "Guest"
+              ? state?.existingUserData?.firstName || old.firstName || "User"
               : old.firstName,
           lastName:
             old.lastName?.startsWith("+") || !old.lastName
-              ? "User"
+              ? state?.existingUserData?.lastName || old.lastName || ""
               : old.lastName,
-          dateOfBirth: old.dateOfBirth || "2000-01-01",
-          gender: old.gender || "Other",
+          dateOfBirth:
+            old.dateOfBirth ||
+            state?.existingUserData?.dateOfBirth ||
+            "2000-01-01",
+          gender:
+            old.gender || state?.existingUserData?.gender || "Other",
         };
       });
 
@@ -870,7 +898,10 @@ export default function OnboardingScreen() {
       Toast.show({
         type: "error",
         text1: "Error",
-        text2: "Failed to skip onboarding.",
+        text2:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Failed to skip onboarding.",
       });
     } finally {
       setLoading(false);
@@ -2073,9 +2104,9 @@ export default function OnboardingScreen() {
           </View>
           <TouchableOpacity
             onPress={handleSkipOnboarding}
-            disabled={!isOnboardingCompleted}
+            disabled={!canSkip}
             style={{
-              opacity: !isOnboardingCompleted ? 0.5 : 1,
+              opacity: !canSkip ? 0.5 : 1,
               paddingHorizontal: 12,
               paddingVertical: 6,
               backgroundColor: `${theme.colors.primary}15`,

@@ -19,8 +19,6 @@ interface Props {
   onSelect?: (id: string) => void;
   onEdit?: (document: MedicalDocument) => void;
   onShare?: (document: MedicalDocument) => void;
-  selected?: boolean;
-  isSelectionMode?: boolean;
 }
 
 const getFileStyle = (ext: string, isDark: boolean) => {

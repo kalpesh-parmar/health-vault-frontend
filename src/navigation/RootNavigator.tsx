@@ -26,10 +26,7 @@ const RootNavigator = () => {
 
   const isProfileIncomplete = (user: any) => {
     if (!user) return true;
-    if (!user?.firstName || user?.firstName === "User") return true;
-    if (!user?.lastName || user?.lastName?.startsWith("+")) return true;
-    if (!user?.dateOfBirth) return true;
-    if (!user?.gender) return true;
+    if (!user?.onboardingCompleted) return true;
     return false;
   };
   

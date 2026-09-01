@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
+  AppState,
   FlatList,
   Keyboard,
   KeyboardEvent,
@@ -19,7 +20,6 @@ import Animated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-re
 import Toast from "react-native-toast-message";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
-import { formatUTCDateTime, getRelativeDateLabel } from "../../utils/dateFormatter";
 import { ChatDateHeader } from "../../components/chat/ChatDateHeader";
 
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
@@ -149,6 +149,8 @@ const buildChatHistory = (messages: ChatMessage[]) =>
 
 const I18N_CHAT_UI: Record<string, Record<string, string>> = {
   english: {
+    today: "Today",
+    yesterday: "Yesterday",
     selectModeOrReport: "Select Mode or Report",
     chooseGeneralOrDiscuss:
       "Choose general health mode or discuss a specific medical report",
@@ -165,6 +167,8 @@ const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "Document: ",
   },
   gujarati: {
+    today: "આજે",
+    yesterday: "ગઈકાલે",
     selectModeOrReport: "મોડ અથવા રિપોર્ટ પસંદ કરો",
     chooseGeneralOrDiscuss:
       "સામાન્ય સ્વાસ્થ્ય મોડ પસંદ કરો અથવા ચોક્કસ તબીબી અહેવાલ વિશે ચર્ચા કરો",
@@ -181,6 +185,8 @@ const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "દસ્તાવેજ: ",
   },
   hindi: {
+    today: "आज",
+    yesterday: "कल",
     selectModeOrReport: "मोड या रिपोर्ट चुनें",
     chooseGeneralOrDiscuss:
       "सामान्य स्वास्थ्य मोड चुनें या किसी विशिष्ट मेडिकल रिपोर्ट पर चर्चा करें",
@@ -197,6 +203,8 @@ const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "दस्तावेज़: ",
   },
   marathi: {
+    today: "आज",
+    yesterday: "काल",
     selectModeOrReport: "मोड किंवा अहवाल निवडा",
     chooseGeneralOrDiscuss:
       "सामान्य आरोग्य मोड निवडा किंवा विशिष्ट वैद्यकीय अहवालावर चर्चा करा",
@@ -214,6 +222,8 @@ const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "दस्तऐवज: ",
   },
   tamil: {
+    today: "இன்று",
+    yesterday: "நேற்று",
     selectModeOrReport: "முறை அல்லது அறிக்கையைத் தேர்ந்தெடுக்கவும்",
     chooseGeneralOrDiscuss:
       "பொது சுகாதார முறையைத் தேர்ந்தெடுக்கவும் அல்லது குறிப்பிட்ட மருத்துவ அறிக்கையைப் பற்றி விவாதிக்கவும்",
@@ -230,6 +240,61 @@ const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     onboardingArchive: "உள்வாங்கல் அமர்வு (படிக்க மட்டும் காப்பகம்)",
     documentPrefix: "ஆவணம்: ",
   },
+};
+
+const LOCALE_TAG_MAP: Record<string, string> = {
+  english: "en-US",
+  gujarati: "gu-IN",
+  hindi: "hi-IN",
+  marathi: "mr-IN",
+  tamil: "ta-IN",
+};
+
+const parseToLocalDate = (raw: string | Date | undefined): Date | null => {
+  if (!raw) return null;
+  const d = typeof raw === "string" ? new Date(raw) : raw;
+  if (!d || isNaN(d.getTime())) return null;
+  return d;
+};
+
+const getLocalDayKey = (d: Date): string => {
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
+
+const formatChatDateLabel = (
+  date: Date,
+  preferredLang: string,
+  tFunc: (key: string) => string
+): string => {
+  const now = new Date();
+  const todayKey = getLocalDayKey(now);
+
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const yesterdayKey = getLocalDayKey(yesterday);
+
+  const targetKey = getLocalDayKey(date);
+
+  if (targetKey === todayKey) {
+    return tFunc("today");
+  }
+  if (targetKey === yesterdayKey) {
+    return tFunc("yesterday");
+  }
+
+  const localeTag = LOCALE_TAG_MAP[preferredLang] || LOCALE_TAG_MAP.english;
+  try {
+    return date.toLocaleDateString(localeTag, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return date.toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
 };
 
 const SUGGESTED_QUESTIONS_I18N: Record<
@@ -684,6 +749,7 @@ const AIChatScreen = ({ route }: any) => {
   const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(
     null,
   );
+  const [midnightTick, setMidnightTick] = useState(0);
 
   const t = (key: string) => {
     const lang = preferredLang || "english";
@@ -698,6 +764,17 @@ const AIChatScreen = ({ route }: any) => {
   const [activeDateLabel, setActiveDateLabel] = useState<string>("");
   const [showFloatingPanel, setShowFloatingPanel] = useState<boolean>(true);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        setMidnightTick((prev) => prev + 1);
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems && viewableItems.length > 0) {
       let topItem = viewableItems[0];
@@ -708,12 +785,10 @@ const AIChatScreen = ({ route }: any) => {
       }
 
       const message = topItem.item;
-      if (message) {
-        if (message.isDateHeader) {
-          setActiveDateLabel(message.dateLabel);
-        } else if (message.createdAt) {
-          const label = getRelativeDateLabel(message.createdAt, true);
-          setActiveDateLabel(label);
+      if (message && message.createdAt) {
+        const itemDate = parseToLocalDate(message.createdAt);
+        if (itemDate) {
+          setActiveDateLabel(formatChatDateLabel(itemDate, preferredLang, t));
         }
       }
     }
@@ -1830,56 +1905,67 @@ const AIChatScreen = ({ route }: any) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [onboardingMessages, setOnboardingMessages] = useState<any[]>([]);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(false);
+  const [pendingStep, setPendingStep] = useState<string | null>(null);
 
-  // Fetch onboarding history once on mount
-  useEffect(() => {
-    const fetchOnboardingHistory = async () => {
-      try {
-        console.log("[AI_CHAT] Fetching onboarding history...");
-        const response = await apiClient.get("/v1/onboarding/history");
-        const {
-          chatSessionId,
-          messages: historyItems,
-          resumableState,
-        } = response.data?.data || {};
-        console.log("[CHAT SESSION ID] :- ", chatSessionId);
-        setOnboardingSessionId(chatSessionId || null);
+  // Fetch onboarding history on mount and screen focus
+  const fetchOnboardingHistory = useCallback(async () => {
+    try {
+      console.log("[AI_CHAT] Fetching onboarding history...");
+      const response = await apiClient.get("/v1/onboarding/history");
+      const {
+        chatSessionId,
+        messages: historyItems,
+        resumableState,
+        currentStep: topLevelCurrentStep,
+      } = response.data?.data || {};
+      console.log("[CHAT SESSION ID] :- ", chatSessionId);
+      setOnboardingSessionId(chatSessionId || null);
 
-        const completedFromState = Boolean(
-          resumableState?.isOnboardingCompleted ||
-            resumableState?.currentStep === "POST_ONBOARDING" ||
-            resumableState?.currentStep === "COMPLETE",
-        );
-        const completedFromHistory = Array.isArray(historyItems)
-          ? historyItems.some((dbMsg: any) => {
-              const action = dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
-              return action === "POST_ONBOARDING" || action === "COMPLETE";
-            })
-          : false;
-        setIsOnboardingCompleted(completedFromState || completedFromHistory);
+      const resolvedPendingStep =
+        resumableState?.currentStep || topLevelCurrentStep || null;
 
-        if (resumableState?.preferredLanguage) {
-          setPreferredLang(resumableState.preferredLanguage);
-        }
-        if (chatSessionId && Array.isArray(historyItems)) {
-          const mapped = historyItems.map((dbMsg: any) => ({
-            ...(dbMsg.metadata || {}),
-            id: dbMsg.id,
-            role: dbMsg.role === "assistant" ? "ai" : "user",
-            text: dbMsg.content,
-            sessionId: chatSessionId,
-            createdAt: dbMsg.createdAt,
-            action: (dbMsg.metadata || {}).action || (dbMsg.metadata || {}).actionType || "NORMAL_CHAT",
-          }));
-          setOnboardingMessages(mapped);
-        }
-      } catch (err) {
-        console.warn("[AI_CHAT] Failed to load onboarding history:", err);
+      const completedFromState = Boolean(
+        resumableState?.isOnboardingCompleted ||
+          resumableState?.currentStep === "POST_ONBOARDING" ||
+          resumableState?.currentStep === "COMPLETE" ||
+          resolvedPendingStep === "POST_ONBOARDING" ||
+          resolvedPendingStep === "COMPLETE",
+      );
+      const completedFromHistory = Array.isArray(historyItems)
+        ? historyItems.some((dbMsg: any) => {
+            const action = dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
+            return action === "POST_ONBOARDING" || action === "COMPLETE";
+          })
+        : false;
+      const isComplete = completedFromState || completedFromHistory;
+      setIsOnboardingCompleted(isComplete);
+      setPendingStep(isComplete ? null : resolvedPendingStep);
+
+      if (resumableState?.preferredLanguage) {
+        setPreferredLang(resumableState.preferredLanguage);
       }
-    };
-
-    fetchOnboardingHistory();
+      if (chatSessionId && Array.isArray(historyItems)) {
+        const mapped = historyItems.map((dbMsg: any) => ({
+          ...(dbMsg.metadata || {}),
+          id: dbMsg.id,
+          role: dbMsg.role === "assistant" ? "ai" : "user",
+          text: dbMsg.content,
+          sessionId: chatSessionId,
+          createdAt: dbMsg.createdAt,
+          action: (dbMsg.metadata || {}).action || (dbMsg.metadata || {}).actionType || "NORMAL_CHAT",
+        }));
+        setOnboardingMessages(mapped);
+      }
+    } catch (err) {
+      console.warn("[AI_CHAT] Failed to load onboarding history:", err);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isFocused && !isOnboardingCompleted) {
+      fetchOnboardingHistory();
+    }
+  }, [isFocused, isOnboardingCompleted, fetchOnboardingHistory]);
 
   const isOnboardingSession = useMemo(() => {
     const activeSess = sessions.find((s) => s.id === activeSessionId);
@@ -2086,6 +2172,81 @@ const AIChatScreen = ({ route }: any) => {
     const textToSubmit = (customText || input).trim();
     if (!textToSubmit) return;
 
+    if (!isOnboardingCompleted && pendingStep) {
+      // Route typed text to pending onboarding flow
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        text: textToSubmit,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      setInput("");
+      setIsSending(true);
+
+      try {
+        const latestAssistantMessage = [...messages]
+          .reverse()
+          .find((msg) => msg.role === "ai");
+
+        const payload: any = {
+          sessionId: activeSessionId || onboardingSessionId || undefined,
+          preferredLanguage: preferredLang,
+          history: messages.map((m) => ({
+            role: m.role === "ai" ? "assistant" : "user",
+            content: m.text,
+          })),
+          documentId: normalizeDocumentIds(
+            latestAssistantMessage?.documentIds,
+            latestAssistantMessage?.documents,
+            chatWizardState.filesInfo,
+          ),
+          message: textToSubmit,
+        };
+
+        const response = await apiClient.post("/v1/onboarding/chat", payload);
+        const resData = response.data?.data;
+        if (resData?.reply) {
+          const aiMsg: ChatMessage = {
+            id: `ai-opt-res-${Date.now()}`,
+            role: "ai",
+            text: resData.reply,
+            action: resData.actionType || resData.action || "NORMAL_CHAT",
+            options: resData.options || [],
+            medicines: resData.medicines || [],
+            documents: resData.documents || [],
+            documentIds: normalizeDocumentIds(
+              resData.documentId,
+              resData.documentIds,
+              resData.documents,
+            ),
+            createdAt: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+
+          const nextPendingStep =
+            resData?.onboardingState?.currentStep ||
+            resData?.state?.currentStep ||
+            resData?.actionType ||
+            resData?.action ||
+            null;
+          const isNowCompleted = Boolean(
+            resData?.onboardingState?.isOnboardingCompleted ??
+              resData?.state?.isOnboardingCompleted ??
+              resData?.isOnboardingCompleted ??
+              (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
+          );
+          setIsOnboardingCompleted(isNowCompleted);
+          setPendingStep(isNowCompleted ? null : nextPendingStep);
+        }
+      } catch (err: any) {
+        console.warn("Failed to send onboarding text message:", err);
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
+
     if (!isOnboardingCompleted) {
       Toast.show({
         type: "info",
@@ -2251,6 +2412,21 @@ const AIChatScreen = ({ route }: any) => {
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, aiMsg]);
+
+        const nextPendingStep =
+          resData?.onboardingState?.currentStep ||
+          resData?.state?.currentStep ||
+          resData?.actionType ||
+          resData?.action ||
+          null;
+        const isNowCompleted = Boolean(
+          resData?.onboardingState?.isOnboardingCompleted ??
+            resData?.state?.isOnboardingCompleted ??
+            resData?.isOnboardingCompleted ??
+            (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
+        );
+        setIsOnboardingCompleted(isNowCompleted);
+        setPendingStep(isNowCompleted ? null : nextPendingStep);
       }
     } catch (err: any) {
       console.warn("Failed to submit option click:", err);
@@ -2272,47 +2448,62 @@ const AIChatScreen = ({ route }: any) => {
       : questionSource.general;
   }, [activeMode, preferredLang]);
 
-  // Merge live messages and onboarding history (rendered newest-first for inverted FlatList)
+  // Merge live messages and onboarding history (rendered newest-first for inverted FlatList with ID deduplication)
   const mergedMessages = useMemo(() => {
     const liveNewestFirst = [...messages].reverse();
     const onboardingNewestFirst = [...onboardingMessages].reverse();
-    return [...liveNewestFirst, ...onboardingNewestFirst];
-  }, [messages, onboardingMessages]);
+    const combined = [...liveNewestFirst, ...onboardingNewestFirst];
 
-  const displayMessages = useMemo(() => {
-    const displayArr: any[] = [];
+    const seenIds = new Set<string>();
+    const deduplicated: ChatMessage[] = [];
 
-    for (let i = 0; i < mergedMessages.length; i++) {
-       const item = mergedMessages[i];
-       displayArr.push(item);
-
-       const nextItem = mergedMessages[i + 1];
-       let showDateHeader = false;
-       if (!nextItem) {
-         showDateHeader = true;
-       } else if (item.createdAt && nextItem.createdAt) {
-         const currentDate = formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true);
-         const prevDate = formatUTCDateTime(nextItem.createdAt, "dd-MMM-yyyy", true);
-         if (currentDate !== prevDate) {
-           showDateHeader = true;
-         }
-       }
-
-       if (showDateHeader && item.createdAt) {
-         const label = getRelativeDateLabel(item.createdAt, true);
-         displayArr.push({
-           isDateHeader: true,
-           id: `date-header-${item.id || i}`,
-           dateLabel: label,
-         });
-       }
+    for (const msg of combined) {
+      if (msg && msg.id) {
+        if (seenIds.has(msg.id)) {
+          continue;
+        }
+        seenIds.add(msg.id);
+      }
+      deduplicated.push(msg);
     }
 
-    return displayArr;
-  }, [mergedMessages]);
+    return deduplicated;
+  }, [messages, onboardingMessages]);
+
+  const activePendingMessageId = useMemo(() => {
+    if (isOnboardingCompleted || !pendingStep) return null;
+    const targetMsg = mergedMessages.find((m) => m.role === "ai" && m.action === pendingStep);
+    return targetMsg?.id || null;
+  }, [mergedMessages, pendingStep, isOnboardingCompleted]);
+
+  const dateHeadersMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (let i = 0; i < mergedMessages.length; i++) {
+      const item = mergedMessages[i];
+      const itemDate = parseToLocalDate(item?.createdAt);
+      if (!itemDate || !item?.id) continue;
+
+      let prevItemDate: Date | null = null;
+      for (let j = i + 1; j < mergedMessages.length; j++) {
+        const candidateDate = parseToLocalDate(mergedMessages[j]?.createdAt);
+        if (candidateDate) {
+          prevItemDate = candidateDate;
+          break;
+        }
+      }
+
+      const isDayBoundary =
+        !prevItemDate || getLocalDayKey(itemDate) !== getLocalDayKey(prevItemDate);
+
+      if (isDayBoundary) {
+        map.set(item.id, formatChatDateLabel(itemDate, preferredLang, t));
+      }
+    }
+    return map;
+  }, [mergedMessages, preferredLang, midnightTick]);
 
   const isLatestActiveMessage = (msgId: string) => {
-    return mergedMessages[0]?.id === msgId;
+    return !!activePendingMessageId && activePendingMessageId === msgId;
   };
 
   if (isLoadingDocs || isLoadingHistory) {
@@ -2397,7 +2588,7 @@ const AIChatScreen = ({ route }: any) => {
           ) : (
             <FlatList
               ref={flatListRef}
-              data={displayMessages}
+              data={mergedMessages}
               keyExtractor={(item: any, index: number) =>
                 item.id || String(index)
               }
@@ -2405,13 +2596,13 @@ const AIChatScreen = ({ route }: any) => {
               onViewableItemsChanged={onViewableItemsChanged.current}
               viewabilityConfig={viewabilityConfig.current}
               renderItem={({ item }) => {
-                if (item.isDateHeader) {
-                  return (
-                    <ChatDateHeader dateLabel={item.dateLabel} isDark={isDark} />
-                  );
-                }
+                const dateLabel = item?.id ? dateHeadersMap.get(item.id) : null;
+                const dateHeader = dateLabel ? (
+                  <ChatDateHeader dateLabel={dateLabel} isDark={isDark} />
+                ) : null;
 
-                const isHistorical = item.sessionId === onboardingSessionId;
+                const isPendingStep = !!activePendingMessageId && item.id === activePendingMessageId;
+                const isHistorical = !isPendingStep;
                 const { chosenVal, chosenLabel } = isHistorical
                   ? findHistoricalUserReply(mergedMessages, item.id, true)
                   : { chosenVal: null, chosenLabel: null };
@@ -2455,7 +2646,7 @@ const AIChatScreen = ({ route }: any) => {
                   const hasText = item.text && item.text.trim().length > 0;
                   return (
                     <View style={{ width: "100%" }}>
-
+                      {dateHeader}
                       {hasText && (
                         <MessageBubble
                           message={item}
@@ -2982,6 +3173,7 @@ const AIChatScreen = ({ route }: any) => {
                 if (isHistorical && isChipStep) {
                   return (
                     <View style={{ width: "100%" }}>
+                      {dateHeader}
                       <MessageBubble
                         message={item}
                         isDark={isDark}
@@ -3006,6 +3198,7 @@ const AIChatScreen = ({ route }: any) => {
 
                 return (
                   <View style={{ width: "100%" }}>
+                    {dateHeader}
                     <MessageBubble
                       message={item}
                       isDark={isDark}

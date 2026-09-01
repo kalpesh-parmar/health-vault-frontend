@@ -167,10 +167,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       </View>
     ) : null;
 
-  const isHistorical = item.sessionId === onboardingSessionId;
-  const { chosenVal, chosenLabel } = isHistorical
-    ? findHistoricalUserReply(mergedMessages, item.id, true)
-    : { chosenVal: null, chosenLabel: null };
+  const { chosenVal, chosenLabel } = findHistoricalUserReply(mergedMessages, item.id, true);
+  const isAnswered = chosenVal !== null || chosenLabel !== null;
+  const isLatest = isLatestActiveMessage(item.id);
+  const isHistorical = (item.sessionId === onboardingSessionId && isAnswered) || !isLatest;
 
   const isComplexStep =
     item.action === "RESOLVE_PROFILE_SOURCE" ||
@@ -234,7 +234,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           theme={theme}
           sendMessage={() => {}}
           state={{}}
-          isHistorical={true}
+          isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
@@ -250,7 +250,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           setState={() => {}}
           sendMessage={() => {}}
           handleDocumentUpload={() => {}}
-          isHistorical={true}
+          isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
@@ -260,7 +260,6 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       item.action === "ADD_MEDICINE" ||
       item.action === "EDIT_MEDICINE"
     ) {
-      const isLatest = isLatestActiveMessage(item.id);
       const med = item.medicine || {};
       return renderAssistantPrompt(
         <AddMedicineCard
@@ -279,14 +278,13 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
               actionType: "ADD_MEDICINE",
             });
           }}
-          readOnly={!isLatest}
+          readOnly={isHistorical || !isLatest}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
       );
     }
     if (item.action === "REVIEW_MEDICINES_LIST") {
-      const isLatest = isLatestActiveMessage(item.id);
       const isReadOnly = isHistorical || !isLatest;
 
       const handleConfirm = (checkedMeds: string[]) => {
@@ -348,7 +346,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           theme={theme}
           onConfirm={() => {}}
           onEdit={() => {}}
-          readOnly={true}
+          readOnly={isHistorical || !isLatest}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
@@ -360,8 +358,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           optionsList={item.options || []}
           isDark={isDark}
           theme={theme}
-          onOptionPress={() => {}}
-          readOnly={true}
+          onOptionPress={(opt) => handleGenericOptionPress(opt)}
+          readOnly={isHistorical || !isLatest}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
