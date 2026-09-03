@@ -652,14 +652,12 @@ const LoginScreen = () => {
                   loading={isGoogleLoading}
                   disabled={loading}
                 />
-                {Platform.OS === "ios" && (
-                  <SocialAuthButton
-                    provider="apple"
-                    label="Continue with Apple"
-                    onPress={handleAppleSignIn}
-                    disabled={loading}
-                  />
-                )}
+                <SocialAuthButton
+                  provider="apple"
+                  label="Continue with Apple"
+                  onPress={handleAppleSignIn}
+                  disabled={loading || Platform.OS === "android"}
+                />
                 <SocialAuthButton
                   provider="facebook"
                   label="Continue with Facebook"

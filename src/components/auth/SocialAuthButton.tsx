@@ -82,6 +82,7 @@ const ButtonContainer = styled.TouchableOpacity<{ themeColor: any }>`
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.05);
   elevation: 2;
   min-height: 52px;
+  opacity: ${(props) => (props.disabled ? 0.5 : 1)};
 `;
 
 const IconWrapper = styled.View`
