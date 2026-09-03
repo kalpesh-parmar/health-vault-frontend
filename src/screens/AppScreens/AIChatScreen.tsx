@@ -3425,7 +3425,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 8,
-    paddingTop: 10,
+    paddingTop: 0,
     paddingBottom: 16,
   },
   optionsWrapper: {

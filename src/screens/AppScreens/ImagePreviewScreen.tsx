@@ -30,6 +30,7 @@ const ImagePreviewScreen = ({ route }: Props) => {
 
       navigation.navigate("SaveDocument", {
         images,
+        fileName: route.params.fileName,
         aiSummary: "response-summary",
       });
     } catch (err) {
