@@ -175,11 +175,14 @@ export const useDocumentMedia = () => {
         }
       }
 
+      const fileNameWithoutExt = images.fileName ? images.fileName.replace(/\.[^/.]+$/, "") : "Document";
+
       setPreviewSource("gallery");
       setSelectedImages(images.uri);
       if (from !== "Register" && from !== "Profile" && from !== "Document") {
         navigation.navigate("ImagePreview", {
           images: images.uri,
+          fileName: fileNameWithoutExt,
         });
       }
     } finally {

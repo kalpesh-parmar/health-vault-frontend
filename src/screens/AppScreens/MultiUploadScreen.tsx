@@ -38,6 +38,8 @@ export const MultiUploadScreen = () => {
     initialFiles.map((file: any) => ({
       ...file,
       originalName: file.originalName || file.name,
+      name: file.name || file.originalName || "document",
+      type: file.type || file.mimeType || "application/octet-stream",
     }))
   );
 
@@ -47,6 +49,8 @@ export const MultiUploadScreen = () => {
         initialFiles.map((file: any) => ({
           ...file,
           originalName: file.originalName || file.name,
+          name: file.name || file.originalName || "document",
+          type: file.type || file.mimeType || "application/octet-stream",
         }))
       );
     }

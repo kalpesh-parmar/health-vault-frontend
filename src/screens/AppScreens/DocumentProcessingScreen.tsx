@@ -328,14 +328,41 @@ export const DocumentProcessingScreen = () => {
           })}
 
           {isAllTerminal && (
-            <DoneBanner>
-              <Ionicons name="checkmark-done-circle" size={32} color="#10b981" />
-              <DoneTitle>All Tasks Finished</DoneTitle>
-              <DoneSubtitle>Your medical document library has been updated.</DoneSubtitle>
-              <DoneButton onPress={() => navigation.navigate("DocumentStack" as any)}>
-                <DoneButtonText>Go to My Documents</DoneButtonText>
-              </DoneButton>
-            </DoneBanner>
+            completedCount === 0 && failedCount > 0 ? (
+              <DoneBanner style={{ backgroundColor: "#fef2f2", borderColor: "#fca5a5" }}>
+                <Ionicons name="alert-circle" size={32} color="#ef4444" />
+                <DoneTitle style={{ color: "#b91c1c" }}>Processing Failed</DoneTitle>
+                <DoneSubtitle style={{ color: "#991b1b" }}>
+                  We encountered an error processing your documents. Please check your connection and try again.
+                </DoneSubtitle>
+                {jobList.some(job => job.status === "FAILED" && !isNonMedicalError(job.error)) && (
+                  <DoneButton 
+                    style={{ backgroundColor: "#ef4444" }}
+                    onPress={() => {
+                      jobList.forEach(job => {
+                        if (job.status === "FAILED" && !isNonMedicalError(job.error)) {
+                          const matchedFile = filesInfo.find((f) => f.jobId === job.jobId);
+                          const fileKey = matchedFile?.fileKey || job.jobId;
+                          retryDocument(fileKey);
+                        }
+                      });
+                    }}
+                  >
+                    <Ionicons name="refresh" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+                    <DoneButtonText>Retry Failed Documents</DoneButtonText>
+                  </DoneButton>
+                )}
+              </DoneBanner>
+            ) : (
+              <DoneBanner>
+                <Ionicons name="checkmark-done-circle" size={32} color="#10b981" />
+                <DoneTitle>All Tasks Finished</DoneTitle>
+                <DoneSubtitle>Your medical document library has been updated.</DoneSubtitle>
+                <DoneButton onPress={() => navigation.navigate("DocumentStack" as any)}>
+                  <DoneButtonText>Go to My Documents</DoneButtonText>
+                </DoneButton>
+              </DoneBanner>
+            )
           )}
 
           {!isAllTerminal && (
