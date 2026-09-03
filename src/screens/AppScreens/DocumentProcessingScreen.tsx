@@ -46,18 +46,32 @@ export const DocumentProcessingScreen = () => {
   const isFocused = useIsFocused();
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
+  const normalizedJobIds = useMemo(
+    () => (jobIds.length > 0 ? jobIds : filesInfo.map((file) => file.jobId)).filter(Boolean),
+    [jobIds, filesInfo],
+  );
+  const normalizedFilesInfo = useMemo(
+    () =>
+      filesInfo.map((file) => ({
+        ...file,
+        jobId: file.jobId || file.fileKey,
+        fileKey: file.fileKey || file.jobId,
+        fileName: (file.fileName || "Document").replace(/%20/g, " "),
+      })),
+    [filesInfo],
+  );
   const [hasMovedToBackground, setHasMovedToBackground] = useState(false);
 
   useEffect(() => {
-    if (jobIds && jobIds.length > 0 && uploadingDocs && uploadingDocs.length > 0) {
-      const alreadyInBackground = jobIds.some((id) =>
-        uploadingDocs.some((d) => d.id === id)
+    if (normalizedJobIds.length > 0 && uploadingDocs && uploadingDocs.length > 0) {
+      const alreadyInBackground = normalizedJobIds.some((id) =>
+        uploadingDocs.some((d) => (d.jobId || d.id || d.fileKey) === id)
       );
       if (alreadyInBackground) {
         setHasMovedToBackground(true);
       }
     }
-  }, [jobIds, uploadingDocs]);
+  }, [normalizedJobIds, uploadingDocs]);
 
   const {
     jobList,
@@ -67,11 +81,11 @@ export const DocumentProcessingScreen = () => {
     failedCount,
     queuedCount,
     runningCount,
-  } = useOcrJobPolling(jobIds);
+  } = useOcrJobPolling(normalizedJobIds);
 
   const handleBackAction = () => {
     if (!isAllTerminal) {
-      startBackgroundOcr(jobIds, filesInfo);
+      startBackgroundOcr(normalizedJobIds, normalizedFilesInfo);
     }
     if (fromScreen && fromScreen !== "MultiUpload") {
       navigation.navigate(fromScreen as any);
@@ -85,7 +99,7 @@ export const DocumentProcessingScreen = () => {
 
   const handleMoveToBackground = () => {
     if (!isAllTerminal) {
-      startBackgroundOcr(jobIds, filesInfo);
+      startBackgroundOcr(normalizedJobIds, normalizedFilesInfo);
       setHasMovedToBackground(true);
     }
   };
@@ -116,7 +130,7 @@ export const DocumentProcessingScreen = () => {
     );
 
     return () => subscription.remove();
-  }, [isFocused, fromScreen, navigation, jobIds, filesInfo]);
+  }, [isFocused, fromScreen, navigation, normalizedJobIds, normalizedFilesInfo, handleBackAction]);
 
   const [selectedResult, setSelectedResult] = useState<{
     fileName: string;
@@ -135,12 +149,15 @@ export const DocumentProcessingScreen = () => {
   }, [isAllTerminal, userId]);
 
   const filesMap = useMemo(() => {
-    const map: Record<string, { fileName: string; fileKey: string }> = {};
-    filesInfo.forEach((f) => {
+    const map: Record<string, { fileName: string; fileKey: string; jobId: string }> = {};
+    normalizedFilesInfo.forEach((f) => {
       map[f.jobId] = f;
+      if (f.fileKey) {
+        map[f.fileKey] = f;
+      }
     });
     return map;
-  }, [filesInfo]);
+  }, [normalizedFilesInfo]);
 
   const handleCardPress = async (job: JobState) => {
     if (job.status !== "COMPLETED") return;

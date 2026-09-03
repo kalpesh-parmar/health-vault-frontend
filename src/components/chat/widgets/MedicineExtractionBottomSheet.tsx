@@ -396,7 +396,10 @@ export const MedicineExtractionBottomSheet = forwardRef<
     return renderProcessingStep();
   };
 
-  const hasContent = chatWizardState.step !== "idle" || isUploading;
+  const hasContent =
+    chatWizardState.step !== "idle" ||
+    (isUploading && uploadingDocs.length > 0) ||
+    chatWizardState.jobIds.length > 0;
 
   return (
     <BottomSheet

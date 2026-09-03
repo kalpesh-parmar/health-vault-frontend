@@ -160,7 +160,8 @@ export interface RetryDocumentResponse {
 export const retryDocumentProcessing = async (
   payload: RetryDocumentPayload,
 ): Promise<ApiResponse<RetryDocumentResponse>> => {
-  let endpoint = `${DOCUMENT_ENDPOINTS.RETRY_DOCUMENT}?fileKey=${encodeURIComponent(payload.fileKey)}`;
+  const cleanFileKey = payload.fileKey.replace(/['"]+/g, '');
+  let endpoint = `${DOCUMENT_ENDPOINTS.RETRY_DOCUMENT}?fileKey=${encodeURIComponent(cleanFileKey)}`;
   if (payload.batchId) {
     endpoint += `&batchId=${encodeURIComponent(payload.batchId)}`;
   }

@@ -421,9 +421,19 @@ const HomeScreen = () => {
               </View>
               <TouchableOpacity
                 onPress={() => {
+                  const processingDocs = uploadingDocs.map((doc) => {
+                    const jobId = doc.jobId || doc.id;
+                    const fileKey = doc.fileKey || jobId;
+                    return {
+                      jobId,
+                      fileName: doc.name,
+                      fileKey,
+                    };
+                  });
+
                   navigation.navigate("DocumentProcessing", {
-                    jobIds: uploadingDocs.map(d => d.id),
-                    filesInfo: uploadingDocs.map(d => ({ jobId: d.id, fileName: d.name, fileKey: "" })),
+                    jobIds: processingDocs.map((doc) => doc.jobId),
+                    filesInfo: processingDocs,
                   });
                 }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

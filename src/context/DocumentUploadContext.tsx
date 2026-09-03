@@ -142,31 +142,45 @@ const getFileNameWithExtension = (displayName: string, originalName: string) => 
 };
 
 const normalizeStatus = (event: any) => {
-  const stage = String(event?.stage || event?.stageStatus || event?.status || event?.type || "").toUpperCase();
+  const type = String(event?.type || "").toUpperCase();
+  const stageStatus = String(event?.stageStatus || "").toUpperCase();
+  const stage = String(event?.stage || "").toUpperCase();
+  const status = String(event?.status || "").toUpperCase();
 
-  if (
-    stage.includes("FAILED") ||
-    stage.includes("ERROR") ||
-    stage.includes("REJECTED") ||
-    stage.includes("CANCELLED")
-  ) {
-    return "FAILED";
+  const stateIndicators = [type, stageStatus, stage, status].filter(Boolean);
+
+  for (const indicator of stateIndicators) {
+    if (
+      indicator.includes("FAILED") ||
+      indicator.includes("ERROR") ||
+      indicator.includes("REJECTED") ||
+      indicator.includes("CANCELLED")
+    ) {
+      return "FAILED";
+    }
   }
 
-  if (
-    stage.includes("COMPLETED") ||
-    stage.includes("DONE") ||
-    stage === "SUCCESS"
-  ) {
-    return "COMPLETED";
+  for (const indicator of [type, stageStatus, stage]) {
+    if (
+      indicator.includes("COMPLETED") ||
+      indicator.includes("DONE")
+    ) {
+      return "COMPLETED";
+    }
+  }
+  
+  // Fallback for old status=SUCCESS without other specific stages
+  if (!stage && !stageStatus && !type && status === "SUCCESS") {
+     return "COMPLETED";
   }
 
-  if (stage.includes("UPLOAD")) {
-    return "UPLOADING";
-  }
-
-  if (stage.includes("QUEUE") || stage.includes("PENDING")) {
-    return "QUEUED";
+  for (const indicator of stateIndicators) {
+    if (indicator.includes("UPLOAD")) {
+      return "UPLOADING";
+    }
+    if (indicator.includes("QUEUE") || indicator.includes("PENDING")) {
+      return "QUEUED";
+    }
   }
 
   return "RUNNING";
@@ -184,6 +198,27 @@ const extractEventProgress = (event: any) => {
       : Math.round(event.data.progress);
   }
   return undefined;
+};
+
+const getMonotonicProgress = (
+  currentProgress: number,
+  status: string,
+  nextProgress: number,
+): number => {
+  if (status === "FAILED") return -1;
+  if (status === "COMPLETED") return 100;
+
+  if (!Number.isFinite(nextProgress)) {
+    return currentProgress;
+  }
+
+  const clampedNext = Math.min(99, Math.max(0, nextProgress));
+
+  if (currentProgress >= 15 && clampedNext <= 5) {
+    return currentProgress;
+  }
+
+  return Math.max(currentProgress, clampedNext);
 };
 
 const extractBatchDocumentEvents = (event: any): any[] => {
@@ -358,34 +393,22 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             setUploadingDocs((prev) =>
               prev.map((doc) => {
                 if (doc.fileKey === fileKey || doc.id === fileKey) {
-                  const isCompleted =
-                    event.type === "document.completed" ||
-                    event.stage === "COMPLETED" ||
-                    event.stageStatus === "COMPLETED" ||
-                    (event.status === "SUCCESS" && (event.percentage === 100 || event.progress === 100));
-
-                  const isFailed =
-                    event.type === "document.failed" ||
-                    event.stage === "FAILED" ||
-                    event.stageStatus === "FAILED" ||
-                    event.status === "FAILED";
-
-                  const status = isCompleted ? "COMPLETED" : isFailed ? "FAILED" : "RUNNING";
-                  const pct = isCompleted
-                    ? 100
-                    : typeof event.percentage === "number"
-                      ? event.percentage
-                      : typeof event.progress === "number"
-                        ? event.progress
-                        : mapStatusToProgress(event);
-
-                  const stage = event.stage || doc.stage;
-                  const currentStep = event.message || stage || doc.currentStep;
-                  const reason = isFailed ? (event.message || event.error || "Processing failed") : null;
-                  const errorCode = event.errorCode || doc.errorCode;
-                  const retryable = isFailed && errorCode !== "NON_MEDICAL_DOCUMENT";
-                  const skippedPages = event.extra?.skippedPages || doc.skippedPages;
-
+                  const status = normalizeStatus(event);
+                  const nextProgress = extractEventProgress(event) ?? mapStatusToProgress(event);
+                  const pct = getMonotonicProgress(doc.progress, status, nextProgress);
+                  const stage = event.stage || event.stageStatus || event.status || doc.stage;
+                  const currentStep = event.message || event.data?.message || stage || doc.currentStep;
+                  const errorCode = event.errorCode || event.data?.errorCode || doc.errorCode;
+                  const reason =
+                    status === "FAILED"
+                      ? event.message ||
+                        event.error ||
+                        event.data?.message ||
+                        (errorCode === "NON_MEDICAL_DOCUMENT"
+                          ? "Non-medical document rejected"
+                          : "Processing failed")
+                      : null;
+                  
                   return {
                     ...doc,
                     progress: pct,
@@ -395,8 +418,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                     currentStep,
                     reason,
                     errorCode,
-                    retryable,
-                    skippedPages,
+                    retryable: status === "FAILED" && errorCode !== "NON_MEDICAL_DOCUMENT",
+                    skippedPages: event.extra?.skippedPages || event.data?.extra?.skippedPages || doc.skippedPages,
                   };
                 }
                 return doc;
@@ -408,7 +431,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
             queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
 
-            if (event.stage === "COMPLETED" || event.stageStatus === "COMPLETED" || event.type === "document.completed" || event.status === "SUCCESS") {
+            if (normalizeStatus(event) === "COMPLETED") {
               Toast.show({
                 type: "success",
                 text1: "Document Processed",
@@ -444,8 +467,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       const initialUploading: UploadingDoc[] = selectedFiles.map((file) => ({
         id: file.id,
         name: file.displayName || file.originalName,
-        progress: 5,
-        percentage: 5,
+        progress: 0,
+        percentage: 0,
         status: "UPLOADING",
         stage: "UPLOADING",
         currentStep: "Uploading files...",
@@ -489,8 +512,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           fileKey: doc.fileKey,
           jobId: doc.jobId || doc.fileKey,
           name: doc.fileName || "Document",
-          progress: 15,
-          percentage: 15,
+          progress: 0,
+          percentage: 0,
           status: doc.status || "QUEUED",
           stage: doc.status || "QUEUED",
           currentStep: "Queued for processing",
@@ -629,17 +652,20 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           }
         };
 
+        const endpointUrl = lastBatchEventIdRef.current 
+          ? `${batchUrl}?lastEventId=${lastBatchEventIdRef.current}`
+          : batchUrl;
+
         activeSseUnsubRef.current = connectSseStream({
-          endpoint: batchUrl,
-          method: "POST",
-          body: {
-            batchId,
-            "Last-Event-ID": lastBatchEventIdRef.current,
-            lastEventId: lastBatchEventIdRef.current,
-          },
+          endpoint: endpointUrl,
+          method: "GET",
+          headers: lastBatchEventIdRef.current 
+            ? { "Last-Event-ID": lastBatchEventIdRef.current } 
+            : undefined,
           onEvent: (event: SseEventPayload) => {
-            if (event.id) {
-              lastBatchEventIdRef.current = event.id;
+            const currentEventId = event.id || event.eventId;
+            if (currentEventId) {
+              lastBatchEventIdRef.current = String(currentEventId);
             }
 
             setUploadingDocs((prev) => {
@@ -672,10 +698,9 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   }
 
                   const status = normalizeStatus(matchedEvent);
-                  const pct =
-                    status === "COMPLETED"
-                      ? 100
-                      : extractEventProgress(matchedEvent) ?? mapStatusToProgress(matchedEvent);
+                  const rawPct =
+                    extractEventProgress(matchedEvent) ?? mapStatusToProgress(matchedEvent);
+                  const pct = getMonotonicProgress(doc.progress, status, rawPct);
                   const stage = matchedEvent.stage || matchedEvent.stageStatus || matchedEvent.status || doc.stage;
                   const currentStep = matchedEvent.message || matchedEvent.data?.message || stage || doc.currentStep;
                   const errorCode = matchedEvent.errorCode || matchedEvent.data?.errorCode || doc.errorCode;
@@ -710,10 +735,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   }
 
                   const status = normalizeStatus(event);
-                  const pct =
-                    status === "COMPLETED"
-                      ? 100
-                      : extractEventProgress(event) ?? mapStatusToProgress(event);
+                  const rawPct = extractEventProgress(event) ?? mapStatusToProgress(event);
+                  const pct = getMonotonicProgress(doc.progress, status, rawPct);
                   const stage = event.stage || event.stageStatus || event.status || doc.stage;
                   const currentStep = event.message || stage || doc.currentStep;
                   const errorCode = event.errorCode || doc.errorCode;
@@ -781,8 +804,9 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             });
           },
           onTerminal: (event: SseEventPayload) => {
-            if (event.id) {
-              lastBatchEventIdRef.current = event.id;
+            const currentEventId = event.id || event.eventId;
+            if (currentEventId) {
+              lastBatchEventIdRef.current = String(currentEventId);
             }
 
             setUploadingDocs((currentDocs) => {
@@ -864,7 +888,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         fileKey: file?.fileKey || jobId,
         jobId,
         name: finalBackgroundName,
-        progress: 15,
+        progress: 0,
         status: "QUEUED",
         reason: null,
       };
