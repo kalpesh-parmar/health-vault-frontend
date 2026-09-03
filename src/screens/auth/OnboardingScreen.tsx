@@ -73,6 +73,9 @@ import { I18N_ONBOARDING_UI as ONBOARDING_I18N } from "../../components/chat/wid
 import { AskUploadOrSkipCard } from "../../components/chat/widgets/AskUploadOrSkipCard";
 import { findHistoricalUserReply } from "../../components/chat/widgets/HistoricalChips";
 import { DocumentProcessingModal } from "../../components/chat/widgets/DocumentProcessingModal";
+import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
+import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal";
+import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
 
 type Message = {
@@ -94,6 +97,9 @@ type Message = {
   medicine?: any;
   medicines?: any[];
   summary?: any;
+  document?: any;
+  suggestedQuestions?: string[];
+  keyFindings?: any[];
   documentIds?: string[];
   createdAt?: string | Date;
 };
@@ -226,6 +232,8 @@ export default function OnboardingScreen() {
   );
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [versionToken, setVersionToken] = useState<string | null>(null);
+  const [viewerDoc, setViewerDoc] = useState<any | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
 
   // Safe reference mapping to avoid stale hook variables inside async polling loops
   const isOfflineRef = useRef(false);
@@ -460,8 +468,8 @@ export default function OnboardingScreen() {
           setCanSkip(
             Boolean(
               historyCanSkip ??
-                resumableState?.canSkip ??
-                response.data?.data?.canSkip,
+              resumableState?.canSkip ??
+              response.data?.data?.canSkip,
             ),
           );
 
@@ -476,13 +484,23 @@ export default function OnboardingScreen() {
               "historical messages.",
             );
             const mappedMessages: Message[] = historyItems.map(
-              (dbMsg: any) => ({
-                ...(dbMsg.metadata || {}),
-                id: dbMsg.id,
-                role: dbMsg.role,
-                content: dbMsg.content,
-                createdAt: dbMsg.createdAt,
-              }),
+              (dbMsg: any) => {
+                let meta = dbMsg.metadata;
+                if (typeof meta === "string") {
+                  try {
+                    meta = JSON.parse(meta);
+                  } catch (e) {
+                    meta = {};
+                  }
+                }
+                return {
+                  ...(meta || {}),
+                  id: dbMsg.id,
+                  role: dbMsg.role,
+                  content: dbMsg.content,
+                  createdAt: dbMsg.createdAt,
+                };
+              },
             );
 
             setMessages(mappedMessages);
@@ -550,20 +568,20 @@ export default function OnboardingScreen() {
     const action = aiRes.actionType || aiRes.action;
     const resolvedOnboardingCompleted = Boolean(
       aiRes.onboardingState?.isOnboardingCompleted ??
-        aiRes.state?.isOnboardingCompleted ??
-        aiRes.isOnboardingCompleted,
+      aiRes.state?.isOnboardingCompleted ??
+      aiRes.isOnboardingCompleted,
     );
     const resolvedCanSkip = Boolean(
       aiRes.canSkip ??
-        aiRes.onboardingState?.canSkip ??
-        aiRes.state?.canSkip ??
-        aiRes.resumableState?.canSkip,
+      aiRes.onboardingState?.canSkip ??
+      aiRes.state?.canSkip ??
+      aiRes.resumableState?.canSkip,
     );
 
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
-      content: messageContent || "Please provide the information.",
+      content: action === "ASK_REPORT" ? "" : (messageContent || "Please provide the information."),
       action,
       options: aiRes.options,
       fields: aiRes.fields,
@@ -578,7 +596,11 @@ export default function OnboardingScreen() {
       medicine: aiRes.medicine,
       medicines: aiRes.medicines,
       summary: aiRes.summary,
+      document: aiRes.document,
+      suggestedQuestions: aiRes.suggestedQuestions,
+      keyFindings: aiRes.document?.keyFindings || aiRes.keyFindings,
       documentIds: normalizeDocumentIds(
+        aiRes.document?.id,
         aiRes.documentId,
         aiRes.documentIds,
         aiRes.documents,
@@ -586,13 +608,23 @@ export default function OnboardingScreen() {
       createdAt: aiRes.createdAt || new Date().toISOString(),
     };
 
+    const completionMsg: Message | null = aiRes.completionMessage
+      ? {
+        id: `ai-comp-${Date.now()}`,
+        role: "assistant",
+        content: aiRes.completionMessage,
+        createdAt: aiRes.createdAt || new Date().toISOString(),
+      }
+      : null;
+
     if (action === "RESOLVE_PROFILE_SOURCE") {
       setMessages((prev) => {
-        const existingIndex = prev.findIndex(
+        const list = completionMsg ? [...prev, completionMsg] : [...prev];
+        const existingIndex = list.findIndex(
           (m) => m.action === "RESOLVE_PROFILE_SOURCE",
         );
         if (existingIndex !== -1) {
-          const updated = [...prev];
+          const updated = [...list];
           const existingMsg = updated[existingIndex];
           updated[existingIndex] = {
             ...existingMsg,
@@ -611,10 +643,12 @@ export default function OnboardingScreen() {
           };
           return updated;
         }
-        return [...prev, newMsg];
+        return [...list, newMsg];
       });
     } else {
-      setMessages((prev) => [...prev, newMsg]);
+      setMessages((prev) =>
+        completionMsg ? [...prev, completionMsg, newMsg] : [...prev, newMsg],
+      );
     }
 
     let updatedUserData = { ...currentState.existingUserData };
@@ -691,7 +725,7 @@ export default function OnboardingScreen() {
     );
     setState(finalState);
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
-    setCanSkip(resolvedCanSkip);
+    setCanSkip((prev) => prev || resolvedCanSkip);
 
     if (finalState.documentExtracted) {
       setUploadProgress(null);
@@ -750,6 +784,7 @@ export default function OnboardingScreen() {
         documentId: normalizeDocumentIds(
           updatedState?.documentId,
           latestAssistantMessage?.documentIds,
+          latestAssistantMessage?.document?.id,
         ),
         stream: false,
       };
@@ -765,14 +800,18 @@ export default function OnboardingScreen() {
         const action = resData.actionType || resData.action;
         const responseOnboardingCompleted = Boolean(
           resData.onboardingState?.isOnboardingCompleted ??
-            resData.state?.isOnboardingCompleted ??
-            resData.isOnboardingCompleted,
+          resData.state?.isOnboardingCompleted ??
+          resData.isOnboardingCompleted,
         );
 
         if (
-          action === "COMPLETE" ||
-          action === "POST_ONBOARDING" ||
-          responseOnboardingCompleted
+          action !== "ASK_REPORT" &&
+          action !== "NORMAL_CHAT" &&
+          (action === "COMPLETE" ||
+            action === "POST_ONBOARDING" ||
+            (responseOnboardingCompleted &&
+              action !== "ASK_REPORT" &&
+              action !== "NORMAL_CHAT"))
         ) {
           queryClient.invalidateQueries({ queryKey: ["profile"] });
           queryClient.invalidateQueries({ queryKey: ["userProfile"] });
@@ -860,15 +899,18 @@ export default function OnboardingScreen() {
       }
 
       const skipCompleted = Boolean(
-        res?.data?.data?.onboardingState?.isOnboardingCompleted ??
-          res?.data?.data?.state?.isOnboardingCompleted ??
-          res?.data?.data?.isOnboardingCompleted ??
-          res?.data?.isOnboardingCompleted,
+        res?.data?.data?.actionType === "SKIP_ONBOARDING" ||
+        res?.data?.data?.onboardingState?.hasSkipped ||
+        res?.data?.data?.onboardingState?.isOnboardingCompleted ||
+        res?.data?.data?.state?.isOnboardingCompleted ||
+        res?.data?.data?.isOnboardingCompleted ||
+        res?.data?.isOnboardingCompleted ||
+        true,
       );
 
-      setIsOnboardingCompleted(skipCompleted);
+      setIsOnboardingCompleted(true);
 
-      // Update profile cache after successful server response
+      // Update profile and userProfile caches only after successful server confirmation
       queryClient.setQueryData(["profile"], (old: any) => {
         if (!old) return old;
         return {
@@ -891,8 +933,23 @@ export default function OnboardingScreen() {
         };
       });
 
+      queryClient.setQueryData(["userProfile"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          onboardingCompleted: true,
+        };
+      });
+
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+
+      if (navigation?.isReady) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "CustomDrawerNavigator" }],
+        });
+      }
     } catch (error: any) {
       console.error("[Onboarding] Skip failed:", error);
       Toast.show({
@@ -1432,12 +1489,7 @@ export default function OnboardingScreen() {
           });
         }, 500);
       } else if (value === "ASK_ABOUT_REPORT" || value === "ASK_REPORT") {
-        sendMessage(value, state, label);
-        setTimeout(() => {
-          navigation.navigate("HOME", {
-            screen: "AIChatScreen",
-          });
-        }, 500);
+        sendMessage("ASK_REPORT", state, label);
       } else if (value === "LOGOUT") {
         logout();
       } else {
@@ -1472,10 +1524,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(opt.value).toLowerCase() ===
-                  String(chosenVal).toLowerCase()) ||
+                String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(opt.label).toLowerCase() ===
-                    String(chosenLabel).toLowerCase()));
+                  String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1553,10 +1605,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(opt.value).toLowerCase() ===
-                  String(chosenVal).toLowerCase()) ||
+                String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(label).toLowerCase() ===
-                    String(chosenLabel).toLowerCase()));
+                  String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -1691,14 +1743,14 @@ export default function OnboardingScreen() {
           const updatedMeds = localMedicines.map((m) =>
             (m.client_med_id || m.id) === (med.client_med_id || med.id)
               ? {
-                  ...m,
-                  ...updatedMed,
-                  subtitle:
-                    updatedMed.type === "TABLET" ||
+                ...m,
+                ...updatedMed,
+                subtitle:
+                  updatedMed.type === "TABLET" ||
                     updatedMed.type === "CAPSULE"
-                      ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
-                      : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
-                }
+                    ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
+                    : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
+              }
               : m,
           );
           setLocalMedicines(updatedMeds);
@@ -1768,11 +1820,11 @@ export default function OnboardingScreen() {
           onCancel={
             isEditingLocal
               ? () => {
-                  setActiveMedicineToEdit(null);
-                  setMessages((prev) =>
-                    prev.filter((m) => m.id !== activeMsg.id),
-                  );
-                }
+                setActiveMedicineToEdit(null);
+                setMessages((prev) =>
+                  prev.filter((m) => m.id !== activeMsg.id),
+                );
+              }
               : undefined
           }
           readOnly={isHistorical}
@@ -1788,14 +1840,14 @@ export default function OnboardingScreen() {
           prev.map((msg) =>
             msg.id === activeMsg.id
               ? {
-                  ...msg,
-                  medicines: (msg.medicines || localMedicines || []).map(
-                    (m) => ({
-                      ...m,
-                      selected: checkedMeds.includes(m.id),
-                    }),
-                  ),
-                }
+                ...msg,
+                medicines: (msg.medicines || localMedicines || []).map(
+                  (m) => ({
+                    ...m,
+                    selected: checkedMeds.includes(m.id),
+                  }),
+                ),
+              }
               : msg,
           ),
         );
@@ -1937,6 +1989,30 @@ export default function OnboardingScreen() {
       );
     }
 
+    if (activeMsg.action === "ASK_REPORT") {
+      const doc = activeMsg.document || {};
+      const questions =
+        activeMsg.suggestedQuestions && activeMsg.suggestedQuestions.length > 0
+          ? activeMsg.suggestedQuestions
+          : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+      return (
+        <ReportSummaryChatCard
+          document={doc}
+          suggestedQuestions={questions}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          onQuestionPress={(q) => sendMessage(q, state, q)}
+          onViewFullReport={() => {
+            setViewerDoc(doc);
+            setIsViewerOpen(true);
+          }}
+          readOnly={isHistorical}
+        />
+      );
+    }
+
     if (
       activeMsg.action === "COMPLETE" ||
       activeMsg.action === "POST_ONBOARDING"
@@ -1957,10 +2033,10 @@ export default function OnboardingScreen() {
               isHistorical &&
               ((chosenVal &&
                 String(value).toLowerCase() ===
-                  String(chosenVal).toLowerCase()) ||
+                String(chosenVal).toLowerCase()) ||
                 (chosenLabel &&
                   String(label).toLowerCase() ===
-                    String(chosenLabel).toLowerCase()));
+                  String(chosenLabel).toLowerCase()));
             const isUnchosen = isHistorical && !isChosen;
 
             return (
@@ -2163,15 +2239,16 @@ export default function OnboardingScreen() {
                 {
                   paddingBottom:
                     activeAction === "ASK_LANGUAGE" ||
-                    activeAction === "ASK_UPLOAD_OR_SKIP" ||
-                    activeAction === "ASK_GENDER" ||
-                    activeAction === "ASK_DOB" ||
-                    activeAction === "REVIEW_MEDICINES_LIST" ||
-                    activeAction === "ADD_MEDICINE" ||
-                    activeAction === "EDIT_MEDICINE" ||
-                    activeAction === "CONFIRM_MEDICINE" ||
-                    activeAction === "MEDICINE_OPTIONS" ||
-                    activeAction === "POST_ONBOARDING"
+                      activeAction === "ASK_UPLOAD_OR_SKIP" ||
+                      activeAction === "ASK_GENDER" ||
+                      activeAction === "ASK_DOB" ||
+                      activeAction === "REVIEW_MEDICINES_LIST" ||
+                      activeAction === "ADD_MEDICINE" ||
+                      activeAction === "EDIT_MEDICINE" ||
+                      activeAction === "CONFIRM_MEDICINE" ||
+                      activeAction === "MEDICINE_OPTIONS" ||
+                      activeAction === "ASK_REPORT" ||
+                      activeAction === "POST_ONBOARDING"
                       ? Math.max(insets.bottom, 16) + 16
                       : 16,
                 },
@@ -2200,10 +2277,12 @@ export default function OnboardingScreen() {
                 const options = renderOptions(item, isHistorical);
                 const isJson =
                   item.content && item.content.trim().startsWith("{");
+                const hasText =
+                  item.content && item.content.trim().length > 0;
 
                 return (
                   <View style={{ width: "100%" }}>
-                    {!isJson && (
+                    {!isJson && hasText && (
                       <MessageBubble
                         message={{ ...mappedMsg, createdAt: item.createdAt }}
                         isDark={isDark}
@@ -2310,6 +2389,15 @@ export default function OnboardingScreen() {
           isDark={isDark}
           theme={theme}
           preferredLanguage={state.preferredLanguage!}
+        />
+
+        <DocumentViewerModal
+          visible={isViewerOpen}
+          document={viewerDoc}
+          onClose={() => {
+            setIsViewerOpen(false);
+            setViewerDoc(null);
+          }}
         />
       </SafeAreaView>
       <ConfirmationModal

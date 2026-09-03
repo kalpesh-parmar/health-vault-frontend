@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Modal,
   TouchableOpacity,
@@ -12,6 +12,7 @@ import {
   Text,
   Keyboard,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -21,16 +22,19 @@ import Animated, {
 import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { useAppTheme } from "../../context/ThemeContext";
-import { formatUTCDateTime } from "../../utils/dateFormatter";
+import { formatDateOnly, formatUTCDateTime } from "../../utils/dateFormatter";
 import { getFileSource } from "../../services/fileService";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
+import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal";
 import { getFileExtension } from "../../utils/fileUtils";
 import ErrorBoundary from "../../components/shared/ErrorBoundary";
 import { EditDocumentBottomSheet, formatDocumentType } from "../../components/shared/EditDocumentBottomSheet";
 import { ShareDocumentSheet } from "../../components/shared/ShareDocumentSheet";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { getSharedLinks, revokeShareLink, ShareLinkResponse } from "../../services/documentService";
+import { getDocument, getSharedLinks, revokeShareLink, ShareLinkResponse } from "../../services/documentService";
 import {
   Gesture,
   GestureDetector,
@@ -41,9 +45,18 @@ import { StatusBar } from "expo-status-bar";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const SummaryScreen = ({ route, navigation }: any) => {
-  const { document } = route.params;
-  const [localDoc, setLocalDoc] = useState(document);
+  const { document: passedDocument, documentId } = route.params || {};
+  const [localDoc, setLocalDoc] = useState(passedDocument || null);
+  const targetDocId = documentId || passedDocument?.id;
+  const initialHasSource = Boolean(
+    passedDocument?.s3Key || passedDocument?.imageUri || passedDocument?.fileUrl
+  );
+  const [isLoadingDoc, setIsLoadingDoc] = useState(
+    (!passedDocument && !!documentId) || (!!passedDocument && !initialHasSource && !!targetDocId)
+  );
   const [imageSource, setImageSource] = useState<any>(null);
+  const [isLoadingSource, setIsLoadingSource] = useState<boolean>(true);
+  const [isSourceError, setIsSourceError] = useState<boolean>(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [askText, setAskText] = useState("");
@@ -55,6 +68,32 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
   const [sharedLinks, setSharedLinks] = useState<ShareLinkResponse[]>([]);
+
+  useEffect(() => {
+    const targetId = documentId || localDoc?.id;
+    const hasSource = Boolean(
+      localDoc?.s3Key || localDoc?.imageUri || localDoc?.fileUrl
+    );
+
+    if ((!localDoc || !hasSource) && targetId) {
+      setIsLoadingDoc(true);
+      getDocument(targetId)
+        .then((res: any) => {
+          if (res?.data) {
+            setLocalDoc((prev: any) => ({
+              ...(prev || {}),
+              ...res.data,
+            }));
+          }
+        })
+        .catch((err) => {
+          console.warn("Failed to load document by id:", err);
+        })
+        .finally(() => {
+          setIsLoadingDoc(false);
+        });
+    }
+  }, [documentId, localDoc?.id, localDoc?.s3Key, localDoc?.imageUri, localDoc?.fileUrl]);
 
   /*
   useEffect(() => {
@@ -173,28 +212,82 @@ const SummaryScreen = ({ route, navigation }: any) => {
   }));
 
   useEffect(() => {
+    if (!localDoc) return;
+    let isCancelled = false;
     (async () => {
+      setIsLoadingSource(true);
+      setIsSourceError(false);
       try {
         const response = await getFileSource(localDoc?.s3Key);
-        setImageSource(
-          response ||
-            (localDoc.imageUri ? { uri: localDoc.imageUri } : null),
-        );
+        if (!isCancelled) {
+          if (response?.uri) {
+            setImageSource(response);
+          } else if (localDoc.imageUri) {
+            setImageSource({ uri: localDoc.imageUri });
+          } else if (localDoc.fileUrl) {
+            setImageSource({ uri: localDoc.fileUrl });
+          } else {
+            setIsSourceError(true);
+          }
+        }
       } catch (e) {
-        console.log("Failed to load document image URL", e);
+        console.warn("Failed to load document image URL", e);
+        if (!isCancelled) {
+          setIsSourceError(true);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingSource(false);
+        }
       }
     })();
-  }, [localDoc?.s3Key, localDoc?.imageUri]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [localDoc?.s3Key, localDoc?.imageUri, localDoc?.fileUrl]);
 
   const handleShare = async () => {
     if (imageSource?.uri) {
       try {
-        await Share.share({
-          message: `Check out this medical document: ${localDoc?.fileName}\nURL: ${imageSource.uri}`,
-          url: imageSource.uri,
+        const ext = getFileExtension(localDoc?.fileName || "").toLowerCase();
+        const isPdf = ext === "pdf" || localDoc?.fileType === "PDF" || localDoc?.mimeType === "application/pdf";
+        const filename = localDoc?.fileName || (isPdf ? "document.pdf" : "document.jpg");
+        const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const localUri = `${FileSystem.cacheDirectory}share_${Date.now()}_${safeName}`;
+
+        Toast.show({
+          type: "info",
+          text1: "Preparing document...",
+          text2: "Downloading file for secure sharing",
         });
+
+        const downloadRes = await FileSystem.downloadAsync(imageSource.uri, localUri, {
+          headers: imageSource.headers || {},
+        });
+
+        if (downloadRes.status === 200) {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(downloadRes.uri, {
+              mimeType: isPdf ? "application/pdf" : "image/jpeg",
+              dialogTitle: `Share ${filename}`,
+            });
+          } else {
+            await Share.share({
+              message: `Medical Document: ${filename}`,
+              url: downloadRes.uri,
+            });
+          }
+        } else {
+          throw new Error("Failed to download file");
+        }
       } catch (error) {
-        console.log("Error sharing document:", error);
+        console.warn("Error sharing document:", error);
+        Toast.show({
+          type: "error",
+          text1: "Sharing Failed",
+          text2: "Could not prepare file for sharing.",
+        });
       }
     } else {
       Toast.show({
@@ -233,11 +326,11 @@ const SummaryScreen = ({ route, navigation }: any) => {
   };
 
   const formattedDate = localDoc?.createdAt
-    ? formatUTCDateTime(localDoc.createdAt, "dd-MMM-yyyy")
+    ? formatUTCDateTime(localDoc.createdAt, "dd-MMM-yyyy", true)
     : "N/A";
 
   const formattedTime = localDoc?.createdAt
-    ? formatUTCDateTime(localDoc.createdAt, "hh:mm a")
+    ? formatUTCDateTime(localDoc.createdAt, "hh:mm a", true)
     : "N/A";
 
   const formattedSize = localDoc?.fileSize
@@ -408,12 +501,33 @@ const SummaryScreen = ({ route, navigation }: any) => {
               onPress={() => setIsPreviewModalOpen(true)}
             >
               <ThumbnailBox>
-                {imageSource ? (
-                  <Image
-                    source={imageSource}
-                    style={{ width: "100%", height: "100%" }}
-                    resizeMode="cover"
-                  />
+                {isLoadingSource ? (
+                  <View style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#1e293b" : "#f1f5f9" }}>
+                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 6 }}>
+                      Loading preview...
+                    </Text>
+                  </View>
+                ) : imageSource && !isSourceError ? (
+                  getFileExtension(localDoc?.fileName || "").toLowerCase() === "pdf" ||
+                  localDoc?.fileType === "PDF" ||
+                  localDoc?.mimeType === "application/pdf" ? (
+                    <View style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#1e293b" : "#f8fafc", padding: 12 }}>
+                      <MaterialCommunityIcons name="file-pdf-box" size={44} color="#ef4444" />
+                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: theme.colors.textPrimary, marginTop: 4, textAlign: "center" }}>
+                        {localDoc?.fileName}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 }}>
+                        Tap to open interactive PDF viewer
+                      </Text>
+                    </View>
+                  ) : (
+                    <Image
+                      source={imageSource}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="cover"
+                    />
+                  )
                 ) : (
                   <EmptyPreviewBox>
                     <Ionicons
@@ -421,6 +535,9 @@ const SummaryScreen = ({ route, navigation }: any) => {
                       size={24}
                       color="#cbd5e1"
                     />
+                    <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                      Preview unavailable
+                    </Text>
                   </EmptyPreviewBox>
                 )}
               </ThumbnailBox>
@@ -452,7 +569,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                       {link.shareUrl}
                     </LinkText>
                     <ExpiryText isExpired={isExpired}>
-                      {isExpired ? "Expired" : "Expires"}: {formatUTCDateTime(link.expiresAt, "dd-MMM-yyyy hh:mm a")}
+                      {isExpired ? "Expired" : "Expires"}: {formatUTCDateTime(link.expiresAt, "dd-MMM-yyyy hh:mm a", true)}
                     </ExpiryText>
                   </View>
                   <RevokeButton
@@ -542,42 +659,12 @@ const SummaryScreen = ({ route, navigation }: any) => {
         </Card>
       </ScrollView>
 
-      {/* FULL SCREEN ZOOM MODAL */}
-      <Modal
+      <DocumentViewerModal
         visible={isPreviewModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsPreviewModalOpen(false)}
-      >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <ModalBackdrop>
-            <CloseButton onPress={() => setIsPreviewModalOpen(false)}>
-              <Ionicons name="close-circle" size={36} color="white" />
-            </CloseButton>
-
-            <ZoomContainer>
-              <GestureDetector gesture={composedGesture}>
-                {imageSource ? (
-                  <Animated.Image
-                    source={imageSource}
-                    style={[{ width: "100%", height: "100%" }, animatedStyle]}
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <EmptyPreviewBox>
-                    <Ionicons
-                      name="cloud-offline-outline"
-                      size={48}
-                      color="#cbd5e1"
-                    />
-                    <EmptyText>Image preview not available</EmptyText>
-                  </EmptyPreviewBox>
-                )}
-              </GestureDetector>
-            </ZoomContainer>
-          </ModalBackdrop>
-        </GestureHandlerRootView>
-      </Modal>
+        onClose={() => setIsPreviewModalOpen(false)}
+        document={localDoc}
+        title={localDoc?.fileName}
+      />
 
       <EditDocumentBottomSheet
         ref={editSheetRef}

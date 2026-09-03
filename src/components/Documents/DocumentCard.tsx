@@ -140,11 +140,11 @@ const DocumentCard = memo(({ document, onSelect, onEdit, onShare }: Props) => {
   );
 
   const formattedDate = useMemo(() => {
-    return formatUTCDateTime(document.createdAt, "dd-MMM-yyyy");
+    return formatUTCDateTime(document.createdAt, "dd-MMM-yyyy", true);
   }, [document.createdAt]);
 
   const formattedTime = useMemo(() => {
-    return formatUTCDateTime(document.createdAt, "hh:mm a");
+    return formatUTCDateTime(document.createdAt, "hh:mm a", true);
   }, [document.createdAt]);
 
   const metaText = useMemo(() => {

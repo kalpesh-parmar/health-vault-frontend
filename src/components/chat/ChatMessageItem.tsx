@@ -22,6 +22,8 @@ import {
   MedicineDocumentAccordionCard,
 } from "./widgets/ConversationalExtractionWidgets";
 import { I18N_ONBOARDING_UI } from "./widgets/OnboardingI18n";
+import { ReportSummaryChatCard } from "./widgets/ReportSummaryChatCard";
+import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 
 export interface ChatMessage {
   id: string;
@@ -40,6 +42,9 @@ export interface ChatMessage {
   successCount?: number;
   docsCount?: number;
   summary?: any;
+  document?: any;
+  suggestedQuestions?: string[];
+  keyFindings?: any[];
   fields?: any[];
   loginSummary?: string;
   documentSummary?: string;
@@ -85,6 +90,7 @@ interface ChatMessageItemProps {
   handleGenericOptionPress: (option: any) => Promise<void>;
   navigation: any;
   setChatWizardState: React.Dispatch<React.SetStateAction<any>>;
+  onViewFullReport?: (doc: any) => void;
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
@@ -111,6 +117,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   handleGenericOptionPress,
   navigation,
   setChatWizardState,
+  onViewFullReport,
 }) => {
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
@@ -186,7 +193,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     item.action === "EXTRACTED_MEDICINES_SUCCESS" ||
     item.action === "MEDICINE_SUMMARY" ||
     item.action === "MEDICINE_REVIEW_ACCORDION" ||
-    item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE";
+    item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE" ||
+    item.action === "ASK_REPORT";
 
   const isExcludedStep =
     item.action === "FILE_UPLOAD" ||
@@ -225,6 +233,34 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   };
 
   if (isComplexStep) {
+    if (item.action === "ASK_REPORT") {
+      const doc = item.document || {};
+      const questions =
+        item.suggestedQuestions && item.suggestedQuestions.length > 0
+          ? item.suggestedQuestions
+          : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+      return renderAssistantPrompt(
+        <ReportSummaryChatCard
+          document={doc}
+          suggestedQuestions={questions}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          onQuestionPress={(q) =>
+            handleGenericOptionPress({
+              label: q,
+              value: q,
+              actionType: "NORMAL_CHAT",
+            })
+          }
+          onViewFullReport={
+            onViewFullReport ? () => onViewFullReport(doc) : undefined
+          }
+          readOnly={chosenVal !== null}
+        />,
+      );
+    }
     if (item.action === "RESOLVE_PROFILE_SOURCE") {
       return renderAssistantPrompt(
         <ResolveProfileSourceCard
@@ -232,7 +268,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
-          sendMessage={() => {}}
+          sendMessage={() => { }}
           state={{}}
           isHistorical={isHistorical}
           chosenVal={chosenVal}
@@ -247,9 +283,9 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           preferredLang={preferredLang}
           theme={theme}
           state={{}}
-          setState={() => {}}
-          sendMessage={() => {}}
-          handleDocumentUpload={() => {}}
+          setState={() => { }}
+          sendMessage={() => { }}
+          handleDocumentUpload={() => { }}
           isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -344,8 +380,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
-          onConfirm={() => {}}
-          onEdit={() => {}}
+          onConfirm={() => { }}
+          onEdit={() => { }}
           readOnly={isHistorical || !isLatest}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}

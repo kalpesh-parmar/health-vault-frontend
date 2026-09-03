@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import Animated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
 import Toast from "react-native-toast-message";
+import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
 import { ChatDateHeader } from "../../components/chat/ChatDateHeader";
@@ -77,6 +78,7 @@ import { AddMedicineCard } from "../../components/chat/widgets/AddMedicineCard";
 import { ReviewMedicinesListCard } from "../../components/chat/widgets/ReviewMedicinesListCard";
 import { ConfirmMedicineCard } from "../../components/chat/widgets/ConfirmMedicineCard";
 import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOptionsPanel";
+import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
 import {
   findHistoricalUserReply,
   HistoricalChips,
@@ -115,6 +117,9 @@ type ChatMessage = {
   documentIds?: string[];
   conflicts?: any[];
   createdAt?: string | Date;
+  document?: any;
+  suggestedQuestions?: string[];
+  keyFindings?: any[];
 };
 
 const normalizeDocumentIds = (...sources: any[]): string[] | undefined => {
@@ -761,8 +766,11 @@ const AIChatScreen = ({ route }: any) => {
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const hasInitializedHistory = useRef(false);
+  const lastKnownStateRef = useRef<any>({});
   const [activeDateLabel, setActiveDateLabel] = useState<string>("");
   const [showFloatingPanel, setShowFloatingPanel] = useState<boolean>(true);
+  const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
+  const [viewerDoc, setViewerDoc] = useState<any>(null);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -948,6 +956,16 @@ const AIChatScreen = ({ route }: any) => {
                 options: finalData?.options ?? baseMessage.options ?? [],
                 medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
                 documents: finalData?.documents ?? baseMessage.documents,
+                document: finalData?.document ?? baseMessage.document ?? null,
+                suggestedQuestions:
+                  finalData?.suggestedQuestions ??
+                  baseMessage.suggestedQuestions ??
+                  [],
+                keyFindings:
+                  finalData?.document?.keyFindings ??
+                  finalData?.keyFindings ??
+                  baseMessage.keyFindings ??
+                  [],
                 documentIds:
                   normalizeDocumentIds(
                     finalData?.documentId,
@@ -964,7 +982,7 @@ const AIChatScreen = ({ route }: any) => {
                 .then((res) => {
                   setSessions(res.data?.data?.items || res.data?.items || []);
                 })
-                .catch(() => {});
+                .catch(() => { });
             }
           },
           onError: (error) => {
@@ -1081,7 +1099,7 @@ const AIChatScreen = ({ route }: any) => {
                 .then((res) => {
                   setSessions(res.data?.data?.items || res.data?.items || []);
                 })
-                .catch(() => {});
+                .catch(() => { });
             }
           } catch (err: any) {
             console.warn(
@@ -1262,9 +1280,9 @@ const AIChatScreen = ({ route }: any) => {
           prev.map((msg) =>
             msg.id === checkingMsgId
               ? {
-                  ...msg,
-                  text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed`,
-                }
+                ...msg,
+                text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed`,
+              }
               : msg,
           ),
         );
@@ -1285,9 +1303,9 @@ const AIChatScreen = ({ route }: any) => {
           prev.map((msg) =>
             msg.id === checkingMsgId
               ? {
-                  ...msg,
-                  text: `I detected duplicate conflicts with your existing medications. Let's resolve them.`,
-                }
+                ...msg,
+                text: `I detected duplicate conflicts with your existing medications. Let's resolve them.`,
+              }
               : msg,
           ),
         );
@@ -1311,9 +1329,9 @@ const AIChatScreen = ({ route }: any) => {
           prev.map((msg) =>
             msg.id === checkingMsgId
               ? {
-                  ...msg,
-                  text: `No duplicates found. All medicines are ready to be added.`,
-                }
+                ...msg,
+                text: `No duplicates found. All medicines are ready to be added.`,
+              }
               : msg,
           ),
         );
@@ -1335,9 +1353,9 @@ const AIChatScreen = ({ route }: any) => {
         prev.map((msg) =>
           msg.id === checkingMsgId
             ? {
-                ...msg,
-                text: `We couldn't check your medicines for duplicates. Please try again.`,
-              }
+              ...msg,
+              text: `We couldn't check your medicines for duplicates. Please try again.`,
+            }
             : msg,
         ),
       );
@@ -1432,7 +1450,7 @@ const AIChatScreen = ({ route }: any) => {
           // Use the merged payload if provided for the current conflict, or fall back to existing medication
           const payload =
             c.extractedMedicine.id === currentConflict.extractedMedicine.id &&
-            mergedPayload
+              mergedPayload
               ? mergedPayload
               : buildMedicationPayload(c.extractedMedicine);
           nextMergeList.push({
@@ -1739,9 +1757,9 @@ const AIChatScreen = ({ route }: any) => {
         prev.map((msg) =>
           msg.id === progressMsgId
             ? {
-                ...msg,
-                text: getAddingProgressMsg(i + 1, itemsToSubmit.length),
-              }
+              ...msg,
+              text: getAddingProgressMsg(i + 1, itemsToSubmit.length),
+            }
             : msg,
         ),
       );
@@ -1782,9 +1800,9 @@ const AIChatScreen = ({ route }: any) => {
         prev.map((msg) =>
           msg.id === progressMsgId
             ? {
-                ...msg,
-                text: getPartialFailureMsg(successCount, failed.length),
-              }
+              ...msg,
+              text: getPartialFailureMsg(successCount, failed.length),
+            }
             : msg,
         ),
       );
@@ -1926,16 +1944,16 @@ const AIChatScreen = ({ route }: any) => {
 
       const completedFromState = Boolean(
         resumableState?.isOnboardingCompleted ||
-          resumableState?.currentStep === "POST_ONBOARDING" ||
-          resumableState?.currentStep === "COMPLETE" ||
-          resolvedPendingStep === "POST_ONBOARDING" ||
-          resolvedPendingStep === "COMPLETE",
+        resumableState?.currentStep === "POST_ONBOARDING" ||
+        resumableState?.currentStep === "COMPLETE" ||
+        resolvedPendingStep === "POST_ONBOARDING" ||
+        resolvedPendingStep === "COMPLETE",
       );
       const completedFromHistory = Array.isArray(historyItems)
         ? historyItems.some((dbMsg: any) => {
-            const action = dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
-            return action === "POST_ONBOARDING" || action === "COMPLETE";
-          })
+          const action = dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
+          return action === "POST_ONBOARDING" || action === "COMPLETE";
+        })
         : false;
       const isComplete = completedFromState || completedFromHistory;
       setIsOnboardingCompleted(isComplete);
@@ -1944,16 +1962,42 @@ const AIChatScreen = ({ route }: any) => {
       if (resumableState?.preferredLanguage) {
         setPreferredLang(resumableState.preferredLanguage);
       }
+      if (resumableState) {
+        lastKnownStateRef.current = resumableState;
+      }
       if (chatSessionId && Array.isArray(historyItems)) {
-        const mapped = historyItems.map((dbMsg: any) => ({
-          ...(dbMsg.metadata || {}),
-          id: dbMsg.id,
-          role: dbMsg.role === "assistant" ? "ai" : "user",
-          text: dbMsg.content,
-          sessionId: chatSessionId,
-          createdAt: dbMsg.createdAt,
-          action: (dbMsg.metadata || {}).action || (dbMsg.metadata || {}).actionType || "NORMAL_CHAT",
-        }));
+        const mapped = historyItems.map((dbMsg: any) => {
+          let meta = dbMsg.metadata;
+          if (typeof meta === "string") {
+            try {
+              meta = JSON.parse(meta);
+            } catch (e) {
+              meta = {};
+            }
+          } else {
+            meta = meta || {};
+          }
+          return {
+            ...meta,
+            id: dbMsg.id,
+            role: dbMsg.role === "assistant" ? "ai" : "user",
+            text: dbMsg.content,
+            sessionId: chatSessionId,
+            createdAt: dbMsg.createdAt,
+            action:
+              meta.action || meta.actionType || "NORMAL_CHAT",
+            document: meta.document || null,
+            suggestedQuestions: meta.suggestedQuestions || [],
+            keyFindings:
+              meta.document?.keyFindings || meta.keyFindings || [],
+            documentIds: normalizeDocumentIds(
+              meta.document?.id,
+              meta.documentId,
+              meta.documentIds,
+              meta.documents,
+            ),
+          };
+        });
         setOnboardingMessages(mapped);
       }
     } catch (err) {
@@ -2021,6 +2065,31 @@ const AIChatScreen = ({ route }: any) => {
   const documentsList = useMemo(() => {
     return safeFilter(documents, (doc: MedicalDocument) => !!doc?.s3Key);
   }, [documents]);
+
+  const handleViewFullReport = useCallback(
+    (doc: any) => {
+      if (!doc) return;
+      const targetId = doc.id || doc.documentId || doc.fileKey;
+      const matchingDoc = (documents || []).find(
+        (d: any) =>
+          (targetId && d.id === targetId) ||
+          (doc.fileName && d.fileName === doc.fileName),
+      );
+
+      const fullDoc = {
+        ...doc,
+        ...(matchingDoc || {}),
+        id: targetId || matchingDoc?.id,
+        s3Key: matchingDoc?.s3Key || doc?.s3Key,
+        fileUrl: (matchingDoc as any)?.fileUrl || doc?.fileUrl,
+        imageUri: (matchingDoc as any)?.imageUri || doc?.imageUri,
+      };
+
+      setViewerDoc(fullDoc);
+      setIsViewerOpen(true);
+    },
+    [documents],
+  );
 
   const activeMode = selectedDocument
     ? ChatMode.DOCUMENT_RAG
@@ -2095,6 +2164,15 @@ const AIChatScreen = ({ route }: any) => {
               conflicts: meta.conflicts || [],
               documents: meta.documents || [],
               options: meta.options || [],
+              document: meta.document || null,
+              suggestedQuestions: meta.suggestedQuestions || [],
+              keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
+              documentIds: normalizeDocumentIds(
+                meta.document?.id,
+                meta.documentId,
+                meta.documentIds,
+                meta.documents,
+              ),
             };
           });
 
@@ -2150,6 +2228,15 @@ const AIChatScreen = ({ route }: any) => {
           conflicts: meta.conflicts || [],
           documents: meta.documents || [],
           options: meta.options || [],
+          document: meta.document || null,
+          suggestedQuestions: meta.suggestedQuestions || [],
+          keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
+          documentIds: normalizeDocumentIds(
+            meta.document?.id,
+            meta.documentId,
+            meta.documentIds,
+            meta.documents,
+          ),
         };
       });
 
@@ -2232,9 +2319,9 @@ const AIChatScreen = ({ route }: any) => {
             null;
           const isNowCompleted = Boolean(
             resData?.onboardingState?.isOnboardingCompleted ??
-              resData?.state?.isOnboardingCompleted ??
-              resData?.isOnboardingCompleted ??
-              (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
+            resData?.state?.isOnboardingCompleted ??
+            resData?.isOnboardingCompleted ??
+            (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
           );
           setIsOnboardingCompleted(isNowCompleted);
           setPendingStep(isNowCompleted ? null : nextPendingStep);
@@ -2305,6 +2392,18 @@ const AIChatScreen = ({ route }: any) => {
           mode: resData?.mode as ChatMode,
           action: resData?.actionType || resData?.action || "NORMAL_CHAT",
           options: resData?.options || [],
+          medicines: resData?.medicines || [],
+          documents: resData?.documents || [],
+          document: resData?.document || null,
+          suggestedQuestions: resData?.suggestedQuestions || [],
+          keyFindings:
+            resData?.document?.keyFindings || resData?.keyFindings || [],
+          documentIds: normalizeDocumentIds(
+            resData?.document?.id,
+            resData?.documentId,
+            resData?.documentIds,
+            resData?.documents,
+          ),
           createdAt: new Date().toISOString(),
         };
 
@@ -2317,7 +2416,7 @@ const AIChatScreen = ({ route }: any) => {
             .then((res) => {
               setSessions(res.data?.data?.items || res.data?.items || []);
             })
-            .catch(() => {});
+            .catch(() => { });
         }
       }
     } catch (err: any) {
@@ -2334,12 +2433,57 @@ const AIChatScreen = ({ route }: any) => {
     }
   };
 
+  const resolveDashboardDocumentId = () => {
+    // 1. route.params?.documentId
+    if (route?.params?.documentId) {
+      return String(route.params.documentId);
+    }
+    // 2. current chat session's documentId
+    const currentSession = sessions.find((s) => s.id === activeSessionId);
+    if (currentSession?.documentId) {
+      return String(currentSession.documentId);
+    }
+    if (selectedDocument?.id) {
+      return String(selectedDocument.id);
+    }
+    // 3. documentId from the most recent ASK_REPORT / document message in loaded history
+    const allKnownMessages = [...messages, ...onboardingMessages];
+    const recentDocMsg = [...allKnownMessages].reverse().find(
+      (m) =>
+        (m.action === "ASK_REPORT" && (m.document?.id || m.documentId)) ||
+        m.document?.id ||
+        (m.documentIds && m.documentIds.length > 0) ||
+        (m.documents && m.documents.length > 0),
+    );
+    if (recentDocMsg) {
+      const docId =
+        recentDocMsg.document?.id ||
+        recentDocMsg.documentId ||
+        recentDocMsg.documentIds?.[0] ||
+        recentDocMsg.documents?.[0]?.id;
+      if (docId) return String(docId);
+    }
+    if (lastKnownStateRef.current?.documentId) {
+      const stateDocId = Array.isArray(lastKnownStateRef.current.documentId)
+        ? lastKnownStateRef.current.documentId[0]
+        : lastKnownStateRef.current.documentId;
+      if (stateDocId) return String(stateDocId);
+    }
+    // 4. undefined
+    return undefined;
+  };
+
   const handleGenericOptionPress = async (option: any) => {
+    const optKey = option.key ?? option.value ?? option.action ?? option.id;
+    const normalizedKey = optKey === "ASK_ABOUT_REPORT" ? "ASK_REPORT" : optKey;
+    const optionLabel =
+      option.label || (typeof normalizedKey === "string" ? normalizedKey : "Option");
+
     // 1. Show user reply in chat
     const userMsg: ChatMessage = {
       id: `user-opt-${Date.now()}`,
       role: "user",
-      text: option.label,
+      text: optionLabel,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
@@ -2347,6 +2491,7 @@ const AIChatScreen = ({ route }: any) => {
     // 2. Perform actions based on value/actionType
     if (
       option.actionType === "ADD_DOCUMENT" ||
+      normalizedKey === "ADD_DOCUMENT" ||
       option.value === "ADD_DOCUMENT"
     ) {
       uploadSheetRef.current?.present();
@@ -2355,6 +2500,7 @@ const AIChatScreen = ({ route }: any) => {
 
     if (
       option.actionType === "ADD_MEDICINE" ||
+      normalizedKey === "ADD_MEDICINE" ||
       option.value === "ADD_MEDICINE"
     ) {
       navigation.navigate("MEDICATION");
@@ -2368,6 +2514,15 @@ const AIChatScreen = ({ route }: any) => {
         .reverse()
         .find((msg) => msg.role === "ai");
 
+      const targetDocId = resolveDashboardDocumentId();
+      const resolvedDocIds = targetDocId
+        ? [targetDocId]
+        : normalizeDocumentIds(
+            latestAssistantMessage?.documentIds,
+            latestAssistantMessage?.documents,
+            chatWizardState.filesInfo,
+          );
+
       const payload: any = {
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
@@ -2375,36 +2530,52 @@ const AIChatScreen = ({ route }: any) => {
           role: m.role === "ai" ? "assistant" : "user",
           content: m.text,
         })),
-        documentId:
-          normalizeDocumentIds(
-            latestAssistantMessage?.documentIds,
-            latestAssistantMessage?.documents,
-            chatWizardState.filesInfo,
-          ),
+        state: lastKnownStateRef.current || {},
       };
+
+      if (resolvedDocIds && resolvedDocIds.length > 0) {
+        payload.documentId = resolvedDocIds;
+      }
 
       if (option.actionType === "CONFIRM_MEDICINES") {
         payload.actionType = "CONFIRM_MEDICINES";
         payload.actionData = option.value;
       } else {
         payload.message =
-          typeof option.value === "object"
-            ? JSON.stringify(option.value)
-            : option.value;
+          typeof normalizedKey === "object"
+            ? JSON.stringify(normalizedKey)
+            : normalizedKey;
+        if (normalizedKey === "ASK_REPORT") {
+          payload.actionType = "ASK_REPORT";
+        }
       }
 
       const response = await apiClient.post("/v1/onboarding/chat", payload);
       const resData = response.data?.data;
-      if (resData?.reply) {
+      const action = resData?.actionType || resData?.action || "NORMAL_CHAT";
+      const hasStructuredPayload = Boolean(
+        resData?.document ||
+        resData?.options?.length ||
+        resData?.medicines?.length ||
+        resData?.documents?.length ||
+        resData?.suggestedQuestions?.length,
+      );
+
+      if (resData && (resData.reply || hasStructuredPayload)) {
         const aiMsg: ChatMessage = {
           id: `ai-opt-res-${Date.now()}`,
           role: "ai",
-          text: resData.reply,
-          action: resData.actionType || resData.action || "NORMAL_CHAT",
+          text: resData.reply || "",
+          action,
           options: resData.options || [],
           medicines: resData.medicines || [],
           documents: resData.documents || [],
+          document: resData.document || null,
+          suggestedQuestions: resData.suggestedQuestions || [],
+          keyFindings:
+            resData.document?.keyFindings || resData.keyFindings || [],
           documentIds: normalizeDocumentIds(
+            resData.document?.id,
             resData.documentId,
             resData.documentIds,
             resData.documents,
@@ -2412,6 +2583,10 @@ const AIChatScreen = ({ route }: any) => {
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, aiMsg]);
+
+        if (resData?.onboardingState || resData?.state) {
+          lastKnownStateRef.current = resData.onboardingState || resData.state;
+        }
 
         const nextPendingStep =
           resData?.onboardingState?.currentStep ||
@@ -2421,9 +2596,9 @@ const AIChatScreen = ({ route }: any) => {
           null;
         const isNowCompleted = Boolean(
           resData?.onboardingState?.isOnboardingCompleted ??
-            resData?.state?.isOnboardingCompleted ??
-            resData?.isOnboardingCompleted ??
-            (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
+          resData?.state?.isOnboardingCompleted ??
+          resData?.isOnboardingCompleted ??
+          (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
         );
         setIsOnboardingCompleted(isNowCompleted);
         setPendingStep(isNowCompleted ? null : nextPendingStep);
@@ -2527,7 +2702,7 @@ const AIChatScreen = ({ route }: any) => {
     <Container
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
     >
-        <StatusBar barStyle={"dark-content"} />
+      <StatusBar barStyle={"dark-content"} />
       {/* Sticky Premium AI Header */}
       <ChatHeader
         onBack={() => navigation.navigate("Home")}
@@ -2541,11 +2716,11 @@ const AIChatScreen = ({ route }: any) => {
           (uploadingDocs?.length > 0 && avgProgress < 100) ||
           (chatWizardState.step !== "idle" &&
             !chatWizardState.hasViewedCompletedOcr)) && (
-        <FloatingProgressPanel
-          onOpenSheet={handleOpenProgressSheet}
-          isDark={isDark}
-        />
-      )}
+          <FloatingProgressPanel
+            onOpenSheet={handleOpenProgressSheet}
+            isDark={isDark}
+          />
+        )}
 
       <View style={styles.keyboardContainer}>
         {/* Emergency Card Display */}
@@ -2611,6 +2786,7 @@ const AIChatScreen = ({ route }: any) => {
                   item.action === "RESOLVE_PROFILE_SOURCE" ||
                   item.action === "ASK_UPLOAD_OR_SKIP" ||
                   item.action === "MEDICINE_OPTIONS" ||
+                  item.action === "ASK_REPORT" ||
                   item.action === "ADD_MEDICINE" ||
                   item.action === "EDIT_MEDICINE" ||
                   item.action === "REVIEW_MEDICINES_LIST" ||
@@ -2670,7 +2846,7 @@ const AIChatScreen = ({ route }: any) => {
                         preferredLang={preferredLang}
                         isDark={isDark}
                         theme={theme}
-                        sendMessage={() => {}}
+                        sendMessage={() => { }}
                         state={{}}
                         isHistorical={true}
                         chosenVal={chosenVal}
@@ -2685,9 +2861,9 @@ const AIChatScreen = ({ route }: any) => {
                         preferredLang={preferredLang}
                         theme={theme}
                         state={{}}
-                        setState={() => {}}
-                        sendMessage={() => {}}
-                        handleDocumentUpload={() => {}}
+                        setState={() => { }}
+                        sendMessage={() => { }}
+                        handleDocumentUpload={() => { }}
                         isHistorical={true}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
@@ -2863,16 +3039,16 @@ const AIChatScreen = ({ route }: any) => {
                         onConfirm={(formattedMeds) => {
                           const displayLabel =
                             preferredLang === "gujarati" ||
-                            preferredLang === "gu"
+                              preferredLang === "gu"
                               ? "પસંદ કરેલ પુષ્ટિ કરો"
                               : preferredLang === "hindi" ||
-                                  preferredLang === "hi"
+                                preferredLang === "hi"
                                 ? "चयनित की पुष्टि करें"
                                 : preferredLang === "marathi" ||
-                                    preferredLang === "mr"
+                                  preferredLang === "mr"
                                   ? "निवडलेले निश्चित करा"
                                   : preferredLang === "tamil" ||
-                                      preferredLang === "ta"
+                                    preferredLang === "ta"
                                     ? "தேர்ந்தெடுக்கப்பட்டதை உறுதிப்படுத்தவும்"
                                     : "Confirm Selection";
 
@@ -2885,16 +3061,16 @@ const AIChatScreen = ({ route }: any) => {
                         onAddNew={() => {
                           const displayLabel =
                             preferredLang === "gujarati" ||
-                            preferredLang === "gu"
+                              preferredLang === "gu"
                               ? "નવું ઉમેરો"
                               : preferredLang === "hindi" ||
-                                  preferredLang === "hi"
+                                preferredLang === "hi"
                                 ? "नया जोड़ें"
                                 : preferredLang === "marathi" ||
-                                    preferredLang === "mr"
+                                  preferredLang === "mr"
                                   ? "नवीन जोडा"
                                   : preferredLang === "tamil" ||
-                                      preferredLang === "ta"
+                                    preferredLang === "ta"
                                     ? "புதியதைச் சேர்க்கவும்"
                                     : "Add New";
 
@@ -2907,16 +3083,16 @@ const AIChatScreen = ({ route }: any) => {
                         onSkipAll={() => {
                           const displayLabel =
                             preferredLang === "gujarati" ||
-                            preferredLang === "gu"
+                              preferredLang === "gu"
                               ? "બધા છોડી દો"
                               : preferredLang === "hindi" ||
-                                  preferredLang === "hi"
+                                preferredLang === "hi"
                                 ? "सभी छोड़ें"
                                 : preferredLang === "marathi" ||
-                                    preferredLang === "mr"
+                                  preferredLang === "mr"
                                   ? "सर्व वगळा"
                                   : preferredLang === "tamil" ||
-                                      preferredLang === "ta"
+                                    preferredLang === "ta"
                                     ? "அனைத்தையும் தவிர்க்கவும்"
                                     : "Skip All";
 
@@ -2945,7 +3121,7 @@ const AIChatScreen = ({ route }: any) => {
                         preferredLang={preferredLang}
                         isDark={isDark}
                         theme={theme}
-                        onConfirm={() => {}}
+                        onConfirm={() => { }}
                         onEdit={(med) => {
                           setMedicineToEdit(med);
                           setTimeout(() => {
@@ -2959,15 +3135,48 @@ const AIChatScreen = ({ route }: any) => {
                     );
                   }
                   if (item.action === "MEDICINE_OPTIONS") {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
                     return renderAssistantPrompt(
                       <MedicineOptionsPanel
                         optionsList={item.options || []}
                         isDark={isDark}
                         theme={theme}
-                        onOptionPress={() => {}}
-                        readOnly={true}
+                        onOptionPress={(key, label) =>
+                          handleGenericOptionPress({ key, label, value: key })
+                        }
+                        readOnly={isReadOnly}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
+                      />,
+                    );
+                  }
+                  if (item.action === "ASK_REPORT") {
+                    const doc = item.document;
+                    const hasDoc = Boolean(
+                      doc && (doc.id || doc.summary || (doc.keyFindings && doc.keyFindings.length > 0)),
+                    );
+
+                    if (!hasDoc) {
+                      return renderAssistantPrompt(null);
+                    }
+
+                    const isReadOnly = chosenVal !== null;
+                    const questions =
+                      item.suggestedQuestions && item.suggestedQuestions.length > 0
+                        ? item.suggestedQuestions
+                        : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+                    return renderAssistantPrompt(
+                      <ReportSummaryChatCard
+                        document={doc}
+                        suggestedQuestions={questions}
+                        isDark={isDark}
+                        theme={theme}
+                        preferredLang={preferredLang}
+                        onQuestionPress={(q) => handleSend(q)}
+                        onViewFullReport={() => handleViewFullReport(doc)}
+                        readOnly={isReadOnly}
                       />,
                     );
                   }
@@ -3039,8 +3248,8 @@ const AIChatScreen = ({ route }: any) => {
                           item.medicinesCount !== undefined
                             ? item.medicinesCount
                             : chatWizardState.resolvedMedicines.length +
-                              chatWizardState.replaceList.length +
-                              chatWizardState.mergeList.length
+                            chatWizardState.replaceList.length +
+                            chatWizardState.mergeList.length
                         }
                         isDark={isDark}
                         isLatest={isLatest}
@@ -3358,6 +3567,16 @@ const AIChatScreen = ({ route }: any) => {
           )}
         </View>
       </BottomSheet>
+
+      <DocumentViewerModal
+        visible={isViewerOpen}
+        document={viewerDoc}
+        title={viewerDoc?.fileName}
+        onClose={() => {
+          setIsViewerOpen(false);
+          setViewerDoc(null);
+        }}
+      />
     </Container>
   );
 };
