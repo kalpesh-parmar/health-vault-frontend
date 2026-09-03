@@ -430,29 +430,10 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             queryClient.invalidateQueries({ queryKey: ["documents"] });
             queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
             queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
-
-            if (normalizeStatus(event) === "COMPLETED") {
-              Toast.show({
-                type: "success",
-                text1: "Document Processed",
-                text2: "Extraction completed successfully on retry.",
-              });
-            } else {
-              Toast.show({
-                type: "error",
-                text1: "Retry Failed",
-                text2: event.message || "Document processing failed.",
-              });
-            }
           },
         });
       } catch (err: any) {
         console.error("[retryDocument Error]", err);
-        Toast.show({
-          type: "error",
-          text1: "Retry Failed",
-          text2: err.message || "Failed to retry document processing.",
-        });
       }
     },
     [],

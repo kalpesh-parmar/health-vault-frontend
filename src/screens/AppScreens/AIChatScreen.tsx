@@ -834,6 +834,13 @@ const AIChatScreen = ({ route }: any) => {
   };
 
   const handleUploadStart = () => {
+    setChatWizardState((prev) => ({
+      ...prev,
+      step: "processing",
+      jobIds: [],
+      filesInfo: [],
+      hasViewedCompletedOcr: false,
+    }));
     uploadSheetRef.current?.dismiss();
     extractionSheetRef.current?.present();
   };

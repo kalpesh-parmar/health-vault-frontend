@@ -1221,11 +1221,6 @@ export default function OnboardingScreen() {
       startJobPolling(jobId, docId, streamUrl);
     } catch (err: any) {
       setUploadState("failed");
-      Toast.show({
-        type: "error",
-        text1: "Retry Failed",
-        text2: err.message || "Failed to retry document.",
-      });
     }
   };
 
