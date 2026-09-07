@@ -17,6 +17,7 @@ import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/
 import { MaterialCommunityIcons, Feather, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import * as MediaLibrary from "expo-media-library";
 import Toast from "react-native-toast-message";
 
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
@@ -359,45 +360,33 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
     }
   };
 
-  const handleGalleryPickMultiple = async () => {
+    const handleGalleryPickMultiple = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Toast.show({
-          type: "error",
-          text1: "Permission Denied",
-          text2: "Please grant gallery permission in settings.",
-        });
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 1,
-        allowsMultipleSelection: true,
-        selectionLimit: 5,
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        multiple: true,
+        copyToCacheDirectory: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
         return;
       }
+      console.log("RESULT :- ", result);
 
-      const files = result.assets.map((asset, index) => {
-        const fileUri = asset.uri;
-        const uriParts = fileUri.split("/");
-        let fileName = asset.fileName || uriParts[uriParts.length - 1] || `image_${index + 1}.jpg`;
+      const files = result.assets.map((asset) => {
+        let decName = asset.name;
         try {
-          fileName = decodeURIComponent(fileName);
+          decName = decodeURIComponent(asset.name);
         } catch (e) {}
 
         return {
           id: Math.random().toString(36).substring(7),
-          uri: fileUri,
-          originalName: fileName,
-          displayName: fileName.replace(/\.[^/.]+$/, ""),
+          uri: asset.uri,
+          originalName: decName,
+          displayName: decName.replace(/\.[^/.]+$/, ""),
           documentType: "Other Medical Document",
           mimeType: asset.mimeType || "image/jpeg",
-          size: (asset as any).fileSize || 0,
+          size: asset.size || 0,
         };
       });
 

@@ -87,6 +87,15 @@ const HomeScreen = () => {
     return Math.round(totalProgress / uploadingDocs.length);
   }, [uploadingDocs]);
 
+  const hasActiveUploads = useMemo(() => {
+    return uploadingDocs.some(
+      (doc) => {
+        const status = (doc.status || "").toUpperCase();
+        return !["COMPLETED", "FAILED", "REJECTED", "CANCELLED", "SUCCESS", "ERROR"].includes(status) && doc.progress !== 100 && doc.progress !== -1;
+      }
+    );
+  }, [uploadingDocs]);
+
   const handleRetryFailed = useCallback(async () => {
     if (!completedBatch?.documents) return;
     const failedDocs = completedBatch.documents.filter(
@@ -408,7 +417,7 @@ const HomeScreen = () => {
         </ActionsRow>
 
         {/* Inline Processing Documents Card */}
-        {uploadingDocs.length > 0 && avgProgress < 100 && (
+        {uploadingDocs.length > 0 && hasActiveUploads && (
           <ProcessingCard style={{ marginHorizontal: 24, marginTop: 15, paddingBottom: 15 }}>
             <SheetHeaderRow style={{ flexWrap: "nowrap", marginBottom: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8, flexShrink: 1 }}>
@@ -507,7 +516,7 @@ const HomeScreen = () => {
         )}
 
         {/* Analysis Complete Banner */}
-        {completedBatch && !isBannerDismissed && (() => {
+        {processingError === null && completedBatch && !isBannerDismissed && (() => {
           const docs = completedBatch.documents || [];
           const completedDocs = docs.filter(
             (d: any) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
