@@ -14,6 +14,8 @@ interface Message {
   text: string;
   documents?: { id: string; fileName: string; }[];
   createdAt?: string | Date;
+  title?: string;
+  subtitle?: string;
 }
 
 interface MessageBubbleProps {
@@ -239,7 +241,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
           <Ionicons name="sparkles" size={14} color="#ffffff" />
         </LinearGradient>
       </View>
-      {message.text ? (
+      {message.text || message.title || message.subtitle ? (
         <View
           style={[
             styles.aiBubble,
@@ -250,7 +252,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
             },
           ]}
         >
-          {renderMarkdown(message.text, aiTextColor, false)}
+          {message.title && (
+            <Text style={[styles.aiTitleText, { color: aiTextColor }]}>
+              {message.title}
+            </Text>
+          )}
+          {message.subtitle && (
+            <Text style={[styles.aiSubtitleText, { color: aiTextColor, marginTop: message.title ? 6 : 0, marginBottom: 4 }]}>
+              {message.subtitle}
+            </Text>
+          )}
+          {!message.title && !message.subtitle && message.text && (
+            renderMarkdown(message.text, aiTextColor, false)
+          )}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6, minHeight: 24 }}>
             {timeString ? (
               <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8", marginTop: 0 }]}>
@@ -432,5 +446,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     alignSelf: "flex-end",
     marginTop: 4,
+  },
+  aiTitleText: {
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 22,
+  },
+  aiSubtitleText: {
+    fontSize: 14.5,
+    fontWeight: "500",
+    lineHeight: 21,
   },
 });

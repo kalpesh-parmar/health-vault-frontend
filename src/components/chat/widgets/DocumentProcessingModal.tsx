@@ -25,6 +25,7 @@ interface DocumentProcessingModalProps {
   pollElapsedTime: number;
   progressPercent?: number;
   onCancel: () => void;
+  onRetry?: () => void;
   isDark: boolean;
   theme: any;
   preferredLanguage?: string;
@@ -36,6 +37,7 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
   pollElapsedTime,
   progressPercent = 0,
   onCancel,
+  onRetry,
   isDark,
   theme,
   preferredLanguage = "english",
@@ -112,7 +114,7 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
       : theme.colors.primary;
 
   return (
-    <Modal visible={isVisible} transparent animationType="fade">
+    <Modal visible={isVisible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <Animated.View
           entering={FadeIn.duration(300)}
@@ -220,6 +222,16 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
               />
             </View>
           </View>
+
+          {isError && uploadState !== "rejected" && onRetry && (
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
+              onPress={onRetry}
+            >
+              <Ionicons name="refresh" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+              <Text style={styles.retryButtonText}>Retry Extraction</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Timer Footer */}
           {/* <View style={styles.footerRow}>
@@ -364,5 +376,19 @@ const styles = StyleSheet.create({
   },
   waitText: {
     fontSize: 14,
+  },
+  retryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingVertical: 12,
+    marginTop: 20,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

@@ -1278,11 +1278,6 @@ export default function OnboardingScreen() {
       startJobPolling(jobId, docId, streamUrl);
     } catch (err: any) {
       setUploadState("failed");
-      Toast.show({
-        type: "error",
-        text1: "Retry Failed",
-        text2: err.message || "Failed to retry document.",
-      });
     }
   };
 
@@ -1308,6 +1303,7 @@ export default function OnboardingScreen() {
   const cancelProcessing = async () => {
     cancelRequestedRef.current = true;
     pollActiveRef.current = false;
+    setSelectedFile(null); // Clear selected file so it doesn't auto-upload on next send
     if (sseUnsubRef.current) {
       sseUnsubRef.current();
       sseUnsubRef.current = null;
@@ -1818,7 +1814,7 @@ export default function OnboardingScreen() {
           setCurrentClientMedId={setCurrentClientMedId}
           onSave={handleSave}
           onCancel={
-            isEditingLocal
+            !isHistorical
               ? () => {
                 setActiveMedicineToEdit(null);
                 setMessages((prev) =>
@@ -2386,6 +2382,7 @@ export default function OnboardingScreen() {
           pollElapsedTime={pollElapsedTime}
           progressPercent={uploadPercent}
           onCancel={cancelProcessing}
+          onRetry={handleRetryJob}
           isDark={isDark}
           theme={theme}
           preferredLanguage={state.preferredLanguage!}
@@ -2445,7 +2442,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    padding: 8,
+    paddingHorizontal: 8,
+    paddingTop: 0,
     paddingBottom: 16,
   },
   optionsWrapper: {

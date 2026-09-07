@@ -284,7 +284,7 @@ export function AddMedicineCard({
                 </Text>
               </View>
             </TouchableOpacity>
-            {(isEditingLocal || readOnly) && (onCancel || readOnly) && (
+            {(onCancel || readOnly) && (
               <TouchableOpacity
                 disabled={readOnly}
                 style={[

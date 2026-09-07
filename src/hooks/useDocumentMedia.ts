@@ -14,6 +14,7 @@ import {
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../navigation/types";
 import * as DocumentPicker from "expo-document-picker";
+import * as MediaLibrary from "expo-media-library";
 import { isValidMedicalDocument } from "../utils/documentValidator";
 
 export interface PickedFile {
@@ -175,11 +176,32 @@ export const useDocumentMedia = () => {
         }
       }
 
+      let originalName = images.fileName;
+
+      if (images.assetId) {
+        try {
+          const mediaPermission = await MediaLibrary.requestPermissionsAsync();
+          if (mediaPermission.granted) {
+            const assetInfo = await MediaLibrary.getAssetInfoAsync(images.assetId);
+            if (assetInfo && assetInfo.filename) {
+              originalName = assetInfo.filename;
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to get asset info from MediaLibrary:", err);
+        }
+      }
+
+      originalName = originalName || images.uri.split('/').pop() || "Document.jpg";
+      console.log("ASSET OBJECT :- ", JSON.stringify(images, null, 2));
+      console.log("FILENAME :- ", originalName);
+
       setPreviewSource("gallery");
       setSelectedImages(images.uri);
       if (from !== "Register" && from !== "Profile" && from !== "Document") {
         navigation.navigate("ImagePreview", {
           images: images.uri,
+          fileName: originalName,
         });
       }
     } finally {
@@ -235,8 +257,10 @@ export const useDocumentMedia = () => {
 
       setPreviewSource("camera");
       if (from !== "Register" && from !== "Profile" && from !== "Document") {
+        const originalName = images.split('/').pop() || `Photo_${Date.now()}.jpg`;
         navigation.navigate("ImagePreview", {
           images: images,
+          fileName: originalName,
         });
       }
       setSelectedImages(images);
@@ -284,11 +308,11 @@ export const useDocumentMedia = () => {
           return;
         }
 
-        const fileNameWithoutExt = file.name ? file.name.replace(/\.[^/.]+$/, "") : "Document";
+        const originalName = file.name || file.uri.split('/').pop() || "Document.pdf";
 
         navigation.navigate("SaveDocument", {
           images: file.uri,
-          fileName: fileNameWithoutExt,
+          fileName: originalName,
         });
       } finally {
         setIsProcessing(false);

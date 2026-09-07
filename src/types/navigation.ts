@@ -15,6 +15,7 @@ export type AuthStackParamList = {
 
 export type ImagePreviewParams = {
   images: string;
+  fileName?: string;
 };
 
 // ─── Save Document Params ──────────────────────────────────────

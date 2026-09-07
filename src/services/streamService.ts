@@ -137,23 +137,40 @@ const parseMaybeJson = (value: string) => {
 };
 
 const isTerminalEvent = (event: SseEventPayload) => {
-  const type = String(event.type || event.event || "").toLowerCase();
+  const type = String(event.type || event.event || "").toUpperCase();
   const stage = String(event.stage || "").toUpperCase();
   const stageStatus = String(event.stageStatus || "").toUpperCase();
   const status = String(event.status || "").toUpperCase();
 
-  return (
-    type.includes("completed") ||
-    type.includes("finished") ||
-    type.includes("terminal") ||
-    stage === "COMPLETED" ||
-    stage === "FAILED" ||
-    stage === "BATCH_COMPLETED" ||
-    stageStatus === "COMPLETED" ||
-    stageStatus === "FAILED" ||
-    status === "SUCCESS" ||
-    status === "FAILED"
-  );
+  const stateIndicators = [type, stageStatus, stage, status].filter(Boolean);
+
+  for (const indicator of stateIndicators) {
+    if (
+      indicator.includes("FAILED") ||
+      indicator.includes("ERROR") ||
+      indicator.includes("REJECTED") ||
+      indicator.includes("CANCELLED")
+    ) {
+      return true;
+    }
+  }
+
+  for (const indicator of [type, stageStatus, stage]) {
+    if (
+      indicator.includes("COMPLETED") ||
+      indicator.includes("DONE") ||
+      indicator.includes("TERMINAL") ||
+      indicator.includes("FINISHED")
+    ) {
+      return true;
+    }
+  }
+
+  if (!stage && !stageStatus && !type && status === "SUCCESS") {
+    return true;
+  }
+
+  return false;
 };
 
 const parseSseBlock = (block: string) => {
