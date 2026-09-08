@@ -8,7 +8,7 @@ import {
   useIsFocused,
 } from "@react-navigation/native";
 import Animated, { FadeInRight } from "react-native-reanimated";
-import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
@@ -18,8 +18,6 @@ import { AppStackParamList } from "../../navigation/types";
 import { useAppTheme } from "../../context/ThemeContext";
 import Toast from "react-native-toast-message";
 import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
-import CameraModal from "../../components/shared/CameraModal";
-import Loader from "../../components/shared/Loader";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "../../config/queryClient";
 import { getNotificationCount } from "../../services/notificationService";
@@ -33,7 +31,7 @@ import {
   listTodayOccurrencesCount,
 } from "../../services/reminderService";
 import { listMedications } from "../../services/medicationservice";
-import { listDocument, getDocumentsSummary } from "../../services/documentService";
+import { getDocumentsSummary } from "../../services/documentService";
 import { Reminder } from "../../types";
 import { getInitials } from "../../utils/avatarUtils";
 
@@ -61,12 +59,10 @@ const ActionItem = memo(
 const HomeScreen = () => {
   const isFocused = useIsFocused();
   const refRBSheet = useRef<BottomSheetModal>(null);
-  const cameraRef = useRef<any>(null);
 
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark } = useAppTheme();
-  const bottomPadding = useBottomBarPadding(40, 20);
 
   const {
     uploadingDocs,
@@ -107,6 +103,7 @@ const HomeScreen = () => {
     setRetryingKeys(keys);
 
     try {
+      clearProcessingError();
       await Promise.all(
         failedDocs.map((doc) => {
           const fileKey = doc.fileKey || doc.id;
@@ -123,7 +120,7 @@ const HomeScreen = () => {
       setIsBannerDismissed(true);
       clearCompletedBatch();
     }
-  }, [completedBatch, retryDocument, clearCompletedBatch]);
+  }, [completedBatch, retryDocument, clearCompletedBatch, clearProcessingError]);
 
   React.useEffect(() => {
     if (completedBatch) {
@@ -478,7 +475,7 @@ const HomeScreen = () => {
         )}
 
         {/* Processing Error or Interrupted Warning Banner */}
-        {processingError !== null && (
+        {!hasActiveUploads && processingError !== null && (
           <AnalysisCompleteBanner
             style={{
               marginHorizontal: 24,
@@ -516,7 +513,7 @@ const HomeScreen = () => {
         )}
 
         {/* Analysis Complete Banner */}
-        {processingError === null && completedBatch && !isBannerDismissed && (() => {
+        {!hasActiveUploads && processingError === null && completedBatch && !isBannerDismissed && (() => {
           const docs = completedBatch.documents || [];
           const completedDocs = docs.filter(
             (d: any) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
@@ -592,12 +589,6 @@ const HomeScreen = () => {
                   <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>document with medicines</Text>
                 </View>
               </View>
-
-              {/* Warnings (Optional - static for now based on design) */}
-              {/* <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
-                <Ionicons name="warning-outline" size={16} color="#f59e0b" style={{ marginRight: 8 }} />
-                <Text style={{ fontSize: 12, color: "#d97706" }}>1 document contains promotional content</Text>
-              </View> */}
 
               {/* Divider before errors (only if there are errors) */}
               {(failedDocs.length > 0 || rejectedDocs.length > 0) && (

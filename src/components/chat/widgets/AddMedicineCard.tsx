@@ -58,7 +58,7 @@ export function AddMedicineCard({
     selectedSlots,
   } = formState;
 
-  const [localErrors, setLocalErrors] = useState<string[]>([]);
+  const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isEditingLocal && !currentClientMedId) {
@@ -70,11 +70,45 @@ export function AddMedicineCard({
     }
   }, [med]);
 
-  React.useEffect(() => {
-    if (localErrors.length > 0) {
-      setLocalErrors([]);
-    }
-  }, [formState]);
+  useEffect(() => {
+    setLocalErrors((prev) => {
+      const newErrors = { ...prev };
+      let changed = false;
+
+      if (formName.trim() && newErrors.name) {
+        delete newErrors.name;
+        changed = true;
+      }
+      if (formType !== "TABLET" && formType !== "CAPSULE") {
+        if (formUnit && newErrors.unit) {
+          delete newErrors.unit;
+          changed = true;
+        }
+      }
+      const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
+      if (selectedSlots.length === N && newErrors.slots) {
+        delete newErrors.slots;
+        changed = true;
+      }
+      const parsedQty = parseInt(formQty.trim(), 10);
+      if (formQty.trim() && !isNaN(parsedQty) && parsedQty > 0 && newErrors.qty) {
+        delete newErrors.qty;
+        changed = true;
+      }
+      if (startDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const sDate = new Date(startDate);
+        sDate.setHours(0, 0, 0, 0);
+        if (sDate >= today && newErrors.startDate) {
+          delete newErrors.startDate;
+          changed = true;
+        }
+      }
+      
+      return changed ? newErrors : prev;
+    });
+  }, [formName, formType, formUnit, formFreq, selectedSlots, formQty, startDate]);
 
   const t = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
@@ -89,28 +123,26 @@ export function AddMedicineCard({
   };
 
   const handleSave = () => {
-    const errors: string[] = [];
+    const errors: Record<string, string> = {};
     if (!formName.trim()) {
-      errors.push(t("nameRequired"));
+      errors.name = t("nameRequired");
     }
     if (formType !== "TABLET" && formType !== "CAPSULE") {
       if (!formUnit) {
-        errors.push(t("unitRequired"));
+        errors.unit = t("unitRequired");
       }
     }
     
     const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
     if (selectedSlots.length !== N) {
-      errors.push(t("saveGateError", { required: N }));
+      errors.slots = t("saveGateError", { required: N });
     }
 
     const parsedQty = parseInt(formQty.trim(), 10);
     if (!formQty.trim() || isNaN(parsedQty) || parsedQty <= 0) {
-      errors.push(
-        preferredLang === "gujarati"
-          ? "કુલ જથ્થો જરૂરી છે"
-          : "Total Quantity is required"
-      );
+      errors.qty = preferredLang === "gujarati"
+        ? "કુલ જથ્થો જરૂરી છે"
+        : "Total Quantity is required";
     }
 
     if (startDate) {
@@ -119,21 +151,19 @@ export function AddMedicineCard({
       const sDate = new Date(startDate);
       sDate.setHours(0, 0, 0, 0);
       if (sDate < today) {
-        errors.push(
-          preferredLang === "gujarati"
-            ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
-            : preferredLang === "hindi"
-              ? "आरंभ तिथि भूतकाल में नहीं हो सकती"
-              : preferredLang === "marathi"
-                ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
-                : preferredLang === "tamil"
-                  ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
-                  : "Start Date cannot be in the past"
-        );
+        errors.startDate = preferredLang === "gujarati"
+          ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
+          : preferredLang === "hindi"
+            ? "आरंभ तिथि भूतकाल में नहीं हो सकती"
+            : preferredLang === "marathi"
+              ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
+              : preferredLang === "tamil"
+                ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
+                : "Start Date cannot be in the past";
       }
     }
 
-    if (errors.length > 0) {
+    if (Object.keys(errors).length > 0) {
       setLocalErrors(errors);
       return;
     }
@@ -207,17 +237,8 @@ export function AddMedicineCard({
         preferredLang={preferredLang}
         readOnly={readOnly}
         isInBottomSheet={isInBottomSheet}
+        errors={localErrors}
       />
-
-      {localErrors.length > 0 && (
-        <View style={{ marginBottom: 12, marginTop: 8 }}>
-          {localErrors.map((err, i) => (
-            <Text key={i} style={{ color: "#ef4444", fontSize: 12 }}>
-              • {err}
-            </Text>
-          ))}
-        </View>
-      )}
 
       {(() => {
         const parsed = parseChosenJson(chosenVal);

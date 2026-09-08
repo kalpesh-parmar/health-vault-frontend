@@ -39,6 +39,7 @@ export const MedicineExtractionBottomSheet = forwardRef<
     setChatWizardState,
     uploadingDocs,
     isUploading,
+    retryDocument,
   } = useDocumentUpload();
   const bottomPadding = useBottomBarPadding(16, 8);
 
@@ -373,17 +374,49 @@ export const MedicineExtractionBottomSheet = forwardRef<
                   />
                 </View>
 
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "bold",
-                    color: isDark ? "#cbd5e1" : "#334155",
-                    width: 35,
-                    textAlign: "right",
-                  }}
-                >
-                  {isFailed ? "-" : isDone ? "100%" : `${progress}%`}
-                </Text>
+                {isFailed && doc.fileKey && doc.retryable !== false ? (
+                  <TouchableOpacity
+                    onPress={() => retryDocument(doc.fileKey!, doc.batchId)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "#ef444420",
+                      borderColor: "#ef4444",
+                      borderWidth: 1,
+                      borderRadius: 8,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                    }}
+                  >
+                    <Ionicons
+                      name="refresh"
+                      size={11}
+                      color="#ef4444"
+                      style={{ marginRight: 3 }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: "#ef4444",
+                      }}
+                    >
+                      {t("retry") || "Retry"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "bold",
+                      color: isDark ? "#cbd5e1" : "#334155",
+                      width: 35,
+                      textAlign: "right",
+                    }}
+                  >
+                    {isFailed ? "-" : isDone ? "100%" : `${progress}%`}
+                  </Text>
+                )}
               </View>
             );
           })}
@@ -397,20 +430,22 @@ export const MedicineExtractionBottomSheet = forwardRef<
   };
 
   const hasContent =
+    uploadingDocs.length > 0 ||
+    isUploading ||
     chatWizardState.step !== "idle" ||
-    (isUploading && uploadingDocs.length > 0) ||
     chatWizardState.jobIds.length > 0;
 
   return (
     <BottomSheet
       ref={ref}
+      snapPoints={["60%", "85%"]}
       onChange={(index: number) => {
         if (index === -1 && onClose) {
           onClose();
         }
       }}
     >
-      <View style={{ paddingBottom: bottomPadding }}>
+      <View style={{ flex: 1, paddingBottom: bottomPadding }}>
         {hasContent ? renderStepContent() : null}
       </View>
     </BottomSheet>

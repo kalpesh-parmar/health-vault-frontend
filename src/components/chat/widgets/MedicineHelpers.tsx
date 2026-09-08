@@ -355,3 +355,44 @@ export function parseChosenJson(rawValue: string | null | undefined): any {
   }
 }
 
+/**
+ * Sanitizes a medicine object before sending it in the payload.
+ * - Upper-cases the type field.
+ * - Maps custom types (e.g. "SHOTS" -> "INJECTION").
+ * - Formats the dose object correctly based on the type.
+ */
+export function sanitizeMedicineForPayload(med: any): any {
+  if (!med || typeof med !== 'object') return med;
+
+  const rawType = String(med.type || med.medicineType || med.medicationType || "TABLET").toUpperCase().trim();
+  let newType = rawType;
+  
+  if (rawType === "SHOT" || rawType === "SHOTS") {
+    newType = "INJECTION";
+  } else if (rawType === "DROP") {
+    newType = "DROPS";
+  }
+
+  const isPill = newType === "TABLET" || newType === "CAPSULE";
+  
+  let newDose = med.dose ? { ...med.dose } : {};
+  if (isPill) {
+    const countVal = newDose.count !== undefined 
+      ? newDose.count 
+      : (newDose.value !== undefined ? newDose.value : 1);
+    newDose = { count: Number(countVal) || 1 };
+  } else {
+    if (newDose.count !== undefined && newDose.value === undefined) {
+      newDose = { value: Number(newDose.count) || 1, unit: newDose.unit || "ml" };
+    }
+  }
+
+  return {
+    ...med,
+    type: newType,
+    medicineType: newType,
+    medicationType: newType,
+    dose: newDose,
+  };
+}
+

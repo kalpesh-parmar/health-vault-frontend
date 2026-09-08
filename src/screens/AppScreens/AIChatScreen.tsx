@@ -78,13 +78,15 @@ import { AddMedicineCard } from "../../components/chat/widgets/AddMedicineCard";
 import { ReviewMedicinesListCard } from "../../components/chat/widgets/ReviewMedicinesListCard";
 import { ConfirmMedicineCard } from "../../components/chat/widgets/ConfirmMedicineCard";
 import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOptionsPanel";
-import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
+import { DocumentSummaryStats, ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
+import { DocumentProgressSummaryContainer } from "../../components/chat/widgets/DocumentProgressSummaryContainer";
 import {
   findHistoricalUserReply,
   HistoricalChips,
 } from "../../components/chat/widgets/HistoricalChips";
 import TypingIndicator from "../../components/chat/TypingIndicator";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { sanitizeMedicineForPayload } from "../../components/chat/widgets/MedicineHelpers";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 enum ChatMode {
   GENERAL_HEALTH = "GENERAL_HEALTH",
@@ -111,7 +113,7 @@ type ChatMessage = {
   summary?: any;
   fields?: any[];
   loginSummary?: string;
-  documentSummary?: string;
+  documentSummary?: string | DocumentSummaryStats;
   loginProvider?: string;
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
   documentIds?: string[];
@@ -120,6 +122,7 @@ type ChatMessage = {
   document?: any;
   suggestedQuestions?: string[];
   keyFindings?: any[];
+  isOnboardingMessage?: boolean;
 };
 
 const normalizeDocumentIds = (...sources: any[]): string[] | undefined => {
@@ -870,6 +873,8 @@ const AIChatScreen = ({ route }: any) => {
   >([]);
   const streamingAbortRef = useRef<AbortController | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
+  const streamingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isActivelyStreaming, setIsActivelyStreaming] = useState<boolean>(false);
 
   const tOnboarding = (
     key: string,
@@ -886,12 +891,21 @@ const AIChatScreen = ({ route }: any) => {
     return str;
   };
 
+  const clearStreamingTimer = () => {
+    if (streamingTimerRef.current) {
+      clearInterval(streamingTimerRef.current);
+      streamingTimerRef.current = null;
+    }
+  };
+
   const abortActiveStream = () => {
+    clearStreamingTimer();
     if (streamingAbortRef.current) {
       streamingAbortRef.current.abort();
       streamingAbortRef.current = null;
     }
     streamingMessageIdRef.current = null;
+    setIsActivelyStreaming(false);
   };
 
   const upsertAssistantMessage = (
@@ -917,7 +931,98 @@ const AIChatScreen = ({ route }: any) => {
 
     const messageId = `ai-stream-${Date.now()}`;
     streamingMessageIdRef.current = messageId;
-    let hasChunk = false;
+    let pendingBuffer = "";
+    let displayedText = "";
+    let streamFinished = false;
+    let finishData: any = null;
+
+    const finalizeStream = (finalData: any) => {
+      clearStreamingTimer();
+      setIsActivelyStreaming(false);
+      const replyText =
+        finalData?.reply ||
+        finalData?.data?.reply ||
+        finalData?.message ||
+        finalData?.text ||
+        "";
+
+      upsertAssistantMessage(messageId, (current) => {
+        const baseMessage = current || {
+          id: messageId,
+          role: "ai",
+          text: "",
+          createdAt: new Date().toISOString(),
+        };
+
+        return {
+          ...baseMessage,
+          text: displayedText || replyText || baseMessage.text,
+          sessionId: finalData?.sessionId ?? baseMessage.sessionId,
+          mode: finalData?.mode ?? baseMessage.mode,
+          action:
+            finalData?.actionType ||
+            finalData?.action ||
+            baseMessage.action ||
+            "NORMAL_CHAT",
+          options: finalData?.options ?? baseMessage.options ?? [],
+          medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
+          documents: finalData?.documents ?? baseMessage.documents,
+          document: finalData?.document ?? baseMessage.document ?? null,
+          suggestedQuestions:
+            finalData?.suggestedQuestions ??
+            baseMessage.suggestedQuestions ??
+            [],
+          keyFindings:
+            finalData?.document?.keyFindings ??
+            finalData?.keyFindings ??
+            baseMessage.keyFindings ??
+            [],
+          documentIds:
+            normalizeDocumentIds(
+              finalData?.documentId,
+              finalData?.documentIds,
+              finalData?.documents,
+            ) ?? baseMessage.documentIds,
+        };
+      });
+
+      if (finalData?.sessionId && !activeSessionId) {
+        setActiveSessionId(finalData.sessionId);
+        apiClient
+          .get("/chat/session", { params: { limit: 50 } })
+          .then((res) => {
+            setSessions(res.data?.data?.items || res.data?.items || []);
+          })
+          .catch(() => { });
+      }
+    };
+
+    // Smooth character release interval (ticking every 20ms)
+    streamingTimerRef.current = setInterval(() => {
+      if (pendingBuffer.length > 0) {
+        let step = 1;
+        if (pendingBuffer.length > 80) step = 8;
+        else if (pendingBuffer.length > 40) step = 5;
+        else if (pendingBuffer.length > 20) step = 3;
+        else if (pendingBuffer.length > 8) step = 2;
+
+        const nextChars = pendingBuffer.slice(0, step);
+        pendingBuffer = pendingBuffer.slice(step);
+        displayedText += nextChars;
+
+        upsertAssistantMessage(messageId, (current) => ({
+          ...(current || {
+            id: messageId,
+            role: "ai",
+            text: "",
+            createdAt: new Date().toISOString(),
+          }),
+          text: displayedText,
+        }));
+      } else if (streamFinished) {
+        finalizeStream(finishData);
+      }
+    }, 20);
 
     try {
       await streamChatResponse(
@@ -926,73 +1031,19 @@ const AIChatScreen = ({ route }: any) => {
         {
           onChunk: (chunkText) => {
             if (!chunkText) return;
-            hasChunk = true;
-            upsertAssistantMessage(messageId, (current) => ({
-              ...(current || {
-                id: messageId,
-                role: "ai",
-                text: "",
-                createdAt: new Date().toISOString(),
-              }),
-              text: `${current?.text || ""}${chunkText}`,
-            }));
+            setIsActivelyStreaming(true);
+            pendingBuffer += chunkText;
           },
           onFinish: (finalData) => {
-            const replyText = finalData?.reply || "";
-
-            upsertAssistantMessage(messageId, (current) => {
-              const baseMessage = current || {
-                id: messageId,
-                role: "ai",
-                text: "",
-                createdAt: new Date().toISOString(),
-              };
-
-              return {
-                ...baseMessage,
-                text: hasChunk
-                  ? baseMessage.text || replyText
-                  : replyText || baseMessage.text,
-                sessionId: finalData?.sessionId ?? baseMessage.sessionId,
-                mode: finalData?.mode ?? baseMessage.mode,
-                action:
-                  finalData?.actionType ||
-                  finalData?.action ||
-                  baseMessage.action ||
-                  "NORMAL_CHAT",
-                options: finalData?.options ?? baseMessage.options ?? [],
-                medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
-                documents: finalData?.documents ?? baseMessage.documents,
-                document: finalData?.document ?? baseMessage.document ?? null,
-                suggestedQuestions:
-                  finalData?.suggestedQuestions ??
-                  baseMessage.suggestedQuestions ??
-                  [],
-                keyFindings:
-                  finalData?.document?.keyFindings ??
-                  finalData?.keyFindings ??
-                  baseMessage.keyFindings ??
-                  [],
-                documentIds:
-                  normalizeDocumentIds(
-                    finalData?.documentId,
-                    finalData?.documentIds,
-                    finalData?.documents,
-                  ) ?? baseMessage.documentIds,
-              };
-            });
-
-            if (finalData?.sessionId && !activeSessionId) {
-              setActiveSessionId(finalData.sessionId);
-              apiClient
-                .get("/chat/session", { params: { limit: 50 } })
-                .then((res) => {
-                  setSessions(res.data?.data?.items || res.data?.items || []);
-                })
-                .catch(() => { });
+            finishData = finalData;
+            streamFinished = true;
+            if (pendingBuffer.length === 0) {
+              finalizeStream(finalData);
             }
           },
           onError: (error) => {
+            clearStreamingTimer();
+            setIsActivelyStreaming(false);
             if (error.message === "Stream cancelled") {
               return;
             }
@@ -1085,19 +1136,100 @@ const AIChatScreen = ({ route }: any) => {
               "/v1/onboarding/chat",
               payload,
             );
-            const resData = response.data?.data;
-            if (resData?.reply) {
-              const aiMsg: ChatMessage = {
-                id: `ai-upload-response-${Date.now()}`,
-                role: "ai",
-                text: resData.reply,
-                action: resData.actionType || resData.action || "NORMAL_CHAT",
-                options: resData.options || [],
-                medicines: resData.medicines || [],
-                createdAt: new Date().toISOString(),
-              };
-              setMessages((prev) => [...prev, aiMsg]);
-            }
+            const resData = response.data?.data || response.data;
+            const resDocsName: string[] = Array.isArray(resData?.documentsName)
+              ? resData.documentsName
+              : Array.isArray(resData?.documentsNames)
+                ? resData.documentsNames
+                : [];
+
+            const uploadedDocuments =
+              resData?.documents && resData.documents.length > 0
+                ? resData.documents
+                : resData?.document
+                  ? [resData.document]
+                  : resDocsName.length > 0
+                    ? resDocsName.map((nameOrKey: string, idx: number) => {
+                        const matchedUpload = uploadingDocs.find(
+                          (u) =>
+                            u.jobId === nameOrKey ||
+                            u.fileKey === nameOrKey ||
+                            u.id === nameOrKey ||
+                            u.name === nameOrKey,
+                        );
+                        const matchedInfo = chatWizardState.filesInfo.find(
+                          (f) =>
+                            f.jobId === nameOrKey ||
+                            f.fileKey === nameOrKey ||
+                            f.fileName === nameOrKey,
+                        );
+                        let docStatus = matchedUpload?.status || "COMPLETED";
+                        if (resData?.documentSummary) {
+                          const failed = resData.documentSummary.failed || 0;
+                          const rejected = resData.documentSummary.rejected || 0;
+                          if (idx < rejected) {
+                            docStatus = "REJECTED";
+                          } else if (idx < rejected + failed) {
+                            docStatus = "FAILED";
+                          }
+                        }
+                        return {
+                          id: nameOrKey,
+                          fileKey: matchedInfo?.fileKey || matchedUpload?.fileKey || nameOrKey,
+                          fileName: matchedInfo?.fileName || matchedUpload?.name || nameOrKey,
+                          name: matchedInfo?.fileName || matchedUpload?.name || nameOrKey,
+                          status: docStatus,
+                          reason: matchedUpload?.reason || null,
+                          retryable: matchedUpload?.retryable ?? true,
+                        };
+                      })
+                  : chatWizardState.filesInfo.map((f) => {
+                      const matchedUpload = uploadingDocs.find(
+                        (u) => u.jobId === f.jobId || u.fileKey === f.fileKey || u.id === f.jobId,
+                      );
+                      return {
+                        id: f.jobId || f.fileKey,
+                        fileKey: f.fileKey,
+                        fileName: f.fileName,
+                        name: f.fileName,
+                        status: matchedUpload?.status || "COMPLETED",
+                        reason: matchedUpload?.reason || null,
+                        retryable: matchedUpload?.retryable ?? true,
+                      };
+                    });
+
+            const resolvedAction =
+              flatMeds.length > 0
+                ? "REVIEW_MEDICINES_LIST"
+                : (resData?.actionType || resData?.action || "ADD_DOCUMENT");
+
+            const aiMsg: ChatMessage = {
+              id: `ai-upload-response-${Date.now()}`,
+              role: "ai",
+              text:
+                resData?.reply ||
+                (flatMeds.length > 0
+                  ? "I've extracted the following medicines from your uploaded documents. Please review and confirm."
+                  : "Document processing complete."),
+              action: resolvedAction,
+              options: resData?.options || [],
+              medicines: flatMeds.length > 0 ? flatMeds : (resData?.medicines || []),
+              document: resData?.document || null,
+              documentSummary: resData?.documentSummary || null,
+              documents: uploadedDocuments,
+              suggestedQuestions: resData?.suggestedQuestions || [],
+              keyFindings:
+                resData?.document?.keyFindings || resData?.keyFindings || [],
+              documentIds: normalizeDocumentIds(
+                resData?.document?.id,
+                resData?.documentId,
+                resData?.documentIds,
+                resData?.documents,
+                chatWizardState.filesInfo,
+              ),
+              createdAt: new Date().toISOString(),
+            };
+            setMessages((prev) => [...prev, aiMsg]);
 
             if (resData?.sessionId && !activeSessionId) {
               setActiveSessionId(resData.sessionId);
@@ -1968,7 +2100,9 @@ const AIChatScreen = ({ route }: any) => {
 
       if (resumableState?.preferredLanguage) {
         setPreferredLang(resumableState.preferredLanguage);
+        await AsyncStorage.setItem("preferredLanguage", resumableState.preferredLanguage);
       }
+
       if (resumableState) {
         lastKnownStateRef.current = resumableState;
       }
@@ -1994,6 +2128,7 @@ const AIChatScreen = ({ route }: any) => {
             action:
               meta.action || meta.actionType || "NORMAL_CHAT",
             document: meta.document || null,
+            documentSummary: meta.documentSummary || null,
             suggestedQuestions: meta.suggestedQuestions || [],
             keyFindings:
               meta.document?.keyFindings || meta.keyFindings || [],
@@ -2003,6 +2138,7 @@ const AIChatScreen = ({ route }: any) => {
               meta.documentIds,
               meta.documents,
             ),
+            isOnboardingMessage: true,
           };
         });
         setOnboardingMessages(mapped);
@@ -2158,6 +2294,54 @@ const AIChatScreen = ({ route }: any) => {
             } else {
               meta = meta || {};
             }
+            const rawDocsName: string[] = Array.isArray(meta.documentsName)
+              ? meta.documentsName
+              : Array.isArray(meta.documentsNames)
+                ? meta.documentsNames
+                : [];
+
+            const resolvedDocs =
+              meta.documents && meta.documents.length > 0
+                ? meta.documents
+                : meta.document
+                  ? [meta.document]
+                  : rawDocsName.length > 0
+                    ? rawDocsName.map((nameOrKey: string, idx: number) => {
+                        const matched = documentsList.find(
+                          (d: any) =>
+                            d.id === nameOrKey ||
+                            d.s3Key === nameOrKey ||
+                            d.fileKey === nameOrKey ||
+                            d.fileName === nameOrKey,
+                        );
+                        let docStatus = "COMPLETED";
+                        if (meta.documentSummary) {
+                          const failed = meta.documentSummary.failed || 0;
+                          const rejected = meta.documentSummary.rejected || 0;
+                          if (idx < rejected) {
+                            docStatus = "REJECTED";
+                          } else if (idx < rejected + failed) {
+                            docStatus = "FAILED";
+                          }
+                        }
+                        return (
+                          matched || {
+                            id: nameOrKey,
+                            fileKey: nameOrKey,
+                            fileName: nameOrKey,
+                            name: nameOrKey,
+                            status: docStatus,
+                          }
+                        );
+                      })
+                  : Array.isArray(meta.documentIds) && meta.documentIds.length > 0
+                    ? meta.documentIds
+                        .map((id: string) => documentsList.find((d: any) => d.id === id || d.s3Key === id || d.fileKey === id))
+                        .filter(Boolean)
+                    : meta.documentId
+                      ? [documentsList.find((d: any) => d.id === meta.documentId || d.s3Key === meta.documentId || d.fileKey === meta.documentId)].filter(Boolean)
+                      : [];
+
             return {
               ...meta,
               id: dbMsg.id,
@@ -2169,9 +2353,10 @@ const AIChatScreen = ({ route }: any) => {
               action: meta.action || meta.actionType || "NORMAL_CHAT",
               medicines: meta.medicines || [],
               conflicts: meta.conflicts || [],
-              documents: meta.documents || [],
+              documents: resolvedDocs,
               options: meta.options || [],
               document: meta.document || null,
+              documentSummary: meta.documentSummary || null,
               suggestedQuestions: meta.suggestedQuestions || [],
               keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
               documentIds: normalizeDocumentIds(
@@ -2222,6 +2407,54 @@ const AIChatScreen = ({ route }: any) => {
         } else {
           meta = meta || {};
         }
+        const rawDocsName: string[] = Array.isArray(meta.documentsName)
+          ? meta.documentsName
+          : Array.isArray(meta.documentsNames)
+            ? meta.documentsNames
+            : [];
+
+        const resolvedDocs =
+          meta.documents && meta.documents.length > 0
+            ? meta.documents
+            : meta.document
+              ? [meta.document]
+              : rawDocsName.length > 0
+                ? rawDocsName.map((nameOrKey: string, idx: number) => {
+                    const matched = documentsList.find(
+                      (d: any) =>
+                        d.id === nameOrKey ||
+                        d.s3Key === nameOrKey ||
+                        d.fileKey === nameOrKey ||
+                        d.fileName === nameOrKey,
+                    );
+                    let docStatus = "COMPLETED";
+                    if (meta.documentSummary) {
+                      const failed = meta.documentSummary.failed || 0;
+                      const rejected = meta.documentSummary.rejected || 0;
+                      if (idx < rejected) {
+                        docStatus = "REJECTED";
+                      } else if (idx < rejected + failed) {
+                        docStatus = "FAILED";
+                      }
+                    }
+                    return (
+                      matched || {
+                        id: nameOrKey,
+                        fileKey: nameOrKey,
+                        fileName: nameOrKey,
+                        name: nameOrKey,
+                        status: docStatus,
+                      }
+                    );
+                  })
+              : Array.isArray(meta.documentIds) && meta.documentIds.length > 0
+                ? meta.documentIds
+                    .map((id: string) => documentsList.find((d: any) => d.id === id || d.s3Key === id || d.fileKey === id))
+                    .filter(Boolean)
+                : meta.documentId
+                  ? [documentsList.find((d: any) => d.id === meta.documentId || d.s3Key === meta.documentId || d.fileKey === meta.documentId)].filter(Boolean)
+                  : [];
+
         return {
           ...meta,
           id: dbMsg.id,
@@ -2233,9 +2466,10 @@ const AIChatScreen = ({ route }: any) => {
           action: meta.action || meta.actionType || "NORMAL_CHAT",
           medicines: meta.medicines || [],
           conflicts: meta.conflicts || [],
-          documents: meta.documents || [],
+          documents: resolvedDocs,
           options: meta.options || [],
           document: meta.document || null,
+          documentSummary: meta.documentSummary || null,
           suggestedQuestions: meta.suggestedQuestions || [],
           keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
           documentIds: normalizeDocumentIds(
@@ -2308,6 +2542,8 @@ const AIChatScreen = ({ route }: any) => {
             action: resData.actionType || resData.action || "NORMAL_CHAT",
             options: resData.options || [],
             medicines: resData.medicines || [],
+            document: resData.document || null,
+            documentSummary: resData.documentSummary || null,
             documents: resData.documents || [],
             documentIds: normalizeDocumentIds(
               resData.documentId,
@@ -2402,6 +2638,7 @@ const AIChatScreen = ({ route }: any) => {
           medicines: resData?.medicines || [],
           documents: resData?.documents || [],
           document: resData?.document || null,
+          documentSummary: resData?.documentSummary || null,
           suggestedQuestions: resData?.suggestedQuestions || [],
           keyFindings:
             resData?.document?.keyFindings || resData?.keyFindings || [],
@@ -2546,7 +2783,17 @@ const AIChatScreen = ({ route }: any) => {
 
       if (option.actionType === "CONFIRM_MEDICINES") {
         payload.actionType = "CONFIRM_MEDICINES";
-        payload.actionData = option.value;
+        let sanitizedData = option.value;
+        if (Array.isArray(option.value)) {
+          sanitizedData = option.value.map(sanitizeMedicineForPayload);
+        } else if (option.value && Array.isArray(option.value.medicines)) {
+          sanitizedData = {
+            ...option.value,
+            medicines: option.value.medicines.map(sanitizeMedicineForPayload),
+          };
+        }
+        payload.actionData = sanitizedData;
+        payload.message = "CONFIRM_MEDICINES";
       } else {
         payload.message =
           typeof normalizedKey === "object"
@@ -2578,6 +2825,7 @@ const AIChatScreen = ({ route }: any) => {
           medicines: resData.medicines || [],
           documents: resData.documents || [],
           document: resData.document || null,
+          documentSummary: resData.documentSummary || null,
           suggestedQuestions: resData.suggestedQuestions || [],
           keyFindings:
             resData.document?.keyFindings || resData.keyFindings || [],
@@ -2684,8 +2932,36 @@ const AIChatScreen = ({ route }: any) => {
     return map;
   }, [mergedMessages, preferredLang, midnightTick]);
 
+  const hasActiveUploads = useMemo(() => {
+    if (isUploading) return true;
+    if (!uploadingDocs || uploadingDocs.length === 0) return false;
+    return uploadingDocs.some((doc) => {
+      const status = (doc.status || "").toUpperCase();
+      return (
+        !["COMPLETED", "FAILED", "REJECTED", "CANCELLED", "SUCCESS", "ERROR"].includes(status) &&
+        doc.progress !== 100 &&
+        doc.progress !== -1
+      );
+    });
+  }, [isUploading, uploadingDocs]);
+
   const isLatestActiveMessage = (msgId: string) => {
-    return !!activePendingMessageId && activePendingMessageId === msgId;
+    if (!isOnboardingCompleted && activePendingMessageId) {
+      return activePendingMessageId === msgId;
+    }
+    // In active chat / post-onboarding, find the latest actionable AI message
+    const newestActionableMsg = mergedMessages.find(
+      (m) =>
+        m.role === "ai" &&
+        m.action &&
+        m.action !== "NORMAL_CHAT" &&
+        m.action !== "POST_ONBOARDING" &&
+        m.action !== "COMPLETE",
+    );
+    if (!newestActionableMsg) return false;
+    if (newestActionableMsg.id !== msgId) return false;
+    const { chosenVal } = findHistoricalUserReply(mergedMessages, msgId, true);
+    return chosenVal === null;
   };
 
   if (isLoadingDocs || isLoadingHistory) {
@@ -2718,16 +2994,12 @@ const AIChatScreen = ({ route }: any) => {
       />
 
       {/* Floating Background Progress Panel */}
-      {showFloatingPanel &&
-        (isUploading ||
-          (uploadingDocs?.length > 0 && avgProgress < 100) ||
-          (chatWizardState.step !== "idle" &&
-            !chatWizardState.hasViewedCompletedOcr)) && (
-          <FloatingProgressPanel
-            onOpenSheet={handleOpenProgressSheet}
-            isDark={isDark}
-          />
-        )}
+      {showFloatingPanel && hasActiveUploads && (
+        <FloatingProgressPanel
+          onOpenSheet={handleOpenProgressSheet}
+          isDark={isDark}
+        />
+      )}
 
       <View style={styles.keyboardContainer}>
         {/* Emergency Card Display */}
@@ -3005,7 +3277,49 @@ const AIChatScreen = ({ route }: any) => {
                       </View>,
                     );
                   }
-                  if (item.action === "REVIEW_MEDICINES_LIST" || item.action === "ADD_DOCUMENT") {
+                  if (item.action === "ADD_DOCUMENT") {
+                    const hasMedicines = item.medicines && item.medicines.length > 0;
+                    if (!hasMedicines) {
+                      if (item.isOnboardingMessage) {
+                        return renderAssistantPrompt(null);
+                      }
+                      const msgDocs =
+                        item.documents && item.documents.length > 0
+                          ? item.documents
+                          : item.document
+                            ? [item.document]
+                            : [];
+                      return renderAssistantPrompt(
+                        <DocumentProgressSummaryContainer
+                          documents={msgDocs}
+                          preferredLang={preferredLang}
+                          isDark={isDark}
+                          theme={theme}
+                        />,
+                      );
+                    }
+                    const doc = item.document || {};
+                    const isReadOnly = (isHistorical && chosenVal !== null);
+                    const questions =
+                      item.suggestedQuestions && item.suggestedQuestions.length > 0
+                        ? item.suggestedQuestions
+                        : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+                    return renderAssistantPrompt(
+                      <ReportSummaryChatCard
+                        document={doc}
+                        documentSummary={item.documentSummary}
+                        suggestedQuestions={questions}
+                        isDark={isDark}
+                        theme={theme}
+                        preferredLang={preferredLang}
+                        onQuestionPress={(q) => handleSend(q)}
+                        onViewFullReport={() => handleViewFullReport(doc)}
+                        readOnly={isReadOnly}
+                      />,
+                    );
+                  }
+                  if (item.action === "REVIEW_MEDICINES_LIST") {
                     const isLatest = isLatestActiveMessage(item.id);
                     const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
                     const displayMeds = item.medicines?.length
@@ -3118,6 +3432,8 @@ const AIChatScreen = ({ route }: any) => {
                         readOnly={isReadOnly}
                         chosenVal={chosenVal}
                         chosenLabel={chosenLabel}
+                        documents={item.documents}
+                        showDocumentSummary={!item.isOnboardingMessage}
                       />,
                     );
                   }
@@ -3159,9 +3475,32 @@ const AIChatScreen = ({ route }: any) => {
                     );
                   }
                   if (item.action === "ASK_REPORT") {
+                    const hasMedicines = item.medicines && item.medicines.length > 0;
+                    if (!hasMedicines) {
+                      if (item.isOnboardingMessage) {
+                        return renderAssistantPrompt(null);
+                      }
+                      const msgDocs =
+                        item.documents && item.documents.length > 0
+                          ? item.documents
+                          : item.document
+                            ? [item.document]
+                            : [];
+                      if (msgDocs.length > 0) {
+                        return renderAssistantPrompt(
+                          <DocumentProgressSummaryContainer
+                            documents={msgDocs}
+                            preferredLang={preferredLang}
+                            isDark={isDark}
+                            theme={theme}
+                          />,
+                        );
+                      }
+                      return renderAssistantPrompt(null);
+                    }
                     const doc = item.document;
                     const hasDoc = Boolean(
-                      doc && (doc.id || doc.summary || (doc.keyFindings && doc.keyFindings.length > 0)),
+                      doc && (doc.id || doc.summary || (doc.keyFindings && doc.keyFindings.length > 0) || doc.extractedStructuredData),
                     );
 
                     if (!hasDoc) {
@@ -3177,6 +3516,7 @@ const AIChatScreen = ({ route }: any) => {
                     return renderAssistantPrompt(
                       <ReportSummaryChatCard
                         document={doc}
+                        documentSummary={item.documentSummary}
                         suggestedQuestions={questions}
                         isDark={isDark}
                         theme={theme}
@@ -3230,6 +3570,7 @@ const AIChatScreen = ({ route }: any) => {
                           }, 100);
                         }}
                         preferredLang={preferredLang}
+                        documents={item.documents}
                       />,
                     );
                   }
@@ -3483,7 +3824,7 @@ const AIChatScreen = ({ route }: any) => {
                 ) : null
               }
               ListHeaderComponent={
-                isSending ? (
+                isSending && !isActivelyStreaming ? (
                   <View
                     style={{
                       flexDirection: "row",

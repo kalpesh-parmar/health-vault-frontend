@@ -526,11 +526,18 @@ apiClient.interceptors.response.use(
         console.error(`[API LOG] OUTGOING RESPONSE ERROR:\n${JSON.stringify(errorLog, null, 2)}`);
     }
 
+    const isSessionExpiredError = 
+      data?.forceLogout === true || 
+      data?.errorCode === "SESSION_EXPIRED" ||
+      (typeof message === "string" && (
+        message.toLowerCase().includes("session expired") ||
+        message.toLowerCase().includes("user not found")
+      ));
+
     if (
       !isAuthRequest &&
       error.response?.status === 401 &&
-      data &&
-      (data.forceLogout === true || data.errorCode === "SESSION_EXPIRED")
+      isSessionExpiredError
     ) {
       const originalRequest = config;
       

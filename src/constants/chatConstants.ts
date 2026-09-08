@@ -185,6 +185,10 @@ export const I18N_REPORT_CARD_UI: Record<string, Record<string, string>> = {
     beforeFood: "Before Food",
     afterFood: "After Food",
     withFood: "With Food",
+    totalUploads: "Total Uploads",
+    failed: "Failed",
+    rejected: "Rejected",
+    documentUploadSummary: "Document Upload Summary",
   },
   gujarati: {
     completed: "પૂર્ણ",
@@ -212,6 +216,10 @@ export const I18N_REPORT_CARD_UI: Record<string, Record<string, string>> = {
     beforeFood: "જમ્યા પહેલા",
     afterFood: "જમ્યા પછી",
     withFood: "ખોરાક સાથે",
+    totalUploads: "કુલ અપલોડ",
+    failed: "નિષ્ફળ",
+    rejected: "અસ્વીકાર",
+    documentUploadSummary: "દસ્તાવેજ અપલોડ સારાંશ",
   },
   hindi: {
     completed: "पूर्ण",
@@ -239,6 +247,10 @@ export const I18N_REPORT_CARD_UI: Record<string, Record<string, string>> = {
     beforeFood: "खाने से पहले",
     afterFood: "खाने के बाद",
     withFood: "खाने के साथ",
+    totalUploads: "कुल अपलोड",
+    failed: "विफल",
+    rejected: "अस्वीकृत",
+    documentUploadSummary: "दस्तावेज़ अपलोड सारांश",
   },
   marathi: {
     completed: "पूर्ण",
@@ -266,6 +278,10 @@ export const I18N_REPORT_CARD_UI: Record<string, Record<string, string>> = {
     beforeFood: "जेवणापूर्वी",
     afterFood: "जेवणानंतर",
     withFood: "जेवणासोबत",
+    totalUploads: "एकूण अपलोड",
+    failed: "अयशस्वी",
+    rejected: "नाकारले",
+    documentUploadSummary: "दस्तऐवज अपलोड सारांश",
   },
   tamil: {
     completed: "முடிந்தது",
@@ -293,6 +309,10 @@ export const I18N_REPORT_CARD_UI: Record<string, Record<string, string>> = {
     beforeFood: "உணவுக்கு முன்",
     afterFood: "உணவுக்குப் பின்",
     withFood: "உணவுடன்",
+    totalUploads: "மொத்த பதிவேற்றங்கள்",
+    failed: "தோல்வி",
+    rejected: "நிராகரிக்கப்பட்டது",
+    documentUploadSummary: "ஆவண பதிவேற்ற சுருக்கம்",
   },
 };
 

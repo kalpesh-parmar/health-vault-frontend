@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDateOnly } from "../../../utils/dateFormatter";
@@ -52,8 +52,16 @@ export interface ReportSummaryDocument {
   fileUrl?: string;
 }
 
+export interface DocumentSummaryStats {
+  totalUploads?: number;
+  completed?: number;
+  failed?: number;
+  rejected?: number;
+}
+
 export interface ReportSummaryChatCardProps {
   document?: ReportSummaryDocument;
+  documentSummary?: DocumentSummaryStats | string;
   suggestedQuestions?: string[];
   isDark: boolean;
   theme?: any;
@@ -65,6 +73,7 @@ export interface ReportSummaryChatCardProps {
 
 export const ReportSummaryChatCard: React.FC<ReportSummaryChatCardProps> = ({
   document = {},
+  documentSummary,
   suggestedQuestions = [],
   isDark,
   theme,
@@ -97,92 +106,147 @@ export const ReportSummaryChatCard: React.FC<ReportSummaryChatCardProps> = ({
     I18N_REPORT_CARD_UI[preferredLang] ||
     I18N_REPORT_CARD_UI.english;
 
+  // Safely parse documentSummary if passed as object or JSON string
+  const parsedDocSummary: DocumentSummaryStats | null = useMemo(() => {
+    if (!documentSummary) return null;
+    if (typeof documentSummary === "object") {
+      return documentSummary;
+    }
+    if (typeof documentSummary === "string") {
+      try {
+        const parsed = JSON.parse(documentSummary);
+        if (typeof parsed === "object" && parsed !== null) {
+          return parsed;
+        }
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }, [documentSummary]);
+
+  const hasDocSummary = Boolean(
+    parsedDocSummary &&
+      (parsedDocSummary.totalUploads !== undefined ||
+        parsedDocSummary.completed !== undefined ||
+        parsedDocSummary.failed !== undefined ||
+        parsedDocSummary.rejected !== undefined),
+  );
+
+  // Normalize nested extractedStructuredData if present
+  const extracted = (document as any)?.extractedStructuredData || {};
+
   const isPrescription =
     document.documentType === "PRESCRIPTION" ||
-    document.documentType === "PRESCERIPTION";
+    document.documentType === "PRESCERIPTION" ||
+    extracted.documentType === "PRESCRIPTION" ||
+    extracted.reportType === "PRESCRIPTION";
 
   const docTypeLabel = isPrescription
     ? t.prescription
-    : formatDocumentType(document.documentType || "LAB_REPORT");
+    : formatDocumentType(
+        document.documentType ||
+          extracted.documentType ||
+          extracted.reportType ||
+          "LAB_REPORT",
+      );
 
-  const rawDate = document.reportDate || document.createdAt;
+  const rawDate =
+    document.reportDate ||
+    extracted.reportDate ||
+    extracted.visitDate ||
+    document.createdAt;
   const formattedDate = rawDate
     ? formatDateOnly(rawDate, "dd MMM yyyy")
     : "";
 
   const doctorOrHospital =
     document.doctorName ||
+    extracted.doctorName ||
+    extracted.doctorInfo?.name ||
     document.hospitalName ||
     document.clinicName ||
+    extracted.hospitalName ||
+    extracted.hospitalInfo?.name ||
     document.patientName ||
+    extracted.patientName ||
+    extracted.patientInfo?.name ||
     null;
 
   const fileName =
     document.fileName ||
     (isPrescription ? t.prescription : t.medicalReport);
 
-  const doctorName = document.doctorName || null;
-  const hospitalName = document.hospitalName || document.clinicName || null;
+  const doctorName =
+    document.doctorName ||
+    extracted.doctorName ||
+    extracted.doctorInfo?.name ||
+    null;
+
+  const hospitalName =
+    document.hospitalName ||
+    document.clinicName ||
+    extracted.hospitalName ||
+    extracted.hospitalInfo?.name ||
+    null;
 
   // AI Summary - prioritize preferred language when non-English
   const isNonEnglish = langKey !== "english";
   const aiSummaryText =
     (isNonEnglish && (document as any).summaryInPreferredLanguage) ||
     document.summary ||
+    extracted.summary ||
     document.summaryEnglish ||
     (document as any).summaryInPreferredLanguage ||
     null;
 
-  // Task C: Separate honestly-typed lab and medication lists
-  const labFindings: LabFindingItem[] =
+  // Lab findings extraction
+  const rawLabResults =
     document.labFindings && document.labFindings.length > 0
       ? document.labFindings
       : Array.isArray(document.tests) && document.tests.length > 0
-      ? document.tests.map((t: any) => ({
-          name: t.name || t.testName || t.parameter || "Test",
-          value: t.value || t.result || "",
-          unit: t.unit || "",
-          status: t.status || (t.isAbnormal ? "Abnormal" : "Normal"),
-          referenceRange: t.normalRange || t.referenceRange || t.range || "",
-        }))
-      : (!isPrescription && Array.isArray(document.keyFindings) && document.keyFindings.length > 0)
-      ? document.keyFindings.map((f: any) => ({
-          name: f.name || "Test",
-          value: f.value || "",
-          unit: f.unit || "",
-          status: f.status || "Normal",
-          referenceRange: f.referenceRange || f.normalRange || "",
-        }))
+      ? document.tests
+      : Array.isArray(extracted.labResults) && extracted.labResults.length > 0
+      ? extracted.labResults
+      : Array.isArray(extracted.testResults) && extracted.testResults.length > 0
+      ? extracted.testResults
+      : Array.isArray(extracted.observations) && extracted.observations.length > 0
+      ? extracted.observations
+      : !isPrescription && Array.isArray(document.keyFindings) && document.keyFindings.length > 0
+      ? document.keyFindings
       : [];
 
-  const medicationFindings: MedicationFindingItem[] =
+  const labFindings: LabFindingItem[] = rawLabResults.map((item: any) => ({
+    name: item.name || item.testName || item.parameter || "Test",
+    value: item.value || item.result || "",
+    unit: item.unit || "",
+    status: item.status || (item.isAbnormal ? "Abnormal" : "Normal"),
+    referenceRange: item.normalRange || item.referenceRange || item.range || "",
+  }));
+
+  // Medication findings extraction
+  const rawMedications =
     document.medicationFindings && document.medicationFindings.length > 0
       ? document.medicationFindings
       : Array.isArray(document.medications) && document.medications.length > 0
-      ? document.medications.map((m: any) => ({
-          name: m.name || m.medicationName || "Medicine",
-          dosage: m.dosage || m.dose || "",
-          timeOfDay: m.timeOfDay || m.timing || "",
-          frequency: m.frequency || "",
-          duration: m.duration || "",
-          quantity: m.quantity || m.qty || "",
-          instructions: m.instructions || m.notes || "",
-          type: m.type || m.medicationType || "Tablet",
-          foodContext: m.foodContext || m.food_context || "",
-        }))
-      : (isPrescription && Array.isArray(document.keyFindings) && document.keyFindings.length > 0)
-      ? document.keyFindings.map((f: any) => ({
-          name: f.name || "Medicine",
-          dosage: f.value || f.dosage || "",
-          duration: f.unit || f.duration || "",
-          instructions: f.referenceRange || f.instructions || "",
-          type: f.type || "Tablet",
-          timeOfDay: f.timeOfDay || "",
-          quantity: f.quantity || "",
-          frequency: f.frequency || "",
-          foodContext: f.foodContext || "",
-        }))
+      ? document.medications
+      : Array.isArray(extracted.medications) && extracted.medications.length > 0
+      ? extracted.medications
+      : isPrescription && Array.isArray(document.keyFindings) && document.keyFindings.length > 0
+      ? document.keyFindings
       : [];
+
+  const medicationFindings: MedicationFindingItem[] = rawMedications.map((item: any) => ({
+    name: item.name || item.medicationName || "Medicine",
+    dosage: item.dosage || item.dose || item.value || "",
+    timeOfDay: item.timeOfDay || item.timing || "",
+    frequency: item.frequency || "",
+    duration: item.duration || item.unit || "",
+    quantity: item.quantity || item.qty || "",
+    instructions: item.instructions || item.notes || item.referenceRange || "",
+    type: item.type || item.medicationType || "Tablet",
+    foodContext: item.foodContext || item.food_context || "",
+  }));
 
   const hasMedications = isPrescription && medicationFindings.length > 0;
   const hasLabFindings = !isPrescription && labFindings.length > 0;
@@ -271,6 +335,177 @@ export const ReportSummaryChatCard: React.FC<ReportSummaryChatCardProps> = ({
           },
         ]}
       >
+        {/* Upload Summary Stats (When documentSummary is present) */}
+        {hasDocSummary && parsedDocSummary && (
+          <View
+            style={[
+              styles.docSummaryStatsBox,
+              {
+                backgroundColor: isDark
+                  ? "rgba(255, 255, 255, 0.04)"
+                  : "#f8fafc",
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.docSummaryTitleRow}>
+              <Ionicons name="document-text-outline" size={15} color={colors.primary} />
+              <Text style={[styles.docSummaryTitle, { color: colors.textPrimary }]}>
+                {t.documentUploadSummary || "Document Upload Summary"}
+              </Text>
+            </View>
+            <View style={styles.docSummaryGrid}>
+              <View
+                style={[
+                  styles.docSummaryStatCard,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(91, 75, 255, 0.12)"
+                      : "#eff6ff",
+                    borderColor: isDark
+                      ? "rgba(91, 75, 255, 0.25)"
+                      : "#dbeafe",
+                  },
+                ]}
+              >
+                <Text style={[styles.docSummaryStatNum, { color: colors.primary }]}>
+                  {parsedDocSummary.totalUploads ?? 0}
+                </Text>
+                <Text
+                  style={[styles.docSummaryStatLbl, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {t.totalUploads || "Total"}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.docSummaryStatCard,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(34, 197, 94, 0.12)"
+                      : "#f0fdf4",
+                    borderColor: isDark
+                      ? "rgba(34, 197, 94, 0.25)"
+                      : "#dcfce7",
+                  },
+                ]}
+              >
+                <Text style={[styles.docSummaryStatNum, { color: colors.success }]}>
+                  {parsedDocSummary.completed ?? 0}
+                </Text>
+                <Text
+                  style={[styles.docSummaryStatLbl, { color: colors.success }]}
+                  numberOfLines={1}
+                >
+                  {t.completed || "Completed"}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.docSummaryStatCard,
+                  {
+                    backgroundColor:
+                      (parsedDocSummary.failed ?? 0) > 0
+                        ? isDark
+                          ? "rgba(239, 68, 68, 0.15)"
+                          : "#fef2f2"
+                        : isDark
+                        ? "rgba(255, 255, 255, 0.03)"
+                        : "#f1f5f9",
+                    borderColor:
+                      (parsedDocSummary.failed ?? 0) > 0
+                        ? isDark
+                          ? "rgba(239, 68, 68, 0.3)"
+                          : "#fee2e2"
+                        : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.docSummaryStatNum,
+                    {
+                      color:
+                        (parsedDocSummary.failed ?? 0) > 0
+                          ? colors.error
+                          : colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {parsedDocSummary.failed ?? 0}
+                </Text>
+                <Text
+                  style={[
+                    styles.docSummaryStatLbl,
+                    {
+                      color:
+                        (parsedDocSummary.failed ?? 0) > 0
+                          ? colors.error
+                          : colors.textSecondary,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t.failed || "Failed"}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.docSummaryStatCard,
+                  {
+                    backgroundColor:
+                      (parsedDocSummary.rejected ?? 0) > 0
+                        ? isDark
+                          ? "rgba(245, 158, 11, 0.15)"
+                          : "#fffbeb"
+                        : isDark
+                        ? "rgba(255, 255, 255, 0.03)"
+                        : "#f1f5f9",
+                    borderColor:
+                      (parsedDocSummary.rejected ?? 0) > 0
+                        ? isDark
+                          ? "rgba(245, 158, 11, 0.3)"
+                          : "#fef3c7"
+                        : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.docSummaryStatNum,
+                    {
+                      color:
+                        (parsedDocSummary.rejected ?? 0) > 0
+                          ? colors.warning
+                          : colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {parsedDocSummary.rejected ?? 0}
+                </Text>
+                <Text
+                  style={[
+                    styles.docSummaryStatLbl,
+                    {
+                      color:
+                        (parsedDocSummary.rejected ?? 0) > 0
+                          ? colors.warning
+                          : colors.textSecondary,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t.rejected || "Rejected"}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Header: Icon, Synthesized Title, Date, Status Pill */}
         <View style={styles.headerRow}>
           <View
@@ -1129,5 +1364,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
     flex: 1,
+  },
+  docSummaryStatsBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  docSummaryTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  docSummaryTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 6,
+    letterSpacing: 0.3,
+  },
+  docSummaryGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  docSummaryStatCard: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  docSummaryStatNum: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  docSummaryStatLbl: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 2,
+    textAlign: "center",
   },
 });

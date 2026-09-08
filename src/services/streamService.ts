@@ -56,13 +56,23 @@ const extractTextChunk = (data: any): string => {
   if (typeof data === "string") return data;
   if (!data || typeof data !== "object") return "";
 
+  const target = data.data && typeof data.data === "object" ? data.data : data;
+
+  if (typeof target.delta === "string") return target.delta;
+  if (typeof target.delta?.content === "string") return target.delta.content;
+  if (typeof target.delta?.text === "string") return target.delta.text;
+  if (typeof target.choices?.[0]?.delta?.content === "string") return target.choices[0].delta.content;
+  if (typeof target.choices?.[0]?.delta?.text === "string") return target.choices[0].delta.text;
+  if (typeof target.choices?.[0]?.text === "string") return target.choices[0].text;
+
   return (
-    data.reply ??
-    data.delta ??
-    data.text ??
-    data.content ??
-    data.message ??
-    data.chunk ??
+    target.reply ??
+    target.chunk ??
+    target.text ??
+    target.content ??
+    target.message ??
+    target.token ??
+    target.response ??
     ""
   );
 };
@@ -97,7 +107,9 @@ const processChunkBuffer = (
         const chunkText = extractTextChunk(parsed);
         if (chunkText) onChunk(chunkText);
         if (parsed && typeof parsed === "object") {
-          Object.assign(finalData, parsed);
+          const payloadToMerge =
+            parsed.data && typeof parsed.data === "object" ? parsed.data : parsed;
+          Object.assign(finalData, payloadToMerge);
         }
       } catch {
         if (dataStr) onChunk(dataStr);
@@ -105,7 +117,7 @@ const processChunkBuffer = (
       continue;
     }
 
-    if (line.startsWith("event:") || line.startsWith("id:")) {
+    if (line.startsWith("event:") || line.startsWith("id:") || line.startsWith(":")) {
       continue;
     }
 
@@ -114,7 +126,9 @@ const processChunkBuffer = (
       const chunkText = extractTextChunk(parsed);
       if (chunkText) onChunk(chunkText);
       if (parsed && typeof parsed === "object") {
-        Object.assign(finalData, parsed);
+        const payloadToMerge =
+          parsed.data && typeof parsed.data === "object" ? parsed.data : parsed;
+        Object.assign(finalData, payloadToMerge);
       }
     } catch {
       onChunk(line);
@@ -524,8 +538,16 @@ export const streamChatResponse = async (
             }
           }
 
-          if (!finalData.reply && accumulatedText) {
-            finalData.reply = accumulatedText;
+          const resolvedReply =
+            finalData.reply ||
+            finalData.data?.reply ||
+            finalData.message ||
+            finalData.text ||
+            finalData.content ||
+            accumulatedText;
+
+          if (resolvedReply) {
+            finalData.reply = resolvedReply;
           }
 
           console.log(

@@ -956,15 +956,20 @@ export function ResolveProfileSourceCard({
         if (mode === "CONFIRM") {
           const isConfirmChosen = isHistorical && (
             parsed?.confirmed === true ||
-            (chosenLabel && String(chosenLabel).toLowerCase() === "confirm details")
+            parsed?.source === "CONFIRM" ||
+            (chosenLabel && (
+              String(chosenLabel).toLowerCase().includes("confirm") ||
+              String(chosenLabel).toLowerCase().includes(uiT("confirmAndContinue").toLowerCase()) ||
+              String(chosenLabel).toLowerCase() === "confirm details"
+            ))
           );
-          const isEditChosen = isHistorical && (
-            parsed?.edited !== undefined ||
+          const isEditChosen = isHistorical && !isConfirmChosen && (
+            (parsed?.edited !== undefined && !parsed?.confirmed) ||
             (chosenLabel && String(chosenLabel).toLowerCase().includes("saved manual changes"))
           );
 
-          const confirmOpacity = isHistorical ? (isConfirmChosen ? 1 : 0.55) : 1;
-          const editOpacity = isHistorical ? (isEditChosen ? 1 : 0.55) : 1;
+          const confirmOpacity = isHistorical ? (isConfirmChosen ? 1 : 0.5) : 1;
+          const editOpacity = isHistorical ? (isEditChosen ? 1 : 0.5) : 1;
 
           return (
             <View
@@ -989,7 +994,7 @@ export function ResolveProfileSourceCard({
                     paddingVertical: 12,
                     opacity: confirmOpacity,
                     borderWidth: isConfirmChosen ? 2 : 0,
-                    borderColor: isConfirmChosen ? "#ffffff" : "transparent",
+                    borderColor: isConfirmChosen ? (isDark ? "#ffffff" : "#065f46") : "transparent",
                   },
                 ]}
                 onPress={() => {
@@ -1023,14 +1028,16 @@ export function ResolveProfileSourceCard({
                 style={[
                   styles.bigActionButtonSide,
                   {
-                    backgroundColor: isDark ? "#334155" : "#e2e8f0",
+                    backgroundColor: isHistorical
+                      ? (isEditChosen ? (isDark ? "#475569" : "#cbd5e1") : (isDark ? "#334155" : "#e2e8f0"))
+                      : (isDark ? "#334155" : "#e2e8f0"),
                     flex: 1,
                     marginLeft: 6,
                     justifyContent: "center",
                     paddingVertical: 12,
                     opacity: editOpacity,
                     borderWidth: isEditChosen ? 2 : 0,
-                    borderColor: isEditChosen ? (isDark ? "#ffffff" : "#475569") : "transparent",
+                    borderColor: isEditChosen ? (isDark ? "#ffffff" : "#334155") : "transparent",
                   },
                 ]}
                 onPress={() => {
@@ -1056,15 +1063,22 @@ export function ResolveProfileSourceCard({
         } else {
           const isLoginChosen = isHistorical && (
             parsed?.source === "LOGIN" ||
-            (chosenLabel && String(chosenLabel).toLowerCase() === "use social login")
+            (chosenLabel && (
+              String(chosenLabel).toLowerCase().includes("social") ||
+              String(chosenLabel).toLowerCase().includes("login") ||
+              String(chosenLabel).toLowerCase() === "use social login"
+            ))
           );
           const isDocChosen = isHistorical && (
             parsed?.source === "DOCUMENT" ||
-            (chosenLabel && String(chosenLabel).toLowerCase() === "use document")
+            (chosenLabel && (
+              String(chosenLabel).toLowerCase().includes("document") ||
+              String(chosenLabel).toLowerCase() === "use document"
+            ))
           );
 
-          const loginOpacity = isHistorical ? (isLoginChosen ? 1 : 0.55) : 1;
-          const docOpacity = isHistorical ? (isDocChosen ? 1 : 0.55) : 1;
+          const loginOpacity = isHistorical ? (isLoginChosen ? 1 : 0.5) : 1;
+          const docOpacity = isHistorical ? (isDocChosen ? 1 : 0.5) : 1;
 
           return (
             <View
@@ -1087,7 +1101,7 @@ export function ResolveProfileSourceCard({
                     marginRight: 6,
                     opacity: loginOpacity,
                     borderWidth: isLoginChosen ? 2 : 0,
-                    borderColor: isLoginChosen ? "#ffffff" : "transparent",
+                    borderColor: isLoginChosen ? (isDark ? "#ffffff" : "#1d4ed8") : "transparent",
                   },
                 ]}
                 onPress={() =>
@@ -1135,7 +1149,7 @@ export function ResolveProfileSourceCard({
                     marginLeft: 6,
                     opacity: docOpacity,
                     borderWidth: isDocChosen ? 2 : 0,
-                    borderColor: isDocChosen ? "#ffffff" : "transparent",
+                    borderColor: isDocChosen ? (isDark ? "#ffffff" : "#047857") : "transparent",
                   },
                 ]}
                 onPress={() =>

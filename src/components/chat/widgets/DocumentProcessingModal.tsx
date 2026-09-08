@@ -18,6 +18,7 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
 import { I18N_ONBOARDING_UI as ONBOARDING_I18N } from "./OnboardingI18n";
+import { getModalTranslation } from "../../../utils/modalI18n";
 
 interface DocumentProcessingModalProps {
   isVisible: boolean;
@@ -26,6 +27,7 @@ interface DocumentProcessingModalProps {
   progressPercent?: number;
   onCancel: () => void;
   onRetry?: () => void;
+  isRetryable?: boolean;
   isDark: boolean;
   theme: any;
   preferredLanguage?: string;
@@ -38,6 +40,7 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
   progressPercent = 0,
   onCancel,
   onRetry,
+  isRetryable = true,
   isDark,
   theme,
   preferredLanguage = "english",
@@ -64,21 +67,21 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
   const getPillText = () => {
     switch (uploadState) {
       case "uploading":
-        return "Uploading document...";
+        return getModalTranslation(preferredLanguage, "uploadingDoc");
       case "validating":
-        return "Validating document...";
+        return getModalTranslation(preferredLanguage, "validatingDoc");
       case "processing":
-        return "Extracting text from document...";
+        return getModalTranslation(preferredLanguage, "extractingText");
       case "queued":
-        return "Queued for processing...";
+        return getModalTranslation(preferredLanguage, "queuedProcess");
       case "failed":
       case "rejected":
       case "timed_out":
-        return "Processing failed";
+        return getModalTranslation(preferredLanguage, "processFailed");
       case "success":
-        return "Processing complete!";
+        return getModalTranslation(preferredLanguage, "processComplete");
       default:
-        return "Processing...";
+        return getModalTranslation(preferredLanguage, "processing");
     }
   };
 
@@ -87,11 +90,11 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
       case "failed":
       case "rejected":
       case "timed_out":
-        return "We couldn't process your document. Please try again.";
+        return getModalTranslation(preferredLanguage, "retryFailed");
       case "success":
-        return "Document successfully analyzed.";
+        return getModalTranslation(preferredLanguage, "successAnalysis");
       default:
-        return "Analyzing your document. This may take a few seconds.";
+        return getModalTranslation(preferredLanguage, "analyzingDoc");
     }
   };
 
@@ -176,9 +179,8 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
             </View>
           </View>
 
-          {/* Texts */}
           <Text style={[styles.title, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-            {isError ? "Processing Failed" : uploadState === "success" ? "Done" : "Processing Document"}
+            {isError ? getModalTranslation(preferredLanguage, "processFailed") : uploadState === "success" ? getModalTranslation(preferredLanguage, "done") : getModalTranslation(preferredLanguage, "processingDocument")}
           </Text>
           <Text style={[styles.subtitle, { color: isDark ? "#94a3b8" : "#475569" }]}>
             {getSubText()}
@@ -199,7 +201,7 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
           <View style={styles.progressSection}>
             <View style={styles.progressTextRow}>
               <Text style={[styles.progressLabel, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                Extraction Progress
+                {getModalTranslation(preferredLanguage, "extractionProgress")}
               </Text>
               <Text style={[styles.progressValue, { color: progressBarColor }]}>
                 {uploadState === "success" ? "100%" : `${normalizedProgress}%`}
@@ -223,13 +225,13 @@ export const DocumentProcessingModal: React.FC<DocumentProcessingModalProps> = (
             </View>
           </View>
 
-          {isError && uploadState !== "rejected" && onRetry && (
+          {isError && uploadState !== "rejected" && isRetryable && onRetry && (
             <TouchableOpacity
               style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
               onPress={onRetry}
             >
               <Ionicons name="refresh" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-              <Text style={styles.retryButtonText}>Retry Extraction</Text>
+              <Text style={styles.retryButtonText}>{getModalTranslation(preferredLanguage, "retryExtraction")}</Text>
             </TouchableOpacity>
           )}
 

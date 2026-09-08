@@ -14,6 +14,8 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../navigation/types";
 import { deleteMedication } from "../../services/medicationservice";
+import { usePreferredLanguage } from "../../hooks/usePreferredLanguage";
+import { getModalTranslation } from "../../utils/modalI18n";
 
 interface ConfirmationModalProps {
   showModal: boolean;
@@ -31,6 +33,7 @@ const ConfirmationModal = ({
   const { logout } = useAuth();
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const lang = usePreferredLanguage();
 
   const { mutateAsync: logoutMutation, isPending: isLoggingOut } = useMutation({
     mutationFn: logoutUser,
@@ -39,15 +42,15 @@ const ConfirmationModal = ({
       onClose();
       Toast.show({
         type: "success",
-        text1: "Logged Out Successfully !!!",
-        text2: "Enter Your Credentials again to Login.",
+        text1: getModalTranslation(lang, "loggedOutMsg"),
+        text2: getModalTranslation(lang, "loginAgainMsg"),
       });
     },
     onError: (error: any) => {
       Toast.show({
         type: "error",
-        text1: "OOPS!!! 😣",
-        text2: error.message || "Error Logging out.",
+        text1: getModalTranslation(lang, "oops"),
+        text2: error.message || getModalTranslation(lang, "errorMsg"),
       });
     },
   });
@@ -59,15 +62,15 @@ const ConfirmationModal = ({
       onClose();
       Toast.show({
         type: "success",
-        text1: "Account Deleted Successfully !!!",
-        text2: "Create New Account to get Started.",
+        text1: getModalTranslation(lang, "accDeletedMsg"),
+        text2: getModalTranslation(lang, "createNewAccMsg"),
       });
     },
     onError: (error: any) => {
       Toast.show({
         type: "error",
-        text1: "OOPS!!! 😣",
-        text2: error.message || "Error Deleting Account.",
+        text1: getModalTranslation(lang, "oops"),
+        text2: error.message || getModalTranslation(lang, "errorMsg"),
       });
     },
   });
@@ -97,16 +100,16 @@ const ConfirmationModal = ({
       onClose();
       Toast.show({
         type: "success",
-        text1: "Document Deleted Successfully !!!",
-        text2: "Document Deleted Successfully.",
+        text1: getModalTranslation(lang, "successMsg"),
+        text2: getModalTranslation(lang, "docDeletedMsg"),
       });
       navigation.navigate("DocumentStack" as never);
     },
     onError: (error: any) => {
       Toast.show({
         type: "error",
-        text1: "OOPS!!! 😣",
-        text2: error.message || "Error Deleting Document.",
+        text1: getModalTranslation(lang, "oops"),
+        text2: error.message || getModalTranslation(lang, "errorMsg"),
       });
     },
   });
@@ -132,16 +135,16 @@ const ConfirmationModal = ({
       onClose();
       Toast.show({
         type: "success",
-        text1: "Deleted Successfully !!!",
-        text2: "Medication Deleted Successfully.",
+        text1: getModalTranslation(lang, "successMsg"),
+        text2: getModalTranslation(lang, "medDeletedMsg"),
       });
       navigation.navigate("MedicationStack" as never);
     },
     onError: (error: any) => {
       Toast.show({
         type: "error",
-        text1: "OOPS!!! 😣",
-        text2: error.message || "Error Deleting Medication.",
+        text1: getModalTranslation(lang, "oops"),
+        text2: error.message || getModalTranslation(lang, "errorMsg"),
       });
     },
   })
@@ -161,13 +164,40 @@ const ConfirmationModal = ({
       console.error(`Error during ${mode}:`, error);
       Toast.show({
         type: "error",
-        text1: "OOPS!!! 😣",
-        text2: error.message || "Error Logging out.",
+        text1: getModalTranslation(lang, "oops"),
+        text2: error.message || getModalTranslation(lang, "errorMsg"),
       });
     }
   };
 
   const isLogout = mode === "Log Out";
+  
+  let modalTitle = "";
+  let modalDesc = "";
+  let modalBtn = "";
+  let modalLoadingBtn = "";
+
+  if (mode === "Log Out") {
+    modalTitle = getModalTranslation(lang, "logOutTitle");
+    modalDesc = getModalTranslation(lang, "logOutDesc");
+    modalBtn = getModalTranslation(lang, "logOutBtn");
+    modalLoadingBtn = getModalTranslation(lang, "loggingOutBtn");
+  } else if (mode === "Delete Account") {
+    modalTitle = getModalTranslation(lang, "deleteAccTitle");
+    modalDesc = getModalTranslation(lang, "deleteAccDesc");
+    modalBtn = getModalTranslation(lang, "deleteAccBtn");
+    modalLoadingBtn = getModalTranslation(lang, "deletingBtn");
+  } else if (mode === "Delete Document") {
+    modalTitle = getModalTranslation(lang, "deleteDocTitle");
+    modalDesc = getModalTranslation(lang, "deleteDocDesc");
+    modalBtn = getModalTranslation(lang, "deleteDocBtn");
+    modalLoadingBtn = getModalTranslation(lang, "deletingBtn");
+  } else if (mode === "Delete Medication") {
+    modalTitle = getModalTranslation(lang, "deleteMedTitle");
+    modalDesc = getModalTranslation(lang, "deleteMedDesc");
+    modalBtn = getModalTranslation(lang, "deleteMedBtn");
+    modalLoadingBtn = getModalTranslation(lang, "deletingBtn");
+  }
 
   return (
     <Modal
@@ -191,21 +221,19 @@ const ConfirmationModal = ({
           </IconWrapper>
 
           <ContentContainer>
-            <Title>{mode}</Title>
-            <Description>
-              Are you sure you want to {mode}. This action cannot be undone.
-            </Description>
+            <Title>{modalTitle}</Title>
+            <Description>{modalDesc}</Description>
           </ContentContainer>
 
           <DualButtons
-            secondaryBtnText="Cancel"
+            secondaryBtnText={getModalTranslation(lang, "cancelBtn")}
             secondaryBtnColor="grey"
-            mainBtnText={mode}
+            mainBtnText={modalBtn}
             mainBtnColor="red"
             onSecondaryPress={onClose}
             onMainPress={handleAction}
             isLoading={isLoggingOut || isDeletingUser || isDeletingDoc || isDeletingMed}
-            mainLoadingText={mode === "Log Out" ? "Logging out..." : "Deleting..."}
+            mainLoadingText={modalLoadingBtn}
           />
         </ModalCard>
       </Overlay>

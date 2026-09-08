@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { ExtractedMedicine } from "../../../types/medicationReview";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
+import { DocumentProgressSummaryContainer } from "./DocumentProgressSummaryContainer";
 
 // Helper to format food context
 const formatFood = (val: string, t: (k: string) => string) => {
@@ -163,6 +164,8 @@ interface ConflictCarouselCardProps {
   onReviewMedicines: () => void;
   onEdit: (med: ExtractedMedicine) => void;
   preferredLang?: string;
+  documents?: any[];
+  onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
 }
 
 export function ConflictCarouselCard({
@@ -176,6 +179,8 @@ export function ConflictCarouselCard({
   onReviewMedicines,
   onEdit,
   preferredLang = "english",
+  documents,
+  onRetryDocument,
 }: ConflictCarouselCardProps) {
   const t = (key: string) => {
     const lang = preferredLang || "english";
@@ -207,20 +212,27 @@ export function ConflictCarouselCard({
     : "";
 
   return (
-    <View
-      style={{
-        padding: 16,
-        borderRadius: 16,
-        backgroundColor: isDark ? "#1e293b" : "#ffffff",
-        borderColor: isDark ? "#334155" : "#e2e8f0",
-        borderWidth: 1,
-        shadowColor: "#0f172a",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 3,
-      }}
-    >
+    <View style={{ width: "100%" }}>
+      <DocumentProgressSummaryContainer
+        documents={documents}
+        preferredLang={preferredLang}
+        isDark={isDark}
+        onRetry={onRetryDocument}
+      />
+      <View
+        style={{
+          padding: 16,
+          borderRadius: 16,
+          backgroundColor: isDark ? "#1e293b" : "#ffffff",
+          borderColor: isDark ? "#334155" : "#e2e8f0",
+          borderWidth: 1,
+          shadowColor: "#0f172a",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 3,
+        }}
+      >
       {/* Header Info */}
       <View style={{ marginBottom: 12 }}>
         <Text style={{ fontSize: 13, fontWeight: "bold", color: "#b91c1c" }}>
@@ -384,6 +396,7 @@ export function ConflictCarouselCard({
           </TouchableOpacity>
         </View>
       )}
+    </View>
     </View>
   );
 }

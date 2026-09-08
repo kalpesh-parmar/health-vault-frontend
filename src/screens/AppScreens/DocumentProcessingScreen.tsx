@@ -63,15 +63,17 @@ export const DocumentProcessingScreen = () => {
   const [hasMovedToBackground, setHasMovedToBackground] = useState(false);
 
   useEffect(() => {
-    if (normalizedJobIds.length > 0 && uploadingDocs && uploadingDocs.length > 0) {
-      const alreadyInBackground = normalizedJobIds.some((id) =>
-        uploadingDocs.some((d) => (d.jobId || d.id || d.fileKey) === id)
+    if (normalizedJobIds.length > 0) {
+      const hasMissingDocs = normalizedJobIds.some(
+        (id) => !uploadingDocs.some((d) => (d.jobId || d.id || d.fileKey) === id),
       );
-      if (alreadyInBackground) {
+      if (hasMissingDocs) {
+        startBackgroundOcr(normalizedJobIds, normalizedFilesInfo, fromScreen);
+      } else {
         setHasMovedToBackground(true);
       }
     }
-  }, [normalizedJobIds, uploadingDocs]);
+  }, [normalizedJobIds, normalizedFilesInfo, fromScreen, uploadingDocs, startBackgroundOcr]);
 
   const {
     jobList,

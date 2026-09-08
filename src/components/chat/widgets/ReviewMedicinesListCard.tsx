@@ -5,6 +5,7 @@ import { widgetStyles as styles } from "./WidgetStyles";
 import Toast from "react-native-toast-message";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 import { parseChosenJson } from "./MedicineHelpers";
+import { DocumentProgressSummaryContainer } from "./DocumentProgressSummaryContainer";
 
 const formatFoodContext = (val: any): string => {
   if (!val) return "None";
@@ -53,6 +54,9 @@ export interface ReviewMedicinesListCardProps {
   readOnly?: boolean;
   chosenVal?: string | null;
   chosenLabel?: string | null;
+  documents?: any[];
+  onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
+  showDocumentSummary?: boolean;
 }
 
 export function ReviewMedicinesListCard({
@@ -68,6 +72,9 @@ export function ReviewMedicinesListCard({
   readOnly,
   chosenVal,
   chosenLabel,
+  documents,
+  onRetryDocument,
+  showDocumentSummary = true,
 }: ReviewMedicinesListCardProps) {
   // checkedMeds: holds the IDs of checked/selected medications
   const [checkedMeds, setCheckedMeds] = useState<string[]>(
@@ -332,7 +339,8 @@ export function ReviewMedicinesListCard({
     .filter((m) => checkedMeds.includes(m.id))
     .some((m) => m.startDate && m.startDate !== "None" && isPastDate(m.startDate));
 
-  const areActionsDisabled = readOnly || conflictingMeds.length > 0 || isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate;
+  const isConfirmDisabled = readOnly || conflictingMeds.length > 0 || isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate;
+  const areActionsDisabled = readOnly;
 
 
 
@@ -359,20 +367,30 @@ export function ReviewMedicinesListCard({
     const exist = med.duplicateInfo?.matchedMedication || med.duplicateInfo?.matchedMedications?.[0];
 
     return (
-      <View
-        style={[
-          styles.medListCard,
-          {
-            backgroundColor: isDark ? "#1e293b" : "#ffffff",
-            borderColor: isDark ? "#334155" : "#e2e8f0",
-            padding: 16,
-          },
-        ]}
-      >
-        {/* Toggle Header */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#f8fafc" : "#1e293b" }}>
-            Resolve Conflicts
+      <View style={{ width: "100%" }}>
+        {showDocumentSummary && documents && documents.length > 0 && (
+          <DocumentProgressSummaryContainer
+            documents={documents}
+            preferredLang={preferredLang}
+            isDark={isDark}
+            theme={theme}
+            onRetry={onRetryDocument}
+          />
+        )}
+        <View
+          style={[
+            styles.medListCard,
+            {
+              backgroundColor: isDark ? "#1e293b" : "#ffffff",
+              borderColor: isDark ? "#334155" : "#e2e8f0",
+              padding: 16,
+            },
+          ]}
+        >
+          {/* Toggle Header */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#f8fafc" : "#1e293b" }}>
+              Resolve Conflicts
           </Text>
           <TouchableOpacity onPress={() => setViewMode("list")}>
             <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 13 }}>
@@ -541,22 +559,35 @@ export function ReviewMedicinesListCard({
           </TouchableOpacity>
         </View>
       </View>
+      </View>
     );
-  }  const displayedMedicines = readOnly
+  }
+
+  const displayedMedicines = readOnly
     ? safeLocalMedicines.filter((m) => checkedMeds.includes(m.id))
     : safeLocalMedicines;
 
   return (
-    <View
-      style={[
-        styles.medListCard,
-        {
-          backgroundColor: isDark ? "#1e293b" : "#ffffff",
-          borderColor: isDark ? "#334155" : "#e2e8f0",
-          opacity: readOnly ? 1 : 1,
-        },
-      ]}
-    >
+    <View style={{ width: "100%" }}>
+      {showDocumentSummary && documents && documents.length > 0 && (
+        <DocumentProgressSummaryContainer
+          documents={documents}
+          preferredLang={preferredLang}
+          isDark={isDark}
+          theme={theme}
+          onRetry={onRetryDocument}
+        />
+      )}
+      <View
+        style={[
+          styles.medListCard,
+          {
+            backgroundColor: isDark ? "#1e293b" : "#ffffff",
+            borderColor: isDark ? "#334155" : "#e2e8f0",
+            opacity: readOnly ? 1 : 1,
+          },
+        ]}
+      >
       {conflictingMeds.length > 0 && (
         <TouchableOpacity
           onPress={() => setViewMode("conflicts")}
@@ -947,7 +978,7 @@ export function ReviewMedicinesListCard({
         pointerEvents={readOnly ? "none" : "auto"}
       >
         <TouchableOpacity
-          disabled={areActionsDisabled}
+          disabled={isConfirmDisabled}
           style={[
             styles.bigActionButtonSide,
             {
@@ -957,10 +988,10 @@ export function ReviewMedicinesListCard({
                   : isDark
                     ? "#334155"
                     : "#e2e8f0"
-                : (areActionsDisabled ? "#cbd5e1" : theme.colors.primary),
+                : (isConfirmDisabled ? "#cbd5e1" : theme.colors.primary),
               flex: 1,
               marginRight: 6,
-              opacity: areActionsDisabled ? 0.55 : confirmOpacity,
+              opacity: isConfirmDisabled ? 0.55 : confirmOpacity,
               borderWidth: isConfirmChosen ? 2 : 0,
               borderColor: isConfirmChosen ? "#ffffff" : "transparent",
             },
@@ -1081,6 +1112,7 @@ export function ReviewMedicinesListCard({
           </Text>
         </View>
       </TouchableOpacity>
+    </View>
     </View>
   );
 }

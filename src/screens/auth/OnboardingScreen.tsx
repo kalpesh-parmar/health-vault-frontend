@@ -98,6 +98,7 @@ type Message = {
   medicines?: any[];
   summary?: any;
   document?: any;
+  documents?: any[];
   suggestedQuestions?: string[];
   keyFindings?: any[];
   documentIds?: string[];
@@ -220,6 +221,7 @@ export default function OnboardingScreen() {
     | "timed_out"
     | "cancelled"
   >("idle");
+  const [isDocumentRetryable, setIsDocumentRetryable] = useState<boolean>(true);
   const [uploadPercent, setUploadPercent] = useState<number>(0);
   const [pollElapsedTime, setPollElapsedTime] = useState<number>(0);
   const [pollTotalPages, setPollTotalPages] = useState<number>(1);
@@ -608,14 +610,38 @@ export default function OnboardingScreen() {
       createdAt: aiRes.createdAt || new Date().toISOString(),
     };
 
-    const completionMsg: Message | null = aiRes.completionMessage
-      ? {
-        id: `ai-comp-${Date.now()}`,
-        role: "assistant",
-        content: aiRes.completionMessage,
-        createdAt: aiRes.createdAt || new Date().toISOString(),
-      }
-      : null;
+    const normalizeText = (t?: string) =>
+      (t || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+
+    const normReply = normalizeText(messageContent);
+    const normComp = normalizeText(aiRes.completionMessage);
+    const isCompletionAlreadyInReply = Boolean(
+      normComp &&
+      normReply &&
+      (normReply.includes(normComp) ||
+        normComp.includes(normReply) ||
+        (normComp.includes("skip") && normReply.includes("skip")) ||
+        (normComp.includes("dashboard") && normReply.includes("dashboard"))),
+    );
+
+    const isExcludedFromSeparateCompletion =
+      action === "ASK_BLOOD_GROUP" ||
+      action === "ASK_GENDER" ||
+      action === "ASK_DOB" ||
+      action === "ASK_LANGUAGE" ||
+      action === "ASK_ALLERGIES";
+
+    const completionMsg: Message | null =
+      aiRes.completionMessage &&
+      !isCompletionAlreadyInReply &&
+      !isExcludedFromSeparateCompletion
+        ? {
+          id: `ai-comp-${Date.now()}`,
+          role: "assistant",
+          content: aiRes.completionMessage,
+          createdAt: aiRes.createdAt || new Date().toISOString(),
+        }
+        : null;
 
     if (action === "RESOLVE_PROFILE_SOURCE") {
       setMessages((prev) => {
@@ -723,9 +749,25 @@ export default function OnboardingScreen() {
     finalState.preferredLanguage = getNormalizedLang(
       finalState.preferredLanguage,
     );
+    if (finalState.preferredLanguage) {
+      AsyncStorage.setItem("preferredLanguage", finalState.preferredLanguage);
+    }
     setState(finalState);
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
     setCanSkip((prev) => prev || resolvedCanSkip);
+
+    if (resolvedOnboardingCompleted) {
+      queryClient.setQueryData(["profile"], (old: any) => ({
+        ...(old || {}),
+        onboardingCompleted: true,
+      }));
+      queryClient.setQueryData(["userProfile"], (old: any) => ({
+        ...(old || {}),
+        onboardingCompleted: true,
+      }));
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+    }
 
     if (finalState.documentExtracted) {
       setUploadProgress(null);
@@ -912,44 +954,35 @@ export default function OnboardingScreen() {
 
       // Update profile and userProfile caches only after successful server confirmation
       queryClient.setQueryData(["profile"], (old: any) => {
-        if (!old) return old;
         return {
-          ...old,
+          ...(old || {}),
           onboardingCompleted: true,
           firstName:
-            old.firstName === "User" || !old.firstName
-              ? state?.existingUserData?.firstName || old.firstName || "User"
-              : old.firstName,
+            old?.firstName === "User" || !old?.firstName
+              ? state?.existingUserData?.firstName || old?.firstName || "User"
+              : old?.firstName,
           lastName:
-            old.lastName?.startsWith("+") || !old.lastName
-              ? state?.existingUserData?.lastName || old.lastName || ""
-              : old.lastName,
+            old?.lastName?.startsWith("+") || !old?.lastName
+              ? state?.existingUserData?.lastName || old?.lastName || ""
+              : old?.lastName,
           dateOfBirth:
-            old.dateOfBirth ||
+            old?.dateOfBirth ||
             state?.existingUserData?.dateOfBirth ||
             "2000-01-01",
           gender:
-            old.gender || state?.existingUserData?.gender || "Other",
+            old?.gender || state?.existingUserData?.gender || "Other",
         };
       });
 
       queryClient.setQueryData(["userProfile"], (old: any) => {
-        if (!old) return old;
         return {
-          ...old,
+          ...(old || {}),
           onboardingCompleted: true,
         };
       });
 
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-
-      if (navigation?.isReady) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "CustomDrawerNavigator" }],
-        });
-      }
     } catch (error: any) {
       console.error("[Onboarding] Skip failed:", error);
       Toast.show({
@@ -1166,10 +1199,21 @@ export default function OnboardingScreen() {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("failed");
+          const errorMsg = event.message || "Document analysis failed.";
+          const isNonRetryable =
+            event.errorCode === "NON_RETRYABLE" ||
+            event.errorCode === "INVALID_REQUEST" ||
+            event.retryable === false ||
+            (typeof errorMsg === "string" &&
+              (errorMsg.toLowerCase().includes("non-retryable") ||
+                errorMsg.toLowerCase().includes("cannot be retried")));
+          if (isNonRetryable) {
+            setIsDocumentRetryable(false);
+          }
           Toast.show({
             type: "error",
-            text1: "Analysis Failed",
-            text2: event.message || "Document analysis failed.",
+            text1: isNonRetryable ? "Cannot Retry Document" : "Analysis Failed",
+            text2: errorMsg,
           });
           return;
         }
@@ -1248,10 +1292,21 @@ export default function OnboardingScreen() {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("failed");
+          const errorMsg = event.message || "Document analysis failed.";
+          const isNonRetryable =
+            event.errorCode === "NON_RETRYABLE" ||
+            event.errorCode === "INVALID_REQUEST" ||
+            event.retryable === false ||
+            (typeof errorMsg === "string" &&
+              (errorMsg.toLowerCase().includes("non-retryable") ||
+                errorMsg.toLowerCase().includes("cannot be retried")));
+          if (isNonRetryable) {
+            setIsDocumentRetryable(false);
+          }
           Toast.show({
             type: "error",
-            text1: "Analysis Failed",
-            text2: event.message || "Document analysis failed.",
+            text1: isNonRetryable ? "Cannot Retry Document" : "Analysis Failed",
+            text2: errorMsg,
           });
         }
       },
@@ -1263,14 +1318,23 @@ export default function OnboardingScreen() {
 
   const handleRetryJob = async () => {
     const docId = currentDocIdRef.current;
-    if (!docId) return;
+    if (!docId) {
+      const file = selectedFileRef.current || selectedFile;
+      if (file) {
+        uploadSelectedFile(file);
+      }
+      return;
+    }
 
     setUploadState("queued");
     setUploadPercent(0);
     try {
       const response = await retryDocumentProcessing({ fileKey: docId });
-      const streamUrl = response.data?.streamUrl;
-      const jobId = response.data?.fileKey || docId;
+      const respData = (response as any)?.data?.data || (response as any)?.data || response;
+      const streamUrl =
+        respData?.streamUrl ||
+        (respData?.fileKey ? `/sse/files/${respData.fileKey}/stream` : `/sse/files/${docId}/stream`);
+      const jobId = respData?.fileKey || respData?.jobId || docId;
 
       await AsyncStorage.setItem("onboarding_pending_job_id", jobId);
       await AsyncStorage.setItem("onboarding_pending_document_id", docId);
@@ -1278,6 +1342,28 @@ export default function OnboardingScreen() {
       startJobPolling(jobId, docId, streamUrl);
     } catch (err: any) {
       setUploadState("failed");
+      const errorData = err?.response?.data || err?.data || {};
+      const errorMsg =
+        errorData?.message ||
+        err?.message ||
+        "This document failed with a non-retryable error and cannot be retried.";
+      const isNonRetryable =
+        err?.response?.status === 400 ||
+        errorData?.errorCode === "INVALID_REQUEST" ||
+        errorData?.errorCode === "NON_RETRYABLE" ||
+        (typeof errorMsg === "string" &&
+          (errorMsg.toLowerCase().includes("non-retryable") ||
+            errorMsg.toLowerCase().includes("cannot be retried")));
+
+      if (isNonRetryable) {
+        setIsDocumentRetryable(false);
+      }
+
+      Toast.show({
+        type: "error",
+        text1: isNonRetryable ? "Cannot Retry Document" : "Retry Failed",
+        text2: errorMsg,
+      });
     }
   };
 
@@ -1367,6 +1453,7 @@ export default function OnboardingScreen() {
 
     isUploadingRef.current = true;
     isUploadCancelledRef.current = false;
+    setIsDocumentRetryable(true);
     setLoading(true);
     setUploadState("validating");
     setActiveErrorCode(null);
@@ -1414,17 +1501,29 @@ export default function OnboardingScreen() {
       startJobPolling(jobId, docId, streamUrl);
     } catch (error: any) {
       console.error("[ONBOARDING] Document upload sequence failed:", error);
-      setUploadState("idle");
+      setUploadState("failed");
       let errMsg = error.message || "Document upload sequence failed.";
 
       if (error.response) {
-        const backendErr = error.response.data?.error;
+        const backendErr = error.response.data?.error || error.response.data;
         if (backendErr?.message) errMsg = backendErr.message;
+      }
+
+      const isNonRetryable =
+        error?.response?.status === 400 ||
+        error?.response?.data?.errorCode === "INVALID_REQUEST" ||
+        error?.response?.data?.errorCode === "NON_RETRYABLE" ||
+        (typeof errMsg === "string" &&
+          (errMsg.toLowerCase().includes("non-retryable") ||
+            errMsg.toLowerCase().includes("cannot be retried")));
+
+      if (isNonRetryable) {
+        setIsDocumentRetryable(false);
       }
 
       Toast.show({
         type: "error",
-        text1: "Upload Failed",
+        text1: isNonRetryable ? "Cannot Retry Document" : "Upload Failed",
         text2: errMsg,
       });
     } finally {
@@ -1459,6 +1558,9 @@ export default function OnboardingScreen() {
 
   const renderOptions = (activeMsg: Message, isHistorical: boolean = false) => {
     const preferredLang = state.preferredLanguage || "english";
+    if (preferredLang) {
+      AsyncStorage.setItem("preferredLanguage", preferredLang);
+    }
 
     const { chosenVal, chosenLabel } = findHistoricalUserReply(
       messages,
@@ -1480,9 +1582,15 @@ export default function OnboardingScreen() {
         sendMessage(value, state, label);
       } else if (value === "VIEW_MEDICINES" || value === "VIEW_MY_MEDICINES") {
         setTimeout(() => {
-          navigation.navigate("MEDICATION", {
-            screen: "MedicationList",
-          });
+          try {
+            if (navigation && typeof navigation.navigate === "function") {
+              navigation.navigate("MEDICATION", {
+                screen: "MedicationList",
+              });
+            }
+          } catch (e) {
+            console.warn("[Onboarding] Navigation to medication not available yet:", e);
+          }
         }, 500);
       } else if (value === "ASK_ABOUT_REPORT" || value === "ASK_REPORT") {
         sendMessage("ASK_REPORT", state, label);
@@ -1583,7 +1691,7 @@ export default function OnboardingScreen() {
           sendMessage={sendMessage}
           handleDocumentUpload={handleDocumentUpload}
           isHistorical={isHistorical || isProcessingOrSuccess}
-          chosenVal={chosenVal}
+          chosenVal={isProcessingOrSuccess ? (chosenVal || "UPLOAD") : chosenVal}
           chosenLabel={chosenLabel}
         />
       );
@@ -1887,6 +1995,8 @@ export default function OnboardingScreen() {
           readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
+          documents={activeMsg.documents}
+          showDocumentSummary={false}
         />
       );
     }
@@ -2269,7 +2379,13 @@ export default function OnboardingScreen() {
                   text: item.content,
                 };
                 const isLast = item.id === messages[messages.length - 1].id;
-                const isHistorical = !isLast;
+                const { chosenVal, chosenLabel } = findHistoricalUserReply(
+                  messages,
+                  item.id,
+                  false,
+                );
+                const isAnswered = chosenVal !== null || chosenLabel !== null;
+                const isHistorical = isAnswered || !isLast;
                 const options = renderOptions(item, isHistorical);
                 const isJson =
                   item.content && item.content.trim().startsWith("{");
@@ -2295,7 +2411,7 @@ export default function OnboardingScreen() {
                     {isAi && options !== null && (
                       <View
                         style={[styles.optionsWrapper, { opacity: 1 }]}
-                        pointerEvents={isLast ? "auto" : "none"}
+                        pointerEvents={!isHistorical ? "auto" : "none"}
                       >
                         {options}
                       </View>
@@ -2383,6 +2499,7 @@ export default function OnboardingScreen() {
           progressPercent={uploadPercent}
           onCancel={cancelProcessing}
           onRetry={handleRetryJob}
+          isRetryable={isDocumentRetryable}
           isDark={isDark}
           theme={theme}
           preferredLanguage={state.preferredLanguage!}

@@ -37,10 +37,12 @@ export function MedicineOptionsPanel({
   return (
     <View style={styles.optionsPanel} pointerEvents={readOnly ? "none" : "auto"}>
       {safeOptionsList.map((opt: any) => {
-        const isChosen = readOnly && (
+        const optKey = opt.key || opt.value;
+        const isChosen = readOnly && !!(
           (chosenVal && (
-            String(opt.key).toLowerCase() === String(chosenVal).toLowerCase() ||
-            (parsedKey && String(opt.key).toLowerCase() === String(parsedKey).toLowerCase())
+            String(optKey).toLowerCase() === String(chosenVal).toLowerCase() ||
+            (opt.value && String(opt.value).toLowerCase() === String(chosenVal).toLowerCase()) ||
+            (parsedKey && String(optKey).toLowerCase() === String(parsedKey).toLowerCase())
           )) ||
           (chosenLabel && String(opt.label).toLowerCase() === String(chosenLabel).toLowerCase())
         );
@@ -49,15 +51,17 @@ export function MedicineOptionsPanel({
 
         return (
           <TouchableOpacity
-            key={opt.key}
+            key={optKey}
             style={[
               styles.optionsPanelButton,
               {
-                backgroundColor: isPrimary
-                  ? theme.colors.primary
-                  : isDark
-                    ? "#1e293b"
-                    : "#f1f5f9",
+                backgroundColor: isChosen
+                  ? theme.colors.primary + "20"
+                  : isPrimary
+                    ? theme.colors.primary
+                    : isDark
+                      ? "#1e293b"
+                      : "#f1f5f9",
                 borderColor: isChosen
                   ? theme.colors.primary
                   : isPrimary
@@ -66,10 +70,10 @@ export function MedicineOptionsPanel({
                       ? "#334155"
                       : "#e2e8f0",
                 borderWidth: isChosen ? 2 : 1,
-                opacity: isUnchosen ? 0.55 : 1,
+                opacity: isUnchosen ? 0.5 : 1,
               },
             ]}
-            onPress={() => onOptionPress(opt.key, opt.label)}
+            onPress={() => onOptionPress(optKey, opt.label)}
           >
             <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
               <Ionicons

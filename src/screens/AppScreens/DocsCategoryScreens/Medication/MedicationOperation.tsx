@@ -31,7 +31,7 @@ const MedicationOperation = ({
 }) => {
   const navigation =
     useNavigation<NativeStackNavigationProp<MedicationStackParamList>>();
-  const { theme, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { operation, medication } = route.params;
 
   const [currentOperation, setCurrentOperation] = React.useState(operation);
@@ -258,9 +258,6 @@ const MedicationOperation = ({
     const dupInfo = duplicateConflict.details?.duplicateInfo;
     const existingMed = dupInfo?.matchedMedication || dupInfo?.matchedMedications?.[0];
     const actions = duplicateConflict.details?.suggestedActions || [];
-
-    const hasReplace = actions.some((a: any) => a.action === "REPLACE");
-    const hasEdit = actions.some((a: any) => a.action === "EDIT");
     const hasKeepExisting = actions.some((a: any) => a.action === "KEEP EXISTING" || a.action === "REMOVE NEW");
 
     return (
@@ -389,15 +386,6 @@ const MedicationOperation = ({
                     </ModalButton>
                   )}
 
-                  {/* {hasEdit && existingMed && (
-                    <ModalButton
-                      style={{ backgroundColor: "#3b82f6" }}
-                      onPress={() => handleEditPrevious(existingMed)}
-                    >
-                      <ModalButtonText>Edit Existing Medication</ModalButtonText>
-                    </ModalButton>
-                  )} */}
-
                   {hasKeepExisting && (
                     <ModalButton
                       style={{ backgroundColor: "#64748b" }}
@@ -406,15 +394,6 @@ const MedicationOperation = ({
                       <ModalButtonText>Keep Existing</ModalButtonText>
                     </ModalButton>
                   )}
-
-                  {/* <ModalButton
-                    style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: isDark ? "#334155" : "#cbd5e1" }}
-                    onPress={handleCancelModal}
-                  >
-                    <ModalButtonText style={{ color: isDark ? "#cbd5e1" : "#475569" }}>
-                      Cancel & Edit Form
-                    </ModalButtonText>
-                  </ModalButton> */}
                 </View>
               )}
             </ModalFooter>

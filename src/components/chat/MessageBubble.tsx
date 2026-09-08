@@ -252,19 +252,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
             },
           ]}
         >
-          {message.title && (
-            <Text style={[styles.aiTitleText, { color: aiTextColor }]}>
+          {message.title && (!message.text || !message.text.toLowerCase().includes(message.title.trim().toLowerCase())) ? (
+            <Text style={[styles.aiTitleText, { color: aiTextColor, marginBottom: 4 }]}>
               {message.title}
             </Text>
-          )}
-          {message.subtitle && (
-            <Text style={[styles.aiSubtitleText, { color: aiTextColor, marginTop: message.title ? 6 : 0, marginBottom: 4 }]}>
+          ) : null}
+          {message.subtitle && (!message.text || !message.text.toLowerCase().includes(message.subtitle.trim().toLowerCase())) ? (
+            <Text style={[styles.aiSubtitleText, { color: aiTextColor, marginTop: message.title ? 2 : 0, marginBottom: 4 }]}>
               {message.subtitle}
             </Text>
-          )}
-          {!message.title && !message.subtitle && message.text && (
+          ) : null}
+          {message.text ? (
             renderMarkdown(message.text, aiTextColor, false)
-          )}
+          ) : null}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6, minHeight: 24 }}>
             {timeString ? (
               <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8", marginTop: 0 }]}>
@@ -340,10 +340,13 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginBottom: 12,
     paddingLeft: 12,
+    paddingRight: 16,
+    width: "100%",
   },
   aiAvatar: {
     marginRight: 8,
     alignSelf: "flex-end",
+    marginBottom: 2,
   },
   aiAvatarGradient: {
     width: 28,
@@ -355,7 +358,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.3)",
   },
   aiBubble: {
-    maxWidth: MAX_BUBBLE_WIDTH,
+    flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderTopLeftRadius: 22,

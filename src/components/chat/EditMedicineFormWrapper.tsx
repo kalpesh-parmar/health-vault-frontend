@@ -7,6 +7,7 @@ import {
   useMedicationFormState,
 } from "../shared/MedicationFormFields";
 import { ExtractedMedicine } from "../../types/medicationReview";
+import { sanitizeMedicineForPayload } from "./widgets/MedicineHelpers";
 
 interface EditMedicineFormWrapperProps {
   medicine: ExtractedMedicine;
@@ -75,40 +76,60 @@ export const EditMedicineFormWrapper = ({
     selectedSlots,
   } = formState;
 
-  const [localErrors, setLocalErrors] = useState<string[]>([]);
+  const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (localErrors.length > 0) {
-      setLocalErrors([]);
-    }
-  }, [
-    formName,
-    formType,
-    formFreq,
-    formNotes,
-    formPrescribed,
-    formRefill,
-    formQty,
-    formFoodFreq,
-    startDate,
-    formCount,
-    formVal,
-    formUnit,
-    selectedSlots,
-  ]);
+    setLocalErrors((prev) => {
+      const newErrors = { ...prev };
+      let changed = false;
+
+      if (formName.trim() && newErrors.name) {
+        delete newErrors.name;
+        changed = true;
+      }
+      if (formType !== "TABLET" && formType !== "CAPSULE") {
+        if (formUnit && newErrors.unit) {
+          delete newErrors.unit;
+          changed = true;
+        }
+      }
+      const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
+      if (selectedSlots.length === N && newErrors.slots) {
+        delete newErrors.slots;
+        changed = true;
+      }
+      const parsedQty = parseInt(formQty.trim(), 10);
+      if (formQty.trim() && !isNaN(parsedQty) && parsedQty > 0 && newErrors.qty) {
+        delete newErrors.qty;
+        changed = true;
+      }
+      if (startDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const sDate = new Date(startDate);
+        sDate.setHours(0, 0, 0, 0);
+        if (sDate >= today && newErrors.startDate) {
+          delete newErrors.startDate;
+          changed = true;
+        }
+      }
+      
+      return changed ? newErrors : prev;
+    });
+  }, [formName, formType, formUnit, formFreq, selectedSlots, formQty, startDate]);
 
   const handleSave = () => {
-    const errors: string[] = [];
+    const errors: Record<string, string> = {};
     if (!formName.trim()) {
-      errors.push("Name is required");
+      errors.name = "Name is required";
     }
     const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
     if (selectedSlots.length !== N) {
-      errors.push(`Please select exactly ${N} reminder times`);
+      errors.slots = `Please select exactly ${N} reminder times`;
     }
     const parsedQty = parseInt(formQty.trim(), 10);
     if (!formQty.trim() || isNaN(parsedQty) || parsedQty <= 0) {
-      errors.push("Total Quantity is required");
+      errors.qty = "Total Quantity is required";
     }
 
     if (startDate) {
@@ -117,7 +138,7 @@ export const EditMedicineFormWrapper = ({
       const sDate = new Date(startDate);
       sDate.setHours(0, 0, 0, 0);
       if (sDate < today) {
-        errors.push(
+        errors.startDate =
           preferredLang === "gujarati"
             ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
             : preferredLang === "hindi"
@@ -126,22 +147,24 @@ export const EditMedicineFormWrapper = ({
                 ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
                 : preferredLang === "tamil"
                   ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
-                  : "Start Date cannot be in the past"
-        );
+                  : "Start Date cannot be in the past";
       }
     }
 
-    if (errors.length > 0) {
+    if (Object.keys(errors).length > 0) {
       setLocalErrors(errors);
       return;
     }
 
-    onSave({
+    const isPill = formType === "TABLET" || formType === "CAPSULE";
+    const rawMedObject = {
       ...medicine,
       name: formName.trim(),
+      type: formType,
       medicineType: formType,
-      dosage: formType === "TABLET" || formType === "CAPSULE" ? String(formCount) : String(formVal),
-      dosageUnit: formType === "TABLET" || formType === "CAPSULE" ? (formType === "TABLET" ? "tablet" : "capsule") : formUnit,
+      dose: isPill ? { count: formCount } : { value: formVal, unit: formUnit },
+      dosage: isPill ? String(formCount) : String(formVal),
+      dosageUnit: isPill ? (formType === "TABLET" ? "tablet" : "capsule") : formUnit,
       frequency: formFreq,
       foodFrequency: formFoodFreq,
       timing: formFoodFreq === "BEFORE_FOOD" ? "Before Food" : "After Food",
@@ -152,7 +175,9 @@ export const EditMedicineFormWrapper = ({
       refillAlertEnabled: formRefill,
       medicationSchedule: selectedSlots,
       startDate: startDate ? (startDate instanceof Date ? formatLocalDate(startDate) : startDate) : getTodayDateString(),
-    });
+    };
+
+    onSave(sanitizeMedicineForPayload(rawMedObject));
   };
 
   return (
@@ -164,16 +189,7 @@ export const EditMedicineFormWrapper = ({
         </TouchableOpacity>
       </View>
       <BottomSheetScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-        <MedicationFormFields formState={formState} isDark={isDark} theme={theme} preferredLang={preferredLang} isInBottomSheet={true} />
-        {localErrors.length > 0 && (
-          <View style={{ marginTop: 8, marginBottom: 12 }}>
-            {localErrors.map((err, idx) => (
-              <Text key={idx} style={{ color: "#ef4444", fontSize: 12 }}>
-                • {err}
-              </Text>
-            ))}
-          </View>
-        )}
+        <MedicationFormFields formState={formState} isDark={isDark} theme={theme} preferredLang={preferredLang} isInBottomSheet={true} errors={localErrors} />
       </BottomSheetScrollView>
       <TouchableOpacity
         onPress={handleSave}

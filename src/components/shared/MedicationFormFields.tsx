@@ -185,6 +185,7 @@ interface MedicationFormFieldsProps {
   preferredLang?: string;
   readOnly?: boolean;
   isInBottomSheet?: boolean;
+  errors?: Record<string, string>;
 }
 
 export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
@@ -194,6 +195,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
   preferredLang = "english",
   readOnly = false,
   isInBottomSheet = false,
+  errors = {},
 }) => {
   const {
     formName,
@@ -836,7 +838,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           </TouchableOpacity>
         </View>
 
-        {slotError ? (
+        {slotError || errors.slots ? (
           <Text
             style={{
               color: "#ef4444",
@@ -845,7 +847,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               fontWeight: "600",
             }}
           >
-            {slotError}
+            {slotError || errors.slots}
           </Text>
         ) : null}
       </View>
@@ -877,6 +879,11 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           placeholder={t("placeholder.paracetamol")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
         />
+        {errors.name ? (
+          <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
+            {errors.name}
+          </Text>
+        ) : null}
       </View>
 
       {/* Medicine Type */}
@@ -1004,6 +1011,11 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             </View>
           </View>
         </View>
+        {errors.unit ? (
+          <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
+            {errors.unit}
+          </Text>
+        ) : null}
       </View>
 
       {/* Intake Frequency */}
@@ -1140,6 +1152,11 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           placeholder={preferredLang === "gujarati" ? "દા.ત. 30" : "e.g. 30"}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
         />
+        {errors.qty ? (
+          <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
+            {errors.qty}
+          </Text>
+        ) : null}
       </View>
 
       {/* Start Date */}
@@ -1170,6 +1187,11 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             {startDate ? format(startDate, "MMM dd, yyyy") : preferredLang === "gujarati" ? "તારીખ પસંદ કરો" : "Select Start Date"}
           </Text>
         </TouchableOpacity>
+        {errors.startDate ? (
+          <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
+            {errors.startDate}
+          </Text>
+        ) : null}
       </View>
 
       {/* Prescribed By */}

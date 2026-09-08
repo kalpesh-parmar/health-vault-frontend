@@ -22,7 +22,11 @@ import {
   MedicineDocumentAccordionCard,
 } from "./widgets/ConversationalExtractionWidgets";
 import { I18N_ONBOARDING_UI } from "./widgets/OnboardingI18n";
-import { ReportSummaryChatCard } from "./widgets/ReportSummaryChatCard";
+import {
+  ReportSummaryChatCard,
+  DocumentSummaryStats,
+} from "./widgets/ReportSummaryChatCard";
+import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 
 export interface ChatMessage {
@@ -47,11 +51,12 @@ export interface ChatMessage {
   keyFindings?: any[];
   fields?: any[];
   loginSummary?: string;
-  documentSummary?: string;
+  documentSummary?: string | DocumentSummaryStats;
   loginProvider?: string;
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
   createdAt?: string | Date;
   sessionId?: string;
+  isOnboardingMessage?: boolean;
 }
 
 interface ChatMessageItemProps {
@@ -177,7 +182,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   const { chosenVal, chosenLabel } = findHistoricalUserReply(mergedMessages, item.id, true);
   const isAnswered = chosenVal !== null || chosenLabel !== null;
   const isLatest = isLatestActiveMessage(item.id);
-  const isHistorical = (item.sessionId === onboardingSessionId && isAnswered) || !isLatest;
+  const isHistorical = isAnswered || !isLatest;
 
   const isComplexStep =
     item.action === "RESOLVE_PROFILE_SOURCE" ||
@@ -233,7 +238,30 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   };
 
   if (isComplexStep) {
-    if (item.action === "ASK_REPORT") {
+    if (item.action === "ASK_REPORT" || item.action === "ADD_DOCUMENT") {
+      const hasMedicines = item.medicines && item.medicines.length > 0;
+      if (!hasMedicines) {
+        if (item.isOnboardingMessage) {
+          return renderAssistantPrompt(null);
+        }
+        const msgDocs =
+          item.documents && item.documents.length > 0
+            ? item.documents
+            : item.document
+              ? [item.document]
+              : [];
+        if (msgDocs.length > 0) {
+          return renderAssistantPrompt(
+            <DocumentProgressSummaryContainer
+              documents={msgDocs}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+            />,
+          );
+        }
+        return renderAssistantPrompt(null);
+      }
       const doc = item.document || {};
       const questions =
         item.suggestedQuestions && item.suggestedQuestions.length > 0
@@ -243,6 +271,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       return renderAssistantPrompt(
         <ReportSummaryChatCard
           document={doc}
+          documentSummary={item.documentSummary}
           suggestedQuestions={questions}
           isDark={isDark}
           theme={theme}
@@ -314,14 +343,14 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
               actionType: "ADD_MEDICINE",
             });
           }}
-          readOnly={isHistorical || !isLatest}
+          readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
       );
     }
     if (item.action === "REVIEW_MEDICINES_LIST") {
-      const isReadOnly = isHistorical || !isLatest;
+      const isReadOnly = isHistorical;
 
       const handleConfirm = (checkedMeds: string[]) => {
         handleConfirmSelection();
@@ -370,6 +399,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           readOnly={isReadOnly}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
+          documents={item.documents}
+          showDocumentSummary={!item.isOnboardingMessage}
         />,
       );
     }
@@ -382,7 +413,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           theme={theme}
           onConfirm={() => { }}
           onEdit={() => { }}
-          readOnly={isHistorical || !isLatest}
+          readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
@@ -395,7 +426,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           isDark={isDark}
           theme={theme}
           onOptionPress={(opt) => handleGenericOptionPress(opt)}
-          readOnly={isHistorical || !isLatest}
+          readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
@@ -441,6 +472,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             }, 100);
           }}
           preferredLang={preferredLang}
+          documents={item.documents}
         />
       );
     }
@@ -578,18 +610,17 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         <View style={styles.optionsWrapper}>
           <View style={styles.chipsContainer}>
             {item.options?.map((opt: any, idx: number) => {
-              const isLatest = isLatestActiveMessage(item.id);
               return (
                 <TouchableOpacity
                   key={idx}
-                  disabled={!isLatest}
+                  disabled={isHistorical}
                   onPress={() => handleGenericOptionPress(opt)}
                   style={[
                     styles.chipBtn,
                     {
                       backgroundColor: isDark ? "#1e2d2f" : "#ccfbf1",
                       borderColor: isDark ? "#2d4d4f" : "#99f6e4",
-                      opacity: isLatest ? 1 : 0.6,
+                      opacity: isHistorical ? 0.6 : 1,
                     },
                   ]}
                 >

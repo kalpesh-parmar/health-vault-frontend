@@ -366,6 +366,9 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     async (fileKey: string, batchId?: string) => {
       if (!fileKey) return;
 
+      setProcessingError(null);
+      setIsPillHidden(false);
+
       try {
         setUploadingDocs((prev) =>
           prev.map((d) =>
@@ -384,8 +387,30 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         );
 
         const response = await retryDocumentProcessing({ fileKey, batchId });
-        const data = (response as any)?.data || response;
-        const streamEndpoint = (data as any)?.streamUrl || `/sse/files/${fileKey}/stream`;
+        const data = (response as any)?.data?.data || (response as any)?.data || response;
+        const streamEndpoint =
+          data?.streamUrl ||
+          (data?.fileKey ? `/sse/files/${data.fileKey}/stream` : `/sse/files/${fileKey}/stream`);
+
+        const initProgress = typeof data?.progress === "number" ? data.progress : 10;
+        const initStage = data?.resumeStage || data?.stage || "RUNNING";
+        const initStatus = data?.status || "RUNNING";
+
+        setUploadingDocs((prev) =>
+          prev.map((d) =>
+            d.fileKey === fileKey || d.id === fileKey
+              ? {
+                ...d,
+                status: initStatus,
+                stage: initStage,
+                currentStep: `Retrying (${initStage.toLowerCase()})...`,
+                progress: initProgress,
+                percentage: initProgress,
+                reason: null,
+              }
+              : d,
+          ),
+        );
 
         connectSseStream({
           endpoint: streamEndpoint,
@@ -409,6 +434,14 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                           : "Processing failed")
                       : null;
                   
+                  const isNonRetryable =
+                    errorCode === "NON_MEDICAL_DOCUMENT" ||
+                    errorCode === "NON_RETRYABLE" ||
+                    errorCode === "INVALID_REQUEST" ||
+                    (typeof reason === "string" &&
+                      (reason.toLowerCase().includes("non-retryable") ||
+                        reason.toLowerCase().includes("cannot be retried")));
+
                   return {
                     ...doc,
                     progress: pct,
@@ -418,7 +451,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                     currentStep,
                     reason,
                     errorCode,
-                    retryable: status === "FAILED" && errorCode !== "NON_MEDICAL_DOCUMENT",
+                    retryable: status === "FAILED" && !isNonRetryable,
                     skippedPages: event.extra?.skippedPages || event.data?.extra?.skippedPages || doc.skippedPages,
                   };
                 }
@@ -434,6 +467,40 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         });
       } catch (err: any) {
         console.error("[retryDocument Error]", err);
+        const errorData = err?.response?.data || err?.data || {};
+        const errorMsg =
+          errorData?.message ||
+          err?.message ||
+          "This document failed with a non-retryable error and cannot be retried.";
+        const isNonRetryable =
+          err?.response?.status === 400 ||
+          errorData?.errorCode === "INVALID_REQUEST" ||
+          errorData?.errorCode === "NON_RETRYABLE" ||
+          (typeof errorMsg === "string" &&
+            (errorMsg.toLowerCase().includes("non-retryable") ||
+              errorMsg.toLowerCase().includes("cannot be retried")));
+
+        setUploadingDocs((prev) =>
+          prev.map((d) =>
+            d.fileKey === fileKey || d.id === fileKey
+              ? {
+                  ...d,
+                  status: "FAILED",
+                  stage: "FAILED",
+                  currentStep: errorMsg,
+                  reason: errorMsg,
+                  errorCode: errorData?.errorCode || (isNonRetryable ? "NON_RETRYABLE" : d.errorCode),
+                  retryable: !isNonRetryable,
+                }
+              : d,
+          ),
+        );
+
+        Toast.show({
+          type: "error",
+          text1: isNonRetryable ? "Cannot Retry Document" : "Retry Failed",
+          text2: errorMsg,
+        });
       }
     },
     [],
@@ -514,6 +581,20 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           fileKey: d.fileKey || d.id,
         }));
 
+        setChatWizardState({
+          step: "processing",
+          jobIds,
+          filesInfo,
+          extractedMedicines: [],
+          conflicts: [],
+          currentConflictIndex: 0,
+          resolvedMedicines: [],
+          replaceList: [],
+          mergeList: [],
+          summaries: [],
+          hasViewedCompletedOcr: false,
+        });
+
         if (onSuccess) {
           onSuccess(jobIds, filesInfo);
         }
@@ -537,7 +618,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             (d) => d.status === "COMPLETED" || d.progress === 100 || d.percentage === 100
           );
           const failedDocs = currentDocs.filter(
-            (d) => d.status === "FAILED"
+            (d) => d.status === "FAILED" || d.status === "failed" || d.status === "error" || d.status === "REJECTED" || d.status === "rejected"
           );
 
           const completedCount = event?.completed ?? completedDocs.length;
@@ -695,6 +776,14 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                           : "Processing failed")
                       : null;
 
+                  const isNonRetryable =
+                    errorCode === "NON_MEDICAL_DOCUMENT" ||
+                    errorCode === "NON_RETRYABLE" ||
+                    errorCode === "INVALID_REQUEST" ||
+                    (typeof reason === "string" &&
+                      (reason.toLowerCase().includes("non-retryable") ||
+                        reason.toLowerCase().includes("cannot be retried")));
+
                   return {
                     ...doc,
                     progress: pct,
@@ -704,7 +793,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                     currentStep,
                     reason,
                     errorCode,
-                    retryable: status === "FAILED" && errorCode !== "NON_MEDICAL_DOCUMENT",
+                    retryable: status === "FAILED" && !isNonRetryable,
                     skippedPages: matchedEvent.extra?.skippedPages || matchedEvent.data?.extra?.skippedPages || doc.skippedPages,
                   };
                 });
@@ -730,6 +819,14 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                           : "Processing failed")
                       : null;
 
+                  const isNonRetryable =
+                    errorCode === "NON_MEDICAL_DOCUMENT" ||
+                    errorCode === "NON_RETRYABLE" ||
+                    errorCode === "INVALID_REQUEST" ||
+                    (typeof reason === "string" &&
+                      (reason.toLowerCase().includes("non-retryable") ||
+                        reason.toLowerCase().includes("cannot be retried")));
+
                   return {
                     ...doc,
                     progress: pct,
@@ -739,7 +836,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                     currentStep,
                     reason,
                     errorCode,
-                    retryable: status === "FAILED" && errorCode !== "NON_MEDICAL_DOCUMENT",
+                    retryable: status === "FAILED" && !isNonRetryable,
                     skippedPages: event.extra?.skippedPages || doc.skippedPages,
                   };
                 });
@@ -856,29 +953,41 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     if (fromScreen) {
       activeUploadFromScreenRef.current = fromScreen;
     }
-    const docs = jobIds.map((jobId) => {
-      const file = filesInfo?.find((f) => f.jobId === jobId);
-      let finalBackgroundName = file?.fileName || `Document ${jobId.slice(0, 8)}`;
-      try {
-        finalBackgroundName = decodeURIComponent(finalBackgroundName).replace(/%20/g, " ");
-      } catch (e) {
-        finalBackgroundName = finalBackgroundName.replace(/%20/g, " ");
-      }
-      return {
-        id: jobId,
-        fileKey: file?.fileKey || jobId,
-        jobId,
-        name: finalBackgroundName,
-        progress: 0,
-        status: "QUEUED",
-        reason: null,
-      };
+
+    setUploadingDocs((prevDocs) => {
+      const updatedDocs = jobIds.map((jobId) => {
+        const existing = prevDocs.find(
+          (d) => d.jobId === jobId || d.id === jobId || d.fileKey === jobId,
+        );
+        if (existing) {
+          return existing;
+        }
+
+        const file = filesInfo?.find((f) => f.jobId === jobId || f.fileKey === jobId);
+        let finalBackgroundName = file?.fileName || `Document ${jobId.slice(0, 8)}`;
+        try {
+          finalBackgroundName = decodeURIComponent(finalBackgroundName).replace(/%20/g, " ");
+        } catch (e) {
+          finalBackgroundName = finalBackgroundName.replace(/%20/g, " ");
+        }
+        return {
+          id: jobId,
+          fileKey: file?.fileKey || jobId,
+          jobId,
+          name: finalBackgroundName,
+          progress: 0,
+          percentage: 0,
+          status: "QUEUED",
+          stage: "QUEUED",
+          currentStep: "Queued for processing",
+          reason: null,
+        };
+      });
+
+      return updatedDocs;
     });
-    setUploadingDocs(docs);
+
     setIsPillHidden(false);
-    setCompletedBatch(null);
-    activeBatchIdRef.current = null;
-    lastBatchEventIdRef.current = null;
   }, []);
 
   const cancelAllProcessing = useCallback(async () => {

@@ -3,6 +3,8 @@ import { Modal } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { usePreferredLanguage } from "../../hooks/usePreferredLanguage";
+import { getModalTranslation } from "../../utils/modalI18n";
 
 interface UploadValidationDialogProps {
   visible: boolean;
@@ -18,6 +20,7 @@ export const UploadValidationDialog: React.FC<UploadValidationDialogProps> = ({
   onClose,
 }) => {
   const { isDark } = useAppTheme();
+  const lang = usePreferredLanguage();
 
   return (
     <Modal
@@ -31,18 +34,18 @@ export const UploadValidationDialog: React.FC<UploadValidationDialogProps> = ({
           <IconContainer>
             <Ionicons name="warning-outline" size={40} color="#ea580c" />
           </IconContainer>
-          <Title>Invalid Document</Title>
+          <Title>{getModalTranslation(lang, "invalidDocTitle")}</Title>
           <Message>
-            This does not appear to be a medical document. Please select a valid medical document or continue with manual entry.
+            {getModalTranslation(lang, "invalidDocDesc")}
           </Message>
 
           <ButtonContainer>
             <SelectAgainButton onPress={onSelectAgain}>
-              <SelectAgainText>Select Again</SelectAgainText>
+              <SelectAgainText>{getModalTranslation(lang, "selectAgainBtn")}</SelectAgainText>
             </SelectAgainButton>
 
             <ManualButton onPress={onContinueManual}>
-              <ManualText>Continue with Manual Entry</ManualText>
+              <ManualText>{getModalTranslation(lang, "manualEntryBtn")}</ManualText>
             </ManualButton>
           </ButtonContainer>
         </DialogContainer>

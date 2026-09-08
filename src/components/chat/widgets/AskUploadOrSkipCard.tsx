@@ -42,17 +42,27 @@ export function AskUploadOrSkipCard({
   const uploadLabel = uploadOpt.label || uiT("useDocument");
   const manualLabel = manualOpt.label || uiT("editManuallyInstead");
 
-  const isUploadChosen = isHistorical && (
+  const isUploadChosen = isHistorical && !!(
     chosenVal === "UPLOAD" ||
-    (chosenLabel && String(chosenLabel).toLowerCase() === String(uploadLabel).toLowerCase())
+    chosenVal === "DOCUMENT_UPLOADED" ||
+    (chosenVal && String(chosenVal).toLowerCase().includes("upload")) ||
+    (chosenLabel && (
+      String(chosenLabel).toLowerCase() === String(uploadLabel).toLowerCase() ||
+      String(chosenLabel).toLowerCase().includes("document uploaded") ||
+      String(chosenLabel).toLowerCase().includes("upload")
+    ))
   );
-  const isManualChosen = isHistorical && (
+  const isManualChosen = isHistorical && !!(
     chosenVal === "MANUAL" ||
-    (chosenLabel && String(chosenLabel).toLowerCase() === String(manualLabel).toLowerCase())
+    (chosenVal && String(chosenVal).toLowerCase().includes("manual")) ||
+    (chosenLabel && (
+      String(chosenLabel).toLowerCase() === String(manualLabel).toLowerCase() ||
+      String(chosenLabel).toLowerCase().includes("manual")
+    ))
   );
 
-  const uploadOpacity = isHistorical ? (isUploadChosen ? 1 : 0.55) : 1;
-  const manualOpacity = isHistorical ? (isManualChosen ? 1 : 0.55) : 1;
+  const uploadOpacity = isHistorical ? (isUploadChosen ? 1 : 0.45) : 1;
+  const manualOpacity = isHistorical ? (isManualChosen ? 1 : 0.45) : 1;
 
   return (
     <View style={styles.optionContainer} pointerEvents={isHistorical ? "none" : "auto"}>
@@ -62,18 +72,18 @@ export function AskUploadOrSkipCard({
           styles.optionCard,
           {
             backgroundColor: isHistorical
-              ? (isUploadChosen ? theme.colors.primary + "15" : "rgba(100, 116, 139, 0.1)")
+              ? (isUploadChosen ? theme.colors.primary + "22" : "rgba(100, 116, 139, 0.08)")
               : theme.colors.primary + "15",
             opacity: uploadOpacity,
-            borderWidth: isUploadChosen ? 2 : 0,
-            borderColor: isUploadChosen ? theme.colors.primary : "transparent",
+            borderWidth: isUploadChosen ? 2 : 1,
+            borderColor: isUploadChosen ? theme.colors.primary : (isHistorical ? "transparent" : "rgba(100, 116, 139, 0.15)"),
           },
         ]}
         onPress={handleDocumentUpload}
       >
         {isUploadChosen && (
           <View style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
-            <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
+            <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
           </View>
         )}
         <View
@@ -89,7 +99,13 @@ export function AskUploadOrSkipCard({
           <Ionicons name="cloud-upload" size={24} color="#fff" />
         </View>
         <Text
-          style={[styles.optionTitle, { color: theme.colors.textPrimary }]}
+          style={[
+            styles.optionTitle,
+            {
+              color: isUploadChosen ? theme.colors.primary : theme.colors.textPrimary,
+              fontWeight: isUploadChosen ? "700" : "600",
+            },
+          ]}
         >
           {uploadLabel}
         </Text>
@@ -100,10 +116,12 @@ export function AskUploadOrSkipCard({
         style={[
           styles.optionCard,
           {
-            backgroundColor: "rgba(100, 116, 139, 0.1)",
+            backgroundColor: isHistorical
+              ? (isManualChosen ? theme.colors.primary + "22" : "rgba(100, 116, 139, 0.08)")
+              : "rgba(100, 116, 139, 0.1)",
             opacity: manualOpacity,
-            borderWidth: isManualChosen ? 2 : 0,
-            borderColor: isManualChosen ? theme.colors.primary : "transparent",
+            borderWidth: isManualChosen ? 2 : 1,
+            borderColor: isManualChosen ? theme.colors.primary : (isHistorical ? "transparent" : "rgba(100, 116, 139, 0.15)"),
           },
         ]}
         onPress={() => {
@@ -114,14 +132,29 @@ export function AskUploadOrSkipCard({
       >
         {isManualChosen && (
           <View style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
-            <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
+            <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
           </View>
         )}
-        <View style={[styles.iconCircle, { backgroundColor: "#64748b" }]}>
+        <View
+          style={[
+            styles.iconCircle,
+            {
+              backgroundColor: isHistorical
+                ? (isManualChosen ? theme.colors.primary : "#64748b")
+                : "#64748b",
+            },
+          ]}
+        >
           <Ionicons name="create" size={24} color="#fff" />
         </View>
         <Text
-          style={[styles.optionTitle, { color: theme.colors.textPrimary }]}
+          style={[
+            styles.optionTitle,
+            {
+              color: isManualChosen ? theme.colors.primary : theme.colors.textPrimary,
+              fontWeight: isManualChosen ? "700" : "600",
+            },
+          ]}
         >
           {manualLabel}
         </Text>
