@@ -8,7 +8,7 @@ interface DocumentPreviewProps {
   fileName: string;
   fileSize?: string | number;
   uri: string;
-  fileType: "pdf" | "image";
+  fileType: "pdf" | "image" | "document";
   onRemove: () => void;
 }
 

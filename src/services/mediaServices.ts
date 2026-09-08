@@ -41,7 +41,12 @@ export const takePhotoAsset = async () => {
 
 export const pickDocumentAsset = async () => {
   const result = await DocumentPicker.getDocumentAsync({
-    type: ["application/pdf", "image/*"],
+    type: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "image/*",
+    ],
     copyToCacheDirectory: true,
   });
 

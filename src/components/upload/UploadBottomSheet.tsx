@@ -59,25 +59,25 @@ export const UploadBottomSheet = forwardRef<any, UploadBottomSheetProps>(
             </OptionRow>
 
             {/* Choose Document */}
-            {!fromScreen && (
-              <OptionRow
-                onPress={() => handleOptionPress(onChooseDocument)}
-                isLast
-              >
-                <IconContainer bgColor="#f0fdf4">
-                  <Ionicons
-                    name="document-text-outline"
-                    size={24}
-                    color="#16a34a"
-                  />
-                </IconContainer>
-                <TextContent>
-                  <OptionTitle>Choose Document</OptionTitle>
-                  <OptionDesc>Select PDF or image file</OptionDesc>
-                </TextContent>
-                <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-              </OptionRow>
-            )}
+            <OptionRow
+              onPress={() => handleOptionPress(onChooseDocument)}
+              isLast
+            >
+              <IconContainer bgColor="#f0fdf4">
+                <Ionicons
+                  name="document-text-outline"
+                  size={24}
+                  color="#16a34a"
+                />
+              </IconContainer>
+              <TextContent>
+                <OptionTitle>Choose Document</OptionTitle>
+                <OptionDesc>
+                  Upload PDF, DOC, DOCX, and other supported medical document formats
+                </OptionDesc>
+              </TextContent>
+              <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+            </OptionRow>
           </OptionsContainer>
 
           <CancelButton

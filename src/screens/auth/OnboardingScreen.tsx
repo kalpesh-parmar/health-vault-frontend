@@ -262,7 +262,7 @@ export default function OnboardingScreen() {
     name: string;
     type: string;
     size?: number;
-    fileType: "pdf" | "image";
+    fileType: "pdf" | "image" | "document";
   } | null>(null);
   const [validationDialogVisible, setValidationDialogVisible] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -1076,18 +1076,82 @@ export default function OnboardingScreen() {
     const asset = await pickDocumentAsset();
     if (!asset) return;
 
-    const isPdf =
-      asset.name?.toLowerCase().endsWith(".pdf") ||
-      asset.mimeType === "application/pdf";
-    const name = asset.name || `report_${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
+    const rawName = asset.name || "";
+    const ext = rawName.split(".").pop()?.toLowerCase() || "";
+
+    // Resolve MIME type with fallbacks for common medical document formats
+    let mimeType = asset.mimeType;
+    if (!mimeType || mimeType === "application/octet-stream" || mimeType === "*/*") {
+      if (ext === "pdf") mimeType = "application/pdf";
+      else if (ext === "doc") mimeType = "application/msword";
+      else if (ext === "docx")
+        mimeType =
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      else if (ext === "jpg" || ext === "jpeg") mimeType = "image/jpeg";
+      else if (ext === "png") mimeType = "image/png";
+      else if (ext === "webp") mimeType = "image/webp";
+      else if (ext === "tiff" || ext === "tif") mimeType = "image/tiff";
+      else if (ext === "txt") mimeType = "text/plain";
+      else mimeType = "application/octet-stream";
+    }
+
+    const SUPPORTED_EXTENSIONS = [
+      "pdf",
+      "doc",
+      "docx",
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "tiff",
+      "tif",
+    ];
+    const isAllowedMime = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/tiff",
+    ].includes(mimeType?.toLowerCase() || "");
+
+    if (!SUPPORTED_EXTENSIONS.includes(ext) && !isAllowedMime) {
+      Toast.show({
+        type: "error",
+        text1: "Unsupported File Format",
+        text2: "Please upload a PDF, DOC, DOCX, or supported medical document format.",
+      });
+      return;
+    }
+
+    if (asset.size && asset.size > 150 * 1024 * 1024) {
+      Toast.show({
+        type: "error",
+        text1: "File Too Large",
+        text2: "Selected file exceeds the maximum size limit of 150MB.",
+      });
+      return;
+    }
+
+    const isImage =
+      ["jpg", "jpeg", "png", "webp", "tiff", "tif"].includes(ext) ||
+      mimeType?.startsWith("image/");
+    const isPdf = ext === "pdf" || mimeType === "application/pdf";
+    const name =
+      rawName || `report_${Date.now()}.${ext || (isPdf ? "pdf" : "doc")}`;
 
     console.log("[ONBOARDING] Document Selected", name);
     const file = {
       uri: asset.uri,
       name,
-      type: asset.mimeType || (isPdf ? "application/pdf" : "image/jpeg"),
+      type: mimeType || (isPdf ? "application/pdf" : "application/octet-stream"),
       size: asset.size,
-      fileType: (isPdf ? "pdf" : "image") as "pdf" | "image",
+      fileType: (isImage ? "image" : isPdf ? "pdf" : "document") as
+        | "pdf"
+        | "image"
+        | "document",
     };
     setSelectedFile(file);
     setInput(name);
