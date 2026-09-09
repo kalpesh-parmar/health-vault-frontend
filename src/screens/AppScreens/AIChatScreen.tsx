@@ -2607,11 +2607,6 @@ const AIChatScreen = ({ route }: any) => {
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
         history: buildChatHistory(messages),
-        documentId:
-          normalizeDocumentIds(
-            selectedDocument?.s3Key,
-            selectedDocument?.id,
-          ) ?? normalizeDocumentIds(chatWizardState.filesInfo),
         stream: true,
       };
 

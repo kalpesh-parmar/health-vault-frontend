@@ -58,6 +58,19 @@ const extractTextChunk = (data: any): string => {
 
   const target = data.data && typeof data.data === "object" ? data.data : data;
 
+  const eventType = String(
+    target.type || data.type || target.event || data.event || "",
+  ).toLowerCase();
+
+  if (
+    eventType === "done" ||
+    eventType === "completed" ||
+    eventType === "terminal" ||
+    eventType === "final"
+  ) {
+    return "";
+  }
+
   if (typeof target.delta === "string") return target.delta;
   if (typeof target.delta?.content === "string") return target.delta.content;
   if (typeof target.delta?.text === "string") return target.delta.text;
@@ -65,16 +78,12 @@ const extractTextChunk = (data: any): string => {
   if (typeof target.choices?.[0]?.delta?.text === "string") return target.choices[0].delta.text;
   if (typeof target.choices?.[0]?.text === "string") return target.choices[0].text;
 
-  return (
-    target.reply ??
-    target.chunk ??
-    target.text ??
-    target.content ??
-    target.message ??
-    target.token ??
-    target.response ??
-    ""
-  );
+  if (typeof target.chunk === "string") return target.chunk;
+  if (typeof target.token === "string") return target.token;
+  if (typeof target.text === "string" && !target.reply) return target.text;
+  if (typeof target.content === "string" && !target.reply) return target.content;
+
+  return "";
 };
 
 const processChunkBuffer = (
@@ -534,7 +543,9 @@ export const streamChatResponse = async (
               if (chunkText) pushChunk(chunkText);
               collectFinalData(parsed);
             } catch {
-              pushChunk(buffer.trim());
+              if (!sawFirstChunk) {
+                pushChunk(buffer.trim());
+              }
             }
           }
 
