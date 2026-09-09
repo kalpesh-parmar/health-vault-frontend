@@ -388,11 +388,39 @@ export function ConflictCarouselCard({
       {/* Bottom Option buttons to bypass conflicts */}
       {isLatest && (
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 16, borderTopWidth: 0.5, borderTopColor: isDark ? "#334155" : "#e2e8f0", paddingTop: 12 }}>
-          <TouchableOpacity onPress={onContinueAnyway} style={{ padding: 4 }}>
-            <Text style={{ fontSize: 12, color: "#3b82f6", fontWeight: "600" }}>Continue Anyway</Text>
+          <TouchableOpacity
+            onPress={onContinueAnyway}
+            style={{
+              flex: 1,
+              marginRight: 6,
+              paddingVertical: 10,
+              borderRadius: 10,
+              backgroundColor: isDark ? "#334155" : "#f1f5f9",
+              borderColor: isDark ? "#475569" : "#cbd5e1",
+              borderWidth: 1,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 12, color: isDark ? "#cbd5e1" : "#475569", fontWeight: "600" }}>
+              {t("skipAll") || "Skip All"}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onReviewMedicines} style={{ padding: 4 }}>
-            <Text style={{ fontSize: 12, color: "#3b82f6", fontWeight: "600" }}>Review Medicines</Text>
+          <TouchableOpacity
+            onPress={onReviewMedicines}
+            style={{
+              flex: 1,
+              marginLeft: 6,
+              paddingVertical: 10,
+              borderRadius: 10,
+              backgroundColor: isDark ? "#334155" : "#e2e8f0",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 12, color: isDark ? "#f8fafc" : "#1e293b", fontWeight: "600" }}>
+              {t("review") || "Review Medicines"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}

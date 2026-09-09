@@ -558,6 +558,50 @@ export function ReviewMedicinesListCard({
             <Ionicons name="chevron-forward" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
           </TouchableOpacity>
         </View>
+
+        {/* Action buttons under conflict */}
+        {!readOnly && (
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: isDark ? "#334155" : "#e2e8f0" }}>
+            <TouchableOpacity
+              onPress={onSkipAll}
+              style={[
+                styles.bigActionButtonSide,
+                {
+                  backgroundColor: isDark ? "#334155" : "#f1f5f9",
+                  borderColor: isDark ? "#475569" : "#cbd5e1",
+                  borderWidth: 1,
+                  flex: 1,
+                  marginRight: 6,
+                  paddingVertical: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontWeight: "600" }}>
+                {t("skipAll")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onAddNew}
+              style={[
+                styles.bigActionButtonSide,
+                {
+                  backgroundColor: isDark ? "#334155" : "#e2e8f0",
+                  flex: 1,
+                  marginLeft: 6,
+                  paddingVertical: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 13, color: theme.colors.textPrimary, fontWeight: "600" }}>
+                {t("addNew")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
       </View>
     );
@@ -969,149 +1013,256 @@ export function ReviewMedicinesListCard({
         </View>
       )}
 
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          marginTop: 8,
-        }}
-        pointerEvents={readOnly ? "none" : "auto"}
-      >
-        <TouchableOpacity
-          disabled={isConfirmDisabled}
-          style={[
-            styles.bigActionButtonSide,
-            {
-              backgroundColor: readOnly
-                ? isConfirmChosen
-                  ? theme.colors.primary
-                  : isDark
-                    ? "#334155"
-                    : "#e2e8f0"
-                : (isConfirmDisabled ? "#cbd5e1" : theme.colors.primary),
-              flex: 1,
-              marginRight: 6,
-              opacity: isConfirmDisabled ? 0.55 : confirmOpacity,
-              borderWidth: isConfirmChosen ? 2 : 0,
-              borderColor: isConfirmChosen ? "#ffffff" : "transparent",
-            },
-          ]}
-          onPress={handleConfirm}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {isConfirmChosen && (
-              <Ionicons
-                name="checkmark"
-                size={16}
-                color="#fff"
-                style={{ marginRight: 4 }}
-              />
-            )}
-            <Text
-              style={[
-                styles.bigActionButtonTextSide,
-                {
-                  color:
-                    readOnly && !isConfirmChosen
-                      ? theme.colors.textPrimary
-                      : "#ffffff",
-                },
-              ]}
-            >
-              {t("confirmSelection")}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          disabled={areActionsDisabled}
-          style={[
-            styles.bigActionButtonSide,
-            {
-              backgroundColor: isDark ? "#334155" : "#e2e8f0",
-              flex: 0.5,
-              opacity: areActionsDisabled ? 0.55 : addNewOpacity,
-              borderWidth: isAddNewChosen ? 2 : 0,
-              borderColor: isAddNewChosen
-                ? isDark
-                  ? "#ffffff"
-                  : "#475569"
-                : "transparent",
-            },
-          ]}
-          onPress={onAddNew}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {isAddNewChosen && (
-              <Ionicons
-                name="checkmark"
-                size={16}
-                color={theme.colors.textPrimary}
-                style={{ marginRight: 4 }}
-              />
-            )}
-            <Text
-              style={[
-                styles.bigActionButtonTextSide,
-                { color: theme.colors.textPrimary },
-              ]}
-            >
-              {t("addNew")}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity
-        disabled={areActionsDisabled}
-        style={[
-          styles.skipListButton,
-          {
-            opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
-            alignSelf: "center",
-            marginTop: 10,
-            borderWidth: isSkipAllChosen ? 1 : 0,
-            borderColor: theme.colors.textSecondary,
-            borderRadius: 8,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-          },
-        ]}
-        onPress={onSkipAll}
-      >
+      {/* Bottom Action Buttons */}
+      {checkedMeds.length === 0 ? (
         <View
           style={{
             flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "space-between",
+            marginTop: 8,
           }}
+          pointerEvents={readOnly ? "none" : "auto"}
         >
-          {isSkipAllChosen && (
-            <Ionicons
-              name="checkmark"
-              size={14}
-              color={theme.colors.textSecondary}
-              style={{ marginRight: 4 }}
-            />
-          )}
-          <Text
-            style={[styles.skipListText, { color: theme.colors.textSecondary }]}
+          <TouchableOpacity
+            disabled={areActionsDisabled}
+            style={[
+              styles.bigActionButtonSide,
+              {
+                backgroundColor: isDark ? "#334155" : "#e2e8f0",
+                flex: 1,
+                marginRight: 6,
+                paddingVertical: 12,
+                opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
+                borderWidth: isSkipAllChosen ? 2 : 0,
+                borderColor: isSkipAllChosen
+                  ? isDark
+                    ? "#ffffff"
+                    : "#475569"
+                  : "transparent",
+              },
+            ]}
+            onPress={onSkipAll}
           >
-            {t("skipAll")}
-          </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isSkipAllChosen && (
+                <Ionicons
+                  name="checkmark"
+                  size={16}
+                  color={theme.colors.textPrimary}
+                  style={{ marginRight: 4 }}
+                />
+              )}
+              <Text
+                style={[
+                  styles.bigActionButtonTextSide,
+                  { color: theme.colors.textPrimary },
+                ]}
+              >
+                {t("skipAll")}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            disabled={areActionsDisabled}
+            style={[
+              styles.bigActionButtonSide,
+              {
+                backgroundColor: theme.colors.primary,
+                flex: 1,
+                marginLeft: 6,
+                paddingVertical: 12,
+                opacity: areActionsDisabled ? 0.55 : addNewOpacity,
+                borderWidth: isAddNewChosen ? 2 : 0,
+                borderColor: isAddNewChosen ? "#ffffff" : "transparent",
+              },
+            ]}
+            onPress={onAddNew}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isAddNewChosen && (
+                <Ionicons
+                  name="checkmark"
+                  size={16}
+                  color="#ffffff"
+                  style={{ marginRight: 4 }}
+                />
+              )}
+              <Text
+                style={[
+                  styles.bigActionButtonTextSide,
+                  { color: "#ffffff" },
+                ]}
+              >
+                {t("addNew")}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      ) : (
+        <>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginTop: 8,
+            }}
+            pointerEvents={readOnly ? "none" : "auto"}
+          >
+            <TouchableOpacity
+              disabled={isConfirmDisabled}
+              style={[
+                styles.bigActionButtonSide,
+                {
+                  backgroundColor: readOnly
+                    ? isConfirmChosen
+                      ? theme.colors.primary
+                      : isDark
+                        ? "#334155"
+                        : "#e2e8f0"
+                    : (isConfirmDisabled ? "#cbd5e1" : theme.colors.primary),
+                  flex: 1,
+                  marginRight: 6,
+                  opacity: isConfirmDisabled ? 0.55 : confirmOpacity,
+                  borderWidth: isConfirmChosen ? 2 : 0,
+                  borderColor: isConfirmChosen ? "#ffffff" : "transparent",
+                },
+              ]}
+              onPress={handleConfirm}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {isConfirmChosen && (
+                  <Ionicons
+                    name="checkmark"
+                    size={16}
+                    color="#fff"
+                    style={{ marginRight: 4 }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.bigActionButtonTextSide,
+                    {
+                      color:
+                        readOnly && !isConfirmChosen
+                          ? theme.colors.textPrimary
+                          : "#ffffff",
+                    },
+                  ]}
+                >
+                  {t("confirmSelection")}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={areActionsDisabled}
+              style={[
+                styles.bigActionButtonSide,
+                {
+                  backgroundColor: isDark ? "#334155" : "#e2e8f0",
+                  flex: 0.5,
+                  opacity: areActionsDisabled ? 0.55 : addNewOpacity,
+                  borderWidth: isAddNewChosen ? 2 : 0,
+                  borderColor: isAddNewChosen
+                    ? isDark
+                      ? "#ffffff"
+                      : "#475569"
+                    : "transparent",
+                },
+              ]}
+              onPress={onAddNew}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {isAddNewChosen && (
+                  <Ionicons
+                    name="checkmark"
+                    size={16}
+                    color={theme.colors.textPrimary}
+                    style={{ marginRight: 4 }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.bigActionButtonTextSide,
+                    { color: theme.colors.textPrimary },
+                  ]}
+                >
+                  {t("addNew")}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            disabled={areActionsDisabled}
+            style={[
+              styles.bigActionButtonSide,
+              {
+                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                borderColor: isDark ? "#475569" : "#cbd5e1",
+                borderWidth: 1,
+                paddingVertical: 10,
+                borderRadius: 12,
+                marginTop: 10,
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
+              },
+            ]}
+            onPress={onSkipAll}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isSkipAllChosen && (
+                <Ionicons
+                  name="checkmark"
+                  size={14}
+                  color={theme.colors.textSecondary}
+                  style={{ marginRight: 4 }}
+                />
+              )}
+              <Text
+                style={[
+                  styles.bigActionButtonTextSide,
+                  { color: theme.colors.textSecondary, fontSize: 13 },
+                ]}
+              >
+                {t("skipAll")}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
     </View>
   );

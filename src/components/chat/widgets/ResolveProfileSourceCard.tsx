@@ -600,7 +600,7 @@ export function ResolveProfileSourceCard({
       </View>
 
       {/* VS Card Columns or CONFIRM layout */}
-      {mode === "CONFIRM" || parsed?.edited !== undefined || localEditedData !== null ? (
+      {mode === "CONFIRM" ? (
         <View style={[styles.vsColumn, { borderColor: isDark ? "#475569" : "#cbd5e1", width: "100%", marginBottom: 12, borderWidth: 1, borderRadius: 8, overflow: "hidden" }]}>
           <View style={[styles.columnHeader, { backgroundColor: isDark ? "#1e293b" : "#f8fafc" }]}>
             <Ionicons name="person-circle-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
@@ -701,11 +701,11 @@ export function ResolveProfileSourceCard({
         </View>
       ) : (
         <View style={styles.vsContainer}>
-          {/* Social Login Column */}
+          {/* Social / Edited Column */}
           <View
             style={[
               styles.vsColumn,
-              { borderColor: "rgba(59, 130, 246, 0.2)" },
+              { borderColor: localEditedData ? "rgba(59, 130, 246, 0.4)" : "rgba(59, 130, 246, 0.2)" },
             ]}
           >
             <View
@@ -719,7 +719,7 @@ export function ResolveProfileSourceCard({
               ]}
             >
               <Ionicons
-                name={getProviderIcon(activeMsg?.loginProvider)}
+                name={localEditedData ? "create-outline" : getProviderIcon(activeMsg?.loginProvider)}
                 size={16}
                 color={getProviderIconColor(activeMsg?.loginProvider)}
                 style={{ marginRight: 6 }}
@@ -730,12 +730,16 @@ export function ResolveProfileSourceCard({
                   { color: getProviderIconColor(activeMsg?.loginProvider) },
                 ]}
               >
-                {getProviderLabel(activeMsg?.loginProvider)}
+                {localEditedData
+                  ? (uiT("editedInformation") || "Edited Information")
+                  : getProviderLabel(activeMsg?.loginProvider)}
               </Text>
             </View>
             <View style={styles.columnBody}>
               {fields.map((field: any) => {
-                const val = field.loginValue || (field.isMismatch ? null : field.value);
+                const val = (localEditedData && localEditedData[field.key] !== undefined)
+                  ? localEditedData[field.key]
+                  : (field.loginValue || (field.isMismatch ? null : field.value));
                 return (
                   <View key={field.key} style={styles.fieldRow}>
                     <View
@@ -1001,9 +1005,12 @@ export function ResolveProfileSourceCard({
                   const payload = localEditedData
                     ? { confirmed: true, edited: localEditedData }
                     : { confirmed: true };
+                  const updatedState = localEditedData
+                    ? { ...state, existingUserData: { ...(state?.existingUserData || {}), ...localEditedData } }
+                    : state;
                   sendMessage(
                     JSON.stringify(payload),
-                    state,
+                    updatedState,
                     uiT("confirmAndContinue"),
                   );
                 }}
@@ -1022,7 +1029,7 @@ export function ResolveProfileSourceCard({
                   </Text>
                 </View>
               </TouchableOpacity>
- 
+
               <TouchableOpacity
                 disabled={isHistorical}
                 style={[
@@ -1063,10 +1070,14 @@ export function ResolveProfileSourceCard({
         } else {
           const isLoginChosen = isHistorical && (
             parsed?.source === "LOGIN" ||
+            parsed?.source === "MANUAL" ||
             (chosenLabel && (
               String(chosenLabel).toLowerCase().includes("social") ||
               String(chosenLabel).toLowerCase().includes("login") ||
-              String(chosenLabel).toLowerCase() === "use social login"
+              String(chosenLabel).toLowerCase().includes("edited") ||
+              String(chosenLabel).toLowerCase() === "use social login" ||
+              String(chosenLabel).toLowerCase() === "use edited information" ||
+              String(chosenLabel).toLowerCase() === (uiT("useEditedInformation") || "").toLowerCase()
             ))
           );
           const isDocChosen = isHistorical && (
@@ -1104,13 +1115,18 @@ export function ResolveProfileSourceCard({
                     borderColor: isLoginChosen ? (isDark ? "#ffffff" : "#1d4ed8") : "transparent",
                   },
                 ]}
-                onPress={() =>
+                onPress={() => {
+                  const isManual = !!localEditedData;
+                  const payload = { source: isManual ? "MANUAL" : "LOGIN" };
+                  const updatedState = isManual
+                    ? { ...state, existingUserData: { ...(state?.existingUserData || {}), ...localEditedData } }
+                    : state;
                   sendMessage(
-                    JSON.stringify({ source: "LOGIN" }),
-                    state,
-                    uiT("useSocialLogin"),
-                  )
-                }
+                    JSON.stringify(payload),
+                    updatedState,
+                    isManual ? (uiT("useEditedInformation") || "Use Edited Information") : uiT("useSocialLogin"),
+                  );
+                }}
               >
                 <View style={{ alignItems: "center", width: "100%" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
@@ -1120,10 +1136,12 @@ export function ResolveProfileSourceCard({
                         { color: (isHistorical && !isLoginChosen) ? theme.colors.textPrimary : "#ffffff", textAlign: "center" },
                       ]}
                     >
-                      {uiT("useSocialLogin")}
+                      {localEditedData
+                        ? (uiT("useEditedInformation") || "Use Edited Information")
+                        : uiT("useSocialLogin")}
                     </Text>
                   </View>
-                  {loginSummary ? (
+                  {loginSummary && !localEditedData ? (
                     <Text
                       style={[
                         styles.bigActionButtonSubtitleSide,
@@ -1196,7 +1214,9 @@ export function ResolveProfileSourceCard({
           onPress={() => {
             const initData: any = {};
             fields.forEach((f: any) => {
-              const rawVal = f.loginValue || f.documentValue || f.value || "";
+              const rawVal = (localEditedData && localEditedData[f.key] !== undefined)
+                ? localEditedData[f.key]
+                : (f.loginValue || f.documentValue || f.value || "");
               initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
             });
             setEditedProfileData(initData);
