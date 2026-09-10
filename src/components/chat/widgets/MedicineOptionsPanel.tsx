@@ -52,6 +52,7 @@ export function MedicineOptionsPanel({
         return (
           <TouchableOpacity
             key={optKey}
+            disabled={readOnly}
             style={[
               styles.optionsPanelButton,
               {

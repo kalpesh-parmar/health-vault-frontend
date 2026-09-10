@@ -580,6 +580,8 @@ export default function OnboardingScreen() {
       aiRes.resumableState?.canSkip,
     );
 
+    const serverState = aiRes.state || aiRes.onboardingState;
+
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
@@ -587,7 +589,7 @@ export default function OnboardingScreen() {
       action,
       options: aiRes.options,
       fields: aiRes.fields,
-      onboardingState: aiRes.onboardingState,
+      onboardingState: serverState,
       loginSummary: aiRes.loginSummary,
       documentSummary: aiRes.documentSummary,
       mode: aiRes.mode,
@@ -657,7 +659,7 @@ export default function OnboardingScreen() {
             content: newMsg.content,
             options: newMsg.options,
             fields: newMsg.fields,
-            onboardingState: aiRes.onboardingState,
+            onboardingState: serverState,
             loginSummary: newMsg.loginSummary,
             documentSummary: newMsg.documentSummary,
             mode: newMsg.mode,
@@ -672,30 +674,36 @@ export default function OnboardingScreen() {
         return [...list, newMsg];
       });
     } else {
-      setMessages((prev) =>
-        completionMsg ? [...prev, completionMsg, newMsg] : [...prev, newMsg],
-      );
-    }
-
-    let updatedUserData = { ...currentState.existingUserData };
-
-    if (aiRes.extractedData) {
-      updatedUserData = {
-        ...updatedUserData,
-        ...aiRes.extractedData,
-      };
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (
+          lastMsg &&
+          lastMsg.role === "assistant" &&
+          lastMsg.action === newMsg.action &&
+          lastMsg.content === newMsg.content
+        ) {
+          return prev;
+        }
+        return completionMsg ? [...prev, completionMsg, newMsg] : [...prev, newMsg];
+      });
     }
 
     let finalState = { ...currentState };
 
-    if (aiRes.state) {
+    if (serverState) {
       finalState = {
         ...finalState,
-        ...aiRes.state,
+        ...serverState,
+        existingUserData: {
+          ...currentState.existingUserData,
+          ...(serverState.existingUserData || {}),
+          ...(aiRes.extractedData || {}),
+        },
       };
     } else {
       finalState = {
         ...finalState,
+        currentStep: aiRes.currentStep || finalState.currentStep,
         preferredLanguage:
           aiRes.preferredLanguage || finalState.preferredLanguage,
         flowMode: aiRes.flowMode || finalState.flowMode,
@@ -742,7 +750,11 @@ export default function OnboardingScreen() {
           aiRes.medicinesSavedToDb !== undefined
             ? aiRes.medicinesSavedToDb
             : finalState.medicinesSavedToDb,
-        existingUserData: updatedUserData,
+        existingUserData: {
+          ...currentState.existingUserData,
+          ...(aiRes.existingUserData || {}),
+          ...(aiRes.extractedData || {}),
+        },
       };
     }
 
@@ -779,6 +791,7 @@ export default function OnboardingScreen() {
     updatedState = state,
     displayLabel?: string,
   ) => {
+    if (loading) return;
     if (!userText.trim()) return;
 
     let isEditSave = false;
@@ -1538,7 +1551,9 @@ export default function OnboardingScreen() {
 
     try {
       setUploadState("uploading");
-      const uploadRes = await uploadDocumentsBatch([fileToUpload]);
+      const uploadRes = await uploadDocumentsBatch([fileToUpload], undefined, {
+        preferredLanguage: state.preferredLanguage || undefined,
+      });
       const responseData = (uploadRes as any)?.data || uploadRes;
       const documents = responseData?.documents;
       const createdItem = documents?.[0];
@@ -1640,10 +1655,40 @@ export default function OnboardingScreen() {
     };
 
     const handleOptionPress = (value: string, label: string) => {
+      let nextState = { ...state };
+      if (activeMsg.action === "ASK_BLOOD_GROUP") {
+        const isSkipVal = value === "SKIP" || value === "SKIP_QUESTION";
+        nextState = {
+          ...nextState,
+          existingUserData: {
+            ...nextState.existingUserData,
+            bloodGroup: isSkipVal ? "" : value,
+          },
+          ...(isSkipVal ? { bloodGroupSkipped: true } : {}),
+        };
+        setState(nextState);
+      } else if (activeMsg.action === "ASK_ALLERGIES") {
+        const isSkipVal =
+          value === "SKIP" ||
+          value === "NONE" ||
+          value === "NO_ALLERGIES" ||
+          value.toLowerCase() === "no" ||
+          value.toLowerCase() === "none";
+        nextState = {
+          ...nextState,
+          existingUserData: {
+            ...nextState.existingUserData,
+            allergies: isSkipVal ? [] : [value],
+          },
+          ...(isSkipVal ? { allergiesSkipped: true } : {}),
+        };
+        setState(nextState);
+      }
+
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
-        sendMessage(value, state, label);
+        sendMessage(value, nextState, label);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
-        sendMessage(value, state, label);
+        sendMessage(value, nextState, label);
       } else if (value === "VIEW_MEDICINES" || value === "VIEW_MY_MEDICINES") {
         setTimeout(() => {
           try {
@@ -1657,11 +1702,11 @@ export default function OnboardingScreen() {
           }
         }, 500);
       } else if (value === "ASK_ABOUT_REPORT" || value === "ASK_REPORT") {
-        sendMessage("ASK_REPORT", state, label);
+        sendMessage("ASK_REPORT", nextState, label);
       } else if (value === "LOGOUT") {
         logout();
       } else {
-        sendMessage(value, state, label);
+        sendMessage(value, nextState, label);
       }
     };
 
@@ -1701,6 +1746,7 @@ export default function OnboardingScreen() {
             return (
               <TouchableOpacity
                 key={opt.value}
+                disabled={isHistorical || loading}
                 style={[
                   styles.chip,
                   {
@@ -1782,6 +1828,7 @@ export default function OnboardingScreen() {
             return (
               <TouchableOpacity
                 key={opt.value}
+                disabled={isHistorical || loading}
                 style={[
                   styles.chip,
                   {
@@ -2212,6 +2259,7 @@ export default function OnboardingScreen() {
             return (
               <TouchableOpacity
                 key={value}
+                disabled={isHistorical || loading}
                 style={[
                   styles.chip,
                   {

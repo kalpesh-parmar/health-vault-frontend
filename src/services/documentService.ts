@@ -124,6 +124,7 @@ export interface UploadBatchResponse {
 export const uploadDocumentsBatch = async (
   files: Array<{ uri: string; name: string; type: string }>,
   onUploadProgress?: (progressEvent: any) => void,
+  options?: { preferredLanguage?: string },
 ): Promise<ApiResponse<UploadBatchResponse>> => {
   const formData = new FormData();
   files.forEach((file) => {
@@ -133,6 +134,10 @@ export const uploadDocumentsBatch = async (
       type: file.type,
     } as any);
   });
+
+  if (options?.preferredLanguage) {
+    formData.append("preferredLanguage", options.preferredLanguage);
+  }
 
   const response = await apiClient.post(DOCUMENT_ENDPOINTS.UPLOAD_DOCUMENT, formData, {
     headers: {

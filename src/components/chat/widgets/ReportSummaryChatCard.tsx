@@ -192,13 +192,25 @@ export const ReportSummaryChatCard: React.FC<ReportSummaryChatCardProps> = ({
 
   // AI Summary - prioritize preferred language when non-English
   const isNonEnglish = langKey !== "english";
-  const aiSummaryText =
-    (isNonEnglish && (document as any).summaryInPreferredLanguage) ||
-    document.summary ||
-    extracted.summary ||
-    document.summaryEnglish ||
-    (document as any).summaryInPreferredLanguage ||
-    null;
+  const docAny = document as any;
+  const aiSummaryText = isNonEnglish
+    ? docAny.summariesByLanguage?.[langKey] ||
+      extracted.summariesByLanguage?.[langKey] ||
+      docAny.summaryInPreferredLanguage ||
+      extracted.summaryInPreferredLanguage ||
+      document.summary ||
+      extracted.summary ||
+      document.summaryEnglish ||
+      extracted.summaryEnglish ||
+      null
+    : docAny.summariesByLanguage?.english ||
+      extracted.summariesByLanguage?.english ||
+      document.summaryEnglish ||
+      extracted.summaryEnglish ||
+      document.summary ||
+      extracted.summary ||
+      docAny.summaryInPreferredLanguage ||
+      null;
 
   // Lab findings extraction
   const rawLabResults =

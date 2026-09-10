@@ -20,38 +20,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
-type SpeechRecognitionResult = {
-  results?: Array<{ transcript: string }>;
-};
+import {
+  useChatVoice,
+  activeFormDictationCallback,
+  setActiveFormDictationCallback,
+} from "./hooks/useChatVoice";
 
-type SpeechRecognitionError = {
-  error?: string;
-  message?: string;
-};
-
-type SpeechRecognitionSubscription = {
-  remove: () => void;
-};
-
-type SpeechRecognitionModuleShape = {
-  addListener: (
-    eventName: string,
-    listener: (event: any) => void,
-  ) => SpeechRecognitionSubscription;
-  stop: () => void;
-  start: (options: { lang: string }) => void;
-  requestPermissionsAsync: () => Promise<unknown>;
-};
-
-let ExpoSpeechRecognitionModule: SpeechRecognitionModuleShape | null = null;
-
-try {
-  const speechRecognition = require("expo-speech-recognition");
-  ExpoSpeechRecognitionModule =
-    speechRecognition.ExpoSpeechRecognitionModule ?? null;
-} catch (error) {
-  ExpoSpeechRecognitionModule = null;
-}
+export { activeFormDictationCallback, setActiveFormDictationCallback };
 
 interface ChatInputProps {
   value: string;
@@ -64,14 +39,6 @@ interface ChatInputProps {
   mode?: "default" | "onboarding";
   onAttachPress?: () => void;
 }
-
-export let activeFormDictationCallback: ((transcript: string) => void) | null =
-  null;
-export const setActiveFormDictationCallback = (
-  cb: ((transcript: string) => void) | null,
-) => {
-  activeFormDictationCallback = cb;
-};
 
 const AnimatedTouch = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -88,93 +55,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const sendScale = useSharedValue(0.0);
-  const [isListening, setIsListening] = useState(false);
-  const pulseScale = useSharedValue(1);
 
-  useEffect(() => {
-    if (!ExpoSpeechRecognitionModule) {
-      return;
-    }
+  const { isListening, toggleListening, hasVoiceModule, pulseScale } =
+    useChatVoice({
+      preferredLanguage,
+      mode,
+      onTranscript: (transcript) => onChangeText(transcript),
+    });
 
-    const startSubscription = ExpoSpeechRecognitionModule.addListener(
-      "start",
-      () => {
-        setIsListening(true);
-      },
-    );
-    const endSubscription = ExpoSpeechRecognitionModule.addListener(
-      "end",
-      () => {
-        setIsListening(false);
-      },
-    );
-    const errorSubscription = ExpoSpeechRecognitionModule.addListener(
-      "error",
-      (e: SpeechRecognitionError) => {
-        console.log("Voice Error:", e.error, e.message);
-        setIsListening(false);
-      },
-    );
-    const resultSubscription = ExpoSpeechRecognitionModule.addListener(
-      "result",
-      (e: SpeechRecognitionResult) => {
-        if (e.results && e.results.length > 0) {
-          if (mode === "onboarding" && activeFormDictationCallback) {
-            activeFormDictationCallback(e.results[0].transcript);
-          } else {
-            console.log("Transcript :- ", e.results[0].transcript);
-            onChangeText(e.results[0].transcript);
-          }
-        }
-      },
-    );
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
 
-    return () => {
-      startSubscription.remove();
-      endSubscription.remove();
-      errorSubscription.remove();
-      resultSubscription.remove();
-    };
-  }, [mode, onChangeText]);
-
-  useEffect(() => {
-    if (isListening) {
-      pulseScale.value = withRepeat(
-        withTiming(1.2, { duration: 600 }),
-        -1,
-        true,
-      );
-    } else {
-      pulseScale.value = withTiming(1, { duration: 300 });
-    }
-  }, [isListening]);
-
-  const toggleListening = async () => {
-    if (!ExpoSpeechRecognitionModule) {
-      console.warn(
-        "Voice input is unavailable in this build because expo-speech-recognition is not installed in the native app.",
-      );
-      return;
-    }
-
-    if (isListening) {
-      ExpoSpeechRecognitionModule.stop();
-    } else {
-      try {
-        let locale = "en-US";
-        const pl = preferredLanguage.toLowerCase();
-        if (pl === "hindi" || pl === "hi") locale = "hi-IN";
-        else if (pl === "gujarati" || pl === "gu") locale = "gu-IN";
-        else if (pl === "marathi" || pl === "mr") locale = "mr-IN";
-        else if (pl === "tamil" || pl === "ta") locale = "ta-IN";
-
-        await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-        ExpoSpeechRecognitionModule.start({ lang: locale });
-      } catch (e) {
-        console.error("Voice start error:", e);
-      }
-    }
-  };
 
 
 
@@ -200,10 +92,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     ? "rgba(255,255,255,0.4)"
     : "rgba(30,41,59,0.4)";
   const themePrimaryColor = "#5B4BFF";
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-  }));
 
   return (
     <View
@@ -255,7 +143,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {sendScale.value === 0 && !value.trim() && (
         <AnimatedTouch
           onPress={toggleListening}
-          disabled={!ExpoSpeechRecognitionModule}
+          disabled={!hasVoiceModule}
           style={[
             styles.iconButton,
             pulseStyle,
@@ -268,7 +156,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             name="mic"
             size={22}
             color={
-              !ExpoSpeechRecognitionModule
+              !hasVoiceModule
                 ? "#cbd5e1"
                 : isListening
                   ? "#fff"

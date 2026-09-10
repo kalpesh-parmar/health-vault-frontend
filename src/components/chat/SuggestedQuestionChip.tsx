@@ -62,6 +62,10 @@ export const SuggestedQuestionChip: React.FC<SuggestedQuestionChipProps> = ({
   onPressQuestion,
   isDark,
 }) => {
+  if (!questions || questions.length === 0) {
+    return null;
+  }
+
   return (
     <View style={styles.scrollContainer}>
       <ScrollView
