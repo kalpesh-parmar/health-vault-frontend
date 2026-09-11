@@ -29,6 +29,7 @@ import AddDocumentSheet from "../../components/shared/AddDocumentSheet";
 import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import CameraModal from "../../components/shared/CameraModal";
+import DualButtons from "../../components/shared/Buttons/DualButtons";
 
 const getIconColors = (isDark: boolean) => ({
   fullname: {
@@ -375,6 +376,25 @@ const EditProfile = () => {
     else if (!nameReg.test(form.lastName.trim()))
       newErrors.lastName = "Alphabets only";
 
+    if (form.email && form.email.trim()) {
+      const emailReg = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailReg.test(form.email.trim())) {
+        newErrors.email = "Please enter a valid email address";
+      }
+    }
+
+    if (form.mobile && form.mobile.trim()) {
+      const cleaned = form.mobile.trim().replace(/\s+/g, "");
+      const phoneDigits = cleaned.startsWith("+91")
+        ? cleaned.slice(3)
+        : cleaned.startsWith("+")
+          ? cleaned.slice(1)
+          : cleaned;
+      if (!/^\d{10}$/.test(phoneDigits)) {
+        newErrors.mobile = "Please enter a valid 10-digit mobile number";
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -417,12 +437,21 @@ const EditProfile = () => {
 
       const payload: any = {
         profileImageKey: profileImageKey!,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
-        mobile: form.mobile.startsWith("+") ? form.mobile.slice(3) : form.mobile,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
         gender: form.gender,
       };
+
+      if (form.mobile && form.mobile.trim()) {
+        const cleanedMobile = form.mobile.trim().replace(/\s+/g, "");
+        payload.mobile = cleanedMobile.startsWith("+")
+          ? cleanedMobile.slice(3)
+          : cleanedMobile;
+      }
+
+      if (form.email && form.email.trim()) {
+        payload.email = form.email.trim();
+      }
 
       if (form.dateOfBirth) {
         payload.dateOfBirth = format(form.dateOfBirth, "yyyy-MM-dd");
@@ -461,10 +490,15 @@ const EditProfile = () => {
         });
         return;
       }
+      const backendMsg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error?.message ||
+        error.message ||
+        "Failed to update profile.";
       Toast.show({
         type: "error",
         text1: "Update failed",
-        text2: error.message || "Failed to update profile.",
+        text2: backendMsg,
       });
     },
   });
@@ -474,11 +508,15 @@ const EditProfile = () => {
       <ScreenHeader
         title={isEditing ? "Edit Profile" : "Profile"}
         showBack
-        rightAction={{
-          icon: isEditing ? "close-circle-outline" : "create-outline",
-          Label: isEditing ? "Cancel" : "Edit",
-          onPress: isEditing ? handleCancelEdit : handleStartEdit,
-        }}
+        rightAction={
+          isEditing
+            ? undefined
+            : {
+                icon: "create-outline",
+                Label: "Edit",
+                onPress: handleStartEdit,
+              }
+        }
       />
 
       {isLoading ? (
@@ -488,259 +526,255 @@ const EditProfile = () => {
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
-        <>
-          <ScrollContent
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: keyboardHeight + 24 }}
-            ref={scrollViewRef}
-          >
-            <ScrollInner>
-              {/* ── Avatar ── */}
-              <AvatarSection>
-                <AvatarRing>
-                  {profileImageSource || selectedImages ? (
-                    <Image
-                      source={
-                        selectedImages
-                          ? { uri: selectedImages }
-                          : profileImageSource
-                      }
-                      style={{ borderRadius: 45, width: 90, height: 90 }}
-                    />
-                  ) : (
-                    <AvatarText>
-                      {(form.firstName?.charAt(0).toUpperCase() || "") +
-                        (form.lastName?.charAt(0).toUpperCase() || "")}
-                    </AvatarText>
-                  )}
-                </AvatarRing>
-                {isEditing && (
-                  <AvatarEditBadge
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      refRBSheet.current?.present();
-                    }}
-                  >
-                    <Ionicons name="camera" size={16} color="#fff" />
-                  </AvatarEditBadge>
+        <ScrollContent
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            paddingBottom:
+              keyboardHeight > 0 ? keyboardHeight + 30 : bottomPadding + 20,
+          }}
+          ref={scrollViewRef}
+        >
+          <ScrollInner>
+            {/* ── Avatar ── */}
+            <AvatarSection>
+              <AvatarRing>
+                {profileImageSource || selectedImages ? (
+                  <Image
+                    source={
+                      selectedImages
+                        ? { uri: selectedImages }
+                        : profileImageSource
+                    }
+                    style={{ borderRadius: 45, width: 90, height: 90 }}
+                  />
+                ) : (
+                  <AvatarText>
+                    {(form.firstName?.charAt(0).toUpperCase() || "") +
+                      (form.lastName?.charAt(0).toUpperCase() || "")}
+                  </AvatarText>
                 )}
-                {isEditing && (
-                  <AvatarHint>Tap the camera to change photo</AvatarHint>
-                )}
-              </AvatarSection>
-
-              {/* ── Personal Info ── */}
-              <SectionLabel>Personal Info</SectionLabel>
-              <Card>
-                <EditableField
-                  label="First Name"
-                  value={form.firstName}
-                  icon="person-outline"
-                  colors={iconColors.fullname}
-                  isFocused={focusedField === "firstName"}
-                  onFocus={() => setFocusedField("firstName")}
-                  onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("firstName", t)}
-                  editable={isEditing}
-                  inputRef={firstNameInputRef}
-                  isEditing={isEditing}
-                  error={errors.firstName}
-                />
-                <FieldDivider />
-                <EditableField
-                  label="Last Name"
-                  value={form.lastName}
-                  icon="person-outline"
-                  colors={iconColors.fullname}
-                  isFocused={focusedField === "lastName"}
-                  onFocus={() => setFocusedField("lastName")}
-                  onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("lastName", t)}
-                  editable={isEditing}
-                  isEditing={isEditing}
-                  error={errors.lastName}
-                />
-              </Card>
-
-              {/* ── Contact Info ── */}
-              <SectionLabel>Contact Info</SectionLabel>
-              <Card>
-                <EditableField
-                  label="Email Address"
-                  value={form?.email!}
-                  icon="mail-outline"
-                  colors={iconColors.email}
-                  isFocused={focusedField === "email"}
-                  onFocus={() => setFocusedField("email")}
-                  onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("email", t)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={isEditing}
-                  isEditing={isEditing}
-                  error={errors.email}
-                  isVerified={userData?.isEmailVerified}
-                />
-                <FieldDivider />
-                <EditableField
-                  label="Mobile Number"
-                  value={form.mobile || ""}
-                  icon="call-outline"
-                  colors={iconColors.mobile}
-                  isFocused={focusedField === "mobile"}
-                  onFocus={() => setFocusedField("mobile")}
-                  onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("mobile", t)}
-                  keyboardType="phone-pad"
-                  editable={isEditing}
-                  isEditing={isEditing}
-                  error={errors.mobile}
-                  isVerified={userData?.isMobileVerified}
-                />
-              </Card>
-
-              <SectionLabel>More Details</SectionLabel>
-              <Card>
-                <TouchableOpacity
-                  activeOpacity={isEditing ? 0.7 : 1}
-                  onPress={() => isEditing && setShowDatePicker(true)}
+              </AvatarRing>
+              {isEditing && (
+                <AvatarEditBadge
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    refRBSheet.current?.present();
+                  }}
                 >
-                  <FieldRow>
-                    <FieldIconBox
-                      style={{ backgroundColor: iconColors.dob.bg }}
-                    >
-                      <Ionicons
-                        name="calendar-outline"
-                        size={18}
-                        color={iconColors.dob.icon}
-                      />
-                    </FieldIconBox>
-                    <FieldContent>
-                      <FieldLabel>
-                        {isEditing ? "Date of Birth" : "Age"}
-                      </FieldLabel>
-                      <AgeInput hasValue={!!form.dateOfBirth} editable={false}>
-                        {isEditing
-                          ? form.dateOfBirth
-                            ? format(form.dateOfBirth, "dd MMM yyyy")
-                            : "Select Date"
-                          : form.dateOfBirth
-                            ? `${calculateAge(form.dateOfBirth)} Years`
-                            : "Not specified"}
-                      </AgeInput>
-                    </FieldContent>
-                  </FieldRow>
-                </TouchableOpacity>
-
-                <FieldDivider />
-
-                <FieldRow
-                  style={{ flexDirection: "column", alignItems: "flex-start" }}
-                >
-                  <GenderLabelRow>
-                    <FieldIconBox
-                      style={{ backgroundColor: iconColors.gender.bg }}
-                    >
-                      <Ionicons
-                        name="male-female-outline"
-                        size={18}
-                        color={iconColors.gender.icon}
-                      />
-                    </FieldIconBox>
-                    <FieldLabel style={{ marginBottom: 0 }}>Gender</FieldLabel>
-                  </GenderLabelRow>
-                  <GenderRow>
-                    {GENDER_OPTIONS.map((opt) => {
-                      const selected =
-                        form.gender?.toLowerCase() ===
-                          opt.label.toLowerCase() ||
-                        form.gender?.toLowerCase() === opt.icon.toLowerCase();
-                      return (
-                        <GenderChip
-                          key={opt.label}
-                          selected={selected}
-                          onPress={() =>
-                            isEditing && updateField("gender", opt.value)
-                          }
-                          activeOpacity={isEditing ? 0.7 : 1}
-                        >
-                          <Ionicons
-                            name={opt.icon as any}
-                            size={14}
-                            color={
-                              selected
-                                ? theme.colors.surface
-                                : theme.colors.textMuted
-                            }
-                          />
-                          <GenderChipText selected={selected}>
-                            {opt.label}
-                          </GenderChipText>
-                        </GenderChip>
-                      );
-                    })}
-                  </GenderRow>
-                  {errors.gender ? (
-                    <FieldErrorText style={{ marginLeft: 15, marginTop: 10 }}>
-                      {errors.gender}
-                    </FieldErrorText>
-                  ) : null}
-                </FieldRow>
-
-                <FieldDivider />
-
-                <EditableField
-                  label="Blood Group"
-                  value={form.bloodGroup}
-                  icon="water-outline"
-                  colors={{ bg: "#fee2e2", icon: "#ef4444" }}
-                  isFocused={focusedField === "bloodGroup"}
-                  onFocus={() => setFocusedField("bloodGroup")}
-                  onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("bloodGroup", t)}
-                  editable={isEditing}
-                  isEditing={isEditing}
-                  autoCapitalize="characters"
-                />
-
-                <FieldDivider />
-
-                <EditableField
-                  label="Allergies"
-                  value={form.allergies}
-                  icon="medical-outline"
-                  colors={{ bg: "#f3e8ff", icon: "#a855f7" }}
-                  isFocused={focusedField === "allergies"}
-                  onFocus={() => setFocusedField("allergies")}
-                  onBlur={() => setFocusedField(null)}
-                  onChangeText={(t) => updateField("allergies", t)}
-                  editable={isEditing}
-                  isEditing={isEditing}
-                />
-              </Card>
-            </ScrollInner>
-          </ScrollContent>
-
-          {isEditing && (
-            <SaveButton
-              bottomPadding={bottomPadding}
-              onPress={() => updateProfileMutation.mutate()}
-              disabled={updateProfileMutation.isPending}
-              activeOpacity={0.8}
-            >
-              {updateProfileMutation.isPending ? (
-                <View
-                  style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
-                >
-                  <ActivityIndicator color="#ffffff" />
-                  <SaveButtonText>Saving Profile...</SaveButtonText>
-                </View>
-              ) : (
-                <SaveButtonText>Save Profile</SaveButtonText>
+                  <Ionicons name="camera" size={16} color="#fff" />
+                </AvatarEditBadge>
               )}
-            </SaveButton>
-          )}
-        </>
+              {isEditing && (
+                <AvatarHint>Tap the camera to change photo</AvatarHint>
+              )}
+            </AvatarSection>
+
+            {/* ── Personal Info ── */}
+            <SectionLabel>Personal Info</SectionLabel>
+            <Card>
+              <EditableField
+                label="First Name"
+                value={form.firstName}
+                icon="person-outline"
+                colors={iconColors.fullname}
+                isFocused={focusedField === "firstName"}
+                onFocus={() => setFocusedField("firstName")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(t) => updateField("firstName", t)}
+                editable={isEditing}
+                inputRef={firstNameInputRef}
+                isEditing={isEditing}
+                error={errors.firstName}
+              />
+              <FieldDivider />
+              <EditableField
+                label="Last Name"
+                value={form.lastName}
+                icon="person-outline"
+                colors={iconColors.fullname}
+                isFocused={focusedField === "lastName"}
+                onFocus={() => setFocusedField("lastName")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(t) => updateField("lastName", t)}
+                editable={isEditing}
+                isEditing={isEditing}
+                error={errors.lastName}
+              />
+            </Card>
+
+            {/* ── Contact Info ── */}
+            <SectionLabel>Contact Info</SectionLabel>
+            <Card>
+              <EditableField
+                label="Email Address"
+                value={form?.email!}
+                icon="mail-outline"
+                colors={iconColors.email}
+                isFocused={focusedField === "email"}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(t) => updateField("email", t)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={isEditing}
+                isEditing={isEditing}
+                error={errors.email}
+                isVerified={userData?.isEmailVerified}
+              />
+              <FieldDivider />
+              <EditableField
+                label="Mobile Number"
+                value={form.mobile || ""}
+                icon="call-outline"
+                colors={iconColors.mobile}
+                isFocused={focusedField === "mobile"}
+                onFocus={() => setFocusedField("mobile")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(t) => updateField("mobile", t)}
+                keyboardType="phone-pad"
+                editable={isEditing}
+                isEditing={isEditing}
+                error={errors.mobile}
+                isVerified={userData?.isMobileVerified}
+              />
+            </Card>
+
+            <SectionLabel>More Details</SectionLabel>
+            <Card>
+              <TouchableOpacity
+                activeOpacity={isEditing ? 0.7 : 1}
+                onPress={() => isEditing && setShowDatePicker(true)}
+              >
+                <FieldRow>
+                  <FieldIconBox
+                    style={{ backgroundColor: iconColors.dob.bg }}
+                  >
+                    <Ionicons
+                      name="calendar-outline"
+                      size={18}
+                      color={iconColors.dob.icon}
+                    />
+                  </FieldIconBox>
+                  <FieldContent>
+                    <FieldLabel>
+                      {isEditing ? "Date of Birth" : "Age"}
+                    </FieldLabel>
+                    <AgeInput hasValue={!!form.dateOfBirth} editable={false}>
+                      {isEditing
+                        ? form.dateOfBirth
+                          ? format(form.dateOfBirth, "dd MMM yyyy")
+                          : "Select Date"
+                        : form.dateOfBirth
+                          ? `${calculateAge(form.dateOfBirth)} Years`
+                          : "Not specified"}
+                    </AgeInput>
+                  </FieldContent>
+                </FieldRow>
+              </TouchableOpacity>
+
+              <FieldDivider />
+
+              <FieldRow
+                style={{ flexDirection: "column", alignItems: "flex-start" }}
+              >
+                <GenderLabelRow>
+                  <FieldIconBox
+                    style={{ backgroundColor: iconColors.gender.bg }}
+                  >
+                    <Ionicons
+                      name="male-female-outline"
+                      size={18}
+                      color={iconColors.gender.icon}
+                    />
+                  </FieldIconBox>
+                  <FieldLabel style={{ marginBottom: 0 }}>Gender</FieldLabel>
+                </GenderLabelRow>
+                <GenderRow>
+                  {GENDER_OPTIONS.map((opt) => {
+                    const selected =
+                      form.gender?.toLowerCase() ===
+                        opt.label.toLowerCase() ||
+                      form.gender?.toLowerCase() === opt.icon.toLowerCase();
+                    return (
+                      <GenderChip
+                        key={opt.label}
+                        selected={selected}
+                        onPress={() =>
+                          isEditing && updateField("gender", opt.value)
+                        }
+                        activeOpacity={isEditing ? 0.7 : 1}
+                      >
+                        <Ionicons
+                          name={opt.icon as any}
+                          size={14}
+                          color={
+                            selected
+                              ? theme.colors.surface
+                              : theme.colors.textMuted
+                          }
+                        />
+                        <GenderChipText selected={selected}>
+                          {opt.label}
+                        </GenderChipText>
+                      </GenderChip>
+                    );
+                  })}
+                </GenderRow>
+                {errors.gender ? (
+                  <FieldErrorText style={{ marginLeft: 15, marginTop: 10 }}>
+                    {errors.gender}
+                  </FieldErrorText>
+                ) : null}
+              </FieldRow>
+
+              <FieldDivider />
+
+              <EditableField
+                label="Blood Group"
+                value={form.bloodGroup}
+                icon="water-outline"
+                colors={{ bg: "#fee2e2", icon: "#ef4444" }}
+                isFocused={focusedField === "bloodGroup"}
+                onFocus={() => setFocusedField("bloodGroup")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(t) => updateField("bloodGroup", t)}
+                editable={isEditing}
+                isEditing={isEditing}
+                autoCapitalize="characters"
+              />
+
+              <FieldDivider />
+
+              <EditableField
+                label="Allergies"
+                value={form.allergies}
+                icon="medical-outline"
+                colors={{ bg: "#f3e8ff", icon: "#a855f7" }}
+                isFocused={focusedField === "allergies"}
+                onFocus={() => setFocusedField("allergies")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(t) => updateField("allergies", t)}
+                editable={isEditing}
+                isEditing={isEditing}
+              />
+            </Card>
+
+            {isEditing && (
+              <View style={{ marginTop: 10, marginBottom: 20 }}>
+                <DualButtons
+                  secondaryBtnText="Cancel"
+                  secondaryBtnColor={isDark ? "#475569" : "#64748b"}
+                  mainBtnText="Save Profile"
+                  mainBtnColor={theme.colors.primary}
+                  onSecondaryPress={handleCancelEdit}
+                  onMainPress={() => updateProfileMutation.mutate()}
+                  isLoading={updateProfileMutation.isPending}
+                  mainLoadingText="Saving Profile..."
+                />
+              </View>
+            )}
+          </ScrollInner>
+        </ScrollContent>
       )}
 
       <BottomSheet ref={refRBSheet}>
@@ -982,26 +1016,6 @@ const GenderChipText = styled.Text<{ selected: boolean }>`
   font-weight: 700;
   color: ${({ selected, theme }: any) =>
     selected ? theme.colors.surface : theme.colors.textMuted};
-`;
-
-const SaveButton = styled.TouchableOpacity<{ bottomPadding: number }>`
-  background-color: ${({ theme }: any) => theme.colors.primary};
-  padding: 16px;
-  border-radius: 16px;
-  align-items: center;
-  justify-content: center;
-  margin-horizontal: 20px;
-  margin-bottom: ${(props: any) => props.bottomPadding}px;
-  shadow-color: ${({ theme }: any) => theme.colors.primary};
-  shadow-opacity: 0.3;
-  shadow-radius: 10px;
-  elevation: 5;
-`;
-
-const SaveButtonText = styled.Text`
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 700;
 `;
 
 const FieldErrorText = styled.Text`

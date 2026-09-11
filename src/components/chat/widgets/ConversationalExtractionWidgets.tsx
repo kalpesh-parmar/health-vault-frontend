@@ -218,6 +218,8 @@ export function ConflictCarouselCard({
         preferredLang={preferredLang}
         isDark={isDark}
         onRetry={onRetryDocument}
+        canRetry={isLatest}
+        readOnly={!isLatest}
       />
       <View
         style={{

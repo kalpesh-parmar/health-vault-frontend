@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
-
 import { BASE_URL } from "../config/api";
+import { getValidAccessToken } from "./apiClient";
 
 export type SseEventPayload = {
   event?: string;
@@ -32,6 +32,7 @@ export interface StreamCallbacks {
 
 type StreamOptions = {
   signal?: AbortSignal;
+  _retry?: boolean;
 };
 
 type ConnectSseOptions = {
@@ -295,7 +296,7 @@ export const connectSseStream = ({
   };
 
   const start = async () => {
-    const token = await SecureStore.getItemAsync("accessToken");
+    const token = await getValidAccessToken();
     if (token && !headersToSend.Authorization) {
       headersToSend.Authorization = `Bearer ${token}`;
     }
@@ -371,6 +372,11 @@ export const connectSseStream = ({
       if (settled) return;
       settled = true;
 
+      if (xhr.status === 401 || xhr.status === 403) {
+        safeError(new Error("Unauthorized or session expired"));
+        return;
+      }
+
       const text = xhr.responseText || "";
       const tail = text.slice(lastLength);
       if (tail) {
@@ -413,7 +419,7 @@ export const streamChatResponse = async (
   const startedAt = Date.now();
 
   try {
-    const token = await SecureStore.getItemAsync("accessToken");
+    const token = await getValidAccessToken();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
@@ -527,7 +533,7 @@ export const streamChatResponse = async (
         failOnce(new Error("Stream cancelled"));
       };
 
-      xhr.onload = () => {
+      xhr.onload = async () => {
         try {
           const text = xhr.responseText || "";
           const tail = text.slice(lastLength);
@@ -547,6 +553,38 @@ export const streamChatResponse = async (
                 pushChunk(buffer.trim());
               }
             }
+          }
+
+          // If 401/403 and this request has not already been retried, force refresh token and retry
+          if ((xhr.status === 401 || xhr.status === 403) && !options._retry) {
+            console.warn("[STREAM] Received 401/403, attempting token refresh and retry...");
+            try {
+              const refreshedToken = await getValidAccessToken(true);
+              if (refreshedToken) {
+                if (settled) return;
+                settled = true;
+                return streamChatResponse(endpoint, payload, callbacks, {
+                  ...options,
+                  _retry: true,
+                })
+                  .then(resolve)
+                  .catch(reject);
+              }
+            } catch (refreshErr) {
+              console.error("[STREAM] Token refresh retry failed:", refreshErr);
+            }
+          }
+
+          // If HTTP error status (>= 400), fail the stream with error rather than treating response body as chat reply
+          if (xhr.status >= 400) {
+            const errorMessage =
+              finalData.message ||
+              finalData.error ||
+              finalData.reply ||
+              `HTTP error ${xhr.status}`;
+            console.error(`[STREAM] HTTP error ${xhr.status}:`, errorMessage);
+            failOnce(new Error(errorMessage));
+            return;
           }
 
           const resolvedReply =

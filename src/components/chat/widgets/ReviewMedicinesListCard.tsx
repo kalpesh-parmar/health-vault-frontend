@@ -52,6 +52,7 @@ export interface ReviewMedicinesListCardProps {
   onSkipAll: () => void;
   onEdit: (med: any) => void;
   readOnly?: boolean;
+  canRetry?: boolean;
   chosenVal?: string | null;
   chosenLabel?: string | null;
   documents?: any[];
@@ -70,6 +71,7 @@ export function ReviewMedicinesListCard({
   onSkipAll,
   onEdit,
   readOnly,
+  canRetry,
   chosenVal,
   chosenLabel,
   documents,
@@ -100,13 +102,21 @@ export function ReviewMedicinesListCard({
     );
   }, [localMedicines]);
 
+  const hasConflict = (m: any) =>
+    Boolean(
+      m?.duplicateInfo?.hasDuplicate ||
+      m?.duplicateInfo?.conflictType ||
+      (m?.duplicateInfo?.matchedMedications && m.duplicateInfo.matchedMedications.length > 0) ||
+      m?.duplicateInfo?.matchedMedication
+    );
+
   // resolutions: holds resolution choice for each medicine
   const [resolutions, setResolutions] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     (localMedicines || []).forEach((m) => {
       if (m.resolution) {
         initial[m.id] = m.resolution;
-      } else if (!m.duplicateInfo?.hasDuplicate) {
+      } else if (!hasConflict(m)) {
         initial[m.id] = "KEEP_NEW";
       }
     });
@@ -120,7 +130,7 @@ export function ReviewMedicinesListCard({
       (localMedicines || []).forEach((m) => {
         if (m.resolution && next[m.id] === undefined) {
           next[m.id] = m.resolution;
-        } else if (!m.duplicateInfo?.hasDuplicate && next[m.id] === undefined) {
+        } else if (!hasConflict(m) && next[m.id] === undefined) {
           next[m.id] = "KEEP_NEW";
         }
       });
@@ -146,9 +156,10 @@ export function ReviewMedicinesListCard({
       );
     }
   }, [localMedicines]);
+
   const conflictingMeds = readOnly
     ? []
-    : safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined);
+    : safeLocalMedicines.filter((m) => hasConflict(m) && resolutions[m.id] === undefined);
   const [viewMode, setViewMode] = useState<"conflicts" | "list">("list");
 
   useEffect(() => {
@@ -164,11 +175,12 @@ export function ReviewMedicinesListCard({
   const autoAdvance = () => {
     const remainingCount = readOnly
       ? 0
-      : safeLocalMedicines.filter((m) => m.duplicateInfo?.hasDuplicate && resolutions[m.id] === undefined).length;
-    if (remainingCount === 0) {
+      : safeLocalMedicines.filter((m) => hasConflict(m) && resolutions[m.id] === undefined).length;
+    if (remainingCount <= 1) {
       setViewMode("list");
-    } else if (currentConflictIdx >= remainingCount) {
-      setCurrentConflictIdx(remainingCount - 1);
+      setCurrentConflictIdx(0);
+    } else if (currentConflictIdx >= remainingCount - 1) {
+      setCurrentConflictIdx(Math.max(0, remainingCount - 2));
     }
   };
 
@@ -368,13 +380,15 @@ export function ReviewMedicinesListCard({
 
     return (
       <View style={{ width: "100%" }}>
-        {showDocumentSummary && documents && documents.length > 0 && (
+        {showDocumentSummary && (
           <DocumentProgressSummaryContainer
             documents={documents}
             preferredLang={preferredLang}
             isDark={isDark}
             theme={theme}
             onRetry={onRetryDocument}
+            canRetry={canRetry !== undefined ? canRetry : !readOnly}
+            readOnly={readOnly}
           />
         )}
         <View
@@ -468,13 +482,17 @@ export function ReviewMedicinesListCard({
             Reason
           </Text>
           <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#475569", fontStyle: "italic" }}>
-            Duplicate medicine with same strength and frequency
+            {med.duplicateInfo?.conflictType === "EXACT_DUPLICATE"
+              ? "Exact duplicate with same medicine in your profile"
+              : med.duplicateInfo?.conflictType === "SIMILAR_NAME"
+                ? "Similar medicine already exists in your profile"
+                : "Duplicate medicine detected in your profile"}
           </Text>
         </View>
 
         {/* Resolution Buttons Grid */}
         <View style={{ marginBottom: 16 }}>
-          {/* Row 1 */}
+          {/* Row 1: Primary actions */}
           <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
             <TouchableOpacity
               disabled={readOnly}
@@ -494,7 +512,7 @@ export function ReviewMedicinesListCard({
 
                 // Compute next remaining conflicts
                 const nextResolutions: Record<string, string> = { ...resolutions, [med.id]: "REMOVE_NEW" };
-                const nextConflicting = nextMeds.filter((m) => m.duplicateInfo?.hasDuplicate && nextResolutions[m.id] === undefined);
+                const nextConflicting = nextMeds.filter((m) => hasConflict(m) && nextResolutions[m.id] === undefined);
                 if (nextConflicting.length === 0) {
                   setViewMode("list");
                 } else if (currentConflictIdx >= nextConflicting.length) {
@@ -527,10 +545,63 @@ export function ReviewMedicinesListCard({
                 
                 autoAdvance();
               }}
-              style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+              style={{ flex: 1, backgroundColor: "#0f766e", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
             >
               <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
                 Replace
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {/* Row 2: Secondary actions (Edit / Keep Both) */}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              disabled={readOnly}
+              onPress={() => {
+                onEdit(med);
+              }}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: isDark ? "#475569" : "#cbd5e1",
+                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                paddingVertical: 10,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: readOnly ? 0.55 : 1,
+              }}
+            >
+              <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
+                Edit
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={readOnly}
+              onPress={() => {
+                setResolutions((prev) => ({ ...prev, [med.id]: "KEEP_NEW" }));
+                setLocalMedicines((prev) =>
+                  prev.map((m) =>
+                    m.id === med.id
+                      ? { ...m, resolution: "KEEP_NEW", selected: true }
+                      : m
+                  )
+                );
+                autoAdvance();
+              }}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: isDark ? "#475569" : "#cbd5e1",
+                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                paddingVertical: 10,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: readOnly ? 0.55 : 1,
+              }}
+            >
+              <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
+                Keep Both
               </Text>
             </TouchableOpacity>
           </View>
@@ -613,13 +684,15 @@ export function ReviewMedicinesListCard({
 
   return (
     <View style={{ width: "100%" }}>
-      {showDocumentSummary && documents && documents.length > 0 && (
+      {showDocumentSummary && (
         <DocumentProgressSummaryContainer
           documents={documents}
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
           onRetry={onRetryDocument}
+          canRetry={canRetry !== undefined ? canRetry : !readOnly}
+          readOnly={readOnly}
         />
       )}
       <View

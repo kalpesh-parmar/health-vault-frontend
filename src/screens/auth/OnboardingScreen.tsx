@@ -226,7 +226,8 @@ export default function OnboardingScreen() {
   const [pollElapsedTime, setPollElapsedTime] = useState<number>(0);
   const [pollTotalPages, setPollTotalPages] = useState<number>(1);
   const [pollCurrentPage, setPollCurrentPage] = useState<number>(1);
-  const [autoRetryCount, setAutoRetryCount] = useState<number>(0);
+  const [uploadRetryCount, setUploadRetryCount] = useState<number>(0);
+  const uploadRetryCountRef = useRef<number>(0);
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [activeErrorCode, setActiveErrorCode] = useState<string | null>(null);
   const [activeErrorDetails, setActiveErrorDetails] = useState<string | null>(
@@ -687,11 +688,12 @@ export default function OnboardingScreen() {
     }
 
     let finalState = { ...currentState };
+    const serverState = aiRes.onboardingState || aiRes.state;
 
-    if (aiRes.state) {
+    if (serverState) {
       finalState = {
         ...finalState,
-        ...aiRes.state,
+        ...serverState,
       };
     } else {
       finalState = {
@@ -903,7 +905,64 @@ export default function OnboardingScreen() {
     if (selectedFile) {
       uploadSelectedFile(selectedFile);
     } else if (textToSubmit) {
-      sendMessage(textToSubmit);
+      const activeAction = messages[messages.length - 1]?.action;
+      let updatedState = { ...state };
+      if (activeAction === "ASK_FIRST_NAME" || activeAction === "ASK_NAME") {
+        updatedState = {
+          ...updatedState,
+          existingUserData: {
+            ...updatedState.existingUserData,
+            firstName: textToSubmit,
+          },
+        };
+        setState(updatedState);
+      } else if (activeAction === "ASK_LAST_NAME") {
+        updatedState = {
+          ...updatedState,
+          existingUserData: {
+            ...updatedState.existingUserData,
+            lastName: textToSubmit,
+          },
+        };
+        setState(updatedState);
+      } else if (activeAction === "ASK_BLOOD_GROUP") {
+        if (textToSubmit.toLowerCase() === "skip") {
+          updatedState = {
+            ...updatedState,
+            bloodGroupSkipped: true,
+          };
+        } else {
+          updatedState = {
+            ...updatedState,
+            existingUserData: {
+              ...updatedState.existingUserData,
+              bloodGroup: textToSubmit,
+            },
+          };
+        }
+        setState(updatedState);
+      } else if (activeAction === "ASK_ALLERGIES") {
+        if (textToSubmit.toLowerCase() === "skip") {
+          updatedState = {
+            ...updatedState,
+            allergiesSkipped: true,
+          };
+        } else {
+          const splitAllergies = textToSubmit
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          updatedState = {
+            ...updatedState,
+            existingUserData: {
+              ...updatedState.existingUserData,
+              allergies: splitAllergies,
+            },
+          };
+        }
+        setState(updatedState);
+      }
+      sendMessage(textToSubmit, updatedState);
     }
   };
 
@@ -1262,6 +1321,12 @@ export default function OnboardingScreen() {
           }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
+
+          if (uploadRetryCountRef.current >= 3) {
+            forceContinueManualFlow();
+            return;
+          }
+
           setUploadState("failed");
           const errorMsg = event.message || "Document analysis failed.";
           const isNonRetryable =
@@ -1355,6 +1420,12 @@ export default function OnboardingScreen() {
         } else {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
+
+          if (uploadRetryCountRef.current >= 3) {
+            forceContinueManualFlow();
+            return;
+          }
+
           setUploadState("failed");
           const errorMsg = event.message || "Document analysis failed.";
           const isNonRetryable =
@@ -1380,7 +1451,48 @@ export default function OnboardingScreen() {
     });
   };
 
+  const forceContinueManualFlow = () => {
+    pollActiveRef.current = false;
+    cancelRequestedRef.current = true;
+    if (sseUnsubRef.current) {
+      sseUnsubRef.current();
+      sseUnsubRef.current = null;
+    }
+    if (uploadAbortControllerRef.current) {
+      uploadAbortControllerRef.current.abort();
+      uploadAbortControllerRef.current = null;
+    }
+    AsyncStorage.removeItem("onboarding_pending_job_id");
+    AsyncStorage.removeItem("onboarding_pending_document_id");
+
+    setUploadState("idle");
+    setValidationDialogVisible(false);
+    setSelectedFile(null);
+    setInput("");
+
+    Toast.show({
+      type: "error",
+      text1: "Upload Limit Exceeded",
+      text2:
+        "You have exceeded the maximum upload limit. Please continue with manual Flow.",
+      visibilityTime: 4000,
+    });
+
+    const newState = { ...state, flowMode: "MANUAL" };
+    setState(newState);
+    sendMessage("MANUAL", newState);
+  };
+
   const handleRetryJob = async () => {
+    if (uploadRetryCountRef.current >= 3) {
+      forceContinueManualFlow();
+      return;
+    }
+
+    const nextRetryCount = uploadRetryCountRef.current + 1;
+    uploadRetryCountRef.current = nextRetryCount;
+    setUploadRetryCount(nextRetryCount);
+
     const docId = currentDocIdRef.current;
     if (!docId) {
       const file = selectedFileRef.current || selectedFile;
@@ -1405,6 +1517,11 @@ export default function OnboardingScreen() {
 
       startJobPolling(jobId, docId, streamUrl);
     } catch (err: any) {
+      if (uploadRetryCountRef.current >= 3) {
+        forceContinueManualFlow();
+        return;
+      }
+
       setUploadState("failed");
       const errorData = err?.response?.data || err?.data || {};
       const errorMsg =
@@ -1474,11 +1591,14 @@ export default function OnboardingScreen() {
   };
 
   const handleCompletedJob = async (documentId: string, fileName: string) => {
+    uploadRetryCountRef.current = 0;
+    setUploadRetryCount(0);
     const newState = {
       ...state,
       flowMode: "UPLOAD",
       uploadedMedicalDocument: true,
       documentUploaded: true,
+      documentExtracted: true,
       documentId: documentId,
     };
 
@@ -1565,6 +1685,10 @@ export default function OnboardingScreen() {
       startJobPolling(jobId, docId, streamUrl);
     } catch (error: any) {
       console.error("[ONBOARDING] Document upload sequence failed:", error);
+      if (uploadRetryCountRef.current >= 3) {
+        forceContinueManualFlow();
+        return;
+      }
       setUploadState("failed");
       let errMsg = error.message || "Document upload sequence failed.";
 
@@ -1656,11 +1780,38 @@ export default function OnboardingScreen() {
             console.warn("[Onboarding] Navigation to medication not available yet:", e);
           }
         }, 500);
-      } else if (value === "ASK_ABOUT_REPORT" || value === "ASK_REPORT") {
-        sendMessage("ASK_REPORT", state, label);
+      } else if (value === "ASK_ABOUT_REPORT" || value === "ASK_REPORT" || value === "CONFIRM_DOCUMENT") {
+        const newState = {
+          ...state,
+          documentConfirmed: true,
+        };
+        setState(newState);
+        sendMessage("ASK_REPORT", newState, label);
       } else if (value === "LOGOUT") {
         logout();
       } else {
+        let newState = { ...state };
+        if (activeMsg.action === "ASK_BLOOD_GROUP") {
+          if (value === "SKIP") {
+            newState.bloodGroupSkipped = true;
+          } else {
+            newState.existingUserData = {
+              ...newState.existingUserData,
+              bloodGroup: value,
+            };
+          }
+          setState(newState);
+          sendMessage(value, newState, label);
+          return;
+        }
+        if (activeMsg.action === "ASK_ALLERGIES") {
+          if (value === "SKIP") {
+            newState.allergiesSkipped = true;
+          }
+          setState(newState);
+          sendMessage(value, newState, label);
+          return;
+        }
         sendMessage(value, state, label);
       }
     };
@@ -2004,6 +2155,19 @@ export default function OnboardingScreen() {
 
     if (activeMsg.action === "REVIEW_MEDICINES_LIST") {
       const handleConfirm = (checkedMeds: string[]) => {
+        const selectedMedicineObjects = (localMedicines || []).filter((m) =>
+          checkedMeds.includes(m.id || m.client_med_id),
+        );
+        const newState = {
+          ...state,
+          medicinesConfirmed: true,
+          medicinesFlowStarted: true,
+          medicinesToAdd:
+            selectedMedicineObjects.length > 0
+              ? selectedMedicineObjects
+              : localMedicines || state.medicinesToAdd,
+        };
+        setState(newState);
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === activeMsg.id
@@ -2021,15 +2185,26 @@ export default function OnboardingScreen() {
         );
         sendMessage(
           JSON.stringify({ selected: checkedMeds }),
-          state,
+          newState,
           uiT("confirmSelection"),
         );
       };
       const handleAddNew = () => {
-        sendMessage(JSON.stringify({ addNew: true }), state, uiT("addNew"));
+        const newState = {
+          ...state,
+          medicinesFlowStarted: true,
+        };
+        setState(newState);
+        sendMessage(JSON.stringify({ addNew: true }), newState, uiT("addNew"));
       };
       const handleSkipAll = () => {
-        sendMessage(JSON.stringify({ skipAll: true }), state, uiT("skipAll"));
+        const newState = {
+          ...state,
+          medicinesFlowStarted: true,
+          medicinesConfirmed: false,
+        };
+        setState(newState);
+        sendMessage(JSON.stringify({ skipAll: true }), newState, uiT("skipAll"));
       };
       const handleEdit = (med: any) => {
         setActiveMedicineToEdit(med);
@@ -2173,7 +2348,14 @@ export default function OnboardingScreen() {
           isDark={isDark}
           theme={theme}
           preferredLang={preferredLang}
-          onQuestionPress={(q) => sendMessage(q, state, q)}
+          onQuestionPress={(q) => {
+            const newState = {
+              ...state,
+              documentConfirmed: true,
+            };
+            setState(newState);
+            sendMessage(q, newState, q);
+          }}
           onViewFullReport={() => {
             setViewerDoc(doc);
             setIsViewerOpen(true);
@@ -2563,7 +2745,7 @@ export default function OnboardingScreen() {
           progressPercent={uploadPercent}
           onCancel={cancelProcessing}
           onRetry={handleRetryJob}
-          isRetryable={isDocumentRetryable}
+          isRetryable={isDocumentRetryable && uploadRetryCount < 3}
           isDark={isDark}
           theme={theme}
           preferredLanguage={state.preferredLanguage!}

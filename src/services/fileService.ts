@@ -1,7 +1,6 @@
-import apiClient from "./apiClient";
+import apiClient, { getValidAccessToken } from "./apiClient";
 import { FILE_ENDPOINTS } from "../constants/endpoints";
 import type { ApiResponse } from "../types";
-import * as SecureStore from "expo-secure-store";
 import { BASE_URL } from "../config/api";
 
 export const uploadFileToS3 = async (
@@ -34,7 +33,7 @@ export const getFileSource = async (
   fileKey: string
 ): Promise<{ uri: string; headers: { Authorization: string } } | null> => {
   if (!fileKey) return null;
-  const token = await SecureStore.getItemAsync("accessToken");
+  const token = await getValidAccessToken();
   return {
     uri: `${BASE_URL}${FILE_ENDPOINTS.GET_SIGNED_URL}?fileKey=${encodeURIComponent(fileKey)}`,
     headers: {

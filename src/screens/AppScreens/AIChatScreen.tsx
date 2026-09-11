@@ -80,6 +80,7 @@ import { ConfirmMedicineCard } from "../../components/chat/widgets/ConfirmMedici
 import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOptionsPanel";
 import { DocumentSummaryStats, ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
 import { DocumentProgressSummaryContainer } from "../../components/chat/widgets/DocumentProgressSummaryContainer";
+import { normalizeDocumentsList, extractMedicationsFromDocuments, DocumentSummaryItem } from "../../utils/documentNormalizer";
 import {
   findHistoricalUserReply,
   HistoricalChips,
@@ -115,7 +116,7 @@ type ChatMessage = {
   loginSummary?: string;
   documentSummary?: string | DocumentSummaryStats;
   loginProvider?: string;
-  documents?: { id: string; fileName: string; medicinesCount?: number }[];
+  documents?: DocumentSummaryItem[] | any[];
   documentIds?: string[];
   conflicts?: any[];
   createdAt?: string | Date;
@@ -816,6 +817,7 @@ const AIChatScreen = ({ route }: any) => {
     startBackgroundOcr,
     isUploading,
     uploadingDocs,
+    retryDocument,
   } = useDocumentUpload();
 
   const avgProgress = useMemo(() => {
@@ -826,6 +828,19 @@ const AIChatScreen = ({ route }: any) => {
     );
     return Math.round(sum / uploadingDocs.length);
   }, [uploadingDocs]);
+
+  const handleRetryDocumentInChat = useCallback(
+    async (fileKey: string, batchId?: string) => {
+      try {
+        if (retryDocument) {
+          await retryDocument(fileKey, batchId);
+        }
+      } catch (err) {
+        console.warn("[AIChatScreen] Document retry error:", err);
+      }
+    },
+    [retryDocument],
+  );
 
   const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
     setChatWizardState({
@@ -966,7 +981,13 @@ const AIChatScreen = ({ route }: any) => {
             "NORMAL_CHAT",
           options: finalData?.options ?? baseMessage.options ?? [],
           medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
-          documents: finalData?.documents ?? baseMessage.documents,
+          documents:
+            normalizeDocumentsList(
+              finalData?.documents || finalData?.document || finalData,
+              [],
+              [],
+              documentsList,
+            ) || baseMessage.documents,
           document: finalData?.document ?? baseMessage.document ?? null,
           suggestedQuestions:
             finalData?.suggestedQuestions ??
@@ -985,6 +1006,10 @@ const AIChatScreen = ({ route }: any) => {
             ) ?? baseMessage.documentIds,
         };
       });
+
+      if (finalData?.onboardingState || finalData?.state) {
+        lastKnownStateRef.current = finalData.onboardingState || finalData.state;
+      }
 
       if (finalData?.sessionId && !activeSessionId) {
         setActiveSessionId(finalData.sessionId);
@@ -1122,6 +1147,15 @@ const AIChatScreen = ({ route }: any) => {
             mimeType: f.mimeType || "application/octet-stream",
           }));
 
+          const updatedState = {
+            ...(lastKnownStateRef.current || {}),
+            documentUploaded: true,
+            uploadedMedicalDocument: true,
+            documentExtracted: true,
+            documentId: normalizeDocumentIds(chatWizardState.filesInfo),
+          };
+          lastKnownStateRef.current = updatedState;
+
           const payload = {
             actionType: "ADD_DOCUMENT",
             sessionId: activeSessionId || onboardingSessionId || undefined,
@@ -1129,6 +1163,7 @@ const AIChatScreen = ({ route }: any) => {
             actionData: {
               files: filesPayload,
             },
+            state: updatedState,
           };
 
           try {
@@ -1137,69 +1172,25 @@ const AIChatScreen = ({ route }: any) => {
               payload,
             );
             const resData = response.data?.data || response.data;
-            const resDocsName: string[] = Array.isArray(resData?.documentsName)
-              ? resData.documentsName
-              : Array.isArray(resData?.documentsNames)
-                ? resData.documentsNames
-                : [];
+            const uploadedDocuments = normalizeDocumentsList(
+              resData,
+              uploadingDocs,
+              chatWizardState.filesInfo,
+              documentsList,
+            );
 
-            const uploadedDocuments =
-              resData?.documents && resData.documents.length > 0
-                ? resData.documents
-                : resData?.document
-                  ? [resData.document]
-                  : resDocsName.length > 0
-                    ? resDocsName.map((nameOrKey: string, idx: number) => {
-                        const matchedUpload = uploadingDocs.find(
-                          (u) =>
-                            u.jobId === nameOrKey ||
-                            u.fileKey === nameOrKey ||
-                            u.id === nameOrKey ||
-                            u.name === nameOrKey,
-                        );
-                        const matchedInfo = chatWizardState.filesInfo.find(
-                          (f) =>
-                            f.jobId === nameOrKey ||
-                            f.fileKey === nameOrKey ||
-                            f.fileName === nameOrKey,
-                        );
-                        let docStatus = matchedUpload?.status || "COMPLETED";
-                        if (resData?.documentSummary) {
-                          const failed = resData.documentSummary.failed || 0;
-                          const rejected = resData.documentSummary.rejected || 0;
-                          if (idx < rejected) {
-                            docStatus = "REJECTED";
-                          } else if (idx < rejected + failed) {
-                            docStatus = "FAILED";
-                          }
-                        }
-                        return {
-                          id: nameOrKey,
-                          fileKey: matchedInfo?.fileKey || matchedUpload?.fileKey || nameOrKey,
-                          fileName: matchedInfo?.fileName || matchedUpload?.name || nameOrKey,
-                          name: matchedInfo?.fileName || matchedUpload?.name || nameOrKey,
-                          status: docStatus,
-                          reason: matchedUpload?.reason || null,
-                          retryable: matchedUpload?.retryable ?? true,
-                        };
-                      })
-                  : chatWizardState.filesInfo.map((f) => {
-                      const matchedUpload = uploadingDocs.find(
-                        (u) => u.jobId === f.jobId || u.fileKey === f.fileKey || u.id === f.jobId,
-                      );
-                      return {
-                        id: f.jobId || f.fileKey,
-                        fileKey: f.fileKey,
-                        fileName: f.fileName,
-                        name: f.fileName,
-                        status: matchedUpload?.status || "COMPLETED",
-                        reason: matchedUpload?.reason || null,
-                        retryable: matchedUpload?.retryable ?? true,
-                      };
-                    });
+            const finalMeds =
+              (resData?.medicines && resData.medicines.length > 0)
+                ? resData.medicines
+                : (flatMeds.length > 0 ? flatMeds : []);
+
+            setChatWizardState((prev) => ({
+              ...prev,
+              extractedMedicines: finalMeds,
+            }));
 
             const resolvedAction =
-              flatMeds.length > 0
+              finalMeds.length > 0
                 ? "REVIEW_MEDICINES_LIST"
                 : (resData?.actionType || resData?.action || "ADD_DOCUMENT");
 
@@ -1208,12 +1199,12 @@ const AIChatScreen = ({ route }: any) => {
               role: "ai",
               text:
                 resData?.reply ||
-                (flatMeds.length > 0
+                (finalMeds.length > 0
                   ? "I've extracted the following medicines from your uploaded documents. Please review and confirm."
                   : "Document processing complete."),
               action: resolvedAction,
               options: resData?.options || [],
-              medicines: flatMeds.length > 0 ? flatMeds : (resData?.medicines || []),
+              medicines: finalMeds,
               document: resData?.document || null,
               documentSummary: resData?.documentSummary || null,
               documents: uploadedDocuments,
@@ -1230,6 +1221,10 @@ const AIChatScreen = ({ route }: any) => {
               createdAt: new Date().toISOString(),
             };
             setMessages((prev) => [...prev, aiMsg]);
+
+            if (resData?.onboardingState || resData?.state) {
+              lastKnownStateRef.current = resData.onboardingState || resData.state;
+            }
 
             if (resData?.sessionId && !activeSessionId) {
               setActiveSessionId(resData.sessionId);
@@ -2118,6 +2113,17 @@ const AIChatScreen = ({ route }: any) => {
           } else {
             meta = meta || {};
           }
+          const resolvedDocs = normalizeDocumentsList(
+            meta,
+            [],
+            [],
+            documentsList,
+          );
+          const rawMeds =
+            meta.medicines && meta.medicines.length > 0
+              ? meta.medicines
+              : extractMedicationsFromDocuments(resolvedDocs);
+
           return {
             ...meta,
             id: dbMsg.id,
@@ -2126,8 +2132,10 @@ const AIChatScreen = ({ route }: any) => {
             sessionId: chatSessionId,
             createdAt: dbMsg.createdAt,
             action:
-              meta.action || meta.actionType || "NORMAL_CHAT",
+              meta.action || meta.actionType || (meta.mode === "ACTION" ? "ACTION" : "NORMAL_CHAT"),
             document: meta.document || null,
+            documents: resolvedDocs,
+            medicines: rawMeds,
             documentSummary: meta.documentSummary || null,
             suggestedQuestions: meta.suggestedQuestions || [],
             keyFindings:
@@ -2294,53 +2302,16 @@ const AIChatScreen = ({ route }: any) => {
             } else {
               meta = meta || {};
             }
-            const rawDocsName: string[] = Array.isArray(meta.documentsName)
-              ? meta.documentsName
-              : Array.isArray(meta.documentsNames)
-                ? meta.documentsNames
-                : [];
-
-            const resolvedDocs =
-              meta.documents && meta.documents.length > 0
-                ? meta.documents
-                : meta.document
-                  ? [meta.document]
-                  : rawDocsName.length > 0
-                    ? rawDocsName.map((nameOrKey: string, idx: number) => {
-                        const matched = documentsList.find(
-                          (d: any) =>
-                            d.id === nameOrKey ||
-                            d.s3Key === nameOrKey ||
-                            d.fileKey === nameOrKey ||
-                            d.fileName === nameOrKey,
-                        );
-                        let docStatus = "COMPLETED";
-                        if (meta.documentSummary) {
-                          const failed = meta.documentSummary.failed || 0;
-                          const rejected = meta.documentSummary.rejected || 0;
-                          if (idx < rejected) {
-                            docStatus = "REJECTED";
-                          } else if (idx < rejected + failed) {
-                            docStatus = "FAILED";
-                          }
-                        }
-                        return (
-                          matched || {
-                            id: nameOrKey,
-                            fileKey: nameOrKey,
-                            fileName: nameOrKey,
-                            name: nameOrKey,
-                            status: docStatus,
-                          }
-                        );
-                      })
-                  : Array.isArray(meta.documentIds) && meta.documentIds.length > 0
-                    ? meta.documentIds
-                        .map((id: string) => documentsList.find((d: any) => d.id === id || d.s3Key === id || d.fileKey === id))
-                        .filter(Boolean)
-                    : meta.documentId
-                      ? [documentsList.find((d: any) => d.id === meta.documentId || d.s3Key === meta.documentId || d.fileKey === meta.documentId)].filter(Boolean)
-                      : [];
+            const resolvedDocs = normalizeDocumentsList(
+              meta,
+              [],
+              [],
+              documentsList,
+            );
+            const rawMeds =
+              meta.medicines && meta.medicines.length > 0
+                ? meta.medicines
+                : extractMedicationsFromDocuments(resolvedDocs);
 
             return {
               ...meta,
@@ -2350,8 +2321,8 @@ const AIChatScreen = ({ route }: any) => {
               mode: meta.mode as ChatMode,
               emergency: !!meta.emergency,
               createdAt: dbMsg.createdAt,
-              action: meta.action || meta.actionType || "NORMAL_CHAT",
-              medicines: meta.medicines || [],
+              action: meta.action || meta.actionType || (meta.mode === "ACTION" ? "ACTION" : "NORMAL_CHAT"),
+              medicines: rawMeds,
               conflicts: meta.conflicts || [],
               documents: resolvedDocs,
               options: meta.options || [],
@@ -2407,53 +2378,16 @@ const AIChatScreen = ({ route }: any) => {
         } else {
           meta = meta || {};
         }
-        const rawDocsName: string[] = Array.isArray(meta.documentsName)
-          ? meta.documentsName
-          : Array.isArray(meta.documentsNames)
-            ? meta.documentsNames
-            : [];
-
-        const resolvedDocs =
-          meta.documents && meta.documents.length > 0
-            ? meta.documents
-            : meta.document
-              ? [meta.document]
-              : rawDocsName.length > 0
-                ? rawDocsName.map((nameOrKey: string, idx: number) => {
-                    const matched = documentsList.find(
-                      (d: any) =>
-                        d.id === nameOrKey ||
-                        d.s3Key === nameOrKey ||
-                        d.fileKey === nameOrKey ||
-                        d.fileName === nameOrKey,
-                    );
-                    let docStatus = "COMPLETED";
-                    if (meta.documentSummary) {
-                      const failed = meta.documentSummary.failed || 0;
-                      const rejected = meta.documentSummary.rejected || 0;
-                      if (idx < rejected) {
-                        docStatus = "REJECTED";
-                      } else if (idx < rejected + failed) {
-                        docStatus = "FAILED";
-                      }
-                    }
-                    return (
-                      matched || {
-                        id: nameOrKey,
-                        fileKey: nameOrKey,
-                        fileName: nameOrKey,
-                        name: nameOrKey,
-                        status: docStatus,
-                      }
-                    );
-                  })
-              : Array.isArray(meta.documentIds) && meta.documentIds.length > 0
-                ? meta.documentIds
-                    .map((id: string) => documentsList.find((d: any) => d.id === id || d.s3Key === id || d.fileKey === id))
-                    .filter(Boolean)
-                : meta.documentId
-                  ? [documentsList.find((d: any) => d.id === meta.documentId || d.s3Key === meta.documentId || d.fileKey === meta.documentId)].filter(Boolean)
-                  : [];
+        const resolvedDocs = normalizeDocumentsList(
+          meta,
+          [],
+          [],
+          documentsList,
+        );
+        const rawMeds =
+          meta.medicines && meta.medicines.length > 0
+            ? meta.medicines
+            : extractMedicationsFromDocuments(resolvedDocs);
 
         return {
           ...meta,
@@ -2463,8 +2397,8 @@ const AIChatScreen = ({ route }: any) => {
           mode: meta.mode as ChatMode,
           emergency: !!meta.emergency,
           createdAt: dbMsg.createdAt,
-          action: meta.action || meta.actionType || "NORMAL_CHAT",
-          medicines: meta.medicines || [],
+          action: meta.action || meta.actionType || (meta.mode === "ACTION" ? "ACTION" : "NORMAL_CHAT"),
+          medicines: rawMeds,
           conflicts: meta.conflicts || [],
           documents: resolvedDocs,
           options: meta.options || [],
@@ -2530,6 +2464,7 @@ const AIChatScreen = ({ route }: any) => {
             chatWizardState.filesInfo,
           ),
           message: textToSubmit,
+          state: lastKnownStateRef.current || {},
         };
 
         const response = await apiClient.post("/v1/onboarding/chat", payload);
@@ -2553,6 +2488,10 @@ const AIChatScreen = ({ route }: any) => {
             createdAt: new Date().toISOString(),
           };
           setMessages((prev) => [...prev, aiMsg]);
+
+          if (resData?.onboardingState || resData?.state) {
+            lastKnownStateRef.current = resData.onboardingState || resData.state;
+          }
 
           const nextPendingStep =
             resData?.onboardingState?.currentStep ||
@@ -2608,6 +2547,7 @@ const AIChatScreen = ({ route }: any) => {
         preferredLanguage: preferredLang,
         history: buildChatHistory(messages),
         stream: true,
+        state: lastKnownStateRef.current || {},
       };
 
       if (payload.actionType === "NORMAL_CHAT" && payload.stream === true) {
@@ -2631,7 +2571,7 @@ const AIChatScreen = ({ route }: any) => {
           action: resData?.actionType || resData?.action || "NORMAL_CHAT",
           options: resData?.options || [],
           medicines: resData?.medicines || [],
-          documents: resData?.documents || [],
+          documents: normalizeDocumentsList(resData, [], [], documentsList),
           document: resData?.document || null,
           documentSummary: resData?.documentSummary || null,
           suggestedQuestions: resData?.suggestedQuestions || [],
@@ -2647,6 +2587,10 @@ const AIChatScreen = ({ route }: any) => {
         };
 
         setMessages((prev) => [...prev, aiMessage]);
+
+        if (resData?.onboardingState || resData?.state) {
+          lastKnownStateRef.current = resData.onboardingState || resData.state;
+        }
 
         if (resData?.sessionId && !activeSessionId) {
           setActiveSessionId(resData.sessionId);
@@ -2776,7 +2720,9 @@ const AIChatScreen = ({ route }: any) => {
         payload.documentId = resolvedDocIds;
       }
 
-      if (option.actionType === "CONFIRM_MEDICINES") {
+      let updatedState = { ...(lastKnownStateRef.current || {}) };
+
+      if (option.actionType === "CONFIRM_MEDICINES" || normalizedKey === "CONFIRM_MEDICINES") {
         payload.actionType = "CONFIRM_MEDICINES";
         let sanitizedData = option.value;
         if (Array.isArray(option.value)) {
@@ -2789,15 +2735,33 @@ const AIChatScreen = ({ route }: any) => {
         }
         payload.actionData = sanitizedData;
         payload.message = "CONFIRM_MEDICINES";
+        updatedState.medicinesConfirmed = true;
+        updatedState.medicinesFlowStarted = true;
+        if (Array.isArray(option.value)) {
+          updatedState.medicinesToAdd = option.value;
+        } else if (option.value?.medicines) {
+          updatedState.medicinesToAdd = option.value.medicines;
+        }
+      } else if (option.actionType === "SKIP_MEDICINES" || normalizedKey === "SKIP_MEDICINES") {
+        payload.actionType = "SKIP_MEDICINES";
+        payload.message = "SKIP_MEDICINES";
+        updatedState.medicinesFlowStarted = true;
+        updatedState.medicinesConfirmed = false;
       } else {
         payload.message =
           typeof normalizedKey === "object"
             ? JSON.stringify(normalizedKey)
             : normalizedKey;
-        if (normalizedKey === "ASK_REPORT") {
+        if (normalizedKey === "ASK_REPORT" || option.actionType === "ASK_REPORT") {
           payload.actionType = "ASK_REPORT";
+          updatedState.documentConfirmed = true;
+        } else if (normalizedKey === "CONFIRM_DOCUMENT" || option.actionType === "CONFIRM_DOCUMENT") {
+          updatedState.documentConfirmed = true;
         }
       }
+
+      lastKnownStateRef.current = updatedState;
+      payload.state = updatedState;
 
       const response = await apiClient.post("/v1/onboarding/chat", payload);
       const resData = response.data?.data;
@@ -2818,7 +2782,7 @@ const AIChatScreen = ({ route }: any) => {
           action,
           options: resData.options || [],
           medicines: resData.medicines || [],
-          documents: resData.documents || [],
+          documents: normalizeDocumentsList(resData, [], [], documentsList),
           document: resData.document || null,
           documentSummary: resData.documentSummary || null,
           suggestedQuestions: resData.suggestedQuestions || [],
@@ -3065,6 +3029,8 @@ const AIChatScreen = ({ route }: any) => {
                   item.action === "EDIT_MEDICINE" ||
                   item.action === "REVIEW_MEDICINES_LIST" ||
                   item.action === "ADD_DOCUMENT" ||
+                  item.action === "ACTION" ||
+                  (item as any).mode === "ACTION" ||
                   item.action === "CONFIRM_MEDICINE" ||
                   item.action === "EXTRACTED_MEDICINES" ||
                   item.action === "EXTRACTED_MEDICINES_CONFLICTS" ||
@@ -3272,165 +3238,176 @@ const AIChatScreen = ({ route }: any) => {
                       </View>,
                     );
                   }
-                  if (item.action === "ADD_DOCUMENT") {
-                    const hasMedicines = item.medicines && item.medicines.length > 0;
-                    if (!hasMedicines) {
-                      if (item.isOnboardingMessage) {
-                        return renderAssistantPrompt(null);
-                      }
-                      const msgDocs =
-                        item.documents && item.documents.length > 0
-                          ? item.documents
-                          : item.document
-                            ? [item.document]
-                            : [];
+                  if (
+                    item.action === "ACTION" ||
+                    (item as any).mode === "ACTION" ||
+                    item.action === "REVIEW_MEDICINES_LIST" ||
+                    item.action === "ADD_DOCUMENT"
+                  ) {
+                    const isLatest = isLatestActiveMessage(item.id);
+                    const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
+                    const msgDocs = normalizeDocumentsList(
+                      item.documents || item.document || item,
+                    );
+                    const rawMeds = item.medicines?.length
+                      ? item.medicines
+                      : (isLatest && chatWizardState.extractedMedicines.length > 0
+                          ? chatWizardState.extractedMedicines
+                          : extractMedicationsFromDocuments(msgDocs));
+
+                    const displayMeds = rawMeds.map((m: any, idx: number) => ({
+                      ...m,
+                      id: m.id || m.client_med_id || `med-${item.id}-${idx}`,
+                      selected: m.selected !== undefined ? m.selected : true,
+                    }));
+
+                    if (displayMeds.length > 0) {
                       return renderAssistantPrompt(
-                        <DocumentProgressSummaryContainer
-                          documents={msgDocs}
+                        <ReviewMedicinesListCard
+                          localMedicines={displayMeds}
+                          setLocalMedicines={(updater) => {
+                            const nextMeds =
+                              typeof updater === "function"
+                                ? updater(displayMeds)
+                                : updater;
+
+                            if (isLatest) {
+                              setChatWizardState((prev) => ({
+                                ...prev,
+                                extractedMedicines: nextMeds,
+                              }));
+                            }
+
+                            setMessages((prev) =>
+                              prev.map((msg) => {
+                                if (msg.id === item.id) {
+                                  return {
+                                    ...msg,
+                                    medicines: nextMeds,
+                                  };
+                                }
+                                return msg;
+                              }),
+                            );
+                          }}
                           preferredLang={preferredLang}
                           isDark={isDark}
                           theme={theme}
+                          onConfirm={(formattedMeds) => {
+                            const displayLabel =
+                              preferredLang === "gujarati" ||
+                              preferredLang === "gu"
+                                ? "પસંદ કરેલ પુષ્ટિ કરો"
+                                : preferredLang === "hindi" ||
+                                  preferredLang === "hi"
+                                  ? "चयनित की पुष्टि करें"
+                                  : preferredLang === "marathi" ||
+                                    preferredLang === "mr"
+                                    ? "निवडलेले निश्चित करा"
+                                    : preferredLang === "tamil" ||
+                                      preferredLang === "ta"
+                                      ? "தேர்ந்தெடுக்கப்பட்டதை உறுதிப்படுத்தவும்"
+                                      : "Confirm Selection";
+
+                            handleGenericOptionPress({
+                              label: displayLabel,
+                              value: { medicines: formattedMeds || [] },
+                              actionType: "CONFIRM_MEDICINES",
+                            });
+                          }}
+                          onAddNew={() => {
+                            const displayLabel =
+                              preferredLang === "gujarati" ||
+                              preferredLang === "gu"
+                                ? "નવું ઉમેરો"
+                                : preferredLang === "hindi" ||
+                                  preferredLang === "hi"
+                                  ? "नया जोड़ें"
+                                  : preferredLang === "marathi" ||
+                                    preferredLang === "mr"
+                                    ? "नवीन जोडा"
+                                    : preferredLang === "tamil" ||
+                                      preferredLang === "ta"
+                                      ? "புதியதைச் சேர்க்கவும்"
+                                      : "Add New";
+
+                            handleGenericOptionPress({
+                              label: displayLabel,
+                              value: { addNew: true },
+                              actionType: "ADD_MEDICINE",
+                            });
+                          }}
+                          onSkipAll={() => {
+                            const displayLabel =
+                              preferredLang === "gujarati" ||
+                              preferredLang === "gu"
+                                ? "બધા છોડી દો"
+                                : preferredLang === "hindi" ||
+                                  preferredLang === "hi"
+                                  ? "सभी छोड़ें"
+                                  : preferredLang === "marathi" ||
+                                    preferredLang === "mr"
+                                    ? "सर्व वगळा"
+                                    : preferredLang === "tamil" ||
+                                      preferredLang === "ta"
+                                      ? "அனைத்தையும் தவிர்க்கவும்"
+                                      : "Skip All";
+
+                            handleGenericOptionPress({
+                              label: displayLabel,
+                              value: { skipAll: true },
+                              actionType: "SKIP_MEDICINES",
+                            });
+                          }}
+                          onEdit={(med) => {
+                            setMedicineToEdit(med);
+                            setTimeout(() => {
+                              editSheetRef.current?.present();
+                            }, 100);
+                          }}
+                          readOnly={isReadOnly}
+                          chosenVal={chosenVal}
+                          chosenLabel={chosenLabel}
+                          documents={msgDocs}
+                          showDocumentSummary={true}
+                          onRetryDocument={handleRetryDocumentInChat}
+                          canRetry={isLatest && !isReadOnly}
                         />,
                       );
                     }
-                    const doc = item.document || {};
-                    const isReadOnly = (isHistorical && chosenVal !== null);
-                    const questions =
-                      item.suggestedQuestions && item.suggestedQuestions.length > 0
-                        ? item.suggestedQuestions
-                        : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
 
-                    return renderAssistantPrompt(
-                      <ReportSummaryChatCard
-                        document={doc}
-                        documentSummary={item.documentSummary}
-                        suggestedQuestions={questions}
-                        isDark={isDark}
-                        theme={theme}
-                        preferredLang={preferredLang}
-                        onQuestionPress={(q) => handleSend(q)}
-                        onViewFullReport={() => handleViewFullReport(doc)}
-                        readOnly={isReadOnly}
-                      />,
-                    );
-                  }
-                  if (item.action === "REVIEW_MEDICINES_LIST") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
-                    const displayMeds = item.medicines?.length
-                      ? item.medicines
-                      : (isLatest ? chatWizardState.extractedMedicines : []);
+                    if (msgDocs.length > 0) {
+                      return renderAssistantPrompt(
+                        <View style={{ width: "100%" }}>
+                          <DocumentProgressSummaryContainer
+                            documents={msgDocs}
+                            preferredLang={preferredLang}
+                            isDark={isDark}
+                            theme={theme}
+                            onRetry={handleRetryDocumentInChat}
+                            canRetry={isLatest && !isReadOnly}
+                            readOnly={isReadOnly}
+                          />
+                          {item.options && item.options.length > 0 && (
+                            <View style={{ marginTop: 10 }}>
+                              <MedicineOptionsPanel
+                                optionsList={item.options}
+                                isDark={isDark}
+                                theme={theme}
+                                onOptionPress={(key, label) =>
+                                  handleGenericOptionPress({ key, label, value: key })
+                                }
+                                readOnly={isReadOnly}
+                                chosenVal={chosenVal}
+                                chosenLabel={chosenLabel}
+                              />
+                            </View>
+                          )}
+                        </View>,
+                      );
+                    }
 
-                    return renderAssistantPrompt(
-                      <ReviewMedicinesListCard
-                        localMedicines={displayMeds}
-                        setLocalMedicines={(updater) => {
-                          const nextMeds =
-                            typeof updater === "function"
-                              ? updater(displayMeds)
-                              : updater;
-
-                          if (isLatest) {
-                            setChatWizardState((prev) => ({
-                              ...prev,
-                              extractedMedicines: nextMeds,
-                            }));
-                          }
-
-                          setMessages((prev) =>
-                            prev.map((msg) => {
-                              if (msg.id === item.id) {
-                                return {
-                                  ...msg,
-                                  medicines: nextMeds,
-                                };
-                              }
-                              return msg;
-                            }),
-                          );
-                        }}
-                        preferredLang={preferredLang}
-                        isDark={isDark}
-                        theme={theme}
-                        onConfirm={(formattedMeds) => {
-                          const displayLabel =
-                            preferredLang === "gujarati" ||
-                              preferredLang === "gu"
-                              ? "પસંદ કરેલ પુષ્ટિ કરો"
-                              : preferredLang === "hindi" ||
-                                preferredLang === "hi"
-                                ? "चयनित की पुष्टि करें"
-                                : preferredLang === "marathi" ||
-                                  preferredLang === "mr"
-                                  ? "निवडलेले निश्चित करा"
-                                  : preferredLang === "tamil" ||
-                                    preferredLang === "ta"
-                                    ? "தேர்ந்தெடுக்கப்பட்டதை உறுதிப்படுத்தவும்"
-                                    : "Confirm Selection";
-
-                          handleGenericOptionPress({
-                            label: displayLabel,
-                            value: { medicines: formattedMeds || [] },
-                            actionType: "CONFIRM_MEDICINES",
-                          });
-                        }}
-                        onAddNew={() => {
-                          const displayLabel =
-                            preferredLang === "gujarati" ||
-                              preferredLang === "gu"
-                              ? "નવું ઉમેરો"
-                              : preferredLang === "hindi" ||
-                                preferredLang === "hi"
-                                ? "नया जोड़ें"
-                                : preferredLang === "marathi" ||
-                                  preferredLang === "mr"
-                                  ? "नवीन जोडा"
-                                  : preferredLang === "tamil" ||
-                                    preferredLang === "ta"
-                                    ? "புதியதைச் சேர்க்கவும்"
-                                    : "Add New";
-
-                          handleGenericOptionPress({
-                            label: displayLabel,
-                            value: { addNew: true },
-                            actionType: "ADD_MEDICINE",
-                          });
-                        }}
-                        onSkipAll={() => {
-                          const displayLabel =
-                            preferredLang === "gujarati" ||
-                              preferredLang === "gu"
-                              ? "બધા છોડી દો"
-                              : preferredLang === "hindi" ||
-                                preferredLang === "hi"
-                                ? "सभी छोड़ें"
-                                : preferredLang === "marathi" ||
-                                  preferredLang === "mr"
-                                  ? "सर्व वगळा"
-                                  : preferredLang === "tamil" ||
-                                    preferredLang === "ta"
-                                    ? "அனைத்தையும் தவிர்க்கவும்"
-                                    : "Skip All";
-
-                          handleGenericOptionPress({
-                            label: displayLabel,
-                            value: { skipAll: true },
-                            actionType: "SKIP_MEDICINES",
-                          });
-                        }}
-                        onEdit={(med) => {
-                          setMedicineToEdit(med);
-                          setTimeout(() => {
-                            editSheetRef.current?.present();
-                          }, 100);
-                        }}
-                        readOnly={isReadOnly}
-                        chosenVal={chosenVal}
-                        chosenLabel={chosenLabel}
-                        documents={item.documents}
-                        showDocumentSummary={!item.isOnboardingMessage}
-                      />,
-                    );
+                    return renderAssistantPrompt(null);
                   }
                   if (item.action === "CONFIRM_MEDICINE") {
                     return renderAssistantPrompt(
@@ -3470,57 +3447,59 @@ const AIChatScreen = ({ route }: any) => {
                     );
                   }
                   if (item.action === "ASK_REPORT") {
-                    const hasMedicines = item.medicines && item.medicines.length > 0;
-                    if (!hasMedicines) {
-                      if (item.isOnboardingMessage) {
-                        return renderAssistantPrompt(null);
-                      }
-                      const msgDocs =
-                        item.documents && item.documents.length > 0
-                          ? item.documents
-                          : item.document
-                            ? [item.document]
-                            : [];
-                      if (msgDocs.length > 0) {
-                        return renderAssistantPrompt(
-                          <DocumentProgressSummaryContainer
-                            documents={msgDocs}
-                            preferredLang={preferredLang}
-                            isDark={isDark}
-                            theme={theme}
-                          />,
-                        );
-                      }
-                      return renderAssistantPrompt(null);
-                    }
                     const doc = item.document;
                     const hasDoc = Boolean(
-                      doc && (doc.id || doc.summary || (doc.keyFindings && doc.keyFindings.length > 0) || doc.extractedStructuredData),
+                      doc &&
+                        !Array.isArray(doc) &&
+                        (doc.id ||
+                          doc.summary ||
+                          (doc.keyFindings && doc.keyFindings.length > 0) ||
+                          doc.extractedStructuredData ||
+                          doc.fileName ||
+                          doc.s3Key),
                     );
 
-                    if (!hasDoc) {
-                      return renderAssistantPrompt(null);
+                    if (hasDoc) {
+                      const isReadOnly = chosenVal !== null;
+                      const questions =
+                        item.suggestedQuestions && item.suggestedQuestions.length > 0
+                          ? item.suggestedQuestions
+                          : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+                      return renderAssistantPrompt(
+                        <ReportSummaryChatCard
+                          document={doc}
+                          documentSummary={item.documentSummary}
+                          suggestedQuestions={questions}
+                          isDark={isDark}
+                          theme={theme}
+                          preferredLang={preferredLang}
+                          onQuestionPress={(q) => handleSend(q)}
+                          onViewFullReport={() => handleViewFullReport(doc)}
+                          readOnly={isReadOnly}
+                        />,
+                      );
                     }
 
-                    const isReadOnly = chosenVal !== null;
-                    const questions =
-                      item.suggestedQuestions && item.suggestedQuestions.length > 0
-                        ? item.suggestedQuestions
-                        : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
-
-                    return renderAssistantPrompt(
-                      <ReportSummaryChatCard
-                        document={doc}
-                        documentSummary={item.documentSummary}
-                        suggestedQuestions={questions}
-                        isDark={isDark}
-                        theme={theme}
-                        preferredLang={preferredLang}
-                        onQuestionPress={(q) => handleSend(q)}
-                        onViewFullReport={() => handleViewFullReport(doc)}
-                        readOnly={isReadOnly}
-                      />,
+                    const msgDocs = normalizeDocumentsList(
+                      item.documents || item.document || item,
                     );
+                    if (msgDocs.length > 0) {
+                      const isLatest = isLatestActiveMessage(item.id);
+                      return renderAssistantPrompt(
+                        <DocumentProgressSummaryContainer
+                          documents={msgDocs}
+                          preferredLang={preferredLang}
+                          isDark={isDark}
+                          theme={theme}
+                          onRetry={handleRetryDocumentInChat}
+                          canRetry={isLatest && chosenVal === null}
+                          readOnly={chosenVal !== null}
+                        />,
+                      );
+                    }
+
+                    return renderAssistantPrompt(null);
                   }
                   if (item.action === "EXTRACTED_MEDICINES") {
                     const isLatest = isLatestActiveMessage(item.id);

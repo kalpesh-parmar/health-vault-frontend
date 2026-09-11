@@ -28,6 +28,7 @@ import {
 } from "./widgets/ReportSummaryChatCard";
 import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
+import { normalizeDocumentsList, extractMedicationsFromDocuments, DocumentSummaryItem } from "../../utils/documentNormalizer";
 
 export interface ChatMessage {
   id: string;
@@ -53,7 +54,7 @@ export interface ChatMessage {
   loginSummary?: string;
   documentSummary?: string | DocumentSummaryStats;
   loginProvider?: string;
-  documents?: { id: string; fileName: string; medicinesCount?: number }[];
+  documents?: DocumentSummaryItem[] | any[];
   createdAt?: string | Date;
   sessionId?: string;
   isOnboardingMessage?: boolean;
@@ -96,6 +97,7 @@ interface ChatMessageItemProps {
   navigation: any;
   setChatWizardState: React.Dispatch<React.SetStateAction<any>>;
   onViewFullReport?: (doc: any) => void;
+  onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
@@ -123,6 +125,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   navigation,
   setChatWizardState,
   onViewFullReport,
+  onRetryDocument,
 }) => {
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
@@ -183,6 +186,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   const isAnswered = chosenVal !== null || chosenLabel !== null;
   const isLatest = isLatestActiveMessage(item.id);
   const isHistorical = isAnswered || !isLatest;
+  const isReadOnly = isHistorical || Boolean((item as any).isConfirmed);
 
   const isComplexStep =
     item.action === "RESOLVE_PROFILE_SOURCE" ||
@@ -191,6 +195,9 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     item.action === "ADD_MEDICINE" ||
     item.action === "EDIT_MEDICINE" ||
     item.action === "REVIEW_MEDICINES_LIST" ||
+    item.action === "ADD_DOCUMENT" ||
+    item.action === "ACTION" ||
+    (item as any).mode === "ACTION" ||
     item.action === "CONFIRM_MEDICINE" ||
     item.action === "EXTRACTED_MEDICINES" ||
     item.action === "EXTRACTED_MEDICINES_CONFLICTS" ||
@@ -238,57 +245,63 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   };
 
   if (isComplexStep) {
-    if (item.action === "ASK_REPORT" || item.action === "ADD_DOCUMENT") {
-      const hasMedicines = item.medicines && item.medicines.length > 0;
-      if (!hasMedicines) {
-        if (item.isOnboardingMessage) {
-          return renderAssistantPrompt(null);
-        }
-        const msgDocs =
-          item.documents && item.documents.length > 0
-            ? item.documents
-            : item.document
-              ? [item.document]
-              : [];
-        if (msgDocs.length > 0) {
-          return renderAssistantPrompt(
-            <DocumentProgressSummaryContainer
-              documents={msgDocs}
-              preferredLang={preferredLang}
-              isDark={isDark}
-              theme={theme}
-            />,
-          );
-        }
-        return renderAssistantPrompt(null);
-      }
-      const doc = item.document || {};
-      const questions =
-        item.suggestedQuestions && item.suggestedQuestions.length > 0
-          ? item.suggestedQuestions
-          : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
-
-      return renderAssistantPrompt(
-        <ReportSummaryChatCard
-          document={doc}
-          documentSummary={item.documentSummary}
-          suggestedQuestions={questions}
-          isDark={isDark}
-          theme={theme}
-          preferredLang={preferredLang}
-          onQuestionPress={(q) =>
-            handleGenericOptionPress({
-              label: q,
-              value: q,
-              actionType: "NORMAL_CHAT",
-            })
-          }
-          onViewFullReport={
-            onViewFullReport ? () => onViewFullReport(doc) : undefined
-          }
-          readOnly={chosenVal !== null}
-        />,
+    if (item.action === "ASK_REPORT") {
+      const doc = item.document;
+      const hasDoc = Boolean(
+        doc &&
+          !Array.isArray(doc) &&
+          (doc.id ||
+            doc.summary ||
+            (doc.keyFindings && doc.keyFindings.length > 0) ||
+            doc.extractedStructuredData ||
+            doc.fileName ||
+            doc.s3Key),
       );
+
+      if (hasDoc) {
+        const questions =
+          item.suggestedQuestions && item.suggestedQuestions.length > 0
+            ? item.suggestedQuestions
+            : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+        return renderAssistantPrompt(
+          <ReportSummaryChatCard
+            document={doc}
+            documentSummary={item.documentSummary}
+            suggestedQuestions={questions}
+            isDark={isDark}
+            theme={theme}
+            preferredLang={preferredLang}
+            onQuestionPress={(q) =>
+              handleGenericOptionPress({
+                label: q,
+                value: q,
+                actionType: "NORMAL_CHAT",
+              })
+            }
+            onViewFullReport={
+              onViewFullReport ? () => onViewFullReport(doc) : undefined
+            }
+            readOnly={chosenVal !== null}
+          />,
+        );
+      }
+
+      const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
+      if (msgDocs.length > 0) {
+        return renderAssistantPrompt(
+          <DocumentProgressSummaryContainer
+            documents={msgDocs}
+            preferredLang={preferredLang}
+            isDark={isDark}
+            theme={theme}
+            onRetry={onRetryDocument}
+            canRetry={isLatest && !isReadOnly}
+            readOnly={isReadOnly}
+          />,
+        );
+      }
+      return renderAssistantPrompt(null);
     }
     if (item.action === "RESOLVE_PROFILE_SOURCE") {
       return renderAssistantPrompt(
@@ -349,10 +362,28 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         />,
       );
     }
-    if (item.action === "REVIEW_MEDICINES_LIST") {
-      const isReadOnly = isHistorical;
+    if (
+      item.action === "ACTION" ||
+      (item as any).mode === "ACTION" ||
+      item.action === "REVIEW_MEDICINES_LIST" ||
+      item.action === "ADD_DOCUMENT"
+    ) {
+      const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
+      const rawMeds = item.medicines?.length
+        ? item.medicines
+        : (isReadOnly
+            ? extractMedicationsFromDocuments(msgDocs)
+            : (chatWizardState.extractedMedicines.length > 0
+                ? chatWizardState.extractedMedicines
+                : extractMedicationsFromDocuments(msgDocs)));
 
-      const handleConfirm = (checkedMeds: string[]) => {
+      const displayMeds = rawMeds.map((m: any, idx: number) => ({
+        ...m,
+        id: m.id || m.client_med_id || `med-${item.id}-${idx}`,
+        selected: m.selected !== undefined ? m.selected : true,
+      }));
+
+      const handleConfirm = (checkedMeds: string[], formattedMeds?: any[]) => {
         handleConfirmSelection();
       };
 
@@ -385,24 +416,59 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         }
       };
 
-      return renderAssistantPrompt(
-        <ReviewMedicinesListCard
-          localMedicines={isReadOnly ? (item.medicines || []) : chatWizardState.extractedMedicines}
-          setLocalMedicines={setLocalMedicinesWrapper}
-          preferredLang={preferredLang}
-          isDark={isDark}
-          theme={theme}
-          onConfirm={handleConfirm}
-          onAddNew={handleAddNew}
-          onSkipAll={handleSkipAll}
-          onEdit={handleEdit}
-          readOnly={isReadOnly}
-          chosenVal={chosenVal}
-          chosenLabel={chosenLabel}
-          documents={item.documents}
-          showDocumentSummary={!item.isOnboardingMessage}
-        />,
-      );
+      if (displayMeds.length > 0) {
+        return renderAssistantPrompt(
+          <ReviewMedicinesListCard
+            localMedicines={displayMeds}
+            setLocalMedicines={setLocalMedicinesWrapper}
+            preferredLang={preferredLang}
+            isDark={isDark}
+            theme={theme}
+            onConfirm={handleConfirm}
+            onAddNew={handleAddNew}
+            onSkipAll={handleSkipAll}
+            onEdit={handleEdit}
+            readOnly={isReadOnly}
+            chosenVal={chosenVal}
+            chosenLabel={chosenLabel}
+            documents={msgDocs}
+            showDocumentSummary={true}
+            onRetryDocument={onRetryDocument}
+            canRetry={isLatest && !isReadOnly}
+          />,
+        );
+      }
+
+      if (msgDocs.length > 0) {
+        return renderAssistantPrompt(
+          <View style={{ width: "100%" }}>
+            <DocumentProgressSummaryContainer
+              documents={msgDocs}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+              onRetry={onRetryDocument}
+              canRetry={isLatest && !isReadOnly}
+              readOnly={isReadOnly}
+            />
+            {item.options && item.options.length > 0 && (
+              <View style={{ marginTop: 10 }}>
+                <MedicineOptionsPanel
+                  optionsList={item.options}
+                  isDark={isDark}
+                  theme={theme}
+                  onOptionPress={(opt) => handleGenericOptionPress(opt)}
+                  readOnly={isReadOnly}
+                  chosenVal={chosenVal}
+                  chosenLabel={chosenLabel}
+                />
+              </View>
+            )}
+          </View>,
+        );
+      }
+
+      return renderAssistantPrompt(null);
     }
     if (item.action === "CONFIRM_MEDICINE") {
       return renderAssistantPrompt(

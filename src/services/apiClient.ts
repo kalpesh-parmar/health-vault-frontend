@@ -203,15 +203,27 @@ export const resetForceLogout = () => {
   isForceLoggedOut = false;
 };
 
-function isTokenExpired(token: string | null): boolean {
+function isTokenExpired(token: string | null, bufferSeconds = 60): boolean {
   if (!token) return true;
   try {
-    const decoded = jwtDecode<{ exp: number }>(token);
+    const decoded = jwtDecode<{ exp?: number }>(token);
     if (!decoded.exp) return false;
-    // 10 second buffer to avoid race conditions
-    return decoded.exp * 1000 < Date.now() + 10000;
+    // Buffer in seconds to refresh proactively before the token actually expires
+    return decoded.exp * 1000 < Date.now() + bufferSeconds * 1000;
   } catch (e) {
     return true; // Assume expired if it fails to decode
+  }
+}
+
+function isRefreshTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const decoded = jwtDecode<{ exp?: number }>(token);
+    if (!decoded.exp) return false;
+    return decoded.exp * 1000 < Date.now();
+  } catch (e) {
+    // If refreshToken is not a JWT (e.g. opaque string or UUID), do not treat as expired locally
+    return false;
   }
 }
 
@@ -274,28 +286,129 @@ export const triggerForceLogout = async () => {
 };
 
 let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshSubscribers: ((token: string | null) => void)[] = [];
 
-const onRerefreshed = (token: string) => {
+const onRerefreshed = (token: string | null) => {
   refreshSubscribers.forEach((cb) => cb(token));
   refreshSubscribers = [];
 };
 
-const addRefreshSubscriber = (cb: (token: string) => void) => {
+const addRefreshSubscriber = (cb: (token: string | null) => void) => {
   refreshSubscribers.push(cb);
 };
+
+/**
+ * Returns a valid access token, automatically refreshing it if expired or nearing expiry.
+ */
+export async function getValidAccessToken(forceRefresh = false): Promise<string | null> {
+  if (isForceLoggedOut) {
+    return null;
+  }
+
+  let token = await SecureStore.getItemAsync("accessToken");
+  const needsRefresh = forceRefresh || !token || isTokenExpired(token, 60);
+
+  if (!needsRefresh && token) {
+    return token;
+  }
+
+  if (isRefreshing) {
+    return new Promise<string | null>((resolve) => {
+      addRefreshSubscriber((newToken) => resolve(newToken));
+    });
+  }
+
+  isRefreshing = true;
+
+  try {
+    const refreshToken = await SecureStore.getItemAsync("authToken"); // refreshToken is stored as authToken
+
+    if (!refreshToken || isRefreshTokenExpired(refreshToken)) {
+      isRefreshing = false;
+      onRerefreshed(null);
+      await triggerForceLogout();
+      return null;
+    }
+
+    const refreshUrl = resolveFullUrl(BASE_URL, "/auth/refresh-token");
+
+    const refreshResponse = await axios.post(
+      refreshUrl,
+      { refreshToken },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+          "Bypass-Tunnel-Reminder": "true",
+        },
+        timeout: 15000,
+      }
+    );
+
+    const resData = refreshResponse.data?.data || refreshResponse.data;
+    const newAccessToken =
+      resData?.accessToken ||
+      resData?.token;
+    const newRefreshToken =
+      resData?.refreshToken;
+
+    if (newAccessToken) {
+      await SecureStore.setItemAsync("accessToken", String(newAccessToken));
+      if (newRefreshToken) {
+        await SecureStore.setItemAsync("authToken", String(newRefreshToken));
+      }
+
+      const newRefreshDate = new Date();
+      newRefreshDate.setDate(newRefreshDate.getDate() + 6);
+      const yyyy = newRefreshDate.getFullYear();
+      const mm = String(newRefreshDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(newRefreshDate.getDate()).padStart(2, "0");
+      await SecureStore.setItemAsync("refreshDate", `${yyyy}-${mm}-${dd}`);
+
+      isRefreshing = false;
+      onRerefreshed(newAccessToken);
+      return newAccessToken;
+    } else {
+      isRefreshing = false;
+      onRerefreshed(null);
+      await triggerForceLogout();
+      return null;
+    }
+  } catch (refreshErr: any) {
+    console.error("[apiClient] Token refresh failed:", refreshErr?.response?.data || refreshErr?.message || refreshErr);
+    isRefreshing = false;
+    onRerefreshed(null);
+
+    const status = refreshErr?.response?.status;
+    const errMsg = String(refreshErr?.response?.data?.message || refreshErr?.message || "").toLowerCase();
+    if (
+      status === 401 ||
+      status === 403 ||
+      errMsg.includes("expired") ||
+      errMsg.includes("user not found") ||
+      errMsg.includes("invalid")
+    ) {
+      await triggerForceLogout();
+    }
+    return null;
+  }
+}
 
 apiClient.interceptors.request.use(
   async (config) => {
     if (config.url && config.url.includes("/ocr/extract")) {
       config.timeout = 240000;
     }
-    const isAuthRequest = config.url && (
-      config.url === "/auth/firebase-login" ||
-      config.url === "/auth/login" ||
-      config.url === "/auth/verify-otp" ||
-      config.url === "/auth/request-otp" ||
-      config.url === "/auth/refresh-token"
+    const isAuthRequest = Boolean(
+      config.url && (
+        config.url === "/auth/firebase-login" ||
+        config.url === "/auth/login" ||
+        config.url === "/auth/verify-otp" ||
+        config.url === "/auth/request-otp" ||
+        config.url === "/auth/refresh-token" ||
+        config.url.endsWith("/auth/refresh-token") ||
+        config.url.includes("/auth/refresh-token")
+      )
     );
 
     // If in force logout state, abort immediately and do not request (except for auth requests)
@@ -312,66 +425,14 @@ apiClient.interceptors.request.use(
     pendingRequestControllers.add(controller);
     (config as any).abortController = controller;
 
-    let token = await SecureStore.getItemAsync("accessToken");
-
-    // Local Token Expiration Check
-    if (token && !isAuthRequest && isTokenExpired(token)) {
-      if (!isRefreshing) {
-        isRefreshing = true;
-        try {
-          const refreshToken = await SecureStore.getItemAsync("authToken"); // refreshToken is stored as authToken
-
-          // If no refresh token or it's also expired, log out immediately without API call
-          if (!refreshToken || isTokenExpired(refreshToken)) {
-            await triggerForceLogout();
-            controller.abort();
-            return config;
-          }
-
-          const refreshUrl = resolveFullUrl(config.baseURL, "/auth/refresh-token");
-          
-          const refreshResponse = await axios.post(refreshUrl, {
-            refreshToken
-          }, {
-            headers: {
-              "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "true",
-              "Bypass-Tunnel-Reminder": "true"
-            }
-          });
-
-          const newAccessToken = refreshResponse.data?.data?.accessToken || refreshResponse.data?.accessToken;
-          const newRefreshToken = refreshResponse.data?.data?.refreshToken || refreshResponse.data?.refreshToken;
-
-          if (newAccessToken && newRefreshToken) {
-            await SecureStore.setItemAsync("accessToken", String(newAccessToken));
-            await SecureStore.setItemAsync("authToken", String(newRefreshToken));
-            
-            isRefreshing = false;
-            token = newAccessToken; // Update token for the current request
-            onRerefreshed(newAccessToken);
-          } else {
-            isRefreshing = false;
-            await triggerForceLogout();
-            controller.abort();
-            return config;
-          }
-        } catch (refreshErr) {
-          isRefreshing = false;
-          await triggerForceLogout();
-          controller.abort();
-          return config;
-        }
-      } else {
-        // Wait for the ongoing refresh process to finish
-        token = await new Promise<string>((resolve) => {
-          addRefreshSubscriber((newToken: string) => resolve(newToken));
-        });
+    if (!isAuthRequest) {
+      const token = await getValidAccessToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      } else if (isForceLoggedOut) {
+        controller.abort();
+        return config;
       }
-    }
-
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
     }
 
     const enabled = ENABLE_API_LOGS;
@@ -415,18 +476,6 @@ apiClient.interceptors.request.use(
     return Promise.reject(error);
   }
 );
-
-// let isRefreshing = false;
-// let refreshSubscribers: ((token: string) => void)[] = [];
-
-// const onRerefreshed = (token: string) => {
-//   refreshSubscribers.forEach((cb) => cb(token));
-//   refreshSubscribers = [];
-// };
-
-// const addRefreshSubscriber = (cb: (token: string) => void) => {
-//   refreshSubscribers.push(cb);
-// };
 
 apiClient.interceptors.response.use(
   (response) => {
@@ -473,7 +522,9 @@ apiClient.interceptors.response.use(
       config.url === "/auth/login" ||
       config.url === "/auth/verify-otp" ||
       config.url === "/auth/request-otp" ||
-      config.url === "/auth/refresh-token"
+      config.url === "/auth/refresh-token" ||
+      config.url.endsWith("/auth/refresh-token") ||
+      config.url.includes("/auth/refresh-token")
     );
 
     const message =
@@ -527,70 +578,27 @@ apiClient.interceptors.response.use(
     }
 
     const isSessionExpiredError = 
+      error.response?.status === 401 ||
       data?.forceLogout === true || 
       data?.errorCode === "SESSION_EXPIRED" ||
       (typeof message === "string" && (
         message.toLowerCase().includes("session expired") ||
-        message.toLowerCase().includes("user not found")
+        message.toLowerCase().includes("user not found") ||
+        message.toLowerCase().includes("unauthorized")
       ));
 
     if (
       !isAuthRequest &&
-      error.response?.status === 401 &&
-      isSessionExpiredError
+      isSessionExpiredError &&
+      !config?._retry
     ) {
-      const originalRequest = config;
-      
-      if (!isRefreshing) {
-        isRefreshing = true;
-        try {
-          const refreshToken = await SecureStore.getItemAsync("authToken");
-          if (!refreshToken) {
-            await triggerForceLogout();
-            return new Promise(() => {});
-          }
-
-          const refreshUrl = resolveFullUrl(config.baseURL, "/auth/refresh-token");
-          
-          const refreshResponse = await axios.post(refreshUrl, {
-            refreshToken
-          }, {
-            headers: {
-              "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "true",
-              "Bypass-Tunnel-Reminder": "true"
-            }
-          });
-
-          const newAccessToken = refreshResponse.data?.data?.accessToken || refreshResponse.data?.accessToken;
-          const newRefreshToken = refreshResponse.data?.data?.refreshToken || refreshResponse.data?.refreshToken;
-
-          if (newAccessToken && newRefreshToken) {
-            await SecureStore.setItemAsync("accessToken", String(newAccessToken));
-            await SecureStore.setItemAsync("authToken", String(newRefreshToken));
-            
-            isRefreshing = false;
-            onRerefreshed(newAccessToken);
-
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-            return apiClient(originalRequest);
-          } else {
-            isRefreshing = false;
-            await triggerForceLogout();
-            return new Promise(() => {});
-          }
-        } catch (refreshErr) {
-          isRefreshing = false;
-          await triggerForceLogout();
-          return new Promise(() => {});
-        }
+      config._retry = true;
+      const newToken = await getValidAccessToken(true);
+      if (newToken) {
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(config);
       } else {
-        return new Promise((resolve) => {
-          addRefreshSubscriber((token: string) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            resolve(apiClient(originalRequest));
-          });
-        });
+        return Promise.reject(new Error(message));
       }
     }
 

@@ -1005,9 +1005,13 @@ export function ResolveProfileSourceCard({
                   const payload = localEditedData
                     ? { confirmed: true, edited: localEditedData }
                     : { confirmed: true };
-                  const updatedState = localEditedData
-                    ? { ...state, existingUserData: { ...(state?.existingUserData || {}), ...localEditedData } }
-                    : state;
+                  const updatedState = {
+                    ...state,
+                    documentConfirmed: true,
+                    ...(localEditedData
+                      ? { existingUserData: { ...(state?.existingUserData || {}), ...localEditedData } }
+                      : {}),
+                  };
                   sendMessage(
                     JSON.stringify(payload),
                     updatedState,
@@ -1170,13 +1174,17 @@ export function ResolveProfileSourceCard({
                     borderColor: isDocChosen ? (isDark ? "#ffffff" : "#047857") : "transparent",
                   },
                 ]}
-                onPress={() =>
+                onPress={() => {
+                  const updatedState = {
+                    ...state,
+                    documentConfirmed: true,
+                  };
                   sendMessage(
                     JSON.stringify({ source: "DOCUMENT" }),
-                    state,
+                    updatedState,
                     uiT("useDocument"),
-                  )
-                }
+                  );
+                }}
               >
                 <View style={{ alignItems: "center", width: "100%" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
