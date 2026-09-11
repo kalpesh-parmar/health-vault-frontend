@@ -184,6 +184,7 @@ export default function OnboardingScreen() {
     };
   });
 
+
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems && viewableItems.length > 0) {
       let topItem = viewableItems[0];
@@ -244,6 +245,7 @@ export default function OnboardingScreen() {
   const uploadStateRef = useRef<string>("idle");
   const pollActiveRef = useRef<boolean>(false);
   const cancelRequestedRef = useRef<boolean>(false);
+  const isSendingRef = useRef<boolean>(false);
 
   useEffect(() => {
     isOfflineRef.current = isOffline;
@@ -486,25 +488,48 @@ export default function OnboardingScreen() {
               historyItems.length,
               "historical messages.",
             );
-            const mappedMessages: Message[] = historyItems.map(
-              (dbMsg: any) => {
-                let meta = dbMsg.metadata;
-                if (typeof meta === "string") {
-                  try {
-                    meta = JSON.parse(meta);
-                  } catch (e) {
-                    meta = {};
-                  }
+            const seenNotice = new Set<string>();
+            const mappedMessages: Message[] = [];
+            for (const dbMsg of historyItems) {
+              let meta = dbMsg.metadata;
+              if (typeof meta === "string") {
+                try {
+                  meta = JSON.parse(meta);
+                } catch (e) {
+                  meta = {};
                 }
-                return {
-                  ...(meta || {}),
-                  id: dbMsg.id,
-                  role: dbMsg.role,
-                  content: dbMsg.content,
-                  createdAt: dbMsg.createdAt,
-                };
-              },
-            );
+              }
+              const isNotice =
+                meta?.action === "ONBOARDING_COMPLETED_NOTICE" ||
+                meta?.actionType === "ONBOARDING_COMPLETED_NOTICE" ||
+                dbMsg.id?.startsWith("ai-comp-");
+              if (isNotice) {
+                if (seenNotice.has("ONBOARDING_COMPLETED_NOTICE")) {
+                  continue; // Deduplicate notice
+                }
+                seenNotice.add("ONBOARDING_COMPLETED_NOTICE");
+              }
+              const msgAction =
+                meta?.action ||
+                (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : undefined);
+              const isDuplicateOfPrev =
+                mappedMessages.length > 0 &&
+                mappedMessages[mappedMessages.length - 1].role === dbMsg.role &&
+                mappedMessages[mappedMessages.length - 1].content?.trim() ===
+                dbMsg.content?.trim() &&
+                mappedMessages[mappedMessages.length - 1].action === msgAction;
+              if (isDuplicateOfPrev) {
+                continue;
+              }
+              mappedMessages.push({
+                ...(meta || {}),
+                id: dbMsg.id,
+                role: dbMsg.role,
+                content: dbMsg.content,
+                action: msgAction,
+                createdAt: dbMsg.createdAt,
+              });
+            }
 
             setMessages(mappedMessages);
             setLoading(false);
@@ -578,7 +603,8 @@ export default function OnboardingScreen() {
       aiRes.canSkip ??
       aiRes.onboardingState?.canSkip ??
       aiRes.state?.canSkip ??
-      aiRes.resumableState?.canSkip,
+      aiRes.resumableState?.canSkip ??
+      !!aiRes.completionMessage,
     );
 
     const newMsg: Message = {
@@ -619,34 +645,36 @@ export default function OnboardingScreen() {
     const isCompletionAlreadyInReply = Boolean(
       normComp &&
       normReply &&
-      (normReply.includes(normComp) ||
-        normComp.includes(normReply) ||
-        (normComp.includes("skip") && normReply.includes("skip")) ||
-        (normComp.includes("dashboard") && normReply.includes("dashboard"))),
+      (normReply === normComp || normReply.includes(normComp)),
     );
 
-    const isExcludedFromSeparateCompletion =
-      action === "ASK_BLOOD_GROUP" ||
-      action === "ASK_GENDER" ||
-      action === "ASK_DOB" ||
-      action === "ASK_LANGUAGE" ||
-      action === "ASK_ALLERGIES";
-
-    const completionMsg: Message | null =
-      aiRes.completionMessage &&
-      !isCompletionAlreadyInReply &&
-      !isExcludedFromSeparateCompletion
-        ? {
-          id: `ai-comp-${Date.now()}`,
-          role: "assistant",
-          content: aiRes.completionMessage,
-          createdAt: aiRes.createdAt || new Date().toISOString(),
-        }
-        : null;
+    const completionNoticeId =
+      aiRes.completionMessageId || `ai-comp-${Date.now()}`;
 
     if (action === "RESOLVE_PROFILE_SOURCE") {
       setMessages((prev) => {
-        const list = completionMsg ? [...prev, completionMsg] : [...prev];
+        const alreadyHasNotice = prev.some(
+          (m) =>
+            m.action === "ONBOARDING_COMPLETED_NOTICE" ||
+            m.id?.startsWith("ai-comp-") ||
+            (aiRes.completionMessageId && m.id === aiRes.completionMessageId) ||
+            (normComp && normalizeText(m.content) === normComp),
+        );
+        const itemsToAdd: Message[] = [];
+        if (
+          aiRes.completionMessage &&
+          !alreadyHasNotice &&
+          !isCompletionAlreadyInReply
+        ) {
+          itemsToAdd.push({
+            id: completionNoticeId,
+            role: "assistant",
+            content: aiRes.completionMessage,
+            action: "ONBOARDING_COMPLETED_NOTICE",
+            createdAt: aiRes.createdAt || new Date().toISOString(),
+          });
+        }
+        const list = itemsToAdd.length > 0 ? [...prev, ...itemsToAdd] : [...prev];
         const existingIndex = list.findIndex(
           (m) => m.action === "RESOLVE_PROFILE_SOURCE",
         );
@@ -673,9 +701,42 @@ export default function OnboardingScreen() {
         return [...list, newMsg];
       });
     } else {
-      setMessages((prev) =>
-        completionMsg ? [...prev, completionMsg, newMsg] : [...prev, newMsg],
-      );
+      setMessages((prev) => {
+        const alreadyHasNotice = prev.some(
+          (m) =>
+            m.action === "ONBOARDING_COMPLETED_NOTICE" ||
+            m.id?.startsWith("ai-comp-") ||
+            (aiRes.completionMessageId && m.id === aiRes.completionMessageId) ||
+            (normComp && normalizeText(m.content) === normComp),
+        );
+        const itemsToAdd: Message[] = [];
+        if (
+          aiRes.completionMessage &&
+          !alreadyHasNotice &&
+          !isCompletionAlreadyInReply
+        ) {
+          itemsToAdd.push({
+            id: completionNoticeId,
+            role: "assistant",
+            content: aiRes.completionMessage,
+            action: "ONBOARDING_COMPLETED_NOTICE",
+            createdAt: aiRes.createdAt || new Date().toISOString(),
+          });
+        }
+        const lastAssistantMsg = [...prev]
+          .reverse()
+          .find((m) => m.role === "assistant");
+        const isDuplicateAssistantMsg =
+          lastAssistantMsg &&
+          lastAssistantMsg.action === newMsg.action &&
+          normalizeText(lastAssistantMsg.content) === normReply &&
+          lastAssistantMsg.action !== "ONBOARDING_COMPLETED_NOTICE";
+
+        if (isDuplicateAssistantMsg) {
+          return itemsToAdd.length > 0 ? [...prev, ...itemsToAdd] : prev;
+        }
+        return [...prev, ...itemsToAdd, newMsg];
+      });
     }
 
     let updatedUserData = { ...currentState.existingUserData };
@@ -781,7 +842,8 @@ export default function OnboardingScreen() {
     updatedState = state,
     displayLabel?: string,
   ) => {
-    if (!userText.trim()) return;
+    if (isSendingRef.current || loading || !userText.trim()) return;
+    isSendingRef.current = true;
 
     let isEditSave = false;
     try {
@@ -796,15 +858,26 @@ export default function OnboardingScreen() {
     }
 
     if (!isEditSave) {
+      const userContent = displayLabel || userText;
       const userMsg: Message = {
         id: `user-${Date.now()}`,
         role: "user",
-        content: displayLabel || userText,
+        content: userContent,
         rawValue: userText, // Store raw value for live matching!
         createdAt: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, userMsg]);
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (
+          lastMsg &&
+          lastMsg.role === "user" &&
+          lastMsg.content === userContent
+        ) {
+          return prev;
+        }
+        return [...prev, userMsg];
+      });
     }
     setInput("");
     setLoading(true);
@@ -869,6 +942,7 @@ export default function OnboardingScreen() {
         text2: "Failed to get response from onboarding assistant.",
       });
     } finally {
+      isSendingRef.current = false;
       setLoading(false);
     }
   };
@@ -901,6 +975,7 @@ export default function OnboardingScreen() {
   };
 
   const handleSend = () => {
+    if (loading || isSendingRef.current) return;
     const textToSubmit = input.trim();
     if (selectedFile) {
       uploadSelectedFile(selectedFile);
@@ -1764,6 +1839,7 @@ export default function OnboardingScreen() {
     };
 
     const handleOptionPress = (value: string, label: string) => {
+      if (loading || isSendingRef.current) return;
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
         sendMessage(value, state, label);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
@@ -1836,7 +1912,7 @@ export default function OnboardingScreen() {
       return (
         <View
           style={styles.chipRow}
-          pointerEvents={isHistorical ? "none" : "auto"}
+          pointerEvents={isHistorical || loading ? "none" : "auto"}
         >
           {(activeMsg.options || []).map((opt) => {
             const isChosen =
@@ -1852,11 +1928,12 @@ export default function OnboardingScreen() {
             return (
               <TouchableOpacity
                 key={opt.value}
+                disabled={isHistorical || loading}
                 style={[
                   styles.chip,
                   {
                     backgroundColor: theme.colors.primary,
-                    opacity: isUnchosen ? 0.55 : 1,
+                    opacity: isUnchosen || loading ? 0.55 : 1,
                     borderWidth: isChosen ? 2 : 0,
                     borderColor: isChosen ? "#ffffff" : "transparent",
                   },
@@ -1916,7 +1993,7 @@ export default function OnboardingScreen() {
       return (
         <View
           style={styles.chipRow}
-          pointerEvents={isHistorical ? "none" : "auto"}
+          pointerEvents={isHistorical || loading ? "none" : "auto"}
         >
           {(activeMsg.options || []).map((opt) => {
             const label = opt.label;
@@ -1933,11 +2010,12 @@ export default function OnboardingScreen() {
             return (
               <TouchableOpacity
                 key={opt.value}
+                disabled={isHistorical || loading}
                 style={[
                   styles.chip,
                   {
                     backgroundColor: theme.colors.primary,
-                    opacity: isUnchosen ? 0.55 : 1,
+                    opacity: isUnchosen || loading ? 0.55 : 1,
                     borderWidth: isChosen ? 2 : 0,
                     borderColor: isChosen ? "#ffffff" : "transparent",
                   },
@@ -1981,15 +2059,15 @@ export default function OnboardingScreen() {
       return (
         <View
           style={styles.actionRow}
-          pointerEvents={isHistorical ? "none" : "auto"}
+          pointerEvents={isHistorical || loading ? "none" : "auto"}
         >
           <TouchableOpacity
-            disabled={isHistorical}
+            disabled={isHistorical || loading}
             style={[
               styles.actionButton,
               {
                 backgroundColor: theme.colors.primary,
-                opacity: 1,
+                opacity: loading ? 0.55 : 1,
                 borderWidth: isHistorical ? 2 : 0,
                 borderColor: isHistorical ? "#ffffff" : "transparent",
               },
@@ -2016,15 +2094,15 @@ export default function OnboardingScreen() {
       return (
         <View
           style={styles.actionRow}
-          pointerEvents={isHistorical ? "none" : "auto"}
+          pointerEvents={isHistorical || loading ? "none" : "auto"}
         >
           <TouchableOpacity
-            disabled={isHistorical}
+            disabled={isHistorical || loading}
             style={[
               styles.actionButton,
               {
                 backgroundColor: theme.colors.primary,
-                opacity: 1,
+                opacity: loading ? 0.55 : 1,
                 borderWidth: isHistorical ? 2 : 0,
                 borderColor: isHistorical ? "#ffffff" : "transparent",
               },
@@ -2328,6 +2406,7 @@ export default function OnboardingScreen() {
           theme={theme}
           onOptionPress={handleOptionPress}
           readOnly={isHistorical}
+          loading={loading}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />
@@ -2376,7 +2455,7 @@ export default function OnboardingScreen() {
       return (
         <View
           style={styles.chipRow}
-          pointerEvents={isHistorical ? "none" : "auto"}
+          pointerEvents={isHistorical || loading ? "none" : "auto"}
         >
           {activeMsg.options.map((opt) => {
             const label = typeof opt === "string" ? opt : opt.label;
@@ -2394,11 +2473,12 @@ export default function OnboardingScreen() {
             return (
               <TouchableOpacity
                 key={value}
+                disabled={isHistorical || loading}
                 style={[
                   styles.chip,
                   {
                     backgroundColor: theme.colors.primary,
-                    opacity: isUnchosen ? 0.55 : 1,
+                    opacity: isUnchosen || loading ? 0.55 : 1,
                     borderWidth: isChosen ? 2 : 0,
                     borderColor: isChosen ? "#ffffff" : "transparent",
                   },
@@ -2657,7 +2737,7 @@ export default function OnboardingScreen() {
                     {isAi && options !== null && (
                       <View
                         style={[styles.optionsWrapper, { opacity: 1 }]}
-                        pointerEvents={!isHistorical ? "auto" : "none"}
+                        pointerEvents={!isHistorical && !loading ? "auto" : "none"}
                       >
                         {options}
                       </View>

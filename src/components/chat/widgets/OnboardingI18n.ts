@@ -139,6 +139,8 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     aiSuccessIntro: "Your medicines have been successfully added. I've also created reminders for each medication.",
     medicinesFound: "Medicines Found",
     reportNames: "Report Name(s)",
+    onboardingCanSkipMessage:
+      "Your onboarding is complete! The Skip button is now enabled. You can tap Skip to go directly to the Dashboard and complete any remaining steps later.",
   },
   gujarati: {
     showAll: "બધું બતાવો",
@@ -280,6 +282,8 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     aiSuccessIntro: "તમારી દવાઓ સફળતાપૂર્વક ઉમેરવામાં આવી છે. મેં દરેક દવા માટે રીમાઇન્ડર્સ પણ બનાવ્યા છે.",
     medicinesFound: "દવાઓ મળી",
     reportNames: "અહેવાલ નામ(ઓ)",
+    onboardingCanSkipMessage:
+      "તમારું ઓનબોર્ડિંગ પૂર્ણ થઈ ગયું છે! હવે SKIP બટન સક્રિય થઈ ગયું છે. તમે SKIP પર ટેપ કરીને સીધા ડેશબોર્ડ પર જઈ શકો છો અને બાકી રહેલા સ્ટેપ્સ પછીથી પણ પૂર્ણ કરી શકો છો.",
   },
   hindi: {
     showAll: "सभी दिखाएं",
@@ -421,6 +425,8 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     aiSuccessIntro: "आसकी दवाएं सफलतापूर्वक जोड़ दी गई हैं। मैंने प्रत्येक दवा के लिए रिमाइंडर भी बनाए हैं।",
     medicinesFound: "दवाएं मिलीं",
     reportNames: "रिपोर्ट नाम",
+    onboardingCanSkipMessage:
+      "आपका ऑनबोर्डिंग पूरा हो गया है! अब SKIP बटन सक्रिय हो गया है। आप SKIP पर टैप करके सीधे डैशबोर्ड पर जा सकते हैं और बाकी चरण बाद में भी पूरे कर सकते हैं।",
   },
   marathi: {
     showAll: "सर्व दाखवा",
@@ -562,6 +568,8 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     aiSuccessIntro: "तुमची औषधे यशस्वीरित्या जोडली गेली आहेत. मी प्रत्येक औषधासाठी स्मरणपत्रे देखील तयार केली आहेत.",
     medicinesFound: "औषधे सापडली",
     reportNames: "अहवाल नाव(ये)",
+    onboardingCanSkipMessage:
+      "तुमचे ऑनबोर्डिंग पूर्ण झाले आहे! आता SKIP बटण सक्रिय झाले आहे. तुम्ही SKIP वर टॅप करून थेट डॅशबोर्डवर जाऊ शकता आणि उर्वरित स्टेप्स नंतरही पूर्ण करू शकता.",
   },
   tamil: {
     showAll: "அனைத்தையும் காட்டு",
@@ -704,5 +712,7 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     aiSuccessIntro: "உங்கள் மருந்துகள் வெற்றிகரமாக சேர்க்கப்பட்டுள்ளன. ஒவ்வொரு மருந்திற்கும் நினைவூட்டல்களையும் உருவாக்கியுள்ளேன்.",
     medicinesFound: "மருந்துகள் கண்டறியப்பட்டன",
     reportNames: "அறிக்கை பெயர்(கள்)",
+    onboardingCanSkipMessage:
+      "உங்கள் ஆன்போர்டிங் முடிந்துவிட்டது! இப்போது SKIP பொத்தான் செயல்படுத்தப்பட்டுள்ளது. SKIP என்பதைத் தட்டி நேரடியாக Dashboard-க்கு செல்லலாம் மற்றும் மீதமுள்ள படிகளை பின்னரும் முடிக்கலாம்.",
   }
 };

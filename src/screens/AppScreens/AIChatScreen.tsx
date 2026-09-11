@@ -1,2203 +1,81 @@
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import {
+  FlatList,
+  Keyboard,
+  StatusBar,
+  BackHandler,
+  View,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import {
-  AppState,
-  FlatList,
-  Keyboard,
-  KeyboardEvent,
-  Platform,
-  StyleSheet,
-  View,
-  Text,
-  StatusBar,
-  BackHandler,
-  LayoutAnimation,
-  TouchableOpacity,
-} from "react-native";
 import Animated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
-import Toast from "react-native-toast-message";
-import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
-import styled from "styled-components/native";
-import { useAppTheme } from "../../context/ThemeContext";
-import { ChatDateHeader } from "../../components/chat/ChatDateHeader";
-
-import { useDocumentUpload } from "../../context/DocumentUploadContext";
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import BottomSheet from "../../components/shared/BottomSheet";
-import { queryClient } from "../../config/queryClient";
-import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
-import {
-  ErrorScreen,
-  LoadingScreen,
-} from "../../components/shared/DefensiveStates";
-import { listDocument } from "../../services/documentService";
-import {
-  useMedicationFormState,
-  MedicationFormFields,
-} from "../../components/shared/MedicationFormFields";
-import { MedicationReviewService } from "../../services/medicationReviewService";
-import {
-  listMedications,
-  updateMedication,
-  checkMedicationDuplicate,
-  addMedication,
-} from "../../services/medicationservice";
-import { ExtractedMedicine } from "../../types/medicationReview";
-import { AddOrEditMedication } from "../../types";
-import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
-import {
-  ExtractedMedicinesCard,
-  ConflictCarouselCard,
-  ConfirmMedicinesCard,
-  SuccessCard,
-  MedicineExtractionSummaryCard,
-  MedicineDocumentAccordionCard,
-} from "../../components/chat/widgets/ConversationalExtractionWidgets";
-import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
-import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
-import type { MedicalDocument } from "../../types";
-import { safeFilter } from "../../utils/arrayUtils";
-import apiClient from "../../services/apiClient";
-import { ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
-import { useTextToSpeech } from "../../hooks/useTextToSpeech";
-import { streamChatResponse } from "../../services/streamService";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 
-// Reusable Redesigned Components
+// Contexts & Services
+import { useAppTheme } from "../../context/ThemeContext";
+import { useDocumentUpload } from "../../context/DocumentUploadContext";
+import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
+import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
+import { listDocument } from "../../services/documentService";
+
+// Chat Hooks & Utils
+import { useChatSession } from "../../hooks/chat/useChatSession";
+import { useChatWizardManager } from "../../hooks/chat/useChatWizardManager";
+import { MedicalDocument } from "../../types";
+
+// Modular UI Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
 import { ChatInput } from "../../components/chat/ChatInput";
-import { MessageBubble } from "../../components/chat/MessageBubble";
+import { ChatMessageItem } from "../../components/chat/ChatMessageItem";
 import { SuggestedQuestionChip } from "../../components/chat/SuggestedQuestionChip";
-
-import { ResolveProfileSourceCard } from "../../components/chat/widgets/ResolveProfileSourceCard";
-import { AskUploadOrSkipCard } from "../../components/chat/widgets/AskUploadOrSkipCard";
-import { AddMedicineCard } from "../../components/chat/widgets/AddMedicineCard";
-import { ReviewMedicinesListCard } from "../../components/chat/widgets/ReviewMedicinesListCard";
-import { ConfirmMedicineCard } from "../../components/chat/widgets/ConfirmMedicineCard";
-import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOptionsPanel";
-import { DocumentSummaryStats, ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
-import { DocumentProgressSummaryContainer } from "../../components/chat/widgets/DocumentProgressSummaryContainer";
-import { normalizeDocumentsList, extractMedicationsFromDocuments, DocumentSummaryItem } from "../../utils/documentNormalizer";
-import {
-  findHistoricalUserReply,
-  HistoricalChips,
-} from "../../components/chat/widgets/HistoricalChips";
+import { FloatingProgressPanel } from "../../components/chat/FloatingProgressPanel";
+import { EditMedicineFormWrapper } from "../../components/chat/EditMedicineFormWrapper";
 import TypingIndicator from "../../components/chat/TypingIndicator";
-import { sanitizeMedicineForPayload } from "../../components/chat/widgets/MedicineHelpers";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-enum ChatMode {
-  GENERAL_HEALTH = "GENERAL_HEALTH",
-  DOCUMENT_RAG = "DOCUMENT_RAG",
-}
-
-type ChatMessage = {
-  id: string;
-  role: "ai" | "user";
-  text: string;
-  sessionId?: string;
-  mode?: ChatMode;
-  emergency?: boolean;
-  action?: string;
-  options?: any[];
-  rawValue?: string;
-  stepKey?: string;
-  medicine?: any;
-  medicines?: any[];
-  medicinesCount?: number;
-  failedCount?: number;
-  successCount?: number;
-  docsCount?: number;
-  summary?: any;
-  fields?: any[];
-  loginSummary?: string;
-  documentSummary?: string | DocumentSummaryStats;
-  loginProvider?: string;
-  documents?: DocumentSummaryItem[] | any[];
-  documentIds?: string[];
-  conflicts?: any[];
-  createdAt?: string | Date;
-  document?: any;
-  suggestedQuestions?: string[];
-  keyFindings?: any[];
-  isOnboardingMessage?: boolean;
-};
-
-const normalizeDocumentIds = (...sources: any[]): string[] | undefined => {
-  const ids = sources
-    .flatMap((source) => {
-      if (!source) return [];
-      if (Array.isArray(source)) return source;
-      return [source];
-    })
-    .flatMap((item) => {
-      if (!item) return [];
-      if (typeof item === "string") return [item];
-      if (Array.isArray(item.documentId)) return item.documentId;
-      if (Array.isArray(item.documentIds)) return item.documentIds;
-      if (item.documentId) return [item.documentId];
-      if (item.id) return [item.id];
-      if (item.fileKey) return [item.fileKey];
-      if (item.s3Key) return [item.s3Key];
-      return [];
-    })
-    .map((id) => String(id).trim())
-    .filter(Boolean);
-
-  return ids.length ? Array.from(new Set(ids)) : undefined;
-};
-
-const buildChatHistory = (messages: ChatMessage[]) =>
-  messages.map((m) => ({
-    role: m.role === "ai" ? "assistant" : "user",
-    content: m.text,
-  }));
-
-const I18N_CHAT_UI: Record<string, Record<string, string>> = {
-  english: {
-    today: "Today",
-    yesterday: "Yesterday",
-    selectModeOrReport: "Select Mode or Report",
-    chooseGeneralOrDiscuss:
-      "Choose general health mode or discuss a specific medical report",
-    generalHealthChatNoDoc: "General Health Chat (No Document)",
-    recentConversations: "Recent Conversations",
-    onboardingSessionReadOnly: "Onboarding Session (Read-Only)",
-    untitledSession: "Untitled Session",
-    noReportsUploaded: "You haven't uploaded any medical reports yet.",
-    uploadMedicalReport: "Upload Medical Report",
-    seekImmediateAttention: "Seek immediate medical attention",
-    emergencyWarning:
-      "This may require urgent medical attention. Please contact emergency services or visit the nearest emergency department immediately.",
-    onboardingArchive: "Onboarding Session (Read-Only Archive)",
-    documentPrefix: "Document: ",
-  },
-  gujarati: {
-    today: "આજે",
-    yesterday: "ગઈકાલે",
-    selectModeOrReport: "મોડ અથવા રિપોર્ટ પસંદ કરો",
-    chooseGeneralOrDiscuss:
-      "સામાન્ય સ્વાસ્થ્ય મોડ પસંદ કરો અથવા ચોક્કસ તબીબી અહેવાલ વિશે ચર્ચા કરો",
-    generalHealthChatNoDoc: "સામાન્ય સ્વાસ્થ્ય ચર્ચા (કોઈ દસ્તાવેજ નથી)",
-    recentConversations: "તાજેતરની વાતચીતો",
-    onboardingSessionReadOnly: "ઓનબોર્ડિંગ સત્ર (ફક્ત વાંચવા માટે)",
-    untitledSession: "શીર્ષક વગરનું સત્ર",
-    noReportsUploaded: "તમે હજી સુધી કોઈ તબીબી અહેવાલો અપલોડ કર્યા નથી.",
-    uploadMedicalReport: "તબીબી અહેવાલ અપલોડ કરો",
-    seekImmediateAttention: "તાત્કાલિક તબીબી સારવાર મેળવો",
-    emergencyWarning:
-      "આ માટે તાત્કાલિક તબીબી સારવારની જરૂર પડી શકે છે. કૃપા કરીને તાત્કાલિક કટોકટી સેવાઓનો સંપર્ક કરો અથવા નજીકના કટોકટી વિભાગની મુલાકાત લો.",
-    onboardingArchive: "ઓનબોર્ડિંગ સત્ર (ફક્ત વાંચવા માટેનું આર્કાઇવ)",
-    documentPrefix: "દસ્તાવેજ: ",
-  },
-  hindi: {
-    today: "आज",
-    yesterday: "कल",
-    selectModeOrReport: "मोड या रिपोर्ट चुनें",
-    chooseGeneralOrDiscuss:
-      "सामान्य स्वास्थ्य मोड चुनें या किसी विशिष्ट मेडिकल रिपोर्ट पर चर्चा करें",
-    generalHealthChatNoDoc: "सामान्य स्वास्थ्य चैट (कोई दस्तावेज़ नहीं)",
-    recentConversations: "हाल की बातचीत",
-    onboardingSessionReadOnly: "ऑनबोर्डिंग सत्र (केवल पढ़ने के लिए)",
-    untitledSession: "बिना शीर्षक का सत्र",
-    noReportsUploaded: "आपने अभी तक कोई मेडिकल रिपोर्ट अपलोड नहीं की है।",
-    uploadMedicalReport: "मेडिकल रिपोर्ट अपलोड करें",
-    seekImmediateAttention: "तुरंत चिकित्सा सहायता लें",
-    emergencyWarning:
-      "इसके लिए तत्काल चिकित्सा सहायता की आवश्यकता हो सकती है। कृपया तुरंत आपातकालीन सेवाओं से संपर्क करें या निकटतम आपातकालीन विभाग में जाएं।",
-    onboardingArchive: "ऑनबोर्डिंग सत्र (केवल पढ़ने के लिए पुरालेख)",
-    documentPrefix: "दस्तावेज़: ",
-  },
-  marathi: {
-    today: "आज",
-    yesterday: "काल",
-    selectModeOrReport: "मोड किंवा अहवाल निवडा",
-    chooseGeneralOrDiscuss:
-      "सामान्य आरोग्य मोड निवडा किंवा विशिष्ट वैद्यकीय अहवालावर चर्चा करा",
-    generalHealthChatNoDoc: "सामान्य आरोग्य चॅट (कोणताही दस्तऐवज नाही)",
-    recentConversations: "अलीकडील संभाषणे",
-    onboardingSessionReadOnly: "ऑनबोर्डिंग सत्र (फक्त वाचण्यासाठी)",
-    untitledSession: "शीर्षक नसलेले सत्र",
-    noReportsUploaded:
-      "तुम्ही अद्याप कोणतेही वैद्यकीय अहवाल अपलोड केलेले नाहीत.",
-    uploadMedicalReport: "वैद्यकीय अहवाल अपलोड करा",
-    seekImmediateAttention: "त्वरित वैद्यकीय मदत घ्या",
-    emergencyWarning:
-      "यासाठी त्वरित वैद्यकीय लक्ष देण्याची आवश्यकता असू शकते. कृपया त्वरित आपत्कालीन सेवांशी संपर्क साधा किंवा जवळच्या आपत्कालीन विभागात जा.",
-    onboardingArchive: "ऑनबोर्डिंग सत्र (फक्त वाचण्यासाठीचे संग्रहण)",
-    documentPrefix: "दस्तऐवज: ",
-  },
-  tamil: {
-    today: "இன்று",
-    yesterday: "நேற்று",
-    selectModeOrReport: "முறை அல்லது அறிக்கையைத் தேர்ந்தெடுக்கவும்",
-    chooseGeneralOrDiscuss:
-      "பொது சுகாதார முறையைத் தேர்ந்தெடுக்கவும் அல்லது குறிப்பிட்ட மருத்துவ அறிக்கையைப் பற்றி விவாதிக்கவும்",
-    generalHealthChatNoDoc: "பொது சுகாதார அரட்டை (ஆவணம் இல்லை)",
-    recentConversations: "சமீபத்திய உரையாடல்கள்",
-    onboardingSessionReadOnly: "உள்வாங்கல் அமர்வு (படிக்க மட்டும்)",
-    untitledSession: "தலைப்பில்லா அமர்வு",
-    noReportsUploaded:
-      "நீங்கள் இன்னும் மருத்துவ அறிக்கைகள் எதையும் பதிவேற்றவில்லை.",
-    uploadMedicalReport: "மருத்துவ அறிக்கையைப் பதிவேற்றவும்",
-    seekImmediateAttention: "உடனடி மருத்துவ உதவியை நாடுங்கள்",
-    emergencyWarning:
-      "இதற்கு அவசர மருத்துவ உதவி தேவைப்படலாம். அவசர சேவைகளைத் தொடர்பு கொள்ளவும் அல்லது உடனடியாக அருகிலுள்ள அவசர சிகிச்சைப் பிரிவுக்குச் செல்லவும்.",
-    onboardingArchive: "உள்வாங்கல் அமர்வு (படிக்க மட்டும் காப்பகம்)",
-    documentPrefix: "ஆவணம்: ",
-  },
-};
-
-const LOCALE_TAG_MAP: Record<string, string> = {
-  english: "en-US",
-  gujarati: "gu-IN",
-  hindi: "hi-IN",
-  marathi: "mr-IN",
-  tamil: "ta-IN",
-};
-
-const parseToLocalDate = (raw: string | Date | undefined): Date | null => {
-  if (!raw) return null;
-  const d = typeof raw === "string" ? new Date(raw) : raw;
-  if (!d || isNaN(d.getTime())) return null;
-  return d;
-};
-
-const getLocalDayKey = (d: Date): string => {
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-};
-
-const formatChatDateLabel = (
-  date: Date,
-  preferredLang: string,
-  tFunc: (key: string) => string
-): string => {
-  const now = new Date();
-  const todayKey = getLocalDayKey(now);
-
-  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  const yesterdayKey = getLocalDayKey(yesterday);
-
-  const targetKey = getLocalDayKey(date);
-
-  if (targetKey === todayKey) {
-    return tFunc("today");
-  }
-  if (targetKey === yesterdayKey) {
-    return tFunc("yesterday");
-  }
-
-  const localeTag = LOCALE_TAG_MAP[preferredLang] || LOCALE_TAG_MAP.english;
-  try {
-    return date.toLocaleDateString(localeTag, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return date.toLocaleDateString("en-US", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  }
-};
-
-const SUGGESTED_QUESTIONS_I18N: Record<
-  string,
-  { general: string[]; document: string[] }
-> = {
-  english: {
-    general: [
-      "What are symptoms of diabetes?",
-      "Reduce cholesterol levels",
-      "Healthy blood pressure diet",
-      "General heart health advice",
-    ],
-    document: [
-      "Are there any abnormal values?",
-      "What medications are prescribed?",
-      "Explain the test results simply.",
-      "Summarize this medical report.",
-    ],
-  },
-  gujarati: {
-    general: [
-      "ડાયાબિટીસના લક્ષણો શું છે?",
-      "કોલેસ્ટરોલનું સ્તર ઓછું કરો",
-      "સ્વસ્થ બ્લડ પ્રેશર માટે આહાર",
-      "સામાન્ય હૃદયના સ્વાસ્થ્ય અંગે સલાહ",
-    ],
-    document: [
-      "શું કોઈ અસામાન્ય મૂલ્યો છે?",
-      "કઈ દવાઓ સૂચવવામાં આવી છે?",
-      "પરીક્ષણ પરિણામો સરળ રીતે સમજાવો.",
-      "આ તબીબી અહેવાલનો સારાંશ આપો.",
-    ],
-  },
-  hindi: {
-    general: [
-      "मधुमेह के लक्षण क्या हैं?",
-      "कोलेस्ट्रॉल का स्तर कम करें",
-      "स्वस्थ रक्तचाप के लिए आहार",
-      "सामान्य हृदय स्वास्थ्य सलाह",
-    ],
-    document: [
-      "क्या कोई असामान्य मूल्य हैं?",
-      "कौन सी दवाएं दी गई हैं?",
-      "परीक्षण के परिणामों को सरलता से समझाएं।",
-      "इस मेडिकल रिपोर्ट का सारांश दें.",
-    ],
-  },
-  marathi: {
-    general: [
-      "मधुमेहाची लक्षणे काय आहेत?",
-      "कोलेस्टेरॉलची पातळी कमी करा",
-      "निरोगी रक्तदाबासाठी आहार",
-      "सामान्य हृदय आरोग्य सल्ला",
-    ],
-    document: [
-      "काही असामान्य मूल्ये आहेत का?",
-      "कोणती औषधे लिहून दिली आहेत?",
-      "चाचणी निकाल सोप्या भाषेत स्पष्ट करा.",
-      "या वैद्यकीय अहवालाचा सारांश द्या.",
-    ],
-  },
-  tamil: {
-    general: [
-      "நீரிழிவு நோயின் அறிகுறிகள் என்ன?",
-      "கொழுப்பின் அளவை குறைக்கவும்",
-      "ஆரோக்கியமான இரத்த அழுத்த உணவு",
-      "பொதுவான இதய சுகாதார ஆலோசனை",
-    ],
-    document: [
-      "ஏதேனும் அசாதாரண மதிப்புகள் உள்ளதா?",
-      "என்ன மருந்துகள் பரிந்துரைக்கப்படுகின்றன?",
-      "சோதனை முடிவுகளை எளிமையாக விளக்கவும்.",
-      "இந்த மருத்துவ அறிக்கையை சுருக்கமாகக் கூறவும்.",
-    ],
-  },
-};
-interface EditMedicineFormWrapperProps {
-  medicine: ExtractedMedicine;
-  preferredLang: string;
-  isDark: boolean;
-  theme: any;
-  onClose: () => void;
-  onSave: (updated: ExtractedMedicine) => void;
-}
-
-const getTodayDateString = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-const formatLocalDate = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const EditMedicineFormWrapper = ({
-  medicine,
-  preferredLang,
-  isDark,
-  theme,
-  onClose,
-  onSave,
-}: EditMedicineFormWrapperProps) => {
-  const initialData = useMemo(() => {
-    return {
-      id: medicine.id,
-      medicationName: medicine.name,
-      medicationType: medicine.medicineType || "TABLET",
-      dose: {
-        count: parseFloat(medicine.dosage || "1") || 1,
-        value: parseFloat(medicine.dosage || "1") || 1,
-        unit: medicine.dosageUnit || "tablet",
-      },
-      frequency: medicine.frequency || "ONCE",
-      notes: medicine.notes || "",
-      prescribed_by: medicine.prescribedBy || "",
-      refill_alert: medicine.refillAlert || false,
-      total_quantity: medicine.totalQuantity || 10,
-      foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
-      startDate: medicine.startDate && medicine.startDate !== "None" ? medicine.startDate : getTodayDateString(),
-      medicationSchedule: medicine.medicationSchedule || ["08:00"],
-    };
-  }, [medicine]);
-
-  const formState = useMedicationFormState(initialData, preferredLang);
-  const {
-    formName,
-    formType,
-    formFreq,
-    formNotes,
-    formPrescribed,
-    formRefill,
-    formQty,
-    formFoodFreq,
-    startDate,
-    formCount,
-    formVal,
-    formUnit,
-    selectedSlots,
-  } = formState;
-
-  const [localErrors, setLocalErrors] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (localErrors.length > 0) {
-      setLocalErrors([]);
-    }
-  }, [
-    formName,
-    formType,
-    formFreq,
-    formNotes,
-    formPrescribed,
-    formRefill,
-    formQty,
-    formFoodFreq,
-    startDate,
-    formCount,
-    formVal,
-    formUnit,
-    selectedSlots,
-  ]);
-
-  const handleSave = () => {
-    const errors: string[] = [];
-    if (!formName.trim()) {
-      errors.push("Name is required");
-    }
-    const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
-    if (selectedSlots.length !== N) {
-      errors.push(`Please select exactly ${N} reminder times`);
-    }
-    const parsedQty = parseInt(formQty.trim(), 10);
-    if (!formQty.trim() || isNaN(parsedQty) || parsedQty <= 0) {
-      errors.push("Total Quantity is required");
-    }
-
-    if (startDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const sDate = new Date(startDate);
-      sDate.setHours(0, 0, 0, 0);
-      if (sDate < today) {
-        errors.push(
-          preferredLang === "gujarati"
-            ? "શરૂઆતની તારીખ ભૂતકાળમાં હોઈ શકતી નથી"
-            : preferredLang === "hindi"
-              ? "आरंभ तिथि भूतकाल में नहीं हो सकती"
-              : preferredLang === "marathi"
-                ? "सुरू होण्याची तारीख भूतकाळात असू शकत नाही"
-                : preferredLang === "tamil"
-                  ? "தொடக்க தேதி கடந்த காலத்தில் இருக்க முடியாது"
-                  : "Start Date cannot be in the past"
-        );
-      }
-    }
-
-    if (errors.length > 0) {
-      setLocalErrors(errors);
-      return;
-    }
-
-    onSave({
-      ...medicine,
-      name: formName.trim(),
-      medicineType: formType,
-      dosage:
-        formType === "TABLET" || formType === "CAPSULE"
-          ? String(formCount)
-          : String(formVal),
-      dosageUnit:
-        formType === "TABLET" || formType === "CAPSULE"
-          ? formType === "TABLET"
-            ? "tablet"
-            : "capsule"
-          : formUnit,
-      frequency: formFreq,
-      foodFrequency: formFoodFreq,
-      timing: formFoodFreq === "BEFORE_FOOD" ? "Before Food" : "After Food",
-      prescribedBy: formPrescribed.trim(),
-      totalQuantity: parsedQty,
-      notes: formNotes.trim(),
-      refillAlert: formRefill,
-      refillAlertEnabled: formRefill,
-      medicationSchedule: selectedSlots,
-      startDate: startDate
-        ? startDate instanceof Date
-          ? formatLocalDate(startDate)
-          : startDate
-        : getTodayDateString(),
-    });
-  };
-
-  return (
-    <View style={{ flex: 1, padding: 16 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "800",
-            color: isDark ? "#f8fafc" : "#1e293b",
-          }}
-        >
-          Edit Medicine
-        </Text>
-        <TouchableOpacity onPress={onClose}>
-          <Ionicons
-            name="close"
-            size={24}
-            color={isDark ? "#cbd5e1" : "#475569"}
-          />
-        </TouchableOpacity>
-      </View>
-      <BottomSheetScrollView
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-      >
-        <MedicationFormFields
-          formState={formState}
-          isDark={isDark}
-          theme={theme}
-          preferredLang={preferredLang}
-          isInBottomSheet={true}
-        />
-        {localErrors.length > 0 && (
-          <View style={{ marginTop: 8, marginBottom: 12 }}>
-            {localErrors.map((err, idx) => (
-              <Text key={idx} style={{ color: "#ef4444", fontSize: 12 }}>
-                • {err}
-              </Text>
-            ))}
-          </View>
-        )}
-      </BottomSheetScrollView>
-      <TouchableOpacity
-        onPress={handleSave}
-        style={{
-          backgroundColor: "#0f766e",
-          borderRadius: 14,
-          padding: 14,
-          alignItems: "center",
-          justifyContent: "center",
-          marginTop: 16,
-        }}
-      >
-        <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 15 }}>
-          Save Changes
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-// Floating Progress Panel Component
-const FloatingProgressPanel = ({ onOpenSheet, isDark }: any) => {
-  const { uploadingDocs, isUploading } = useDocumentUpload();
-
-  const avgProgress = useMemo(() => {
-    if (!uploadingDocs || uploadingDocs.length === 0) return 0;
-    const sum = uploadingDocs.reduce(
-      (acc, doc) => acc + (doc.progress || 0),
-      0,
-    );
-    return Math.round(sum / uploadingDocs.length);
-  }, [uploadingDocs]);
-
-  const completedJobsCount = useMemo(() => {
-    if (!uploadingDocs) return 0;
-    return uploadingDocs.filter(
-      (doc) =>
-        doc.status === "COMPLETED" ||
-        doc.status === "FAILED" ||
-        doc.status === "CANCELLED" ||
-        doc.status === "done" ||
-        doc.status === "completed" ||
-        doc.status === "success",
-    ).length;
-  }, [uploadingDocs]);
-
-  const docCount = uploadingDocs?.length || 0;
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginHorizontal: 16,
-        marginTop: 10,
-        marginBottom: 6,
-        padding: 10,
-        borderRadius: 14,
-        backgroundColor: isDark ? "#1e293b" : "#ffffff",
-        borderColor: isDark ? "#334155" : "#e2e8f0",
-        borderWidth: 1,
-        shadowColor: "#0f172a",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 3,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {/* Left side: Info */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          flex: 1,
-          marginRight: 8,
-        }}
-      >
-        <Text
-          style={{
-            color: isDark ? "#f1f5f9" : "#0f172a",
-            fontWeight: "bold",
-            fontSize: 13,
-          }}
-        >
-          {isUploading
-            ? "Uploading"
-            : `Processing ${completedJobsCount} of ${docCount}`}
-        </Text>
-        <Text style={{ color: "#64748b", marginHorizontal: 6, fontSize: 13 }}>
-          •
-        </Text>
-        <Text style={{ color: "#64748b", fontSize: 13 }} numberOfLines={1}>
-          {isUploading ? "Uploading files" : "Analyzing"}
-        </Text>
-      </View>
-
-      {/* Right side: Actions */}
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text
-          style={{
-            color: "#0f766e",
-            fontWeight: "bold",
-            fontSize: 13,
-            marginRight: 12,
-          }}
-        >
-          {avgProgress}%
-        </Text>
-
-        <TouchableOpacity
-          onPress={onOpenSheet}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingVertical: 4,
-            paddingHorizontal: 8,
-            borderRadius: 8,
-            backgroundColor: isDark ? "#334155" : "#f1f5f9",
-          }}
-        >
-          <Text
-            style={{
-              color: isDark ? "#f1f5f9" : "#0f172a",
-              fontSize: 12,
-              fontWeight: "500",
-            }}
-          >
-            View
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Progress Bar at the very bottom edge */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          backgroundColor: isDark ? "#334155" : "#e2e8f0",
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            height: "100%",
-            width: `${avgProgress}%`,
-            backgroundColor: "#0f766e",
-          }}
-        />
-      </View>
-    </View>
-  );
-};
+import BottomSheet from "../../components/shared/BottomSheet";
+import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
+import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
+import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
+import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveStates";
 
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
-  const { speakingMessageId, speakMessage } = useTextToSpeech();
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
+  const bottomPadding = useBottomBarPadding();
 
+  // State
   const [preferredLang, setPreferredLang] = useState("english");
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(
-    null,
-  );
-  const [midnightTick, setMidnightTick] = useState(0);
-
-  const t = (key: string) => {
-    const lang = preferredLang || "english";
-    return I18N_CHAT_UI[lang]?.[key] || I18N_CHAT_UI.english[key] || key;
-  };
-  const [input, setInput] = useState("");
-  const [selectedDocument, setSelectedDocument] =
-    useState<MedicalDocument | null>(null);
-  const [isSending, setIsSending] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const hasInitializedHistory = useRef(false);
-  const lastKnownStateRef = useRef<any>({});
-  const [activeDateLabel, setActiveDateLabel] = useState<string>("");
-  const [showFloatingPanel, setShowFloatingPanel] = useState<boolean>(true);
-  const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
-  const [viewerDoc, setViewerDoc] = useState<any>(null);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") {
-        setMidnightTick((prev) => prev + 1);
-      }
-    });
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems && viewableItems.length > 0) {
-      let topItem = viewableItems[0];
-      for (const item of viewableItems) {
-        if (item.index > topItem.index) {
-          topItem = item;
-        }
-      }
-
-      const message = topItem.item;
-      if (message && message.createdAt) {
-        const itemDate = parseToLocalDate(message.createdAt);
-        if (itemDate) {
-          setActiveDateLabel(formatChatDateLabel(itemDate, preferredLang, t));
-        }
-      }
-    }
-  });
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 10,
-  });
-
-  const {
-    chatWizardState,
-    setChatWizardState,
-    resetChatWizard,
-    startBackgroundOcr,
-    isUploading,
-    uploadingDocs,
-    retryDocument,
-  } = useDocumentUpload();
-
-  const avgProgress = useMemo(() => {
-    if (!uploadingDocs || uploadingDocs.length === 0) return 0;
-    const sum = uploadingDocs.reduce(
-      (acc: any, doc: any) => acc + (doc.progress || 0),
-      0,
-    );
-    return Math.round(sum / uploadingDocs.length);
-  }, [uploadingDocs]);
-
-  const handleRetryDocumentInChat = useCallback(
-    async (fileKey: string, batchId?: string) => {
-      try {
-        if (retryDocument) {
-          await retryDocument(fileKey, batchId);
-        }
-      } catch (err) {
-        console.warn("[AIChatScreen] Document retry error:", err);
-      }
-    },
-    [retryDocument],
-  );
-
-  const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
-    setChatWizardState({
-      step: "processing",
-      jobIds,
-      filesInfo,
-      extractedMedicines: [],
-      conflicts: [],
-      currentConflictIndex: 0,
-      resolvedMedicines: [],
-      replaceList: [],
-      mergeList: [],
-      summaries: [],
-    });
-
-    startBackgroundOcr(jobIds, filesInfo, "AIChat");
-  };
-
-  const handleUploadStart = () => {
-    setChatWizardState((prev) => ({
-      ...prev,
-      step: "processing",
-      jobIds: [],
-      filesInfo: [],
-      hasViewedCompletedOcr: false,
-    }));
-    uploadSheetRef.current?.dismiss();
-    extractionSheetRef.current?.present();
-  };
-
-  const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
-  const [isLoadingResults, setIsLoadingResults] = useState(false);
-  const [chatCurrentClientMedId, setChatCurrentClientMedId] = useState<string | null>(null);
-  const [medicineToEdit, setMedicineToEdit] =
-    useState<ExtractedMedicine | null>(null);
-  const editSheetRef = useRef<BottomSheetModal>(null);
-  const [isConfirmingMeds, setIsConfirmingMeds] = useState(false);
-  const [failedSubmissions, setFailedSubmissions] = useState<
-    {
-      type: "new" | "replace" | "merge";
-      med: any;
-      payload: any;
-      existingId?: string;
-    }[]
-  >([]);
-  const streamingAbortRef = useRef<AbortController | null>(null);
-  const streamingMessageIdRef = useRef<string | null>(null);
-  const streamingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [isActivelyStreaming, setIsActivelyStreaming] = useState<boolean>(false);
-
-  const tOnboarding = (
-    key: string,
-    replacements?: Record<string, string | number>,
-  ) => {
-    const lang = preferredLang || "english";
-    const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
-    let str = dict[key] || I18N_ONBOARDING_UI.english[key] || key;
-    if (replacements) {
-      Object.entries(replacements).forEach(([k, v]) => {
-        str = str.split(`{${k}}`).join(String(v));
-      });
-    }
-    return str;
-  };
-
-  const clearStreamingTimer = () => {
-    if (streamingTimerRef.current) {
-      clearInterval(streamingTimerRef.current);
-      streamingTimerRef.current = null;
-    }
-  };
-
-  const abortActiveStream = () => {
-    clearStreamingTimer();
-    if (streamingAbortRef.current) {
-      streamingAbortRef.current.abort();
-      streamingAbortRef.current = null;
-    }
-    streamingMessageIdRef.current = null;
-    setIsActivelyStreaming(false);
-  };
-
-  const upsertAssistantMessage = (
-    messageId: string,
-    updater: (current?: ChatMessage) => ChatMessage,
-  ) => {
-    setMessages((prev) => {
-      const index = prev.findIndex((msg) => msg.id === messageId);
-      if (index === -1) {
-        return [...prev, updater(undefined)];
-      }
-
-      const next = [...prev];
-      next[index] = updater(next[index]);
-      return next;
-    });
-  };
-
-  const streamNormalChat = async (payload: any) => {
-    abortActiveStream();
-    const controller = new AbortController();
-    streamingAbortRef.current = controller;
-
-    const messageId = `ai-stream-${Date.now()}`;
-    streamingMessageIdRef.current = messageId;
-    let pendingBuffer = "";
-    let displayedText = "";
-    let streamFinished = false;
-    let finishData: any = null;
-
-    const finalizeStream = (finalData: any) => {
-      clearStreamingTimer();
-      setIsActivelyStreaming(false);
-      const replyText =
-        finalData?.reply ||
-        finalData?.data?.reply ||
-        finalData?.message ||
-        finalData?.text ||
-        "";
-
-      upsertAssistantMessage(messageId, (current) => {
-        const baseMessage = current || {
-          id: messageId,
-          role: "ai",
-          text: "",
-          createdAt: new Date().toISOString(),
-        };
-
-        return {
-          ...baseMessage,
-          text: displayedText || replyText || baseMessage.text,
-          sessionId: finalData?.sessionId ?? baseMessage.sessionId,
-          mode: finalData?.mode ?? baseMessage.mode,
-          action:
-            finalData?.actionType ||
-            finalData?.action ||
-            baseMessage.action ||
-            "NORMAL_CHAT",
-          options: finalData?.options ?? baseMessage.options ?? [],
-          medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
-          documents:
-            normalizeDocumentsList(
-              finalData?.documents || finalData?.document || finalData,
-              [],
-              [],
-              documentsList,
-            ) || baseMessage.documents,
-          document: finalData?.document ?? baseMessage.document ?? null,
-          suggestedQuestions:
-            finalData?.suggestedQuestions ??
-            baseMessage.suggestedQuestions ??
-            [],
-          keyFindings:
-            finalData?.document?.keyFindings ??
-            finalData?.keyFindings ??
-            baseMessage.keyFindings ??
-            [],
-          documentIds:
-            normalizeDocumentIds(
-              finalData?.documentId,
-              finalData?.documentIds,
-              finalData?.documents,
-            ) ?? baseMessage.documentIds,
-        };
-      });
-
-      if (finalData?.onboardingState || finalData?.state) {
-        lastKnownStateRef.current = finalData.onboardingState || finalData.state;
-      }
-
-      if (finalData?.sessionId && !activeSessionId) {
-        setActiveSessionId(finalData.sessionId);
-        apiClient
-          .get("/chat/session", { params: { limit: 50 } })
-          .then((res) => {
-            setSessions(res.data?.data?.items || res.data?.items || []);
-          })
-          .catch(() => { });
-      }
-    };
-
-    // Smooth character release interval (ticking every 20ms)
-    streamingTimerRef.current = setInterval(() => {
-      if (pendingBuffer.length > 0) {
-        let step = 1;
-        if (pendingBuffer.length > 80) step = 8;
-        else if (pendingBuffer.length > 40) step = 5;
-        else if (pendingBuffer.length > 20) step = 3;
-        else if (pendingBuffer.length > 8) step = 2;
-
-        const nextChars = pendingBuffer.slice(0, step);
-        pendingBuffer = pendingBuffer.slice(step);
-        displayedText += nextChars;
-
-        upsertAssistantMessage(messageId, (current) => ({
-          ...(current || {
-            id: messageId,
-            role: "ai",
-            text: "",
-            createdAt: new Date().toISOString(),
-          }),
-          text: displayedText,
-        }));
-      } else if (streamFinished) {
-        finalizeStream(finishData);
-      }
-    }, 20);
-
-    try {
-      await streamChatResponse(
-        "/v1/onboarding/chat",
-        payload,
-        {
-          onChunk: (chunkText) => {
-            if (!chunkText) return;
-            setIsActivelyStreaming(true);
-            pendingBuffer += chunkText;
-          },
-          onFinish: (finalData) => {
-            finishData = finalData;
-            streamFinished = true;
-            if (pendingBuffer.length === 0) {
-              finalizeStream(finalData);
-            }
-          },
-          onError: (error) => {
-            clearStreamingTimer();
-            setIsActivelyStreaming(false);
-            if (error.message === "Stream cancelled") {
-              return;
-            }
-            console.warn("[AI_CHAT] Streaming request failed:", error.message);
-          },
-        },
-        { signal: controller.signal },
-      );
-    } finally {
-      if (streamingAbortRef.current === controller) {
-        streamingAbortRef.current = null;
-      }
-      streamingMessageIdRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    if (
-      chatWizardState.step === "processing" &&
-      isAllTerminal &&
-      chatWizardState.jobIds.length > 0 &&
-      !isLoadingResults
-    ) {
-      const getResults = async () => {
-        setIsLoadingResults(true);
-        try {
-          const data = await MedicationReviewService.fetchExtractedMedicines(
-            chatWizardState.jobIds,
-            chatWizardState.filesInfo,
-          );
-          const flatMeds: ExtractedMedicine[] = [];
-          data.forEach((doc) => {
-            const docMeds = doc.medicines || [];
-            docMeds.forEach((m) => {
-              flatMeds.push({
-                ...m,
-                documentName: doc.name || "Uploaded Report",
-              });
-            });
-          });
-
-          const summariesList = data.map((doc) => ({
-            docName: doc.name || "Report",
-            summary:
-              doc.summaryPreferred ||
-              doc.summaryEnglish ||
-              "No summary generated.",
-          }));
-
-          setChatWizardState((prev) => ({
-            ...prev,
-            step: "results",
-            extractedMedicines: flatMeds,
-            summaries: summariesList,
-          }));
-
-          // Dismiss the progress bottom sheet if open
-          extractionSheetRef.current?.dismiss();
-
-          // 1. Show user message with file names in the chat only when all documents are processed successfully
-          const docNames = chatWizardState.filesInfo
-            .map((f) => f.fileName)
-            .join(", ");
-          const userMsg: ChatMessage = {
-            id: `user-upload-${Date.now()}`,
-            role: "user",
-            text: `Document Uploaded: ${docNames}`,
-            createdAt: new Date().toISOString(),
-          };
-          setMessages((prev) => [...prev, userMsg]);
-
-          // 2. Call unified chatbot API /v1/onboarding/chat with new request body format
-          const filesPayload = chatWizardState.filesInfo.map((f: any) => ({
-            fileKey: f.fileKey || f.s3Key || "",
-            fileName: f.fileName,
-            mimeType: f.mimeType || "application/octet-stream",
-          }));
-
-          const updatedState = {
-            ...(lastKnownStateRef.current || {}),
-            documentUploaded: true,
-            uploadedMedicalDocument: true,
-            documentExtracted: true,
-            documentId: normalizeDocumentIds(chatWizardState.filesInfo),
-          };
-          lastKnownStateRef.current = updatedState;
-
-          const payload = {
-            actionType: "ADD_DOCUMENT",
-            sessionId: activeSessionId || onboardingSessionId || undefined,
-            documentId: normalizeDocumentIds(chatWizardState.filesInfo),
-            actionData: {
-              files: filesPayload,
-            },
-            state: updatedState,
-          };
-
-          try {
-            const response = await apiClient.post(
-              "/v1/onboarding/chat",
-              payload,
-            );
-            const resData = response.data?.data || response.data;
-            const uploadedDocuments = normalizeDocumentsList(
-              resData,
-              uploadingDocs,
-              chatWizardState.filesInfo,
-              documentsList,
-            );
-
-            const finalMeds =
-              (resData?.medicines && resData.medicines.length > 0)
-                ? resData.medicines
-                : (flatMeds.length > 0 ? flatMeds : []);
-
-            setChatWizardState((prev) => ({
-              ...prev,
-              extractedMedicines: finalMeds,
-            }));
-
-            const resolvedAction =
-              finalMeds.length > 0
-                ? "REVIEW_MEDICINES_LIST"
-                : (resData?.actionType || resData?.action || "ADD_DOCUMENT");
-
-            const aiMsg: ChatMessage = {
-              id: `ai-upload-response-${Date.now()}`,
-              role: "ai",
-              text:
-                resData?.reply ||
-                (finalMeds.length > 0
-                  ? "I've extracted the following medicines from your uploaded documents. Please review and confirm."
-                  : "Document processing complete."),
-              action: resolvedAction,
-              options: resData?.options || [],
-              medicines: finalMeds,
-              document: resData?.document || null,
-              documentSummary: resData?.documentSummary || null,
-              documents: uploadedDocuments,
-              suggestedQuestions: resData?.suggestedQuestions || [],
-              keyFindings:
-                resData?.document?.keyFindings || resData?.keyFindings || [],
-              documentIds: normalizeDocumentIds(
-                resData?.document?.id,
-                resData?.documentId,
-                resData?.documentIds,
-                resData?.documents,
-                chatWizardState.filesInfo,
-              ),
-              createdAt: new Date().toISOString(),
-            };
-            setMessages((prev) => [...prev, aiMsg]);
-
-            if (resData?.onboardingState || resData?.state) {
-              lastKnownStateRef.current = resData.onboardingState || resData.state;
-            }
-
-            if (resData?.sessionId && !activeSessionId) {
-              setActiveSessionId(resData.sessionId);
-              apiClient
-                .get("/chat/session", { params: { limit: 50 } })
-                .then((res) => {
-                  setSessions(res.data?.data?.items || res.data?.items || []);
-                })
-                .catch(() => { });
-            }
-          } catch (err: any) {
-            console.warn(
-              "Failed to notify chatbot about document upload:",
-              err,
-            );
-            Toast.show({
-              type: "error",
-              text1: "Chatbot Error",
-              text2:
-                err.message || "Failed to notify chatbot of document upload.",
-            });
-          }
-        } catch (err) {
-          console.error(
-            "Failed to load extracted medicines in conversational chat:",
-            err,
-          );
-          setChatWizardState((prev) => ({
-            ...prev,
-            step: "results",
-            extractedMedicines: [],
-            summaries: [],
-          }));
-        } finally {
-          setIsLoadingResults(false);
-        }
-      };
-      getResults();
-    }
-  }, [
-    chatWizardState.step,
-    isAllTerminal,
-    chatWizardState.jobIds,
-    activeSessionId,
-    onboardingSessionId,
-    preferredLang,
-  ]);
-
-  const handleEditSave = (updated: ExtractedMedicine) => {
-    const updatedExtracted = chatWizardState.extractedMedicines.map((m) =>
-      m.id === updated.id ? updated : m,
-    );
-
-    setChatWizardState((prev) => {
-      const updatedConflicts = prev.conflicts.map((c) => {
-        if (c.extractedMedicine.id === updated.id) {
-          return {
-            ...c,
-            extractedMedicine: updated,
-          };
-        }
-        return c;
-      });
-
-      return {
-        ...prev,
-        extractedMedicines: updatedExtracted,
-        conflicts: updatedConflicts,
-      };
-    });
-
-    setMessages((prev) =>
-      prev
-        .filter((msg) => msg.action !== "EDIT_MEDICINE")
-        .map((msg) => {
-          if (msg.medicines?.length) {
-            return {
-              ...msg,
-              medicines: msg.medicines.map((m) =>
-                m.id === updated.id ? updated : m,
-              ),
-            };
-          }
-          if (msg.action === "REVIEW_MEDICINES_LIST" || msg.action === "ADD_DOCUMENT") {
-            return {
-              ...msg,
-              medicines: updatedExtracted,
-            };
-          }
-          return msg;
-        }),
-    );
-
-    editSheetRef.current?.dismiss();
-    setMedicineToEdit(null);
-
-    Toast.show({
-      type: "success",
-      text1: "Medicine Updated",
-      text2: `${updated.name} has been updated in the list.`,
-    });
-  };
-
-  const handleConfirmSelection = async () => {
-    setIsLoadingResults(true);
-
-    // Add user message "Continue"
-    const userMsg: ChatMessage = {
-      id: `user-continue-${Date.now()}`,
-      role: "user",
-      text: "Continue",
-      createdAt: new Date().toISOString(),
-    };
-
-    // Add progress message in chat
-    const checkingMsgId = `ai-checking-${Date.now()}`;
-    const checkingMsg: ChatMessage = {
-      id: checkingMsgId,
-      role: "ai",
-      text: `Checking your medicines for duplicates... 0 / ${chatWizardState.extractedMedicines.length} completed`,
-      action: "CHECKING_DUPLICATES",
-      createdAt: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, userMsg, checkingMsg]);
-
-    try {
-      const existingRes = await listMedications();
-      const existingMeds = existingRes.data || existingRes || [];
-
-      const conflictsList: any[] = [];
-      const newMedsList: ExtractedMedicine[] = [];
-      const total = chatWizardState.extractedMedicines.length;
-
-      for (let i = 0; i < total; i++) {
-        const med = chatWizardState.extractedMedicines[i];
-
-        // Normalize medication type
-        const typeStr = (med.medicineType || "TABLET").toUpperCase();
-        const normalizedType = typeStr === "DROP" ? "DROPS" : typeStr;
-
-        try {
-          const duplicateRes = await checkMedicationDuplicate({
-            medicationName: med.name,
-            medicationType: normalizedType,
-          });
-          const dupData = duplicateRes?.data || duplicateRes || {};
-
-          if (dupData.hasDuplicate) {
-            const match =
-              dupData.matchedMedication ||
-              dupData.matchedMedications?.[0] ||
-              existingMeds.find(
-                (em: any) =>
-                  em.medicationName.trim().toLowerCase() ===
-                  med.name.trim().toLowerCase(),
-              );
-            conflictsList.push({
-              extractedMedicine: med,
-              existingMedication: match,
-            });
-          } else {
-            newMedsList.push(med);
-          }
-        } catch (apiErr) {
-          console.warn(
-            `Duplicate check failed for ${med.name}, falling back to local check:`,
-            apiErr,
-          );
-          const duplicateLocal = existingMeds.find(
-            (existing: any) =>
-              existing.medicationName.trim().toLowerCase() ===
-              med.name.trim().toLowerCase(),
-          );
-          if (duplicateLocal) {
-            conflictsList.push({
-              extractedMedicine: med,
-              existingMedication: duplicateLocal,
-            });
-          } else {
-            newMedsList.push(med);
-          }
-        }
-
-        // Update progress in chat
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === checkingMsgId
-              ? {
-                ...msg,
-                text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed`,
-              }
-              : msg,
-          ),
-        );
-      }
-
-      if (conflictsList.length > 0) {
-        setChatWizardState((prev) => ({
-          ...prev,
-          step: "conflicts",
-          conflicts: conflictsList,
-          currentConflictIndex: 0,
-          resolvedMedicines: newMedsList,
-          replaceList: [],
-          mergeList: [],
-        }));
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === checkingMsgId
-              ? {
-                ...msg,
-                text: `I detected duplicate conflicts with your existing medications. Let's resolve them.`,
-              }
-              : msg,
-          ),
-        );
-
-        const conflictMsg: ChatMessage = {
-          id: `ai-conflict-${Date.now()}`,
-          role: "ai",
-          text: tOnboarding("aiConflictIntro"),
-          action: "EXTRACTED_MEDICINES_CONFLICTS",
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, conflictMsg]);
-      } else {
-        setChatWizardState((prev) => ({
-          ...prev,
-          step: "summary",
-          resolvedMedicines: newMedsList,
-        }));
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === checkingMsgId
-              ? {
-                ...msg,
-                text: `No duplicates found. All medicines are ready to be added.`,
-              }
-              : msg,
-          ),
-        );
-
-        const confirmMsg: ChatMessage = {
-          id: `ai-confirm-${Date.now()}`,
-          role: "ai",
-          text: tOnboarding("aiConfirmIntro"),
-          action: "EXTRACTED_MEDICINES_CONFIRM",
-          medicinesCount: newMedsList.length,
-          docsCount: chatWizardState.filesInfo.length,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, confirmMsg]);
-      }
-    } catch (err: any) {
-      console.error("Conflict checking failed:", err);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === checkingMsgId
-            ? {
-              ...msg,
-              text: `We couldn't check your medicines for duplicates. Please try again.`,
-            }
-            : msg,
-        ),
-      );
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to perform duplicate check. Please try again.",
-      });
-    } finally {
-      setIsLoadingResults(false);
-    }
-  };
-
-  const resolveCurrentConflict = (
-    resolution: "keep" | "replace" | "merge" | "remove_new",
-    mergedPayload?: AddOrEditMedication,
-  ) => {
-    const currentConflict =
-      chatWizardState.conflicts[chatWizardState.currentConflictIndex];
-    if (!currentConflict) return;
-
-    if (resolution === "keep") {
-      Toast.show({
-        type: "info",
-        text1: `${currentConflict.extractedMedicine.name} already exists in your profile.`,
-        text2: "Incoming duplicate removed.",
-      });
-    }
-
-    // Update message history to deselect/remove the medication if Keep Existing or Remove New is chosen
-    setMessages((prevMsg) =>
-      prevMsg.map((msg) => {
-        if (
-          (msg.action === "EXTRACTED_MEDICINES" ||
-            msg.action === "REVIEW_MEDICINES_LIST" ||
-            msg.action === "MEDICINE_REVIEW_ACCORDION") &&
-          msg.medicines
-        ) {
-          if (resolution === "keep" || resolution === "remove_new") {
-            return {
-              ...msg,
-              medicines: msg.medicines.map((m) =>
-                m.id === currentConflict.extractedMedicine.id
-                  ? { ...m, selected: false, resolution: "REMOVE_NEW" }
-                  : m
-              ),
-            };
-          }
-          return {
-            ...msg,
-            medicines: msg.medicines.map((m) =>
-              m.id === currentConflict.extractedMedicine.id
-                ? { ...m, selected: true, resolution: "REPLACE" }
-                : m,
-            ),
-          };
-        }
-        return msg;
-      }),
-    );
-
-    setChatWizardState((prev) => {
-      const updatedConflicts = prev.conflicts.map((c, idx) =>
-        idx === prev.currentConflictIndex
-          ? { ...c, resolvedAction: resolution }
-          : c,
-      );
-
-      const nextReplaceList: {
-        existingId: string;
-        extractedMedicine: ExtractedMedicine;
-      }[] = [];
-      const nextMergeList: {
-        existingId: string;
-        mergedMedication: AddOrEditMedication;
-      }[] = [];
-      const nextResolvedMedicines = prev.resolvedMedicines.filter(
-        (m) => m.id !== currentConflict.extractedMedicine.id
-      );
-
-      updatedConflicts.forEach((c) => {
-        if (c.resolvedAction === "replace") {
-          nextReplaceList.push({
-            existingId: c.existingMedication.id!,
-            extractedMedicine: {
-              ...c.extractedMedicine,
-              resolution: "REPLACE",
-              replaceMedicationId: c.existingMedication.id,
-            },
-          });
-        } else if (c.resolvedAction === "merge") {
-          // Use the merged payload if provided for the current conflict, or fall back to existing medication
-          const payload =
-            c.extractedMedicine.id === currentConflict.extractedMedicine.id &&
-              mergedPayload
-              ? mergedPayload
-              : buildMedicationPayload(c.extractedMedicine);
-          nextMergeList.push({
-            existingId: c.existingMedication.id!,
-            mergedMedication: payload,
-          });
-        }
-      });
-
-      const nextIndex = prev.currentConflictIndex + 1;
-      const allResolved = updatedConflicts.every(
-        (c) => c.resolvedAction !== undefined,
-      );
-      const nextStep = allResolved ? "summary" : "conflicts";
-
-      const nextExtractedMedicines = prev.extractedMedicines
-        .map((m) => {
-          if (m.id === currentConflict.extractedMedicine.id) {
-            if (resolution === "keep" || resolution === "remove_new") {
-              return {
-                ...m,
-                selected: false,
-                resolution: "REMOVE_NEW",
-              };
-            }
-            return {
-              ...m,
-              selected: true,
-              resolution: "REPLACE",
-              replaceMedicationId: currentConflict.existingMedication.id,
-            };
-          }
-          return m;
-        });
-
-      if (nextStep === "summary") {
-        setTimeout(() => {
-          const confirmMsg: ChatMessage = {
-            id: `ai-confirm-${Date.now()}`,
-            role: "ai",
-            text: tOnboarding("aiConfirmIntro"),
-            action: "EXTRACTED_MEDICINES_CONFIRM",
-            medicinesCount:
-              nextResolvedMedicines.length +
-              nextReplaceList.length +
-              nextMergeList.length,
-            docsCount: chatWizardState.filesInfo.length,
-            createdAt: new Date().toISOString(),
-          };
-          setMessages((prevMsg) => [...prevMsg, confirmMsg]);
-        }, 100);
-      }
-
-      return {
-        ...prev,
-        conflicts: updatedConflicts,
-        currentConflictIndex:
-          nextIndex === prev.conflicts.length
-            ? prev.currentConflictIndex
-            : nextIndex,
-        step: nextStep,
-        replaceList: nextReplaceList,
-        mergeList: nextMergeList,
-        resolvedMedicines: nextResolvedMedicines,
-        extractedMedicines: nextExtractedMedicines,
-      };
-    });
-  };
-
-  const navigateConflict = (direction: "prev" | "next") => {
-    setChatWizardState((prev) => {
-      let nextIdx = prev.currentConflictIndex;
-      if (direction === "prev" && nextIdx > 0) nextIdx--;
-      if (direction === "next" && nextIdx < prev.conflicts.length - 1)
-        nextIdx++;
-      return {
-        ...prev,
-        currentConflictIndex: nextIdx,
-      };
-    });
-  };
-
-  const handleContinueAnyway = () => {
-    setChatWizardState((prev) => {
-      const remainingNew = prev.conflicts
-        .slice(prev.currentConflictIndex)
-        .map((c) => c.extractedMedicine);
-      const nextResolved = [...prev.resolvedMedicines, ...remainingNew];
-
-      setTimeout(() => {
-        const confirmMsg: ChatMessage = {
-          id: `ai-confirm-${Date.now()}`,
-          role: "ai",
-          text: tOnboarding("aiConfirmIntro"),
-          action: "EXTRACTED_MEDICINES_CONFIRM",
-          medicinesCount: nextResolved.length,
-          docsCount: prev.filesInfo.length,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prevMsg) => [...prevMsg, confirmMsg]);
-      }, 100);
-
-      return {
-        ...prev,
-        step: "summary",
-        resolvedMedicines: nextResolved,
-      };
-    });
-  };
-
-  const handleReviewMedicines = () => {
-    // Append user message: "Review Medicines"
-    const userMsg: ChatMessage = {
-      id: `user-review-${Date.now()}`,
-      role: "user",
-      text: "Review Medicines",
-      createdAt: new Date().toISOString(),
-    };
-
-    // Append AI message for review:
-    const aiReviewMsg: ChatMessage = {
-      id: `ai-review-accordion-${Date.now()}`,
-      role: "ai",
-      text: "I've analyzed the medicines extracted from your documents. Please review them before I add them to your Health Vault.",
-      action: "MEDICINE_REVIEW_ACCORDION",
-      medicines: chatWizardState.extractedMedicines,
-      documents: chatWizardState.filesInfo.map((f) => {
-        const m = chatWizardState.extractedMedicines.filter(
-          (x) => x.documentId === f.jobId,
-        );
-        return { id: f.jobId, fileName: f.fileName, medicinesCount: m.length };
-      }),
-      createdAt: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, userMsg, aiReviewMsg]);
-    setChatWizardState((prev) => ({ ...prev, step: "results" }));
-
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
-
-  const buildMedicationPayload = (
-    med: ExtractedMedicine,
-  ): AddOrEditMedication => {
-    const scheduleObj: Record<string, any> = {};
-    const times = med.medicationSchedule || [];
-    times.forEach((timeStr) => {
-      let key = "CUSTOM";
-      if (timeStr === "08:00") key = "MORNING";
-      else if (timeStr === "14:00") key = "NOON";
-      else if (timeStr === "20:00") key = "NIGHT";
-
-      const timeWithSec = `${timeStr}:00`;
-      if (scheduleObj[key]) {
-        if (Array.isArray(scheduleObj[key])) {
-          scheduleObj[key].push(timeWithSec);
-        } else {
-          scheduleObj[key] = [scheduleObj[key], timeWithSec];
-        }
-      } else {
-        scheduleObj[key] = key === "CUSTOM" ? [timeWithSec] : timeWithSec;
-      }
-    });
-
-    let freqLabel = "Once Daily";
-    if (med.frequency === "TWICE" || med.frequency === "Twice Daily")
-      freqLabel = "Twice Daily";
-    else if (med.frequency === "THRICE" || med.frequency === "3x Daily")
-      freqLabel = "3x Daily";
-
-    let normalizedFoodFreq = "AFTER_FOOD";
-    const rawFood = (
-      med.foodFrequency ||
-      med.timing ||
-      "AFTER_FOOD"
-    ).toUpperCase();
-    if (rawFood.includes("BEFORE") || rawFood.includes("PRE")) {
-      normalizedFoodFreq = "BEFORE_FOOD";
-    }
-
-    return {
-      medicationName: med.name.trim(),
-      medicationType: (med.medicineType || "TABLET").toUpperCase(),
-      prescribedBy: med.prescribedBy || "",
-      dosePerIntake: parseFloat(med.dosage || "1") || 1,
-      frequency: freqLabel,
-      foodFrequency: normalizedFoodFreq,
-      startDate: med.startDate && med.startDate !== "None"
-        ? med.startDate
-        : getTodayDateString(),
-      ongoing: true,
-      medicationSchedule: scheduleObj,
-      totalQuantity: med.totalQuantity || 10,
-      notes: med.notes || "",
-      resolution: med.resolution,
-      replaceMedicationId: med.replaceMedicationId,
-    };
-  };
-
-  const handleConfirmAndAddMeds = async (retryOnly = false) => {
-    setIsConfirmingMeds(true);
-
-    if (!retryOnly) {
-      setFailedSubmissions([]);
-    }
-
-    const itemsToSubmit: typeof failedSubmissions = [];
-
-    if (retryOnly) {
-      itemsToSubmit.push(...failedSubmissions);
-    } else {
-      chatWizardState.resolvedMedicines.forEach((med) => {
-        itemsToSubmit.push({
-          type: "new",
-          med,
-          payload: buildMedicationPayload(med),
-        });
-      });
-
-      chatWizardState.replaceList.forEach((replaceItem) => {
-        itemsToSubmit.push({
-          type: "replace",
-          med: replaceItem.extractedMedicine,
-          payload: {
-            ...buildMedicationPayload(replaceItem.extractedMedicine),
-            resolution: "REPLACE",
-            replaceMedicationId: replaceItem.existingId,
-          },
-          existingId: replaceItem.existingId,
-        });
-      });
-
-      chatWizardState.mergeList.forEach((mergeItem) => {
-        itemsToSubmit.push({
-          type: "merge",
-          med: mergeItem.mergedMedication,
-          payload: mergeItem.mergedMedication,
-          existingId: mergeItem.existingId,
-        });
-      });
-    }
-
-    const failed: typeof failedSubmissions = [];
-    let successCount = 0;
-
-    const addingProgressMap: Record<
-      string,
-      (done: number, total: number) => string
-    > = {
-      english: (done, total) =>
-        `Adding medicines to your profile... ${done} / ${total} completed`,
-      gujarati: (done, total) =>
-        `તમારા પ્રોફાઇલમાં દવાઓ ઉમેરી રહ્યા છે... ${done} / ${total} પૂર્ણ થયું`,
-      hindi: (done, total) =>
-        `आपकी प्रोफाइल में दवाएं जोड़ी जा रही हैं... ${done} / ${total} पूर्ण`,
-      marathi: (done, total) =>
-        `तुमच्या प्रोफाइलमध्ये औषधे जोडत आहे... ${done} / ${total} પૂર્ણ झाले`,
-      tamil: (done, total) =>
-        `உங்கள் சுயவிவரத்தில் மருந்துகள் சேர்க்கப்படுகின்றன... ${done} / ${total} முடிந்தது`,
-    };
-    const getAddingProgressMsg = (done: number, total: number) => {
-      const fn = addingProgressMap[preferredLang] || addingProgressMap.english;
-      return fn(done, total);
-    };
-
-    const progressMsgId = `ai-adding-progress-${Date.now()}`;
-    const progressMsg: ChatMessage = {
-      id: progressMsgId,
-      role: "ai",
-      text: getAddingProgressMsg(0, itemsToSubmit.length),
-      action: "ADDING_MEDICINES_PROGRESS",
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, progressMsg]);
-
-    for (let i = 0; i < itemsToSubmit.length; i++) {
-      const task = itemsToSubmit[i];
-      try {
-        if (task.type === "new") {
-          await addMedication(task.payload);
-        } else if (task.type === "replace" && task.existingId) {
-          await updateMedication({
-            medicationId: task.existingId,
-            data: task.payload,
-          });
-        } else if (task.type === "merge" && task.existingId) {
-          await updateMedication({
-            medicationId: task.existingId,
-            data: task.payload,
-          });
-        }
-        successCount++;
-      } catch (err) {
-        console.error(
-          `Failed to submit item: ${task.med.name || task.med.medicationName || "Medication"}`,
-          err,
-        );
-        failed.push(task);
-      }
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === progressMsgId
-            ? {
-              ...msg,
-              text: getAddingProgressMsg(i + 1, itemsToSubmit.length),
-            }
-            : msg,
-        ),
-      );
-    }
-
-    queryClient.invalidateQueries({ queryKey: ["medications"] });
-    queryClient.invalidateQueries({ queryKey: ["allMedications"] });
-    queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
-    queryClient.invalidateQueries({ queryKey: ["reminders"] });
-    queryClient.invalidateQueries({ queryKey: ["allReminders"] });
-    queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
-
-    if (failed.length > 0) {
-      setFailedSubmissions(failed);
-
-      const partialFailureMap: Record<
-        string,
-        (success: number, fail: number) => string
-      > = {
-        english: (success, fail) =>
-          `Operation partially failed. Successfully added ${success} medicines, but ${fail} failed. Please retry.`,
-        gujarati: (success, fail) =>
-          `પ્રક્રિયા અંશતઃ નિષ્ફળ રહી. ${success} દવાઓ સફળતાપૂર્વક ઉમેરાઈ, પરંતુ ${fail} નિષ્ફળ ગઈ. કૃપા કરીને ફરી પ્રયાસ કરો.`,
-        hindi: (success, fail) =>
-          `ऑपरेशन आंशिक रूप से विफल रहा। ${success} दवाएं सफलतापूर्वक जोड़ी गईं, लेकिन ${fail} विफल रहीं। कृपया पुनः प्रयास करें।`,
-        marathi: (success, fail) =>
-          `क्रिया अंशतः अपयशी ठरली. ${success} औषधे यशस्वीरित्या जोडली गेली, परंतु ${fail} अपयशी ठरली. कृपया पुन्हा प्रयत्न करा.`,
-        tamil: (success, fail) =>
-          `செயல்பாடு ஓரளவு தோல்வியடைந்தது. ${success} மருந்துகள் வெற்றிகரமாக சேர்க்கப்பட்டன, ஆனால் ${fail} தோல்வியடைந்தன. மீண்டும் முயற்சிக்கவும்.`,
-      };
-      const getPartialFailureMsg = (success: number, fail: number) => {
-        const fn =
-          partialFailureMap[preferredLang] || partialFailureMap.english;
-        return fn(success, fail);
-      };
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === progressMsgId
-            ? {
-              ...msg,
-              text: getPartialFailureMsg(successCount, failed.length),
-            }
-            : msg,
-        ),
-      );
-
-      const errorSummaryMap: Record<string, string> = {
-        english: "Some medicines could not be added to your profile.",
-        gujarati: "કેટલીક દવાઓ તમારા પ્રોફાઇલમાં ઉમેરી શકાઈ નથી.",
-        hindi: "कुछ दवाएं आपकी प्रोफाइल में नहीं जोड़ी जा सकीं।",
-        marathi: "काही औषधे तुमच्या प्रोफाइलमध्ये जोडली जाऊ शकली नाहीत.",
-        tamil: "சில மருந்துகளை உங்கள் சுயவிவரத்தில் சேர்க்க முடியவில்லை.",
-      };
-      const errorSummaryMsg =
-        errorSummaryMap[preferredLang] || errorSummaryMap.english;
-
-      const errorMsg: ChatMessage = {
-        id: `ai-failure-summary-${Date.now()}`,
-        role: "ai",
-        text: errorSummaryMsg,
-        action: "EXTRACTED_MEDICINES_PARTIAL_FAILURE",
-        failedCount: failed.length,
-        successCount: successCount,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } else {
-      setChatWizardState((prev) => ({
-        ...prev,
-        step: "completed",
-      }));
-
-      const successProgressMap: Record<string, string> = {
-        english: "All medicines have been successfully added to your profile!",
-        gujarati: "બધી દવાઓ તમારા પ્રોફાઇલમાં સફળતાપૂર્વક ઉમેરવામાં આવી છે!",
-        hindi: "सभी दवाएं आपकी प्रोफाइल में सफलतापूर्वक जोड़ दी गई हैं!",
-        marathi:
-          "सर्व औषधे तुमच्या प्रोफाइलमध्ये यशस्वीरित्या जोडली गेली आहेत!",
-        tamil:
-          "அனைத்து மருந்துகளும் உங்கள் சுயவிவரத்தில் வெற்றிகரமாக சேர்க்கப்பட்டன!",
-      };
-      const successProgressMsg =
-        successProgressMap[preferredLang] || successProgressMap.english;
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === progressMsgId ? { ...msg, text: successProgressMsg } : msg,
-        ),
-      );
-
-      const totalAdded = retryOnly ? successCount : itemsToSubmit.length;
-      const successIntro = tOnboarding("aiSuccessIntro");
-
-      const successMsg: ChatMessage = {
-        id: `ai-success-${Date.now()}`,
-        role: "ai",
-        text: successIntro,
-        action: "EXTRACTED_MEDICINES_SUCCESS",
-        medicinesCount: totalAdded,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, successMsg]);
-
-      // Append follow-up question message 300ms later to show it AFTER the success card (View My Medicines button)
-      setTimeout(() => {
-        const helpNextMap: Record<string, string> = {
-          english: "What would you like me to help you with next?",
-          gujarati: "હવે હું તમારી બીજી કઈ મદદ કરી શકું?",
-          hindi: "अब मैं आपकी आगे क्या मदद कर सकता हूँ?",
-          marathi: "आता मी तुम्हाला पुढे काय मदत करू?",
-          tamil: "அடுத்து நான் உங்களுக்கு எவ்வாறு உதவ வேண்டும்?",
-        };
-        const helpNextMsg = helpNextMap[preferredLang] || helpNextMap.english;
-        const followUpMsg: ChatMessage = {
-          id: `ai-followup-${Date.now()}`,
-          role: "ai",
-          text: helpNextMsg,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, followUpMsg]);
-      }, 300);
-
-      resetChatWizard();
-      setFailedSubmissions([]);
-    }
-
-    setIsConfirmingMeds(false);
-  };
-
-  useEffect(() => {
-    if (route?.params?.document) {
-      setSelectedDocument(route.params.document);
-    }
-    if (route?.params?.initialQuestion) {
-      setInput(route.params.initialQuestion);
-    }
-  }, [route?.params]);
-
-  useEffect(() => {
-    if (!isFocused) return;
-
-    const onBackPress = () => {
-      navigation.navigate("Home");
-      return true;
-    };
-
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      onBackPress,
-    );
-
-    return () => subscription.remove();
-  }, [navigation, isFocused]);
-
-
-
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [onboardingMessages, setOnboardingMessages] = useState<any[]>([]);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(false);
   const [pendingStep, setPendingStep] = useState<string | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<any>(null);
+  const [showFloatingPanel] = useState(true);
 
-  // Fetch onboarding history on mount and screen focus
-  const fetchOnboardingHistory = useCallback(async () => {
-    try {
-      console.log("[AI_CHAT] Fetching onboarding history...");
-      const response = await apiClient.get("/v1/onboarding/history");
-      const {
-        chatSessionId,
-        messages: historyItems,
-        resumableState,
-        currentStep: topLevelCurrentStep,
-      } = response.data?.data || {};
-      console.log("[CHAT SESSION ID] :- ", chatSessionId);
-      setOnboardingSessionId(chatSessionId || null);
-
-      const resolvedPendingStep =
-        resumableState?.currentStep || topLevelCurrentStep || null;
-
-      const completedFromState = Boolean(
-        resumableState?.isOnboardingCompleted ||
-        resumableState?.currentStep === "POST_ONBOARDING" ||
-        resumableState?.currentStep === "COMPLETE" ||
-        resolvedPendingStep === "POST_ONBOARDING" ||
-        resolvedPendingStep === "COMPLETE",
-      );
-      const completedFromHistory = Array.isArray(historyItems)
-        ? historyItems.some((dbMsg: any) => {
-          const action = dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
-          return action === "POST_ONBOARDING" || action === "COMPLETE";
-        })
-        : false;
-      const isComplete = completedFromState || completedFromHistory;
-      setIsOnboardingCompleted(isComplete);
-      setPendingStep(isComplete ? null : resolvedPendingStep);
-
-      if (resumableState?.preferredLanguage) {
-        setPreferredLang(resumableState.preferredLanguage);
-        await AsyncStorage.setItem("preferredLanguage", resumableState.preferredLanguage);
-      }
-
-      if (resumableState) {
-        lastKnownStateRef.current = resumableState;
-      }
-      if (chatSessionId && Array.isArray(historyItems)) {
-        const mapped = historyItems.map((dbMsg: any) => {
-          let meta = dbMsg.metadata;
-          if (typeof meta === "string") {
-            try {
-              meta = JSON.parse(meta);
-            } catch (e) {
-              meta = {};
-            }
-          } else {
-            meta = meta || {};
-          }
-          const resolvedDocs = normalizeDocumentsList(
-            meta,
-            [],
-            [],
-            documentsList,
-          );
-          const rawMeds =
-            meta.medicines && meta.medicines.length > 0
-              ? meta.medicines
-              : extractMedicationsFromDocuments(resolvedDocs);
-
-          return {
-            ...meta,
-            id: dbMsg.id,
-            role: dbMsg.role === "assistant" ? "ai" : "user",
-            text: dbMsg.content,
-            sessionId: chatSessionId,
-            createdAt: dbMsg.createdAt,
-            action:
-              meta.action || meta.actionType || (meta.mode === "ACTION" ? "ACTION" : "NORMAL_CHAT"),
-            document: meta.document || null,
-            documents: resolvedDocs,
-            medicines: rawMeds,
-            documentSummary: meta.documentSummary || null,
-            suggestedQuestions: meta.suggestedQuestions || [],
-            keyFindings:
-              meta.document?.keyFindings || meta.keyFindings || [],
-            documentIds: normalizeDocumentIds(
-              meta.document?.id,
-              meta.documentId,
-              meta.documentIds,
-              meta.documents,
-            ),
-            isOnboardingMessage: true,
-          };
-        });
-        setOnboardingMessages(mapped);
-      }
-    } catch (err) {
-      console.warn("[AI_CHAT] Failed to load onboarding history:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isFocused && !isOnboardingCompleted) {
-      fetchOnboardingHistory();
-    }
-  }, [isFocused, isOnboardingCompleted, fetchOnboardingHistory]);
-
-  const isOnboardingSession = useMemo(() => {
-    const activeSess = sessions.find((s) => s.id === activeSessionId);
-    return !isOnboardingCompleted && activeSess?.metadata?.type === "ONBOARDING";
-  }, [sessions, activeSessionId, isOnboardingCompleted]);
-
+  // Refs
+  const flatListRef = useRef<FlatList>(null);
   const uploadSheetRef = useRef<BottomSheetModal>(null);
   const extractionSheetRef = useRef<BottomSheetModal>(null);
-  const flatListRef = useRef<FlatList>(null);
-  const bottomPadding = useBottomBarPadding(0, 0);
+  const editSheetRef = useRef<BottomSheetModal>(null);
+  const lastKnownStateRef = useRef<any>({});
 
-  const keyboard = useAnimatedKeyboard();
-
-  const animatedKeyboardStyle = useAnimatedStyle(() => {
-    return {
-      paddingBottom: Math.max(keyboard.height.value, bottomPadding),
-    };
-  });
-
-  const handleOpenProgressSheet = () => {
-    setShowFloatingPanel(false);
-    extractionSheetRef.current?.present();
-    if (isAllTerminal) {
-      setChatWizardState((prev) => ({
-        ...prev,
-        hasViewedCompletedOcr: true,
-      }));
-    }
-  };
-
-  const handleExtractionSheetClose = () => {
-    setShowFloatingPanel(true);
-  };
-
-  // Fetch all documents
+  // Document Upload State
   const {
-    data: allDocsData,
+    uploadingDocs,
+    isUploading,
+    chatWizardState,
+    setChatWizardState,
+  } = useDocumentUpload();
+
+  const { isAllTerminal } = useOcrJobPolling(chatWizardState.jobIds);
+
+  // Query documents list
+  const {
+    data: docsResponse,
     isLoading: isLoadingDocs,
     error: docsError,
     refetch: refetchDocs,
@@ -2206,690 +84,103 @@ const AIChatScreen = ({ route }: any) => {
     queryFn: listDocument,
   });
 
-  const documents = useMemo(() => {
-    const rawData = allDocsData as any;
-    const items = Array.isArray(rawData?.data?.items) ? rawData.data.items : [];
-    return items as MedicalDocument[];
-  }, [allDocsData]);
+  const documentsList: MedicalDocument[] = useMemo(() => {
+    return docsResponse?.data || [];
+  }, [docsResponse]);
 
-  // Filter documents to ensure they have an S3 key
-  const documentsList = useMemo(() => {
-    return safeFilter(documents, (doc: MedicalDocument) => !!doc?.s3Key);
-  }, [documents]);
+  // Chat Session Hook
+  const {
+    messages,
+    setMessages,
+    mergedMessages,
+    activeSessionId,
+    onboardingSessionId,
+    selectedDocument,
+    input,
+    setInput,
+    isSending,
+    setIsSending,
+    isLoadingHistory,
+    isLoadingMore,
+    isActivelyStreaming,
+    hasEmergency,
+    suggestedQuestions,
+    handleSend,
+    loadMoreMessages,
+    initChatHistory,
+    fetchOnboardingHistory,
+    speakingMessageId,
+    speakMessage,
+    t,
+  } = useChatSession({
+    initialSessionId: route?.params?.sessionId,
+    documentsList,
+    preferredLang,
+    isOnboardingCompleted,
+    setIsOnboardingCompleted,
+    pendingStep,
+    setPendingStep,
+    filesInfo: chatWizardState.filesInfo,
+    lastKnownStateRef,
+  });
 
-  const handleViewFullReport = useCallback(
-    (doc: any) => {
-      if (!doc) return;
-      const targetId = doc.id || doc.documentId || doc.fileKey;
-      const matchingDoc = (documents || []).find(
-        (d: any) =>
-          (targetId && d.id === targetId) ||
-          (doc.fileName && d.fileName === doc.fileName),
-      );
+  // Wizard & Conflict Manager Hook
+  const {
+    isLoadingResults,
+    isConfirmingMeds,
+    medicineToEdit,
+    setMedicineToEdit,
+    handleEditSave,
+    handleConfirmSelection,
+    resolveCurrentConflict,
+    navigateConflict,
+    handleContinueAnyway,
+    handleReviewMedicines,
+    handleConfirmAndAddMeds,
+    handleGenericOptionPress,
+  } = useChatWizardManager({
+    chatWizardState,
+    setChatWizardState,
+    preferredLang,
+    isAllTerminal,
+    uploadingDocs,
+    setMessages,
+    editSheetRef,
+    extractionSheetRef,
+    uploadSheetRef,
+    activeSessionId,
+    onboardingSessionId,
+    navigation,
+    messages,
+    setIsSending,
+    lastKnownStateRef,
+    setIsOnboardingCompleted,
+    setPendingStep,
+  });
 
-      const fullDoc = {
-        ...doc,
-        ...(matchingDoc || {}),
-        id: targetId || matchingDoc?.id,
-        s3Key: matchingDoc?.s3Key || doc?.s3Key,
-        fileUrl: (matchingDoc as any)?.fileUrl || doc?.fileUrl,
-        imageUri: (matchingDoc as any)?.imageUri || doc?.imageUri,
-      };
-
-      setViewerDoc(fullDoc);
-      setIsViewerOpen(true);
-    },
-    [documents],
-  );
-
-  const activeMode = selectedDocument
-    ? ChatMode.DOCUMENT_RAG
-    : ChatMode.GENERAL_HEALTH;
-
-  // Load sessions list and select the most recent session on mount
+  // Load history on focus / mount
   useEffect(() => {
-    if (hasInitializedHistory.current) return;
-    if (isLoadingDocs) return;
-
-    const initChatHistory = async () => {
-      hasInitializedHistory.current = true;
-      setIsLoadingHistory(true);
-      try {
-        console.log("[AI_CHAT] Initializing sessions list...");
-        const sessionsRes = await apiClient.get("/chat/session", {
-          params: { limit: 50 },
-        });
-        const fetchedSessions =
-          sessionsRes.data?.data?.items || sessionsRes.data?.items || [];
-        setSessions(fetchedSessions);
-
-        if (fetchedSessions.length > 0) {
-          const mostRecent = fetchedSessions[0];
-          console.log(
-            "[AI_CHAT] Selecting most recent session on mount:",
-            mostRecent.id,
-          );
-          setActiveSessionId(mostRecent.id);
-
-          // Find corresponding document if any
-          if (mostRecent.documentId) {
-            const matchedDoc = documentsList.find(
-              (d) => d.id === mostRecent.documentId,
-            );
-            setSelectedDocument(matchedDoc || null);
-          } else {
-            setSelectedDocument(null);
-          }
-
-          const messagesRes = await apiClient.get(
-            `/chat/session/${mostRecent.id}/messages`,
-            {
-              params: { limit: 20 },
-            },
-          );
-          const msgItems =
-            messagesRes.data?.data?.items || messagesRes.data?.items || [];
-          const newCursor =
-            messagesRes.data?.data?.nextCursor ||
-            messagesRes.data?.nextCursor ||
-            null;
-          setNextCursor(newCursor);
-
-          const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => {
-            let meta = dbMsg.metadata;
-            if (typeof meta === "string") {
-              try { meta = JSON.parse(meta); } catch (e) { meta = {}; }
-            } else {
-              meta = meta || {};
-            }
-            const resolvedDocs = normalizeDocumentsList(
-              meta,
-              [],
-              [],
-              documentsList,
-            );
-            const rawMeds =
-              meta.medicines && meta.medicines.length > 0
-                ? meta.medicines
-                : extractMedicationsFromDocuments(resolvedDocs);
-
-            return {
-              ...meta,
-              id: dbMsg.id,
-              role: dbMsg.role === "assistant" ? "ai" : "user",
-              text: dbMsg.content,
-              mode: meta.mode as ChatMode,
-              emergency: !!meta.emergency,
-              createdAt: dbMsg.createdAt,
-              action: meta.action || meta.actionType || (meta.mode === "ACTION" ? "ACTION" : "NORMAL_CHAT"),
-              medicines: rawMeds,
-              conflicts: meta.conflicts || [],
-              documents: resolvedDocs,
-              options: meta.options || [],
-              document: meta.document || null,
-              documentSummary: meta.documentSummary || null,
-              suggestedQuestions: meta.suggestedQuestions || [],
-              keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
-              documentIds: normalizeDocumentIds(
-                meta.document?.id,
-                meta.documentId,
-                meta.documentIds,
-                meta.documents,
-              ),
-            };
-          });
-
-          setMessages(mapped);
-        } else {
-          console.log("[AI_CHAT] No historical sessions found.");
-          setActiveSessionId(null);
-          setMessages([]);
-          setNextCursor(null);
-        }
-      } catch (err) {
-        console.warn("[AI_CHAT] Failed to initialize chat history:", err);
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
-
+    fetchOnboardingHistory();
     initChatHistory();
-  }, [documentsList, isLoadingDocs]);
+  }, [fetchOnboardingHistory, initChatHistory]);
 
-  // Infinite scroll pagination to load older messages
-  const loadMoreMessages = async () => {
-    if (isLoadingMore || !nextCursor || !activeSessionId) return;
-    setIsLoadingMore(true);
-    try {
-      const response = await apiClient.get(
-        `/chat/session/${activeSessionId}/messages`,
-        {
-          params: { limit: 20, cursor: nextCursor },
-        },
-      );
-      const msgItems = response.data?.data?.items || response.data?.items || [];
-      const newCursor =
-        response.data?.data?.nextCursor || response.data?.nextCursor || null;
-
-      const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => {
-        let meta = dbMsg.metadata;
-        if (typeof meta === "string") {
-          try { meta = JSON.parse(meta); } catch (e) { meta = {}; }
-        } else {
-          meta = meta || {};
-        }
-        const resolvedDocs = normalizeDocumentsList(
-          meta,
-          [],
-          [],
-          documentsList,
-        );
-        const rawMeds =
-          meta.medicines && meta.medicines.length > 0
-            ? meta.medicines
-            : extractMedicationsFromDocuments(resolvedDocs);
-
-        return {
-          ...meta,
-          id: dbMsg.id,
-          role: dbMsg.role === "assistant" ? "ai" : "user",
-          text: dbMsg.content,
-          mode: meta.mode as ChatMode,
-          emergency: !!meta.emergency,
-          createdAt: dbMsg.createdAt,
-          action: meta.action || meta.actionType || (meta.mode === "ACTION" ? "ACTION" : "NORMAL_CHAT"),
-          medicines: rawMeds,
-          conflicts: meta.conflicts || [],
-          documents: resolvedDocs,
-          options: meta.options || [],
-          document: meta.document || null,
-          documentSummary: meta.documentSummary || null,
-          suggestedQuestions: meta.suggestedQuestions || [],
-          keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
-          documentIds: normalizeDocumentIds(
-            meta.document?.id,
-            meta.documentId,
-            meta.documentIds,
-            meta.documents,
-          ),
-        };
-      });
-
-      setMessages((prev) => [...mapped, ...prev]);
-      setNextCursor(newCursor);
-    } catch (err) {
-      console.warn("[AI_CHAT] Failed to load older messages:", err);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
+  // Back handler
   useEffect(() => {
-    return () => {
-      abortActiveStream();
+    const onBackPress = () => {
+      navigation.navigate("Home");
+      return true;
     };
-  }, []);
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [navigation]);
 
-  const handleSend = async (customText?: string) => {
-    const textToSubmit = (customText || input).trim();
-    if (!textToSubmit) return;
-
-    if (!isOnboardingCompleted && pendingStep) {
-      // Route typed text to pending onboarding flow
-      const userMessage: ChatMessage = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        text: textToSubmit,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
-      setInput("");
-      setIsSending(true);
-
-      try {
-        const latestAssistantMessage = [...messages]
-          .reverse()
-          .find((msg) => msg.role === "ai");
-
-        const payload: any = {
-          sessionId: activeSessionId || onboardingSessionId || undefined,
-          preferredLanguage: preferredLang,
-          history: messages.map((m) => ({
-            role: m.role === "ai" ? "assistant" : "user",
-            content: m.text,
-          })),
-          documentId: normalizeDocumentIds(
-            latestAssistantMessage?.documentIds,
-            latestAssistantMessage?.documents,
-            chatWizardState.filesInfo,
-          ),
-          message: textToSubmit,
-          state: lastKnownStateRef.current || {},
-        };
-
-        const response = await apiClient.post("/v1/onboarding/chat", payload);
-        const resData = response.data?.data;
-        if (resData?.reply) {
-          const aiMsg: ChatMessage = {
-            id: `ai-opt-res-${Date.now()}`,
-            role: "ai",
-            text: resData.reply,
-            action: resData.actionType || resData.action || "NORMAL_CHAT",
-            options: resData.options || [],
-            medicines: resData.medicines || [],
-            document: resData.document || null,
-            documentSummary: resData.documentSummary || null,
-            documents: resData.documents || [],
-            documentIds: normalizeDocumentIds(
-              resData.documentId,
-              resData.documentIds,
-              resData.documents,
-            ),
-            createdAt: new Date().toISOString(),
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-
-          if (resData?.onboardingState || resData?.state) {
-            lastKnownStateRef.current = resData.onboardingState || resData.state;
-          }
-
-          const nextPendingStep =
-            resData?.onboardingState?.currentStep ||
-            resData?.state?.currentStep ||
-            resData?.actionType ||
-            resData?.action ||
-            null;
-          const isNowCompleted = Boolean(
-            resData?.onboardingState?.isOnboardingCompleted ??
-            resData?.state?.isOnboardingCompleted ??
-            resData?.isOnboardingCompleted ??
-            (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
-          );
-          setIsOnboardingCompleted(isNowCompleted);
-          setPendingStep(isNowCompleted ? null : nextPendingStep);
-        }
-      } catch (err: any) {
-        console.warn("Failed to send onboarding text message:", err);
-      } finally {
-        setIsSending(false);
-      }
-      return;
-    }
-
-    if (!isOnboardingCompleted) {
-      Toast.show({
-        type: "info",
-        text1: "Complete onboarding first",
-        text2: "Normal chat becomes available after onboarding is complete.",
-      });
-      return;
-    }
-
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text: textToSubmit,
-      documents: selectedDocument
-        ? [{ id: selectedDocument.id, fileName: selectedDocument.fileName }]
-        : undefined,
-      createdAt: new Date().toISOString(),
+  // Keyboard Animation
+  const keyboard = useAnimatedKeyboard();
+  const animatedKeyboardStyle = useAnimatedStyle(() => {
+    return {
+      paddingBottom: Math.max(keyboard.height.value, bottomPadding),
     };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsSending(true);
-
-    try {
-      const payload = {
-        actionType: "NORMAL_CHAT",
-        message: textToSubmit,
-        sessionId: activeSessionId || onboardingSessionId || undefined,
-        preferredLanguage: preferredLang,
-        history: buildChatHistory(messages),
-        stream: true,
-        state: lastKnownStateRef.current || {},
-      };
-
-      if (payload.actionType === "NORMAL_CHAT" && payload.stream === true) {
-        console.log("[AI_CHAT] NORMAL_CHAT streaming branch selected.", {
-          sessionId: payload.sessionId,
-          preferredLanguage: payload.preferredLanguage,
-        });
-        await streamNormalChat(payload);
-      } else {
-        console.log("[AI_CHAT] Non-streaming branch selected.", {
-          actionType: payload.actionType,
-        });
-        const response = await apiClient.post("/v1/onboarding/chat", payload);
-        const resData = response.data?.data;
-
-        const aiMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: "ai",
-          text: resData?.reply || "No reply from AI",
-          mode: resData?.mode as ChatMode,
-          action: resData?.actionType || resData?.action || "NORMAL_CHAT",
-          options: resData?.options || [],
-          medicines: resData?.medicines || [],
-          documents: normalizeDocumentsList(resData, [], [], documentsList),
-          document: resData?.document || null,
-          documentSummary: resData?.documentSummary || null,
-          suggestedQuestions: resData?.suggestedQuestions || [],
-          keyFindings:
-            resData?.document?.keyFindings || resData?.keyFindings || [],
-          documentIds: normalizeDocumentIds(
-            resData?.document?.id,
-            resData?.documentId,
-            resData?.documentIds,
-            resData?.documents,
-          ),
-          createdAt: new Date().toISOString(),
-        };
-
-        setMessages((prev) => [...prev, aiMessage]);
-
-        if (resData?.onboardingState || resData?.state) {
-          lastKnownStateRef.current = resData.onboardingState || resData.state;
-        }
-
-        if (resData?.sessionId && !activeSessionId) {
-          setActiveSessionId(resData.sessionId);
-          apiClient
-            .get("/chat/session", { params: { limit: 50 } })
-            .then((res) => {
-              setSessions(res.data?.data?.items || res.data?.items || []);
-            })
-            .catch(() => { });
-        }
-      }
-    } catch (err: any) {
-      if (err?.message === "Stream cancelled") {
-        return;
-      }
-      Toast.show({
-        type: "error",
-        text1: "Query Failed",
-        text2: err.message || "An error occurred while calling the chatbot.",
-      });
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const resolveDashboardDocumentId = () => {
-    // 1. route.params?.documentId
-    if (route?.params?.documentId) {
-      return String(route.params.documentId);
-    }
-    // 2. current chat session's documentId
-    const currentSession = sessions.find((s) => s.id === activeSessionId);
-    if (currentSession?.documentId) {
-      return String(currentSession.documentId);
-    }
-    if (selectedDocument?.id) {
-      return String(selectedDocument.id);
-    }
-    // 3. documentId from the most recent ASK_REPORT / document message in loaded history
-    const allKnownMessages = [...messages, ...onboardingMessages];
-    const recentDocMsg = [...allKnownMessages].reverse().find(
-      (m) =>
-        (m.action === "ASK_REPORT" && (m.document?.id || m.documentId)) ||
-        m.document?.id ||
-        (m.documentIds && m.documentIds.length > 0) ||
-        (m.documents && m.documents.length > 0),
-    );
-    if (recentDocMsg) {
-      const docId =
-        recentDocMsg.document?.id ||
-        recentDocMsg.documentId ||
-        recentDocMsg.documentIds?.[0] ||
-        recentDocMsg.documents?.[0]?.id;
-      if (docId) return String(docId);
-    }
-    if (lastKnownStateRef.current?.documentId) {
-      const stateDocId = Array.isArray(lastKnownStateRef.current.documentId)
-        ? lastKnownStateRef.current.documentId[0]
-        : lastKnownStateRef.current.documentId;
-      if (stateDocId) return String(stateDocId);
-    }
-    // 4. undefined
-    return undefined;
-  };
-
-  const handleGenericOptionPress = async (option: any) => {
-    const optKey = option.key ?? option.value ?? option.action ?? option.id;
-    const normalizedKey = optKey === "ASK_ABOUT_REPORT" ? "ASK_REPORT" : optKey;
-    const optionLabel =
-      option.label || (typeof normalizedKey === "string" ? normalizedKey : "Option");
-
-    // 1. Show user reply in chat
-    const userMsg: ChatMessage = {
-      id: `user-opt-${Date.now()}`,
-      role: "user",
-      text: optionLabel,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-
-    // 2. Perform actions based on value/actionType
-    if (
-      option.actionType === "ADD_DOCUMENT" ||
-      normalizedKey === "ADD_DOCUMENT" ||
-      option.value === "ADD_DOCUMENT"
-    ) {
-      uploadSheetRef.current?.present();
-      return;
-    }
-
-    if (
-      option.actionType === "ADD_MEDICINE" ||
-      normalizedKey === "ADD_MEDICINE" ||
-      option.value === "ADD_MEDICINE"
-    ) {
-      navigation.navigate("MEDICATION");
-      return;
-    }
-
-    // 3. Otherwise, send the selected value to /v1/onboarding/chat
-    setIsSending(true);
-    try {
-      const latestAssistantMessage = [...messages]
-        .reverse()
-        .find((msg) => msg.role === "ai");
-
-      const targetDocId = resolveDashboardDocumentId();
-      const resolvedDocIds = targetDocId
-        ? [targetDocId]
-        : normalizeDocumentIds(
-            latestAssistantMessage?.documentIds,
-            latestAssistantMessage?.documents,
-            chatWizardState.filesInfo,
-          );
-
-      const payload: any = {
-        sessionId: activeSessionId || onboardingSessionId || undefined,
-        preferredLanguage: preferredLang,
-        history: messages.map((m) => ({
-          role: m.role === "ai" ? "assistant" : "user",
-          content: m.text,
-        })),
-        state: lastKnownStateRef.current || {},
-      };
-
-      if (resolvedDocIds && resolvedDocIds.length > 0) {
-        payload.documentId = resolvedDocIds;
-      }
-
-      let updatedState = { ...(lastKnownStateRef.current || {}) };
-
-      if (option.actionType === "CONFIRM_MEDICINES" || normalizedKey === "CONFIRM_MEDICINES") {
-        payload.actionType = "CONFIRM_MEDICINES";
-        let sanitizedData = option.value;
-        if (Array.isArray(option.value)) {
-          sanitizedData = option.value.map(sanitizeMedicineForPayload);
-        } else if (option.value && Array.isArray(option.value.medicines)) {
-          sanitizedData = {
-            ...option.value,
-            medicines: option.value.medicines.map(sanitizeMedicineForPayload),
-          };
-        }
-        payload.actionData = sanitizedData;
-        payload.message = "CONFIRM_MEDICINES";
-        updatedState.medicinesConfirmed = true;
-        updatedState.medicinesFlowStarted = true;
-        if (Array.isArray(option.value)) {
-          updatedState.medicinesToAdd = option.value;
-        } else if (option.value?.medicines) {
-          updatedState.medicinesToAdd = option.value.medicines;
-        }
-      } else if (option.actionType === "SKIP_MEDICINES" || normalizedKey === "SKIP_MEDICINES") {
-        payload.actionType = "SKIP_MEDICINES";
-        payload.message = "SKIP_MEDICINES";
-        updatedState.medicinesFlowStarted = true;
-        updatedState.medicinesConfirmed = false;
-      } else {
-        payload.message =
-          typeof normalizedKey === "object"
-            ? JSON.stringify(normalizedKey)
-            : normalizedKey;
-        if (normalizedKey === "ASK_REPORT" || option.actionType === "ASK_REPORT") {
-          payload.actionType = "ASK_REPORT";
-          updatedState.documentConfirmed = true;
-        } else if (normalizedKey === "CONFIRM_DOCUMENT" || option.actionType === "CONFIRM_DOCUMENT") {
-          updatedState.documentConfirmed = true;
-        }
-      }
-
-      lastKnownStateRef.current = updatedState;
-      payload.state = updatedState;
-
-      const response = await apiClient.post("/v1/onboarding/chat", payload);
-      const resData = response.data?.data;
-      const action = resData?.actionType || resData?.action || "NORMAL_CHAT";
-      const hasStructuredPayload = Boolean(
-        resData?.document ||
-        resData?.options?.length ||
-        resData?.medicines?.length ||
-        resData?.documents?.length ||
-        resData?.suggestedQuestions?.length,
-      );
-
-      if (resData && (resData.reply || hasStructuredPayload)) {
-        const aiMsg: ChatMessage = {
-          id: `ai-opt-res-${Date.now()}`,
-          role: "ai",
-          text: resData.reply || "",
-          action,
-          options: resData.options || [],
-          medicines: resData.medicines || [],
-          documents: normalizeDocumentsList(resData, [], [], documentsList),
-          document: resData.document || null,
-          documentSummary: resData.documentSummary || null,
-          suggestedQuestions: resData.suggestedQuestions || [],
-          keyFindings:
-            resData.document?.keyFindings || resData.keyFindings || [],
-          documentIds: normalizeDocumentIds(
-            resData.document?.id,
-            resData.documentId,
-            resData.documentIds,
-            resData.documents,
-          ),
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-
-        if (resData?.onboardingState || resData?.state) {
-          lastKnownStateRef.current = resData.onboardingState || resData.state;
-        }
-
-        const nextPendingStep =
-          resData?.onboardingState?.currentStep ||
-          resData?.state?.currentStep ||
-          resData?.actionType ||
-          resData?.action ||
-          null;
-        const isNowCompleted = Boolean(
-          resData?.onboardingState?.isOnboardingCompleted ??
-          resData?.state?.isOnboardingCompleted ??
-          resData?.isOnboardingCompleted ??
-          (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE"),
-        );
-        setIsOnboardingCompleted(isNowCompleted);
-        setPendingStep(isNowCompleted ? null : nextPendingStep);
-      }
-    } catch (err: any) {
-      console.warn("Failed to submit option click:", err);
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const hasEmergency = useMemo(() => {
-    return messages.some((msg) => msg.emergency === true);
-  }, [messages]);
-
-  const suggestedQuestions = useMemo(() => {
-    const langKey = preferredLang || "english";
-    const questionSource =
-      SUGGESTED_QUESTIONS_I18N[langKey] || SUGGESTED_QUESTIONS_I18N.english;
-    return activeMode === ChatMode.DOCUMENT_RAG
-      ? questionSource.document
-      : questionSource.general;
-  }, [activeMode, preferredLang]);
-
-  // Merge live messages and onboarding history (rendered newest-first for inverted FlatList with ID deduplication)
-  const mergedMessages = useMemo(() => {
-    const liveNewestFirst = [...messages].reverse();
-    const onboardingNewestFirst = [...onboardingMessages].reverse();
-    const combined = [...liveNewestFirst, ...onboardingNewestFirst];
-
-    const seenIds = new Set<string>();
-    const deduplicated: ChatMessage[] = [];
-
-    for (const msg of combined) {
-      if (msg && msg.id) {
-        if (seenIds.has(msg.id)) {
-          continue;
-        }
-        seenIds.add(msg.id);
-      }
-      deduplicated.push(msg);
-    }
-
-    return deduplicated;
-  }, [messages, onboardingMessages]);
-
-  const activePendingMessageId = useMemo(() => {
-    if (isOnboardingCompleted || !pendingStep) return null;
-    const targetMsg = mergedMessages.find((m) => m.role === "ai" && m.action === pendingStep);
-    return targetMsg?.id || null;
-  }, [mergedMessages, pendingStep, isOnboardingCompleted]);
-
-  const dateHeadersMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (let i = 0; i < mergedMessages.length; i++) {
-      const item = mergedMessages[i];
-      const itemDate = parseToLocalDate(item?.createdAt);
-      if (!itemDate || !item?.id) continue;
-
-      let prevItemDate: Date | null = null;
-      for (let j = i + 1; j < mergedMessages.length; j++) {
-        const candidateDate = parseToLocalDate(mergedMessages[j]?.createdAt);
-        if (candidateDate) {
-          prevItemDate = candidateDate;
-          break;
-        }
-      }
-
-      const isDayBoundary =
-        !prevItemDate || getLocalDayKey(itemDate) !== getLocalDayKey(prevItemDate);
-
-      if (isDayBoundary) {
-        map.set(item.id, formatChatDateLabel(itemDate, preferredLang, t));
-      }
-    }
-    return map;
-  }, [mergedMessages, preferredLang, midnightTick]);
+  });
 
   const hasActiveUploads = useMemo(() => {
     if (isUploading) return true;
@@ -2904,24 +195,35 @@ const AIChatScreen = ({ route }: any) => {
     });
   }, [isUploading, uploadingDocs]);
 
-  const isLatestActiveMessage = (msgId: string) => {
-    if (!isOnboardingCompleted && activePendingMessageId) {
-      return activePendingMessageId === msgId;
-    }
-    // In active chat / post-onboarding, find the latest actionable AI message
-    const newestActionableMsg = mergedMessages.find(
-      (m) =>
-        m.role === "ai" &&
-        m.action &&
-        m.action !== "NORMAL_CHAT" &&
-        m.action !== "POST_ONBOARDING" &&
-        m.action !== "COMPLETE",
-    );
-    if (!newestActionableMsg) return false;
-    if (newestActionableMsg.id !== msgId) return false;
-    const { chosenVal } = findHistoricalUserReply(mergedMessages, msgId, true);
-    return chosenVal === null;
+  const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
+    setChatWizardState((prev) => ({
+      ...prev,
+      step: "processing",
+      jobIds,
+      filesInfo,
+      extractedMedicines: [],
+      conflicts: [],
+      currentConflictIndex: 0,
+      resolvedMedicines: [],
+      replaceList: [],
+      mergeList: [],
+      summaries: [],
+      hasViewedCompletedOcr: false,
+    }));
+    extractionSheetRef.current?.present();
   };
+
+  const handleUploadStart = () => {
+    extractionSheetRef.current?.present();
+  };
+
+  const handleViewFullReport = useCallback((doc: any) => {
+    const matched = documentsList.find(
+      (d: any) => d.id === doc?.id || d.s3Key === doc?.s3Key || d.fileKey === doc?.fileKey
+    );
+    setViewerDoc(matched || doc);
+    setIsViewerOpen(true);
+  }, [documentsList]);
 
   if (isLoadingDocs || isLoadingHistory) {
     return <LoadingScreen />;
@@ -2930,919 +232,135 @@ const AIChatScreen = ({ route }: any) => {
   if (docsError) {
     return (
       <ErrorScreen
-        message={
-          docsError instanceof Error ? docsError.message : String(docsError)
-        }
-        onRetry={() => {
-          (refetchDocs as any)();
-        }}
+        message={docsError instanceof Error ? docsError.message : String(docsError)}
+        onRetry={() => refetchDocs()}
       />
     );
   }
 
+  const isOnboardingSession = Boolean(onboardingSessionId && !isOnboardingCompleted);
+
   return (
-    <Container
+    <LinearGradient
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
+      style={styles.container}
     >
-      <StatusBar barStyle={"dark-content"} />
-      {/* Sticky Premium AI Header */}
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+
+      {/* Header */}
       <ChatHeader
         onBack={() => navigation.navigate("Home")}
         isDark={isDark}
         theme={theme}
       />
 
-      {/* Floating Background Progress Panel */}
+      {/* Upload Progress Panel */}
       {showFloatingPanel && hasActiveUploads && (
         <FloatingProgressPanel
-          onOpenSheet={handleOpenProgressSheet}
+          onOpenSheet={() => extractionSheetRef.current?.present()}
           isDark={isDark}
         />
       )}
 
       <View style={styles.keyboardContainer}>
-        {/* Emergency Card Display */}
+        {/* Emergency Alert */}
         {hasEmergency && (
-          <EmergencyCard>
-            <EmergencyTitleRow>
+          <View style={styles.emergencyCard}>
+            <View style={styles.emergencyTitleRow}>
               <Ionicons name="warning" size={20} color="#dc2626" />
-              <EmergencyTitle>{t("seekImmediateAttention")}</EmergencyTitle>
-            </EmergencyTitleRow>
-            <EmergencyText>{t("emergencyWarning")}</EmergencyText>
-          </EmergencyCard>
+              <Text style={styles.emergencyTitle}>{t("seekImmediateAttention")}</Text>
+            </View>
+            <Text style={styles.emergencyText}>{t("emergencyWarning")}</Text>
+          </View>
         )}
 
-        {/* Messages List / Welcome Empty State */}
+        {/* Read Only Archive Banner */}
+        {isOnboardingSession && (
+          <View
+            style={[
+              styles.readOnlyBanner,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Ionicons name="archive-outline" size={18} color="#0f766e" />
+            <Text style={styles.readOnlyText}>{t("onboardingSessionReadOnly")}</Text>
+          </View>
+        )}
+
+        {/* Messages List */}
         <View style={styles.contentWrapper}>
-          {activeDateLabel ? (
-            <View
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 99,
-              }}
-              pointerEvents="none"
-            >
-              <ChatDateHeader dateLabel={activeDateLabel} isDark={isDark} />
-            </View>
-          ) : null}
-          {isLoadingHistory ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <ActivityIndicator size="large" color="#0f766e" />
-            </View>
-          ) : (
-            <FlatList
-              ref={flatListRef}
-              data={mergedMessages}
-              keyExtractor={(item: any, index: number) =>
-                item.id || String(index)
-              }
-              inverted
-              onViewableItemsChanged={onViewableItemsChanged.current}
-              viewabilityConfig={viewabilityConfig.current}
-              renderItem={({ item }) => {
-                const dateLabel = item?.id ? dateHeadersMap.get(item.id) : null;
-                const dateHeader = dateLabel ? (
-                  <ChatDateHeader dateLabel={dateLabel} isDark={isDark} />
-                ) : null;
-
-                const isPendingStep = !!activePendingMessageId && item.id === activePendingMessageId;
-                const isHistorical = !isPendingStep;
-                const { chosenVal, chosenLabel } = isHistorical
-                  ? findHistoricalUserReply(mergedMessages, item.id, true)
-                  : { chosenVal: null, chosenLabel: null };
-
-                const isComplexStep =
-                  item.action === "RESOLVE_PROFILE_SOURCE" ||
-                  item.action === "ASK_UPLOAD_OR_SKIP" ||
-                  item.action === "MEDICINE_OPTIONS" ||
-                  item.action === "ASK_REPORT" ||
-                  item.action === "ADD_MEDICINE" ||
-                  item.action === "EDIT_MEDICINE" ||
-                  item.action === "REVIEW_MEDICINES_LIST" ||
-                  item.action === "ADD_DOCUMENT" ||
-                  item.action === "ACTION" ||
-                  (item as any).mode === "ACTION" ||
-                  item.action === "CONFIRM_MEDICINE" ||
-                  item.action === "EXTRACTED_MEDICINES" ||
-                  item.action === "EXTRACTED_MEDICINES_CONFLICTS" ||
-                  item.action === "EXTRACTED_MEDICINES_CONFIRM" ||
-                  item.action === "EXTRACTED_MEDICINES_SUCCESS" ||
-                  item.action === "MEDICINE_SUMMARY" ||
-                  item.action === "MEDICINE_REVIEW_ACCORDION" ||
-                  item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE";
-
-                const isExcludedStep =
-                  item.action === "FILE_UPLOAD" ||
-                  item.action === "ASK_UPLOAD_DOCUMENT" ||
-                  item.action === "ASK_DOB" ||
-                  item.action === "ASK_MEDICINE_START_DATE" ||
-                  item.action === "ASK_MEDICINE_SCHEDULE" ||
-                  item.action === "INFO";
-
-                const isChipStep =
-                  !isComplexStep &&
-                  !isExcludedStep &&
-                  item.action !== "COMPLETE" &&
-                  item.action !== "POST_ONBOARDING" &&
-                  (item.action === "ASK_LANGUAGE" ||
-                    item.action === "ASK_GENDER" ||
-                    item.action === "ASK_BLOOD_GROUP" ||
-                    (item.options && item.options.length > 0));
-
-                const renderAssistantPrompt = (card: React.ReactNode) => {
-                  const hasText = item.text && item.text.trim().length > 0;
-                  return (
-                    <View style={{ width: "100%" }}>
-                      {dateHeader}
-                      {hasText && (
-                        <MessageBubble
-                          message={item}
-                          isDark={isDark}
-                          onSpeak={() =>
-                            speakMessage(item.id, item.text, preferredLang)
-                          }
-                          isSpeaking={speakingMessageId === item.id}
-                        />
-                      )}
-                      <View style={styles.optionsWrapper}>{card}</View>
-                    </View>
-                  );
-                };
-
-                if (isComplexStep) {
-                  if (item.action === "RESOLVE_PROFILE_SOURCE") {
-                    return renderAssistantPrompt(
-                      <ResolveProfileSourceCard
-                        activeMsg={item}
-                        preferredLang={preferredLang}
-                        isDark={isDark}
-                        theme={theme}
-                        sendMessage={() => { }}
-                        state={{}}
-                        isHistorical={true}
-                        chosenVal={chosenVal}
-                        chosenLabel={chosenLabel}
-                      />,
-                    );
-                  }
-                  if (item.action === "ASK_UPLOAD_OR_SKIP") {
-                    return renderAssistantPrompt(
-                      <AskUploadOrSkipCard
-                        activeMsg={item}
-                        preferredLang={preferredLang}
-                        theme={theme}
-                        state={{}}
-                        setState={() => { }}
-                        sendMessage={() => { }}
-                        handleDocumentUpload={() => { }}
-                        isHistorical={true}
-                        chosenVal={chosenVal}
-                        chosenLabel={chosenLabel}
-                      />,
-                    );
-                  }
-                  if (item.action === "ADD_MEDICINE") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    const med = item.medicine || {};
-                    return renderAssistantPrompt(
-                      <AddMedicineCard
-                        key={item.id}
-                        med={med}
-                        isEditingLocal={false}
-                        preferredLang={preferredLang}
-                        isDark={isDark}
-                        theme={theme}
-                        currentClientMedId={chatCurrentClientMedId}
-                        setCurrentClientMedId={setChatCurrentClientMedId}
-                        onSave={(updatedMed) => {
-                          handleGenericOptionPress({
-                            label: `Add medicine: ${updatedMed.name}`,
-                            value: { medicine: updatedMed },
-                            actionType: "ADD_MEDICINE",
-                          });
-                        }}
-                        readOnly={!isLatest}
-                        chosenVal={chosenVal}
-                        chosenLabel={chosenLabel}
-                      />,
-                    );
-                  }
-                  if (item.action === "EDIT_MEDICINE") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    const med = item.medicine || {};
-                    return renderAssistantPrompt(
-                      <View
-                        style={{
-                          backgroundColor: isDark ? "#1e293b" : "#ffffff",
-                          borderRadius: 16,
-                          padding: 16,
-                          marginTop: 8,
-                          borderWidth: 1,
-                          borderColor: isDark ? "#334155" : "#e2e8f0",
-                          opacity: !isLatest ? 0.6 : 1,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 16,
-                            fontWeight: "600",
-                            color: theme.colors.textPrimary,
-                            marginBottom: 12,
-                          }}
-                        >
-                          {med.name || med.medicationName || "Unknown Medicine"}
-                        </Text>
-
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                color: isDark ? "#cbd5e1" : "#475569",
-                              }}
-                            >
-                              {med.dosage
-                                ? `${med.dosage} ${med.dosageUnit || ""}`.trim()
-                                : "No dosage specified"}
-                            </Text>
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                color: isDark ? "#94a3b8" : "#64748b",
-                                marginTop: 4,
-                              }}
-                            >
-                              {med.frequency
-                                ? med.frequency === "ONCE"
-                                  ? t("frequency.ONCE")
-                                  : med.frequency === "TWICE"
-                                    ? t("frequency.TWICE")
-                                    : med.frequency === "THRICE"
-                                      ? t("frequency.THRICE")
-                                      : med.frequency
-                                : "No frequency specified"}
-                            </Text>
-                          </View>
-
-                          <TouchableOpacity
-                            disabled={!isLatest}
-                            onPress={() => {
-                              setMedicineToEdit(med);
-                              setTimeout(() => {
-                                editSheetRef.current?.present();
-                              }, 100);
-                            }}
-                            style={{
-                              backgroundColor: isDark
-                                ? "rgba(255,255,255,0.1)"
-                                : "#f1f5f9",
-                              paddingHorizontal: 16,
-                              paddingVertical: 8,
-                              borderRadius: 20,
-                              flexDirection: "row",
-                              alignItems: "center",
-                            }}
-                          >
-                            <Ionicons
-                              name="pencil"
-                              size={16}
-                              color={theme.colors.primary}
-                              style={{ marginRight: 6 }}
-                            />
-                            <Text
-                              style={{
-                                color: theme.colors.primary,
-                                fontWeight: "600",
-                                fontSize: 14,
-                              }}
-                            >
-                              Edit
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>,
-                    );
-                  }
-                  if (
-                    item.action === "ACTION" ||
-                    (item as any).mode === "ACTION" ||
-                    item.action === "REVIEW_MEDICINES_LIST" ||
-                    item.action === "ADD_DOCUMENT"
-                  ) {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
-                    const msgDocs = normalizeDocumentsList(
-                      item.documents || item.document || item,
-                    );
-                    const rawMeds = item.medicines?.length
-                      ? item.medicines
-                      : (isLatest && chatWizardState.extractedMedicines.length > 0
-                          ? chatWizardState.extractedMedicines
-                          : extractMedicationsFromDocuments(msgDocs));
-
-                    const displayMeds = rawMeds.map((m: any, idx: number) => ({
-                      ...m,
-                      id: m.id || m.client_med_id || `med-${item.id}-${idx}`,
-                      selected: m.selected !== undefined ? m.selected : true,
-                    }));
-
-                    if (displayMeds.length > 0) {
-                      return renderAssistantPrompt(
-                        <ReviewMedicinesListCard
-                          localMedicines={displayMeds}
-                          setLocalMedicines={(updater) => {
-                            const nextMeds =
-                              typeof updater === "function"
-                                ? updater(displayMeds)
-                                : updater;
-
-                            if (isLatest) {
-                              setChatWizardState((prev) => ({
-                                ...prev,
-                                extractedMedicines: nextMeds,
-                              }));
-                            }
-
-                            setMessages((prev) =>
-                              prev.map((msg) => {
-                                if (msg.id === item.id) {
-                                  return {
-                                    ...msg,
-                                    medicines: nextMeds,
-                                  };
-                                }
-                                return msg;
-                              }),
-                            );
-                          }}
-                          preferredLang={preferredLang}
-                          isDark={isDark}
-                          theme={theme}
-                          onConfirm={(formattedMeds) => {
-                            const displayLabel =
-                              preferredLang === "gujarati" ||
-                              preferredLang === "gu"
-                                ? "પસંદ કરેલ પુષ્ટિ કરો"
-                                : preferredLang === "hindi" ||
-                                  preferredLang === "hi"
-                                  ? "चयनित की पुष्टि करें"
-                                  : preferredLang === "marathi" ||
-                                    preferredLang === "mr"
-                                    ? "निवडलेले निश्चित करा"
-                                    : preferredLang === "tamil" ||
-                                      preferredLang === "ta"
-                                      ? "தேர்ந்தெடுக்கப்பட்டதை உறுதிப்படுத்தவும்"
-                                      : "Confirm Selection";
-
-                            handleGenericOptionPress({
-                              label: displayLabel,
-                              value: { medicines: formattedMeds || [] },
-                              actionType: "CONFIRM_MEDICINES",
-                            });
-                          }}
-                          onAddNew={() => {
-                            const displayLabel =
-                              preferredLang === "gujarati" ||
-                              preferredLang === "gu"
-                                ? "નવું ઉમેરો"
-                                : preferredLang === "hindi" ||
-                                  preferredLang === "hi"
-                                  ? "नया जोड़ें"
-                                  : preferredLang === "marathi" ||
-                                    preferredLang === "mr"
-                                    ? "नवीन जोडा"
-                                    : preferredLang === "tamil" ||
-                                      preferredLang === "ta"
-                                      ? "புதியதைச் சேர்க்கவும்"
-                                      : "Add New";
-
-                            handleGenericOptionPress({
-                              label: displayLabel,
-                              value: { addNew: true },
-                              actionType: "ADD_MEDICINE",
-                            });
-                          }}
-                          onSkipAll={() => {
-                            const displayLabel =
-                              preferredLang === "gujarati" ||
-                              preferredLang === "gu"
-                                ? "બધા છોડી દો"
-                                : preferredLang === "hindi" ||
-                                  preferredLang === "hi"
-                                  ? "सभी छोड़ें"
-                                  : preferredLang === "marathi" ||
-                                    preferredLang === "mr"
-                                    ? "सर्व वगळा"
-                                    : preferredLang === "tamil" ||
-                                      preferredLang === "ta"
-                                      ? "அனைத்தையும் தவிர்க்கவும்"
-                                      : "Skip All";
-
-                            handleGenericOptionPress({
-                              label: displayLabel,
-                              value: { skipAll: true },
-                              actionType: "SKIP_MEDICINES",
-                            });
-                          }}
-                          onEdit={(med) => {
-                            setMedicineToEdit(med);
-                            setTimeout(() => {
-                              editSheetRef.current?.present();
-                            }, 100);
-                          }}
-                          readOnly={isReadOnly}
-                          chosenVal={chosenVal}
-                          chosenLabel={chosenLabel}
-                          documents={msgDocs}
-                          showDocumentSummary={true}
-                          onRetryDocument={handleRetryDocumentInChat}
-                          canRetry={isLatest && !isReadOnly}
-                        />,
-                      );
-                    }
-
-                    if (msgDocs.length > 0) {
-                      return renderAssistantPrompt(
-                        <View style={{ width: "100%" }}>
-                          <DocumentProgressSummaryContainer
-                            documents={msgDocs}
-                            preferredLang={preferredLang}
-                            isDark={isDark}
-                            theme={theme}
-                            onRetry={handleRetryDocumentInChat}
-                            canRetry={isLatest && !isReadOnly}
-                            readOnly={isReadOnly}
-                          />
-                          {item.options && item.options.length > 0 && (
-                            <View style={{ marginTop: 10 }}>
-                              <MedicineOptionsPanel
-                                optionsList={item.options}
-                                isDark={isDark}
-                                theme={theme}
-                                onOptionPress={(key, label) =>
-                                  handleGenericOptionPress({ key, label, value: key })
-                                }
-                                readOnly={isReadOnly}
-                                chosenVal={chosenVal}
-                                chosenLabel={chosenLabel}
-                              />
-                            </View>
-                          )}
-                        </View>,
-                      );
-                    }
-
-                    return renderAssistantPrompt(null);
-                  }
-                  if (item.action === "CONFIRM_MEDICINE") {
-                    return renderAssistantPrompt(
-                      <ConfirmMedicineCard
-                        summary={item.medicines || item.summary || {}}
-                        preferredLang={preferredLang}
-                        isDark={isDark}
-                        theme={theme}
-                        onConfirm={() => { }}
-                        onEdit={(med) => {
-                          setMedicineToEdit(med);
-                          setTimeout(() => {
-                            editSheetRef.current?.present();
-                          }, 100);
-                        }}
-                        readOnly={true}
-                        chosenVal={chosenVal}
-                        chosenLabel={chosenLabel}
-                      />,
-                    );
-                  }
-                  if (item.action === "MEDICINE_OPTIONS") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    const isReadOnly = (isHistorical && chosenVal !== null) || !isLatest;
-                    return renderAssistantPrompt(
-                      <MedicineOptionsPanel
-                        optionsList={item.options || []}
-                        isDark={isDark}
-                        theme={theme}
-                        onOptionPress={(key, label) =>
-                          handleGenericOptionPress({ key, label, value: key })
-                        }
-                        readOnly={isReadOnly}
-                        chosenVal={chosenVal}
-                        chosenLabel={chosenLabel}
-                      />,
-                    );
-                  }
-                  if (item.action === "ASK_REPORT") {
-                    const doc = item.document;
-                    const hasDoc = Boolean(
-                      doc &&
-                        !Array.isArray(doc) &&
-                        (doc.id ||
-                          doc.summary ||
-                          (doc.keyFindings && doc.keyFindings.length > 0) ||
-                          doc.extractedStructuredData ||
-                          doc.fileName ||
-                          doc.s3Key),
-                    );
-
-                    if (hasDoc) {
-                      const isReadOnly = chosenVal !== null;
-                      const questions =
-                        item.suggestedQuestions && item.suggestedQuestions.length > 0
-                          ? item.suggestedQuestions
-                          : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
-
-                      return renderAssistantPrompt(
-                        <ReportSummaryChatCard
-                          document={doc}
-                          documentSummary={item.documentSummary}
-                          suggestedQuestions={questions}
-                          isDark={isDark}
-                          theme={theme}
-                          preferredLang={preferredLang}
-                          onQuestionPress={(q) => handleSend(q)}
-                          onViewFullReport={() => handleViewFullReport(doc)}
-                          readOnly={isReadOnly}
-                        />,
-                      );
-                    }
-
-                    const msgDocs = normalizeDocumentsList(
-                      item.documents || item.document || item,
-                    );
-                    if (msgDocs.length > 0) {
-                      const isLatest = isLatestActiveMessage(item.id);
-                      return renderAssistantPrompt(
-                        <DocumentProgressSummaryContainer
-                          documents={msgDocs}
-                          preferredLang={preferredLang}
-                          isDark={isDark}
-                          theme={theme}
-                          onRetry={handleRetryDocumentInChat}
-                          canRetry={isLatest && chosenVal === null}
-                          readOnly={chosenVal !== null}
-                        />,
-                      );
-                    }
-
-                    return renderAssistantPrompt(null);
-                  }
-                  if (item.action === "EXTRACTED_MEDICINES") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    return renderAssistantPrompt(
-                      <ExtractedMedicinesCard
-                        medicines={item.medicines || []}
-                        documents={item.documents || []}
-                        isDark={isDark}
-                        isLatest={isLatest}
-                        onEdit={(med) => {
-                          setMedicineToEdit(med);
-                          setTimeout(() => {
-                            editSheetRef.current?.present();
-                          }, 100);
-                        }}
-                        onConfirm={handleConfirmSelection}
-                        isLoading={isLoadingResults}
-                        preferredLang={preferredLang}
-                      />,
-                    );
-                  }
-
-                  if (item.action === "EXTRACTED_MEDICINES_CONFLICTS") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    const displayConflicts = item.conflicts?.length
-                      ? item.conflicts
-                      : (isLatest ? chatWizardState.conflicts : []);
-                    return renderAssistantPrompt(
-                      <ConflictCarouselCard
-                        conflicts={displayConflicts}
-                        currentIndex={isLatest ? chatWizardState.currentConflictIndex : 0}
-                        isDark={isDark}
-                        isLatest={isLatest}
-                        onResolve={resolveCurrentConflict}
-                        onNavigate={navigateConflict}
-                        onContinueAnyway={handleContinueAnyway}
-                        onReviewMedicines={handleReviewMedicines}
-                        onEdit={(med) => {
-                          setMedicineToEdit(med);
-                          setTimeout(() => {
-                            editSheetRef.current?.present();
-                          }, 100);
-                        }}
-                        preferredLang={preferredLang}
-                        documents={item.documents}
-                      />,
-                    );
-                  }
-
-                  if (item.action === "EXTRACTED_MEDICINES_CONFIRM") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    return renderAssistantPrompt(
-                      <ConfirmMedicinesCard
-                        docsCount={
-                          item.docsCount !== undefined
-                            ? item.docsCount
-                            : chatWizardState.filesInfo.length
-                        }
-                        extractedCount={
-                          item.medicinesCount !== undefined
-                            ? item.medicinesCount
-                            : chatWizardState.extractedMedicines.length
-                        }
-                        conflictsResolvedCount={
-                          chatWizardState.conflicts.length
-                        }
-                        toBeAddedCount={
-                          item.medicinesCount !== undefined
-                            ? item.medicinesCount
-                            : chatWizardState.resolvedMedicines.length +
-                            chatWizardState.replaceList.length +
-                            chatWizardState.mergeList.length
-                        }
-                        isDark={isDark}
-                        isLatest={isLatest}
-                        onConfirm={handleConfirmAndAddMeds}
-                        isLoading={isConfirmingMeds}
-                        preferredLang={preferredLang}
-                      />,
-                    );
-                  }
-
-                  if (item.action === "EXTRACTED_MEDICINES_SUCCESS") {
-                    return renderAssistantPrompt(
-                      <SuccessCard
-                        count={item.medicinesCount || 0}
-                        isDark={isDark}
-                        onViewMedicines={() =>
-                          navigation.navigate("MEDICATION")
-                        }
-                        preferredLang={preferredLang}
-                      />,
-                    );
-                  }
-
-                  if (item.action === "MEDICINE_SUMMARY") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    return renderAssistantPrompt(
-                      <MedicineExtractionSummaryCard
-                        documents={item.documents || []}
-                        isDark={isDark}
-                        isLatest={isLatest}
-                        onReview={handleReviewMedicines}
-                      />,
-                    );
-                  }
-
-                  if (item.action === "MEDICINE_REVIEW_ACCORDION") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    return renderAssistantPrompt(
-                      <MedicineDocumentAccordionCard
-                        documents={item.documents || []}
-                        medicines={chatWizardState.extractedMedicines}
-                        isDark={isDark}
-                        isLatest={isLatest}
-                        onEdit={(med) => {
-                          setMedicineToEdit(med);
-                          setTimeout(() => {
-                            editSheetRef.current?.present();
-                          }, 100);
-                        }}
-                        onContinue={handleConfirmSelection}
-                        isLoading={isLoadingResults}
-                        preferredLang={preferredLang}
-                      />,
-                    );
-                  }
-
-                  if (item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE") {
-                    const isLatest = isLatestActiveMessage(item.id);
-                    return renderAssistantPrompt(
-                      <View
-                        style={{
-                          backgroundColor: isDark ? "#1e293b" : "#ffffff",
-                          borderColor: "#ef4444",
-                          padding: 16,
-                          borderRadius: 16,
-                          borderWidth: 1,
-                        }}
-                      >
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginBottom: 12,
-                          }}
-                        >
-                          <Ionicons
-                            name="warning"
-                            size={24}
-                            color="#ef4444"
-                            style={{ marginRight: 8 }}
-                          />
-                          <Text
-                            style={{
-                              fontSize: 16,
-                              fontWeight: "700",
-                              color: isDark ? "#f8fafc" : "#1e293b",
-                            }}
-                          >
-                            Some Additions Failed
-                          </Text>
-                        </View>
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: isDark ? "#cbd5e1" : "#475569",
-                            marginBottom: 16,
-                          }}
-                        >
-                          Successfully added {item.successCount || 0}{" "}
-                          medicine(s), but {item.failedCount || 0} failed due to
-                          a network error.
-                        </Text>
-                        {isLatest && (
-                          <TouchableOpacity
-                            onPress={() => handleConfirmAndAddMeds(true)}
-                            disabled={isConfirmingMeds}
-                            style={{
-                              backgroundColor: "#ef4444",
-                              padding: 12,
-                              borderRadius: 12,
-                              alignItems: "center",
-                            }}
-                          >
-                            {isConfirmingMeds ? (
-                              <ActivityIndicator size="small" color="#ffffff" />
-                            ) : (
-                              <Text
-                                style={{ color: "#ffffff", fontWeight: "700" }}
-                              >
-                                Retry Failed
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        )}
-                      </View>,
-                    );
-                  }
-                }
-
-                if (isHistorical && isChipStep) {
-                  return (
-                    <View style={{ width: "100%" }}>
-                      {dateHeader}
-                      <MessageBubble
-                        message={item}
-                        isDark={isDark}
-                        onSpeak={() =>
-                          speakMessage(item.id, item.text, preferredLang)
-                        }
-                        isSpeaking={speakingMessageId === item.id}
-                      />
-                      <View style={styles.optionsWrapper}>
-                        <HistoricalChips
-                          options={item.options || []}
-                          chosenVal={chosenVal}
-                          chosenLabel={chosenLabel}
-                          theme={theme}
-                        />
-                      </View>
-                    </View>
-                  );
-                }
-
-                const showChips = item.options && item.options.length > 0;
-
-                return (
-                  <View style={{ width: "100%" }}>
-                    {dateHeader}
-                    <MessageBubble
-                      message={item}
-                      isDark={isDark}
-                      onSpeak={() =>
-                        speakMessage(item.id, item.text, preferredLang)
-                      }
-                      isSpeaking={speakingMessageId === item.id}
-                    />
-                    {showChips && (
-                      <View style={styles.optionsWrapper}>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            gap: 8,
-                            marginTop: 8,
-                          }}
-                        >
-                          {item.options.map((opt: any, idx: number) => {
-                            const isLatest = isLatestActiveMessage(item.id);
-                            return (
-                              <TouchableOpacity
-                                key={idx}
-                                disabled={!isLatest}
-                                onPress={() => handleGenericOptionPress(opt)}
-                                style={{
-                                  backgroundColor: isDark
-                                    ? "#1e2d2f"
-                                    : "#ccfbf1",
-                                  borderColor: isDark ? "#2d4d4f" : "#99f6e4",
-                                  borderWidth: 1,
-                                  borderRadius: 12,
-                                  paddingVertical: 8,
-                                  paddingHorizontal: 16,
-                                  opacity: isLatest ? 1 : 0.6,
-                                }}
-                              >
-                                <Text
-                                  style={{
-                                    color: isDark ? "#2dd4bf" : "#0f766e",
-                                    fontWeight: "600",
-                                    fontSize: 13,
-                                  }}
-                                >
-                                  {opt.label}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                );
-              }}
-              contentContainerStyle={styles.listContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              onEndReached={loadMoreMessages}
-              onEndReachedThreshold={0.1}
-              ListFooterComponent={
-                isLoadingMore ? (
-                  <View style={{ paddingVertical: 10 }}>
-                    <ActivityIndicator size="small" color="#0f766e" />
-                  </View>
-                ) : null
-              }
-              ListHeaderComponent={
-                isSending && !isActivelyStreaming ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignSelf: "flex-start",
-                      paddingLeft: 12,
-                      marginTop: 4,
-                      marginBottom: 8,
-                    }}
+          <FlatList
+            ref={flatListRef}
+            data={mergedMessages}
+            keyExtractor={(item, index) => item.id || `msg-${index}`}
+            inverted
+            renderItem={({ item, index }) => (
+              <ChatMessageItem
+                item={item}
+                index={index}
+                mergedMessages={mergedMessages}
+                isDark={isDark}
+                theme={theme}
+                preferredLang={preferredLang}
+                speakingMessageId={speakingMessageId}
+                speakMessage={speakMessage}
+                onboardingSessionId={onboardingSessionId}
+                chatWizardState={chatWizardState}
+                isLoadingResults={isLoadingResults}
+                isConfirmingMeds={isConfirmingMeds}
+                setMedicineToEdit={setMedicineToEdit}
+                editSheetRef={editSheetRef}
+                handleConfirmSelection={handleConfirmSelection}
+                resolveCurrentConflict={resolveCurrentConflict}
+                navigateConflict={navigateConflict}
+                handleContinueAnyway={handleContinueAnyway}
+                handleReviewMedicines={handleReviewMedicines}
+                handleConfirmAndAddMeds={handleConfirmAndAddMeds}
+                handleGenericOptionPress={handleGenericOptionPress}
+                navigation={navigation}
+                setChatWizardState={setChatWizardState}
+                onViewFullReport={handleViewFullReport}
+              />
+            )}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.1}
+            ListFooterComponent={
+              isLoadingMore ? (
+                <View style={{ paddingVertical: 10 }}>
+                  <ActivityIndicator size="small" color="#0f766e" />
+                </View>
+              ) : null
+            }
+            ListHeaderComponent={
+              isSending && !isActivelyStreaming ? (
+                <View style={styles.typingWrapper}>
+                  <LinearGradient
+                    colors={["#0f766e", "#0ea5e9"]}
+                    style={styles.typingAvatar}
                   >
-                    <View style={{ alignSelf: "flex-end" }}>
-                      <LinearGradient
-                        colors={["#0f766e", "#0ea5e9"]}
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: 14,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: "rgba(255,255,255,0.3)",
-                        }}
-                      >
-                        <Ionicons name="sparkles" size={14} color="#ffffff" />
-                      </LinearGradient>
-                    </View>
-                    <View style={{ marginLeft: -4 }}>
-                      <TypingIndicator isDark={isDark} />
-                    </View>
-                  </View>
-                ) : null
-              }
-            />
-          )}
+                    <Ionicons name="sparkles" size={14} color="#ffffff" />
+                  </LinearGradient>
+                  <TypingIndicator isDark={isDark} />
+                </View>
+              ) : null
+            }
+          />
         </View>
 
+        {/* Input & Suggested Chips */}
         <Animated.View style={animatedKeyboardStyle}>
-          {/* Suggested Chips above input */}
           <SuggestedQuestionChip
             questions={suggestedQuestions}
             onPressQuestion={handleSend}
             isDark={isDark}
           />
 
-          {/* Floating Input Capsule */}
           <ChatInput
             value={input}
             onChangeText={setInput}
@@ -3858,6 +376,7 @@ const AIChatScreen = ({ route }: any) => {
         </Animated.View>
       </View>
 
+      {/* Modals & Sheets */}
       <DocumentUploadBottomSheet
         ref={uploadSheetRef}
         fromScreen="AIChat"
@@ -3869,7 +388,7 @@ const AIChatScreen = ({ route }: any) => {
         ref={extractionSheetRef}
         preferredLang={preferredLang}
         isDark={isDark}
-        onClose={handleExtractionSheetClose}
+        onClose={() => { }}
       />
 
       <BottomSheet ref={editSheetRef} snapPoints={["85%"]}>
@@ -3899,65 +418,16 @@ const AIChatScreen = ({ route }: any) => {
           setViewerDoc(null);
         }}
       />
-    </Container>
+    </LinearGradient>
   );
 };
 
 export default AIChatScreen;
 
-const Container = styled(LinearGradient)`
-  flex: 1;
-`;
-
-const ReadOnlyBanner = styled.View`
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  margin: 12px 16px 16px;
-  padding: 14px;
-  background-color: ${({ theme }: any) => theme.colors.surface};
-  border-radius: 14px;
-  border-width: 1px;
-  border-color: ${({ theme }: any) => theme.colors.border};
-`;
-
-const ReadOnlyText = styled.Text`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #0f766e;
-  margin-left: 8px;
-`;
-
-const EmergencyCard = styled.View`
-  background-color: #fef2f2;
-  border-width: 1.5px;
-  border-color: #fca5a5;
-  border-radius: 16px;
-  padding: 12px 16px;
-  margin: 4px 10px 8px;
-`;
-
-const EmergencyTitleRow = styled.View`
-  flex-direction: row;
-  align-items: center;
-  margin-bottom: 4px;
-`;
-
-const EmergencyTitle = styled.Text`
-  color: #991b1b;
-  font-size: 14px;
-  font-weight: 800;
-  margin-left: 8px;
-`;
-
-const EmergencyText = styled.Text`
-  color: #7f1d1d;
-  font-size: 12.5px;
-  line-height: 17px;
-  font-weight: 600;
-`;
-
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   keyboardContainer: {
     flex: 1,
   },
@@ -3965,14 +435,66 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 8,
-    paddingTop: 0,
+    paddingHorizontal: 12,
+    paddingTop: 8,
     paddingBottom: 16,
   },
-  optionsWrapper: {
-    paddingLeft: 48,
-    paddingRight: 16,
-    marginTop: 2,
+  readOnlyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  readOnlyText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0f766e",
+    marginLeft: 8,
+  },
+  emergencyCard: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 12,
+    backgroundColor: "#fef2f2",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  emergencyTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  emergencyTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#dc2626",
+    marginLeft: 6,
+  },
+  emergencyText: {
+    fontSize: 12.5,
+    color: "#991b1b",
+    lineHeight: 17,
+  },
+  typingWrapper: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    paddingLeft: 12,
+    marginTop: 4,
     marginBottom: 8,
+  },
+  typingAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    alignSelf: "flex-end",
   },
 });
