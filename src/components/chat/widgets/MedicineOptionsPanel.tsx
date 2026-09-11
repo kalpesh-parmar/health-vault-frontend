@@ -10,6 +10,7 @@ export interface MedicineOptionsPanelProps {
   theme: any;
   onOptionPress: (key: string, label: string) => void;
   readOnly?: boolean;
+  loading?: boolean;
   chosenVal?: string | null;
   chosenLabel?: string | null;
 }
@@ -20,6 +21,7 @@ export function MedicineOptionsPanel({
   theme,
   onOptionPress,
   readOnly,
+  loading,
   chosenVal,
   chosenLabel,
 }: MedicineOptionsPanelProps) {
@@ -35,7 +37,10 @@ export function MedicineOptionsPanel({
   const parsedKey = parsed?.key || null;
 
   return (
-    <View style={styles.optionsPanel} pointerEvents={readOnly ? "none" : "auto"}>
+    <View
+      style={styles.optionsPanel}
+      pointerEvents={readOnly || loading ? "none" : "auto"}
+    >
       {safeOptionsList.map((opt: any) => {
         const optKey = opt.key || opt.value;
         const isChosen = readOnly && !!(
@@ -52,6 +57,7 @@ export function MedicineOptionsPanel({
         return (
           <TouchableOpacity
             key={optKey}
+            disabled={readOnly || loading}
             style={[
               styles.optionsPanelButton,
               {
@@ -70,7 +76,7 @@ export function MedicineOptionsPanel({
                       ? "#334155"
                       : "#e2e8f0",
                 borderWidth: isChosen ? 2 : 1,
-                opacity: isUnchosen ? 0.5 : 1,
+                opacity: isUnchosen || loading ? 0.5 : 1,
               },
             ]}
             onPress={() => onOptionPress(optKey, opt.label)}
