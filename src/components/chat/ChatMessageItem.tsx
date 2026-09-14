@@ -28,37 +28,8 @@ import {
 } from "./widgets/ReportSummaryChatCard";
 import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
-import { normalizeDocumentsList, extractMedicationsFromDocuments, DocumentSummaryItem } from "../../utils/documentNormalizer";
-
-export interface ChatMessage {
-  id: string;
-  role: "ai" | "user";
-  text: string;
-  mode?: any;
-  emergency?: boolean;
-  action?: string;
-  options?: any[];
-  rawValue?: string;
-  stepKey?: string;
-  medicine?: any;
-  medicines?: any[];
-  medicinesCount?: number;
-  failedCount?: number;
-  successCount?: number;
-  docsCount?: number;
-  summary?: any;
-  document?: any;
-  suggestedQuestions?: string[];
-  keyFindings?: any[];
-  fields?: any[];
-  loginSummary?: string;
-  documentSummary?: string | DocumentSummaryStats;
-  loginProvider?: string;
-  documents?: DocumentSummaryItem[] | any[];
-  createdAt?: string | Date;
-  sessionId?: string;
-  isOnboardingMessage?: boolean;
-}
+import { ChatMessage } from "../../types/chat";
+export type { ChatMessage };
 
 interface ChatMessageItemProps {
   item: ChatMessage;
@@ -93,7 +64,7 @@ interface ChatMessageItemProps {
   handleContinueAnyway: () => void;
   handleReviewMedicines: () => void;
   handleConfirmAndAddMeds: (retryOnly?: boolean) => Promise<void>;
-  handleGenericOptionPress: (option: any) => Promise<void>;
+  handleGenericOptionPress: (option: any, optLabel?: string) => Promise<void>;
   navigation: any;
   setChatWizardState: React.Dispatch<React.SetStateAction<any>>;
   onViewFullReport?: (doc: any) => void;
@@ -249,13 +220,13 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       const doc = item.document;
       const hasDoc = Boolean(
         doc &&
-          !Array.isArray(doc) &&
-          (doc.id ||
-            doc.summary ||
-            (doc.keyFindings && doc.keyFindings.length > 0) ||
-            doc.extractedStructuredData ||
-            doc.fileName ||
-            doc.s3Key),
+        !Array.isArray(doc) &&
+        (doc.id ||
+          doc.summary ||
+          (doc.keyFindings && doc.keyFindings.length > 0) ||
+          doc.extractedStructuredData ||
+          doc.fileName ||
+          doc.s3Key),
       );
 
       if (hasDoc) {
@@ -372,10 +343,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       const rawMeds = item.medicines?.length
         ? item.medicines
         : (isReadOnly
-            ? extractMedicationsFromDocuments(msgDocs)
-            : (chatWizardState.extractedMedicines.length > 0
-                ? chatWizardState.extractedMedicines
-                : extractMedicationsFromDocuments(msgDocs)));
+          ? extractMedicationsFromDocuments(msgDocs)
+          : (chatWizardState.extractedMedicines.length > 0
+            ? chatWizardState.extractedMedicines
+            : extractMedicationsFromDocuments(msgDocs)));
 
       const displayMeds = rawMeds.map((m: any, idx: number) => ({
         ...m,
@@ -491,8 +462,9 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           optionsList={item.options || []}
           isDark={isDark}
           theme={theme}
-          onOptionPress={(opt) => handleGenericOptionPress(opt)}
+          onOptionPress={(optKey, label) => handleGenericOptionPress(optKey, label)}
           readOnly={isHistorical}
+          loading={isLoadingResults || isConfirmingMeds}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
@@ -673,20 +645,23 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         isSpeaking={speakingMessageId === item.id}
       />
       {showChips && (
-        <View style={styles.optionsWrapper}>
+        <View
+          style={styles.optionsWrapper}
+          pointerEvents={isHistorical || isLoadingResults || isConfirmingMeds ? "none" : "auto"}
+        >
           <View style={styles.chipsContainer}>
             {item.options?.map((opt: any, idx: number) => {
               return (
                 <TouchableOpacity
                   key={idx}
-                  disabled={isHistorical}
-                  onPress={() => handleGenericOptionPress(opt)}
+                  disabled={isHistorical || isLoadingResults || isConfirmingMeds}
+                  onPress={() => handleGenericOptionPress(opt, opt.label)}
                   style={[
                     styles.chipBtn,
                     {
                       backgroundColor: isDark ? "#1e2d2f" : "#ccfbf1",
                       borderColor: isDark ? "#2d4d4f" : "#99f6e4",
-                      opacity: isHistorical ? 0.6 : 1,
+                      opacity: isHistorical || isLoadingResults || isConfirmingMeds ? 0.6 : 1,
                     },
                   ]}
                 >

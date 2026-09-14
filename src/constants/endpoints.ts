@@ -6,6 +6,9 @@ export const AUTH_ENDPOINTS = {
   FORGOT_PASSWORD: "/auth/forgot-password",
   RESET_PASSWORD: "/auth/reset-password",
   REFRESH_TOKEN: "/auth/refresh-token",
+  SOCIAL_LOGIN: "/auth/social-login",
+  FIREBASE_LOGIN: "/auth/firebase-login",
+  AUTH_FAILURE: "/auth/auth-failure",
 } as const;
 
 export const PATIENT_ENDPOINTS = {

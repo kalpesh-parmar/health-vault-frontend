@@ -26,7 +26,7 @@ export const getConfirmationResult = () => {
 
 export const reportAuthFailure = async (payload: { identifier: string; provider: string; loginType: string }) => {
   try {
-    const response = await apiClient.post("/auth/auth-failure", payload);
+    const response = await apiClient.post("/auth/auth-failure", payload, { skipAuth: true } as any);
     return response?.data;
   } catch (error) {
     console.error("[AUTH] Auth Failure Report Error:", error);
@@ -37,10 +37,14 @@ export const loginWithFirebaseToken = async (
   firebaseToken: string,
   deviceToken?: string | null,
 ) => {
-  const response = await apiClient.post("/auth/firebase-login", {
-    firebaseToken,
-    deviceToken,
-  });
+  const response = await apiClient.post(
+    "/auth/firebase-login",
+    {
+      firebaseToken,
+      deviceToken,
+    },
+    { skipAuth: true } as any,
+  );
   return response?.data?.data || {};
 };
 
@@ -77,7 +81,9 @@ export const socialLogin = async (
   if (loginType === "social" && providerToken) {
     payload.providerToken = providerToken;
   }
-  const response = await apiClient.post("/auth/social-login", payload);
+  const response = await apiClient.post("/auth/social-login", payload, {
+    skipAuth: true,
+  } as any);
   return response?.data || response?.data?.data || {};
 };
 
@@ -203,9 +209,13 @@ export const logoutUser = async () => {
 };
 
 export const refreshAuthToken = async (refreshToken: string) => {
-  const response = await apiClient.post(AUTH_ENDPOINTS.REFRESH_TOKEN, {
-    refreshToken,
-  });
+  const response = await apiClient.post(
+    AUTH_ENDPOINTS.REFRESH_TOKEN,
+    {
+      refreshToken,
+    },
+    { skipAuth: true } as any,
+  );
   return response.data;
 };
 

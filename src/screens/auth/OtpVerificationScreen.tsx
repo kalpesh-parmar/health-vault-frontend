@@ -30,6 +30,7 @@ import {
   setConfirmationResult,
   reportAuthFailure,
 } from "../../services/auth.service";
+import { resetForceLogout } from "../../services/apiClient";
 import { AuthStackParamList } from "../../types/navigation";
 import { maskPhoneNumber } from "../../utils/auth.utils";
 import {
@@ -100,6 +101,7 @@ const OtpVerificationScreen = () => {
       console.log("[OTP_LOG] Prevent duplicate verification call: already loading or verifying");
       return;
     }
+    resetForceLogout();
     Keyboard.dismiss();
     const code = otp.join("");
 
@@ -151,16 +153,16 @@ const OtpVerificationScreen = () => {
       const backendResponse = await socialLogin("mobile", "mobile", firebaseToken, null, deviceToken);
       console.log("Backend Response :- ", backendResponse);
       
-      if (backendResponse?.data?.success && backendResponse?.data?.token) {
+      if (backendResponse?.data?.success && backendResponse?.data?.accessToken) {
         console.log("[OTP_LOG] Backend Login Success: Server authenticated session");
         isSuccess = true;
         
         console.log("[OTP_LOG] Navigation Start: Playing success animation and setting context login");
         triggerSuccessAnimation(async () => {
           await authContextLogin({
-            accessToken: backendResponse?.data?.token,
-            refreshToken: backendResponse?.data?.refreshToken,
-            userId: backendResponse?.data?.user?.id,
+            accessToken: backendResponse.data.accessToken,
+            refreshToken: backendResponse.data.refreshToken,
+            userId: backendResponse.data.user.id,
             createdAt: new Date().toISOString(), // refresh date anchor
           });
 
@@ -203,6 +205,7 @@ const OtpVerificationScreen = () => {
 
   const handleResend = async () => {
     if (loading) return;
+    resetForceLogout();
     setError(null);
     setOtp(Array(6).fill(""));
     otpRef.current?.clear();

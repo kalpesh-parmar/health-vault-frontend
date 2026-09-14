@@ -1,5 +1,7 @@
 export const I18N_CHAT_UI: Record<string, Record<string, string>> = {
   english: {
+    today: "Today",
+    yesterday: "Yesterday",
     selectModeOrReport: "Select Mode or Report",
     chooseGeneralOrDiscuss:
       "Choose general health mode or discuss a specific medical report",
@@ -16,6 +18,8 @@ export const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "Document: ",
   },
   gujarati: {
+    today: "આજે",
+    yesterday: "ગઈકાલે",
     selectModeOrReport: "મોડ અથવા રિપોર્ટ પસંદ કરો",
     chooseGeneralOrDiscuss:
       "સામાન્ય સ્વાસ્થ્ય મોડ પસંદ કરો અથવા ચોક્કસ તબીબી અહેવાલ વિશે ચર્ચા કરો",
@@ -32,6 +36,8 @@ export const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "દસ્તાવેજ: ",
   },
   hindi: {
+    today: "आज",
+    yesterday: "कल",
     selectModeOrReport: "मोड या रिपोर्ट चुनें",
     chooseGeneralOrDiscuss:
       "सामान्य स्वास्थ्य मोड चुनें या किसी विशिष्ट मेडिकल रिपोर्ट पर चर्चा करें",
@@ -40,7 +46,7 @@ export const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     onboardingSessionReadOnly: "ऑनबोर्डिंग सत्र (केवल पढ़ने के लिए)",
     untitledSession: "बिना शीर्षक का सत्र",
     noReportsUploaded: "आपने अभी तक कोई मेडिकल रिपोर्ट अपलोड नहीं की है।",
-    uploadMedicalReport: "मेडical रिपोर्ट अपलोड करें",
+    uploadMedicalReport: "मेडिकल रिपोर्ट अपलोड करें",
     seekImmediateAttention: "तुरंत चिकित्सा सहायता लें",
     emergencyWarning:
       "इसके लिए तत्काल चिकित्सा सहायता की आवश्यकता हो सकती है। कृपया तुरंत आपातकालीन सेवाओं से संपर्क करें या निकटतम आपातकालीन विभाग में जाएं।",
@@ -48,22 +54,26 @@ export const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "दस्तावेज़: ",
   },
   marathi: {
-    selectModeOrReport: "મોડ અથવા રિપોર્ટ પસંદ કરો",
+    today: "आज",
+    yesterday: "काल",
+    selectModeOrReport: "मोड किंवा अहवाल निवडा",
     chooseGeneralOrDiscuss:
-      "સામાન્ય સ્વાસ્થ્ય મોડ પસંદ કરો અથવા ચોક્કસ તબીબી અહેવાલ વિશે ચર્ચા કરો",
-    generalHealthChatNoDoc: "સામાન્ય સ્વાસ્થ્ય ચર્ચા (કોઈ દસ્તાવેજ નથી)",
-    recentConversations: "તાજેતરની વાતચીતો",
-    onboardingSessionReadOnly: "ઓનબોર્ડિંગ સત્ર (ફક્ત વાંચવા માટે)",
-    untitledSession: "શીર્ષક વગરનું સત્ર",
-    noReportsUploaded: "તમે હજી સુધી કોઈ તબીબી અહેવાલો અપલોડ કર્યા નથી.",
-    uploadMedicalReport: "તબીબી અહેવાલ અપલોડ કરો",
-    seekImmediateAttention: "તાત્કાલિક તબીબી સારવાર મેળવો",
+      "सामान्य आरोग्य मोड निवडा किंवा विशिष्ट वैद्यकीय अहवालावर चर्चा करा",
+    generalHealthChatNoDoc: "सामान्य आरोग्य चॅट (कोणताही दस्तऐवज नाही)",
+    recentConversations: "अलीकडील संभाषणे",
+    onboardingSessionReadOnly: "ऑनबोर्डिंग सत्र (फक्त वाचण्यासाठी)",
+    untitledSession: "शीर्षक नसलेले सत्र",
+    noReportsUploaded: "तुम्ही अद्याप कोणतेही वैद्यकीय अहवाल अपलोड केलेले नाहीत.",
+    uploadMedicalReport: "वैद्यकीय अहवाल अपलोड करा",
+    seekImmediateAttention: "तातडीने वैद्यकीय मदत घ्या",
     emergencyWarning:
-      "આ માટે તાત્કાલિક તબીબી સારવારની જરૂર પડી શકે છે. કૃપા કરીને તાત્કાલિક કટોકટી સેવાઓનો સંપર્ક કરો અથવા નજીકના કટોકટી વિભાગની મુલાકાત લો.",
-    onboardingArchive: "ઓનબોર્ડિંગ સત્ર (ફક્ત વાંચવા માટેનું આર્કાઇવ)",
-    documentPrefix: "દસ્તાવેજ: ",
+      "यासाठी तातडीने वैद्यकीय मदतीची आवश्यकता असू शकते. कृपया त्वरित आपत्कालीन सेवांशी संपर्क साधा किंवा जवळच्या आपत्कालीन विभागाला भेट द्या.",
+    onboardingArchive: "ऑनबोर्डिंग सत्र (फक्त वाचण्यासाठी संग्रह)",
+    documentPrefix: "दस्तऐवज: ",
   },
   tamil: {
+    today: "இன்று",
+    yesterday: "நேற்று",
     selectModeOrReport: "முறை அல்லது அறிக்கையைத் தேர்ந்தெடுக்கவும்",
     chooseGeneralOrDiscuss:
       "பொது சுகாதார முறையைத் தேர்ந்தெடுக்கவும் அல்லது குறிப்பிட்ட மருத்துவ அறிக்கையைப் பற்றி விவாதிக்கவும்",
@@ -81,6 +91,12 @@ export const I18N_CHAT_UI: Record<string, Record<string, string>> = {
     documentPrefix: "ஆவணம்: ",
   },
 };
+
+I18N_CHAT_UI.en = I18N_CHAT_UI.english;
+I18N_CHAT_UI.gu = I18N_CHAT_UI.gujarati;
+I18N_CHAT_UI.hi = I18N_CHAT_UI.hindi;
+I18N_CHAT_UI.mr = I18N_CHAT_UI.marathi;
+I18N_CHAT_UI.ta = I18N_CHAT_UI.tamil;
 
 export const SUGGESTED_QUESTIONS_I18N: Record<
   string,
