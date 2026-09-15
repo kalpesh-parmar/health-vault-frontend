@@ -20,6 +20,7 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
+import { usePreferredLanguage } from "../../hooks/usePreferredLanguage";
 import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
 import { listDocument } from "../../services/documentService";
 
@@ -30,6 +31,7 @@ import { MedicalDocument } from "../../types";
 
 // Modular UI Components
 import { ChatHeader } from "../../components/chat/ChatHeader";
+import { ChatDateHeader } from "../../components/chat/ChatDateHeader";
 import { ChatInput } from "../../components/chat/ChatInput";
 import { ChatMessageItem } from "../../components/chat/ChatMessageItem";
 import { SuggestedQuestionChip } from "../../components/chat/SuggestedQuestionChip";
@@ -41,6 +43,7 @@ import { DocumentUploadBottomSheet } from "../../components/document-upload/Docu
 import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
 import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
 import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveStates";
+import { getRelativeDateLabel } from "../../utils/dateFormatter";
 
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
@@ -49,12 +52,43 @@ const AIChatScreen = ({ route }: any) => {
   const bottomPadding = useBottomBarPadding();
 
   // State
-  const [preferredLang, setPreferredLang] = useState("english");
+  const storedPreferredLanguage = usePreferredLanguage();
+  const [preferredLang, setPreferredLang] = useState(storedPreferredLanguage || "english");
+
+  useEffect(() => {
+    if (storedPreferredLanguage) {
+      setPreferredLang(storedPreferredLanguage);
+    }
+  }, [storedPreferredLanguage]);
+
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(false);
   const [pendingStep, setPendingStep] = useState<string | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<any>(null);
   const [showFloatingPanel] = useState(true);
+  const [activeDateLabel, setActiveDateLabel] = useState<string>("");
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems && viewableItems.length > 0) {
+      let topItem = viewableItems[0];
+      for (const item of viewableItems) {
+        if (item.index > topItem.index) {
+          topItem = item;
+        }
+      }
+      const message = topItem?.item;
+      if (message && message.createdAt) {
+        const label = getRelativeDateLabel(message.createdAt, true);
+        if (label) {
+          setActiveDateLabel(label);
+        }
+      }
+    }
+  });
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 10,
+  });
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -164,6 +198,19 @@ const AIChatScreen = ({ route }: any) => {
     initChatHistory();
   }, [fetchOnboardingHistory, initChatHistory]);
 
+  // Initialize active date label from latest messages if not yet set
+  useEffect(() => {
+    if (!activeDateLabel && mergedMessages.length > 0) {
+      const topMsg = mergedMessages[mergedMessages.length - 1];
+      if (topMsg && topMsg.createdAt) {
+        const label = getRelativeDateLabel(topMsg.createdAt, true);
+        if (label) {
+          setActiveDateLabel(label);
+        }
+      }
+    }
+  }, [mergedMessages, activeDateLabel]);
+
   // Back handler
   useEffect(() => {
     const onBackPress = () => {
@@ -183,9 +230,29 @@ const AIChatScreen = ({ route }: any) => {
   });
 
   const hasActiveUploads = useMemo(() => {
+    // Only show upload progress in AIChatScreen if upload originated from AIChat
+    const isChatUpload =
+      chatWizardState?.fromScreen === "AIChat" ||
+      chatWizardState?.fromScreen === "AIChatScreen" ||
+      chatWizardState?.step === "processing" ||
+      chatWizardState?.step === "results" ||
+      uploadingDocs?.some(
+        (d) => d.fromScreen === "AIChat" || d.fromScreen === "AIChatScreen"
+      );
+
+    if (!isChatUpload) {
+      return false;
+    }
+
     if (isUploading) return true;
     if (!uploadingDocs || uploadingDocs.length === 0) return false;
     return uploadingDocs.some((doc) => {
+      const isDocFromChat =
+        doc.fromScreen === "AIChat" ||
+        doc.fromScreen === "AIChatScreen" ||
+        (!doc.fromScreen && chatWizardState.step !== "idle");
+      if (!isDocFromChat) return false;
+
       const status = (doc.status || "").toUpperCase();
       return (
         !["COMPLETED", "FAILED", "REJECTED", "CANCELLED", "SUCCESS", "ERROR"].includes(status) &&
@@ -193,7 +260,7 @@ const AIChatScreen = ({ route }: any) => {
         doc.progress !== -1
       );
     });
-  }, [isUploading, uploadingDocs]);
+  }, [isUploading, uploadingDocs, chatWizardState]);
 
   const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
     setChatWizardState((prev) => ({
@@ -238,8 +305,6 @@ const AIChatScreen = ({ route }: any) => {
     );
   }
 
-  const isOnboardingSession = Boolean(onboardingSessionId && !isOnboardingCompleted);
-
   return (
     <LinearGradient
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
@@ -274,29 +339,25 @@ const AIChatScreen = ({ route }: any) => {
           </View>
         )}
 
-        {/* Read Only Archive Banner */}
-        {isOnboardingSession && (
-          <View
-            style={[
-              styles.readOnlyBanner,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <Ionicons name="archive-outline" size={18} color="#0f766e" />
-            <Text style={styles.readOnlyText}>{t("onboardingSessionReadOnly")}</Text>
-          </View>
-        )}
 
         {/* Messages List */}
         <View style={styles.contentWrapper}>
+          {activeDateLabel ? (
+            <View
+              style={styles.stickyDateHeaderContainer}
+              pointerEvents="none"
+            >
+              <ChatDateHeader dateLabel={activeDateLabel} isDark={isDark} />
+            </View>
+          ) : null}
+
           <FlatList
             ref={flatListRef}
             data={mergedMessages}
             keyExtractor={(item, index) => item.id || `msg-${index}`}
             inverted
+            onViewableItemsChanged={onViewableItemsChanged.current}
+            viewabilityConfig={viewabilityConfig.current}
             renderItem={({ item, index }) => (
               <ChatMessageItem
                 item={item}
@@ -322,6 +383,7 @@ const AIChatScreen = ({ route }: any) => {
                 handleGenericOptionPress={handleGenericOptionPress}
                 navigation={navigation}
                 setChatWizardState={setChatWizardState}
+                setMessages={setMessages}
                 onViewFullReport={handleViewFullReport}
               />
             )}
@@ -333,7 +395,7 @@ const AIChatScreen = ({ route }: any) => {
             ListFooterComponent={
               isLoadingMore ? (
                 <View style={{ paddingVertical: 10 }}>
-                  <ActivityIndicator size="small" color="#0f766e" />
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
                 </View>
               ) : null
             }
@@ -341,7 +403,7 @@ const AIChatScreen = ({ route }: any) => {
               isSending && !isActivelyStreaming ? (
                 <View style={styles.typingWrapper}>
                   <LinearGradient
-                    colors={["#0f766e", "#0ea5e9"]}
+                    colors={["#5B4BFF", "#7C6CFF"]}
                     style={styles.typingAvatar}
                   >
                     <Ionicons name="sparkles" size={14} color="#ffffff" />
@@ -433,28 +495,21 @@ const styles = StyleSheet.create({
   },
   contentWrapper: {
     flex: 1,
+    position: "relative",
+  },
+  stickyDateHeaderContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 99,
   },
   listContent: {
     paddingHorizontal: 12,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 0,
   },
-  readOnlyBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  readOnlyText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#0f766e",
-    marginLeft: 8,
-  },
+
   emergencyCard: {
     marginHorizontal: 16,
     marginVertical: 8,

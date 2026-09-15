@@ -50,6 +50,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     headers?: Record<string, string>;
   } | null>(null);
   const [localFileUri, setLocalFileUri] = useState<string | null>(null);
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [hasError, setHasError] = useState<boolean>(false);
@@ -134,43 +135,217 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
   // Display original document title / fileName directly
   const computedTitle = React.useMemo(() => {
-    return title || document?.fileName || "Document";
+    return title || document?.fileName || document?.displayName || document?.name || "Document";
   }, [title, document]);
+
+  // Generate HTML for PDF viewer using PDF.js for crisp, responsive cross-platform rendering
+  const generatePdfHtml = useCallback((base64Data: string, isDarkMode: boolean) => {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      background-color: ${isDarkMode ? "#090d16" : "#0f172a"};
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 8px 60px 8px;
+    }
+    #loading {
+      color: #94a3b8;
+      font-size: 14px;
+      margin-top: 60px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(91, 75, 255, 0.2);
+      border-top-color: #5B4BFF;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    #pdf-container {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .page-wrapper {
+      position: relative;
+      background: #ffffff;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+    .page-number-tag {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(15, 23, 42, 0.8);
+      color: #f8fafc;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: auto !important;
+    }
+    #floating-badge {
+      position: fixed;
+      bottom: 20px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #f8fafc;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 100;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="spinner"></div>
+    <span>Loading PDF document...</span>
+  </div>
+  <div id="pdf-container"></div>
+  <div id="floating-badge"></div>
+
+  <script>
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      
+      const rawData = atob("${base64Data}");
+      const uint8Array = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; i++) {
+        uint8Array[i] = rawData.charCodeAt(i);
+      }
+
+      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+      loadingTask.promise.then(async function(pdf) {
+        document.getElementById('loading').style.display = 'none';
+        const badge = document.getElementById('floating-badge');
+        badge.style.display = 'block';
+        badge.textContent = pdf.numPages + (pdf.numPages === 1 ? ' Page' : ' Pages');
+
+        const container = document.getElementById('pdf-container');
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const viewport = page.getViewport({ scale: 2.0 });
+          
+          const wrapper = document.createElement('div');
+          wrapper.className = 'page-wrapper';
+
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          const tag = document.createElement('div');
+          tag.className = 'page-number-tag';
+          tag.textContent = pageNum + ' / ' + pdf.numPages;
+
+          wrapper.appendChild(canvas);
+          if (pdf.numPages > 1) {
+            wrapper.appendChild(tag);
+          }
+          container.appendChild(wrapper);
+
+          await page.render({ canvasContext: context, viewport: viewport }).promise;
+        }
+      }).catch(function(err) {
+        console.error("PDF render error:", err);
+        document.getElementById('loading').innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px;">Failed to render PDF: ' + err.message + '</div>';
+      });
+    } catch (e) {
+      console.error("Initialization error:", e);
+      document.getElementById('loading').innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px;">Initialization error: ' + e.message + '</div>';
+    }
+  </script>
+</body>
+</html>`;
+  }, []);
 
   // Load document source and detect PDF vs Image
   const loadDocumentSource = useCallback(async () => {
     if (!document) return;
     setIsLoading(true);
     setHasError(false);
+    setPdfBase64(null);
     resetZoom();
 
-    const fileName = document.fileName || "";
+    const fileName =
+      document.fileName ||
+      document.displayName ||
+      document.name ||
+      document.originalName ||
+      "";
     const ext = getFileExtension(fileName).toLowerCase();
     const isPdfDoc =
       ext === "pdf" ||
       document.fileType === "PDF" ||
       document.mimeType === "application/pdf" ||
-      document.contentType === "application/pdf";
+      document.contentType === "application/pdf" ||
+      (typeof document.uri === "string" && document.uri.toLowerCase().endsWith(".pdf")) ||
+      (typeof document.fileUrl === "string" && document.fileUrl.toLowerCase().includes(".pdf"));
     setIsPdf(isPdfDoc);
 
     try {
       let source: { uri: string; headers?: Record<string, string> } | null = null;
-      if (document.s3Key) {
-        source = await getFileSource(document.s3Key);
+      const targetKey = document.s3Key || document.fileKey;
+
+      if (targetKey) {
+        source = await getFileSource(targetKey);
       } else if (document.imageUri) {
         source = { uri: document.imageUri };
       } else if (document.fileUrl) {
         source = { uri: document.fileUrl };
+      } else if (document.uri) {
+        source = { uri: document.uri };
+      } else if (document.url) {
+        source = { uri: document.url };
       } else if (document.id) {
         try {
           const docRes = await getDocument(document.id);
           const fullData = docRes?.data || docRes;
-          if (fullData?.s3Key) {
-            source = await getFileSource(fullData.s3Key);
+          const fetchedKey = (fullData as any)?.s3Key || (fullData as any)?.fileKey;
+          if (fetchedKey) {
+            source = await getFileSource(fetchedKey);
           } else if ((fullData as any)?.fileUrl) {
             source = { uri: (fullData as any).fileUrl };
           } else if ((fullData as any)?.imageUri) {
             source = { uri: (fullData as any).imageUri };
+          } else if ((fullData as any)?.uri) {
+            source = { uri: (fullData as any).uri };
           }
         } catch (fetchErr) {
           console.warn("[DocumentViewerModal] Fallback getDocument failed:", fetchErr);
@@ -180,15 +355,36 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       if (source?.uri) {
         setFileSource(source);
 
-        // Pre-download PDF to local cache for reliable rendering on Android & offline viewing
         if (isPdfDoc) {
-          const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_") || "doc.pdf";
-          const cacheUri = `${FileSystem.cacheDirectory}preview_${Date.now()}_${safeName}`;
-          const dlRes = await FileSystem.downloadAsync(source.uri, cacheUri, {
-            headers: source.headers || {},
-          });
-          if (dlRes.status === 200) {
-            setLocalFileUri(dlRes.uri);
+          // If already local file URI
+          if (source.uri.startsWith("file://")) {
+            setLocalFileUri(source.uri);
+            try {
+              const b64 = await FileSystem.readAsStringAsync(source.uri, {
+                encoding: "base64",
+              });
+              setPdfBase64(b64);
+            } catch (readErr) {
+              console.warn("[DocumentViewerModal] Failed reading local PDF base64:", readErr);
+            }
+          } else {
+            // Download PDF to local cache for reliable base64 rendering
+            const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_") || "preview.pdf";
+            const cacheUri = `${FileSystem.cacheDirectory}preview_${Date.now()}_${safeName}`;
+            try {
+              const dlRes = await FileSystem.downloadAsync(source.uri, cacheUri, {
+                headers: source.headers || {},
+              });
+              if (dlRes.status === 200) {
+                setLocalFileUri(dlRes.uri);
+                const b64 = await FileSystem.readAsStringAsync(dlRes.uri, {
+                  encoding: "base64",
+                });
+                setPdfBase64(b64);
+              }
+            } catch (dlErr) {
+              console.warn("[DocumentViewerModal] PDF download/base64 cache failed:", dlErr);
+            }
           }
         }
       } else {
@@ -208,6 +404,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     } else {
       setFileSource(null);
       setLocalFileUri(null);
+      setPdfBase64(null);
       setHasError(false);
       resetZoom();
     }
@@ -345,26 +542,38 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           {!isLoading && !hasError && fileSource && (
             <>
               {isPdf ? (
-                // PDF Viewer using react-native-webview
+                // PDF Viewer using WebView with PDF.js base64 rendering or native WebKit
                 <View style={styles.pdfWrapper}>
                   <WebView
-                    source={{
-                      uri:
-                        Platform.OS === "android" && localFileUri
-                          ? localFileUri
-                          : fileSource.uri,
-                      headers: fileSource.headers,
-                    }}
+                    source={
+                      Platform.OS === "ios"
+                        ? {
+                            uri: localFileUri || fileSource.uri,
+                            headers: fileSource.headers,
+                          }
+                        : pdfBase64
+                          ? {
+                              html: generatePdfHtml(pdfBase64, isDark),
+                              baseUrl: "https://localhost",
+                            }
+                          : {
+                              uri: localFileUri || fileSource.uri,
+                              headers: fileSource.headers,
+                            }
+                    }
                     style={styles.webview}
                     originWhitelist={["*"]}
                     allowFileAccess={true}
+                    allowFileAccessFromFileURLs={true}
                     allowUniversalAccessFromFileURLs={true}
+                    javaScriptEnabled={true}
+                    domStorageEnabled={true}
                     scalesPageToFit={true}
                     startInLoadingState={true}
                     renderLoading={() => (
                       <View style={styles.webviewLoading}>
                         <ActivityIndicator size="large" color="#5B4BFF" />
-                        <Text style={styles.stateText}>Loading PDF pages...</Text>
+                        <Text style={styles.stateText}>Rendering PDF document...</Text>
                       </View>
                     )}
                     onError={(err) => {

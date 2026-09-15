@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components/native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 import { ExtractedMedicine } from "../../types/medicationReview";
 
@@ -26,7 +27,21 @@ export const MedicineSummaryCard: React.FC<MedicineSummaryCardProps> = ({ medici
           <MedEmoji>💊</MedEmoji>
         </MedIconContainer>
         <InfoColumn>
-          <MedicineName isDark={isDark}>{medicine.name}</MedicineName>
+          <NameRow>
+            <MedicineName isDark={isDark} numberOfLines={1}>{medicine.name}</MedicineName>
+            {medicine.resolution === "REPLACE" && (
+              <ResolutionBadge type="replace">
+                <Ionicons name="swap-horizontal" size={10} color="#2563eb" style={{ marginRight: 2 }} />
+                <ResolutionBadgeText type="replace">Replacing</ResolutionBadgeText>
+              </ResolutionBadge>
+            )}
+            {medicine.resolution === "KEEP_NEW" && (medicine.isBackendDuplicate || medicine.hasDuplicate) && (
+              <ResolutionBadge type="keep_new">
+                <Ionicons name="add-circle" size={10} color="#059669" style={{ marginRight: 2 }} />
+                <ResolutionBadgeText type="keep_new">Added as new</ResolutionBadgeText>
+              </ResolutionBadge>
+            )}
+          </NameRow>
           <MedicineDetails isDark={isDark}>
             {medicine.medicineType || "Tablet"} • {medicine.dosage || "N/A"}{medicine.dosageUnit || ""}
           </MedicineDetails>
@@ -73,11 +88,35 @@ const InfoColumn = styled.View`
   flex: 1;
 `;
 
+const NameRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 2px;
+  gap: 6px;
+`;
+
 const MedicineName = styled.Text<{ isDark: boolean }>`
   font-size: 15px;
   font-weight: 700;
   color: ${(props: any) => props.isDark ? "#f8fafc" : "#1f2937"};
-  margin-bottom: 2px;
+  flex-shrink: 1;
+`;
+
+const ResolutionBadge = styled.View<{ type: "replace" | "keep_new" }>`
+  background-color: ${(props: any) => props.type === "replace" ? "#eff6ff" : "#ecfdf5"};
+  padding-horizontal: 6px;
+  padding-vertical: 2px;
+  border-radius: 4px;
+  flex-direction: row;
+  align-items: center;
+  border-width: 0.5px;
+  border-color: ${(props: any) => props.type === "replace" ? "#bfdbfe" : "#a7f3d0"};
+`;
+
+const ResolutionBadgeText = styled.Text<{ type: "replace" | "keep_new" }>`
+  font-size: 9px;
+  font-weight: 700;
+  color: ${(props: any) => props.type === "replace" ? "#1d4ed8" : "#047857"};
 `;
 
 const MedicineDetails = styled.Text<{ isDark: boolean }>`
@@ -94,3 +133,4 @@ const MedicineSubDetails = styled.Text<{ isDark: boolean }>`
 `;
 
 export default MedicineSummaryCard;
+

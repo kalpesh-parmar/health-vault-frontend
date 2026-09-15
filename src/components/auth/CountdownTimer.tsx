@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { ActivityIndicator, AppState, AppStateStatus } from "react-native";
 import styled from "styled-components/native";
 import { useAppTheme } from "../../context/ThemeContext";
 
@@ -14,21 +14,46 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ onResend, initialSecond
   const [loading, setLoading] = useState(false);
   const { theme } = useAppTheme();
 
+  // Store target end timestamp in milliseconds
+  const targetEndTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
+
+  const calculateRemainingSeconds = useCallback(() => {
+    const diff = Math.ceil((targetEndTimeRef.current - Date.now()) / 1000);
+    return Math.max(0, diff);
+  }, []);
+
   useEffect(() => {
-    if (seconds <= 0) return;
+    // Synchronize initial seconds based on target time
+    setSeconds(calculateRemainingSeconds());
 
     const interval = setInterval(() => {
-      setSeconds((prev) => prev - 1);
+      const remaining = calculateRemainingSeconds();
+      setSeconds(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+      }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [seconds]);
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        setSeconds(calculateRemainingSeconds());
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [calculateRemainingSeconds, initialSeconds]);
 
   const handleResendPress = async () => {
     if (seconds > 0 || loading || disabled) return;
     setLoading(true);
     try {
       await onResend();
+      targetEndTimeRef.current = Date.now() + initialSeconds * 1000;
       setSeconds(initialSeconds);
     } catch (error) {
       console.error("Resend error:", error);

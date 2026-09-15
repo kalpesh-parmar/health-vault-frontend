@@ -14,6 +14,7 @@ import { ChatMessage, ChatWizardState, ConflictResolution } from "../../types/ch
 import { buildMedicationPayload, normalizeDocumentIds } from "../../utils/chatUtils";
 import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
 import { sanitizeMedicineForPayload } from "../../components/chat/widgets/MedicineHelpers";
+import { queryClient } from "../../config/queryClient";
 
 interface UseChatWizardManagerProps {
   chatWizardState: ChatWizardState;
@@ -145,16 +146,26 @@ export const useChatWizardManager = ({
             const response = await apiClient.post("/v1/onboarding/chat", payload);
             const resData = response.data?.data || response.data;
             if (resData?.reply) {
+              const incomingMeds =
+                resData.medicines && resData.medicines.length > 0
+                  ? resData.medicines
+                  : flatMeds;
               const aiMsg: ChatMessage = {
                 id: `ai-doc-res-${Date.now()}`,
                 role: "ai",
                 text: resData.reply,
                 action: resData.actionType || resData.action || "REVIEW_MEDICINES_LIST",
                 options: resData.options || [],
-                medicines: flatMeds,
+                medicines: incomingMeds,
+                documentSummary: resData.documentSummary || null,
+                documents: resData.documents || [],
                 createdAt: new Date().toISOString(),
               };
               setMessages((prev) => [...prev, aiMsg]);
+              setChatWizardState((prev) => ({
+                ...prev,
+                extractedMedicines: incomingMeds,
+              }));
             }
           } catch (apiErr) {
             console.warn("[AI_CHAT] /v1/onboarding/chat ADD_DOCUMENT error:", apiErr);
@@ -182,7 +193,7 @@ export const useChatWizardManager = ({
 
   const handleEditSave = (updated: ExtractedMedicine) => {
     const updatedExtracted = chatWizardState.extractedMedicines.map((m) =>
-      m.id === updated.id ? updated : m
+      m.id === updated.id ? { ...m, ...updated } : m
     );
 
     setChatWizardState((prev) => {
@@ -190,7 +201,7 @@ export const useChatWizardManager = ({
         if (c.extractedMedicine.id === updated.id) {
           return {
             ...c,
-            extractedMedicine: updated,
+            extractedMedicine: { ...c.extractedMedicine, ...updated },
           };
         }
         return c;
@@ -211,7 +222,7 @@ export const useChatWizardManager = ({
             return {
               ...msg,
               medicines: msg.medicines.map((m) =>
-                m.id === updated.id ? updated : m
+                m.id === updated.id ? { ...m, ...updated } : m
               ),
             };
           }
@@ -238,159 +249,123 @@ export const useChatWizardManager = ({
     });
   };
 
-  const handleConfirmSelection = async () => {
+  const handleConfirmSelection = async (
+    checkedMedIds?: string[],
+    formattedMeds?: any[],
+    messageId?: string
+  ) => {
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
     setIsLoadingResults(true);
+    setIsSending(true);
+
+    const selectedMeds =
+      formattedMeds && formattedMeds.length > 0
+        ? formattedMeds
+        : (chatWizardState.extractedMedicines || []).filter((m) =>
+            (checkedMedIds || []).includes(m.id || (m as any).client_med_id)
+          );
+
+    if (messageId) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                isConfirmed: true,
+                medicines: (msg.medicines || []).map((m: any) => ({
+                  ...m,
+                  selected: (checkedMedIds || []).includes(
+                    m.id || m.client_med_id
+                  ),
+                })),
+              }
+            : msg
+        )
+      );
+    }
 
     const userMsg: ChatMessage = {
-      id: `user-continue-${Date.now()}`,
+      id: `user-confirm-${Date.now()}`,
       role: "user",
-      text: "Continue",
+      text: tOnboarding("confirmSelection") || "Confirm Selection",
       createdAt: new Date().toISOString(),
     };
-
-    const checkingMsgId = `ai-checking-${Date.now()}`;
-    const checkingMsg: ChatMessage = {
-      id: checkingMsgId,
-      role: "ai",
-      text: `Checking your medicines for duplicates... 0 / ${chatWizardState.extractedMedicines.length} completed`,
-      action: "CHECKING_DUPLICATES",
-      createdAt: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, userMsg, checkingMsg]);
+    setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const existingRes = await listMedications();
-      const existingMeds = existingRes.data || existingRes || [];
+      const payload: any = {
+        actionType: "CONFIRM_MEDICINES",
+        message: "CONFIRM_MEDICINES",
+        sessionId: activeSessionId || onboardingSessionId || undefined,
+        preferredLanguage: preferredLang,
+        history: messages.map((m) => ({
+          role: m.role === "ai" ? "assistant" : "user",
+          content: m.text,
+        })),
+        state: lastKnownStateRef.current || {},
+        actionData: {
+          selected:
+            checkedMedIds ||
+            selectedMeds.map((m: any) => m.id || m.client_med_id),
+          medicines: selectedMeds.map(sanitizeMedicineForPayload),
+        },
+      };
 
-      const conflictsList: any[] = [];
-      const newMedsList: ExtractedMedicine[] = [];
-      const total = chatWizardState.extractedMedicines.length;
+      const res = await apiClient.post("/v1/onboarding/chat", payload);
+      const resData = res.data?.data || res.data;
 
-      for (let i = 0; i < total; i++) {
-        const med = chatWizardState.extractedMedicines[i];
-        const typeStr = (med.medicineType || "TABLET").toUpperCase();
-        const normalizedType = typeStr === "DROP" ? "DROPS" : typeStr;
+      // Invalidate queries so dashboard & medications list update immediately
+      queryClient.invalidateQueries({ queryKey: ["medications"] });
+      queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
 
-        try {
-          const duplicateRes = await checkMedicationDuplicate({
-            medicationName: med.name,
-            medicationType: normalizedType,
-          });
-          const dupData = duplicateRes?.data || duplicateRes || {};
-
-          if (dupData.hasDuplicate) {
-            const match =
-              dupData.matchedMedication ||
-              dupData.matchedMedications?.[0] ||
-              existingMeds.find(
-                (em: any) =>
-                  em.medicationName.trim().toLowerCase() ===
-                  med.name.trim().toLowerCase()
-              );
-            conflictsList.push({
-              extractedMedicine: med,
-              existingMedication: match,
-            });
-          } else {
-            newMedsList.push(med);
-          }
-        } catch (apiErr) {
-          const duplicateLocal = existingMeds.find(
-            (existing: any) =>
-              existing.medicationName.trim().toLowerCase() ===
-              med.name.trim().toLowerCase()
-          );
-          if (duplicateLocal) {
-            conflictsList.push({
-              extractedMedicine: med,
-              existingMedication: duplicateLocal,
-            });
-          } else {
-            newMedsList.push(med);
-          }
-        }
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === checkingMsgId
-              ? {
-                  ...msg,
-                  text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed`,
-                }
-              : msg
-          )
-        );
-      }
-
-      if (conflictsList.length > 0) {
-        setChatWizardState((prev) => ({
-          ...prev,
-          step: "conflicts",
-          conflicts: conflictsList,
-          currentConflictIndex: 0,
-          resolvedMedicines: newMedsList,
-          replaceList: [],
-          mergeList: [],
-        }));
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === checkingMsgId
-              ? {
-                  ...msg,
-                  text: `I detected duplicate conflicts with your existing medications. Let's resolve them.`,
-                }
-              : msg
-          )
-        );
-
-        const conflictMsg: ChatMessage = {
-          id: `ai-conflict-${Date.now()}`,
+      if (resData?.reply) {
+        const aiMsg: ChatMessage = {
+          id: `ai-confirm-res-${Date.now()}`,
           role: "ai",
-          text: tOnboarding("aiConflictIntro"),
-          action: "EXTRACTED_MEDICINES_CONFLICTS",
+          text: resData.reply,
+          action: resData.actionType || resData.action || "NORMAL_CHAT",
+          options: resData.options || [],
+          medicines: resData.medicines || [],
+          document: resData.document || null,
+          documentSummary: resData.documentSummary || null,
+          documents: resData.documents || [],
           createdAt: new Date().toISOString(),
         };
-        setMessages((prev) => [...prev, conflictMsg]);
-      } else {
-        setChatWizardState((prev) => ({
-          ...prev,
-          step: "summary",
-          resolvedMedicines: newMedsList,
-        }));
+        setMessages((prev) => [...prev, aiMsg]);
 
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === checkingMsgId
-              ? {
-                  ...msg,
-                  text: `No duplicates found. All medicines are ready to be added.`,
-                }
-              : msg
-          )
+        const nextPendingStep =
+          resData?.onboardingState?.currentStep ||
+          resData?.state?.currentStep ||
+          resData?.actionType ||
+          resData?.action ||
+          null;
+        const isNowCompleted = Boolean(
+          resData?.onboardingState?.isOnboardingCompleted ??
+            resData?.state?.isOnboardingCompleted ??
+            resData?.isOnboardingCompleted ??
+            (nextPendingStep === "POST_ONBOARDING" ||
+              nextPendingStep === "COMPLETE")
         );
-
-        const confirmMsg: ChatMessage = {
-          id: `ai-confirm-${Date.now()}`,
-          role: "ai",
-          text: tOnboarding("aiConfirmIntro"),
-          action: "EXTRACTED_MEDICINES_CONFIRM",
-          medicinesCount: newMedsList.length,
-          docsCount: chatWizardState.filesInfo.length,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, confirmMsg]);
+        setIsOnboardingCompleted(isNowCompleted);
+        setPendingStep(isNowCompleted ? null : nextPendingStep);
       }
-    } catch (err) {
-      console.error("[AI_CHAT] Conflict checking failed:", err);
+    } catch (err: any) {
+      console.error("[AI_CHAT] Error confirming medicines:", err);
       Toast.show({
         type: "error",
         text1: "Error",
-        text2: "Failed to perform duplicate check. Please try again.",
+        text2:
+          err?.message || "Failed to confirm medications. Please try again.",
       });
     } finally {
+      isSendingRef.current = false;
       setIsLoadingResults(false);
+      setIsSending(false);
     }
   };
 
@@ -596,6 +571,14 @@ export const useChatWizardManager = ({
         });
       }
 
+      // Invalidate queries so dashboard & medications list update immediately
+      queryClient.invalidateQueries({ queryKey: ["medications"] });
+      queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+
       Toast.show({
         type: "success",
         text1: "Success",
@@ -678,12 +661,104 @@ export const useChatWizardManager = ({
       return;
     }
 
+    // If saving a medicine from AddMedicineCard
+    if (option?.value?.medicine || (option?.actionType === "ADD_MEDICINE" && option?.value?.medicine)) {
+      try {
+        const medData = option.value.medicine;
+        const payload: AddOrEditMedication = {
+          medicationName: (medData.medicationName || medData.name || "").trim(),
+          medicationType: (medData.medicationType || medData.type || "TABLET").toUpperCase(),
+          prescribedBy: medData.prescribedBy || medData.prescribed_by || "",
+          dosePerIntake: typeof medData.dosePerIntake === "number" ? medData.dosePerIntake : parseFloat(String(medData.dose?.count || medData.dose?.value || medData.dosePerIntake || "1")) || 1,
+          frequency: medData.frequency || "Once Daily",
+          foodFrequency: medData.foodFrequency || medData.foodContext || "AFTER_FOOD",
+          startDate: medData.startDate || new Date().toISOString().split("T")[0],
+          ongoing: medData.ongoing !== undefined ? medData.ongoing : true,
+          medicationSchedule: Array.isArray(medData.medicationSchedule)
+            ? medData.medicationSchedule.reduce((acc: any, t: string) => {
+                let key = "CUSTOM";
+                if (t === "08:00") key = "MORNING";
+                else if (t === "14:00") key = "NOON";
+                else if (t === "20:00") key = "NIGHT";
+                acc[key] = `${t}:00`;
+                return acc;
+              }, {})
+            : (medData.medicationSchedule || { MORNING: "08:00:00" }),
+          totalQuantity: medData.totalQuantity || medData.total_quantity || 1,
+          notes: medData.notes || "",
+        };
+
+        await addMedication(payload);
+
+        // Invalidate react-query cache so it appears immediately on Dashboard and Medication list
+        queryClient.invalidateQueries({ queryKey: ["medications"] });
+        queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+        queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
+        queryClient.invalidateQueries({ queryKey: ["reminders"] });
+        queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+        queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+
+        Toast.show({
+          type: "success",
+          text1: "Medicine Saved",
+          text2: `${payload.medicationName} added successfully`,
+        });
+
+        const confirmationMsg: ChatMessage = {
+          id: `ai-med-saved-${Date.now()}`,
+          role: "ai",
+          text: `Added ${payload.medicationName} to your medications successfully.`,
+          action: "NORMAL_CHAT",
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, confirmationMsg]);
+      } catch (err: any) {
+        console.error("[AI_CHAT] Error saving medicine:", err);
+        Toast.show({
+          type: "error",
+          text1: "Save Failed",
+          text2: err?.message || "Could not save medicine",
+        });
+      } finally {
+        isSendingRef.current = false;
+        setIsSending(false);
+      }
+      return;
+    }
+
+    // If cancelling the Add Medicine form
+    if (option?.actionType === "CANCEL" || normalizedKey === "CANCEL" || option?.value === "cancel") {
+      const cancelMsg: ChatMessage = {
+        id: `ai-cancel-${Date.now()}`,
+        role: "ai",
+        text: "Medicine addition cancelled.",
+        action: "NORMAL_CHAT",
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, cancelMsg]);
+      isSendingRef.current = false;
+      setIsSending(false);
+      return;
+    }
+
+    // If opening the Add Medicine form in Chatbot (stay in chat!)
     if (
-      option?.actionType === "ADD_MEDICINE" ||
-      normalizedKey === "ADD_MEDICINE" ||
-      option?.value === "ADD_MEDICINE"
+      (option?.actionType === "ADD_MEDICINE" ||
+        normalizedKey === "ADD_MEDICINE" ||
+        option?.value === "ADD_MEDICINE" ||
+        normalizedKey === "ADD" ||
+        option?.value === "ADD") &&
+      !option?.value?.medicine
     ) {
-      navigation.navigate("MEDICATION");
+      const addMedPromptMsg: ChatMessage = {
+        id: `ai-add-med-${Date.now()}`,
+        role: "ai",
+        text: "Please fill out the medicine details below:",
+        action: "ADD_MEDICINE",
+        medicine: {},
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, addMedPromptMsg]);
       isSendingRef.current = false;
       setIsSending(false);
       return;

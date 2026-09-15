@@ -515,15 +515,18 @@ const HomeScreen = () => {
         {/* Analysis Complete Banner */}
         {!hasActiveUploads && processingError === null && completedBatch && !isBannerDismissed && (() => {
           const docs = completedBatch.documents || [];
-          const completedDocs = docs.filter(
-            (d: any) => d.status === "COMPLETED" || d.status === "completed" || d.status === "success"
-          ).length;
-          const failedDocs = docs.filter(
-            (d: any) => d.status === "FAILED" || d.status === "failed" || d.status === "error"
-          );
-          const rejectedDocs = docs.filter(
-            (d: any) => d.status === "REJECTED" || d.status === "rejected"
-          );
+          const completedDocs = docs.filter((d: any) => {
+            const s = (d.status || "").toUpperCase();
+            return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100;
+          }).length;
+          const failedDocs = docs.filter((d: any) => {
+            const s = (d.status || "").toUpperCase();
+            return s === "FAILED" || s === "ERROR";
+          });
+          const rejectedDocs = docs.filter((d: any) => {
+            const s = (d.status || "").toUpperCase();
+            return s === "REJECTED";
+          });
           
           const totalMedicines = completedBatch.medicineCount || 0;
           const docsWithMedicines = docs.filter((d: any) => (d.medicineCount || 0) > 0).length;
@@ -557,7 +560,7 @@ const HomeScreen = () => {
                     Analysis Complete
                   </Text>
                   <Text style={{ fontSize: 12, marginTop: 2, color: isDark ? "#94a3b8" : "#64748b" }}>
-                    {completedDocs} of {docs.length} documents processed successfully
+                    {completedDocs} of {docs.length} document{docs.length === 1 ? "" : "s"} processed successfully
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -577,7 +580,9 @@ const HomeScreen = () => {
                   <Text style={{ fontSize: 24, fontWeight: "700", color: isDark ? "#f8fafc" : "#0f172a", marginRight: 8 }}>
                     {totalMedicines}
                   </Text>
-                  <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>medicines found</Text>
+                  <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>
+                    medicine{totalMedicines === 1 ? "" : "s"} found
+                  </Text>
                 </View>
                 
                 <View style={{ width: 1, height: "100%", backgroundColor: isDark ? "#334155" : "#e2e8f0", marginHorizontal: 12 }} />
@@ -586,7 +591,9 @@ const HomeScreen = () => {
                   <Text style={{ fontSize: 24, fontWeight: "700", color: isDark ? "#f8fafc" : "#0f172a", marginRight: 8 }}>
                     {docsWithMedicines}
                   </Text>
-                  <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>document with medicines</Text>
+                  <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b" }}>
+                    document{docsWithMedicines === 1 ? "" : "s"} with medicines
+                  </Text>
                 </View>
               </View>
 

@@ -38,6 +38,7 @@ import {
   getDummyConfirmationResult,
   DUMMY_TOKEN,
 } from "../../services/dummyAuth.service";
+import { resetForceLogout } from "../../services/apiClient";
 
 type OtpVerificationRouteProp = RouteProp<
   AuthStackParamList,
@@ -57,6 +58,7 @@ const OtpVerificationScreen = () => {
 
   useEffect(() => {
     console.log("[OTP_LOG] Component Mounted: OtpVerificationScreen");
+    resetForceLogout();
     return () => {
       console.log("[OTP_LOG] Component Unmounted: OtpVerificationScreen");
     };

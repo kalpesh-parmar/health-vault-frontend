@@ -32,6 +32,7 @@ export const ReviewAllMedicinesScreen: React.FC = () => {
     documents,
     medicines,
     selectedMedicineIds,
+    duplicateGroups,
     toggleMedicineSelection,
   } = useMedicationReview();
 
@@ -62,14 +63,24 @@ export const ReviewAllMedicinesScreen: React.FC = () => {
           .filter((doc) => doc.medicines.length > 0)
           .map((doc) => (
             <DocumentMedicineCard key={doc.id} document={doc}>
-              {doc.medicines.map((med) => (
-                <ExtractedMedicineCard
-                  key={med.id}
-                  medicine={med}
-                  onPress={() => navigation.navigate("MedicineDetails" as any, { medicineId: med.id })}
-                  onToggle={() => toggleMedicineSelection(med.id)}
-                />
-              ))}
+              {doc.medicines.map((med) => {
+                const dupGroup = duplicateGroups.find((g) => g.medicineIds.includes(med.id));
+                const isDup = Boolean(dupGroup && dupGroup.medicineIds.length > 1);
+                const dupHasDiff = dupGroup ? dupGroup.hasDifference : false;
+                const isBackendDup = Boolean(med.isBackendDuplicate || med.duplicateInfo?.hasDuplicate || med.hasDuplicate);
+
+                return (
+                  <ExtractedMedicineCard
+                    key={med.id}
+                    medicine={med}
+                    onPress={() => navigation.navigate("MedicineDetails" as any, { medicineId: med.id })}
+                    onToggle={() => toggleMedicineSelection(med.id)}
+                    isDuplicate={isDup}
+                    duplicateHasDifference={dupHasDiff}
+                    isBackendDuplicate={isBackendDup}
+                  />
+                );
+              })}
             </DocumentMedicineCard>
           ))}
       </ScrollWrapper>

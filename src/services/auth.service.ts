@@ -198,8 +198,24 @@ export const loginWithFacebook = async (): Promise<{
 };
 
 export const logoutUser = async () => {
-  const response = await apiClient.post(AUTH_ENDPOINTS.LOGOUT, {});
-  return response.data;
+  try {
+    const response = await apiClient.post(AUTH_ENDPOINTS.LOGOUT, {});
+    return response.data;
+  } catch (error: any) {
+    const status = error?.response?.status;
+    const msg = String(error?.response?.data?.message || error?.message || "").toLowerCase();
+    if (
+      status === 401 ||
+      status === 403 ||
+      msg.includes("session expired") ||
+      msg.includes("user not found") ||
+      msg.includes("unauthorized")
+    ) {
+      // Session is already expired / terminated on server, treat logout as completed
+      return { success: true, message: "Logged out" };
+    }
+    throw error;
+  }
 };
 
 export const refreshAuthToken = async (refreshToken: string) => {

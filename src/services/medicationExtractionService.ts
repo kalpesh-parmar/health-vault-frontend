@@ -84,6 +84,19 @@ export const MedicationExtractionService = {
           normalizedFoodFreq = "AFTER_FOOD";
         }
 
+        const replaceMedId =
+          med.replaceMedicationId ||
+          med.matchedMedication?.id ||
+          med.matchedMedication?._id ||
+          med.duplicateInfo?.matchedMedication?.id ||
+          med.duplicateInfo?.matchedMedication?._id ||
+          med.duplicateInfo?.matchedMedications?.[0]?.id ||
+          med.duplicateInfo?.matchedMedications?.[0]?._id;
+
+        const resolutionVal =
+          med.resolution ||
+          (replaceMedId ? "REPLACE" : (med.isBackendDuplicate || med.hasDuplicate ? "KEEP_NEW" : undefined));
+
         const payload: AddOrEditMedication = {
           medicationName: med.name.trim(),
           medicationType: (med.medicineType || "TABLET").toUpperCase(),
@@ -96,13 +109,23 @@ export const MedicationExtractionService = {
           medicationSchedule: scheduleObj,
           totalQuantity: med.totalQuantity || 10,
           notes: med.notes || "",
-          resolution: med.resolution,
-          replaceMedicationId: med.replaceMedicationId,
+          resolution: resolutionVal,
+          replaceMedicationId: replaceMedId,
         };
 
         await addMedication(payload);
       } catch (medErr: any) {
-        if (medErr?.isDuplicate) {
+        const isDup =
+          medErr?.isDuplicate ||
+          medErr?.response?.status === 409 ||
+          medErr?.responseData?.errorCode === "CONFLICT" ||
+          medErr?.responseData?.errorCode === "MEDICINE_ALREADY_EXISTS" ||
+          (typeof medErr?.message === "string" && (
+            medErr.message.toLowerCase().includes("already exists") ||
+            medErr.message.toLowerCase().includes("conflict")
+          ));
+
+        if (isDup) {
           duplicateIds.push(med.id);
         }
         console.error(`[MedicationExtractionService] Failed to add medicine ${med.name}:`, medErr);

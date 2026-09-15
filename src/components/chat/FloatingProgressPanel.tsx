@@ -10,15 +10,34 @@ interface FloatingProgressPanelProps {
 export const FloatingProgressPanel = ({ onOpenSheet, isDark }: FloatingProgressPanelProps) => {
   const { chatWizardState, resetChatWizard, uploadingDocs, isUploading } = useDocumentUpload();
 
+  const isChatUpload =
+    chatWizardState?.fromScreen === "AIChat" ||
+    chatWizardState?.fromScreen === "AIChatScreen" ||
+    chatWizardState?.step === "processing" ||
+    chatWizardState?.step === "results" ||
+    uploadingDocs?.some(
+      (d) => d.fromScreen === "AIChat" || d.fromScreen === "AIChatScreen"
+    );
+
+  const chatDocs = useMemo(() => {
+    if (!uploadingDocs) return [];
+    return uploadingDocs.filter(
+      (doc) =>
+        doc.fromScreen === "AIChat" ||
+        doc.fromScreen === "AIChatScreen" ||
+        (!doc.fromScreen && chatWizardState.step !== "idle")
+    );
+  }, [uploadingDocs, chatWizardState]);
+
   const avgProgress = useMemo(() => {
-    if (!uploadingDocs || uploadingDocs.length === 0) return 0;
-    const sum = uploadingDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0);
-    return Math.round(sum / uploadingDocs.length);
-  }, [uploadingDocs]);
+    if (!chatDocs || chatDocs.length === 0) return 0;
+    const sum = chatDocs.reduce((acc, doc) => acc + (doc.progress || 0), 0);
+    return Math.round(sum / chatDocs.length);
+  }, [chatDocs]);
 
   const completedJobsCount = useMemo(() => {
-    if (!uploadingDocs) return 0;
-    return uploadingDocs.filter(
+    if (!chatDocs) return 0;
+    return chatDocs.filter(
       (doc) =>
         doc.status === "COMPLETED" ||
         doc.status === "FAILED" ||
@@ -27,9 +46,13 @@ export const FloatingProgressPanel = ({ onOpenSheet, isDark }: FloatingProgressP
         doc.status === "completed" ||
         doc.status === "success"
     ).length;
-  }, [uploadingDocs]);
+  }, [chatDocs]);
 
-  const docCount = uploadingDocs?.length || 0;
+  const docCount = chatDocs?.length || 0;
+
+  if (!isChatUpload || (docCount === 0 && !isUploading)) {
+    return null;
+  }
 
   return (
     <View

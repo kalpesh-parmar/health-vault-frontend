@@ -31,8 +31,14 @@ import {
   socialLogin,
   reportAuthFailure,
   loginWithApple,
+  loginWithGoogle,
+  loginWithFacebook,
 } from "../../services/auth.service";
-import { statusCodes } from "@react-native-google-signin/google-signin";
+import {
+  handleSuccessfulSocialLogin,
+  isAuthCancelled,
+  isNetworkAuthError,
+} from "../../utils/socialAuth.utils";
 import { resetForceLogout } from "../../services/apiClient";
 import { useAppTheme } from "../../context/ThemeContext";
 import { AuthStackParamList } from "../../types/navigation";
@@ -46,10 +52,6 @@ import {
   getDummyConfirmationResult,
 } from "../../services/dummyAuth.service";
 import { useAuth } from "../../hooks/useAuth";
-import {
-  loginWithGoogle,
-  loginWithFacebook,
-} from "../../services/auth.service";
 import SocialAuthButton from "../../components/auth/SocialAuthButton";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -202,28 +204,16 @@ const LoginScreen = () => {
             );
           }
 
-          await authContextLogin({
-            accessToken: backendResponse?.data?.accessToken,
-            refreshToken: backendResponse?.data?.refreshToken,
-            userId: backendResponse?.data?.user?.id,
-            createdAt: new Date().toISOString(),
-          });
-          Toast.show({
-            type: "success",
-            text1: "Logged In Successfully! 🚀",
-            text2: "Welcome to your secure health vault.",
+          await handleSuccessfulSocialLogin({
+            authContextLogin,
+            backendResponse,
+            customSuccessTitle: "Logged In Successfully! 🚀",
           });
         } else {
           throw new Error("Backend login failed.");
         }
       } catch (error: any) {
-        const errorMsg = String(error.message || "").toLowerCase();
-        const isCancelled = errorMsg.includes("cancel");
-        const isNetwork =
-          errorMsg.includes("network") ||
-          error.code === "auth/network-request-failed";
-
-        if (!isCancelled && !isNetwork) {
+        if (!isAuthCancelled(error) && !isNetworkAuthError(error)) {
           reportAuthFailure({
             identifier: firebaseToken,
             provider: "microsoft",
@@ -234,9 +224,9 @@ const LoginScreen = () => {
         Toast.show({
           type: "error",
           text1: "Microsoft Sign-In Failed",
-          text2: error.message || "An error occurred during sign in.",
+          text2: error?.message || "An error occurred during sign in.",
         });
-        console.log("Microsoft Error :- ", error.message);
+        console.log("Microsoft Error :- ", error?.message);
       } finally {
         setIsMicrosoftLoading(false);
       }
@@ -359,16 +349,10 @@ const LoginScreen = () => {
         console.log("Backend Response :- ", backendResponse?.data?.user?.id);
 
         if (backendResponse?.data?.user?.id) {
-          await authContextLogin({
-            accessToken: backendResponse?.data?.accessToken,
-            refreshToken: backendResponse?.data?.refreshToken,
-            userId: backendResponse?.data?.user?.id,
-            createdAt: new Date().toISOString(),
-          });
-          Toast.show({
-            type: "success",
-            text1: "Logged In Successfully! 🎉",
-            text2: "Welcome to your secure health vault.",
+          await handleSuccessfulSocialLogin({
+            authContextLogin,
+            backendResponse,
+            customSuccessTitle: "Logged In Successfully! 🎉",
           });
         } else {
           throw new Error("Backend login failed.");
@@ -377,15 +361,7 @@ const LoginScreen = () => {
         throw new Error("Google Sign-In failed.");
       }
     } catch (error: any) {
-      const isCancelled =
-        error.code === statusCodes.SIGN_IN_CANCELLED ||
-        error.code === statusCodes.IN_PROGRESS ||
-        String(error.message).toLowerCase().includes("cancel");
-      const isNetwork =
-        String(error.message).toLowerCase().includes("network") ||
-        error.code === "auth/network-request-failed";
-
-      if (!isCancelled && !isNetwork) {
+      if (!isAuthCancelled(error) && !isNetworkAuthError(error)) {
         reportAuthFailure({
           identifier: firebaseToken,
           provider: "google",
@@ -396,7 +372,7 @@ const LoginScreen = () => {
       Toast.show({
         type: "error",
         text1: "Google Sign-In Failed",
-        text2: error.message || "An error occurred during sign in.",
+        text2: error?.message || "An error occurred during sign in.",
       });
     } finally {
       setIsGoogleLoading(false);
@@ -445,16 +421,10 @@ const LoginScreen = () => {
 
         console.log("Backend Response :- ", backendResponse?.data?.user?.id);
         if (backendResponse?.data?.user?.id) {
-          await authContextLogin({
-            accessToken: backendResponse?.data?.accessToken,
-            refreshToken: backendResponse?.data?.refreshToken,
-            userId: backendResponse?.data?.user.id,
-            createdAt: new Date().toISOString(),
-          });
-          Toast.show({
-            type: "success",
-            text1: "Logged In Successfully! 🎉",
-            text2: "Welcome to your secure health vault.",
+          await handleSuccessfulSocialLogin({
+            authContextLogin,
+            backendResponse,
+            customSuccessTitle: "Logged In Successfully! 🎉",
           });
         } else {
           throw new Error("Backend login failed.");
@@ -463,13 +433,7 @@ const LoginScreen = () => {
         throw new Error("Facebook Sign-In failed.");
       }
     } catch (error: any) {
-      const errorMsg = String(error.message || "").toLowerCase();
-      const isCancelled = errorMsg.includes("cancel");
-      const isNetwork =
-        errorMsg.includes("network") ||
-        error.code === "auth/network-request-failed";
-
-      if (!isCancelled && !isNetwork) {
+      if (!isAuthCancelled(error) && !isNetworkAuthError(error)) {
         reportAuthFailure({
           identifier: firebaseToken,
           provider: "facebook",
@@ -480,7 +444,7 @@ const LoginScreen = () => {
       Toast.show({
         type: "error",
         text1: "Facebook Sign-In Failed",
-        text2: errorMsg || "An error occurred during sign in.",
+        text2: error?.message || "An error occurred during sign in.",
       });
     } finally {
       setIsFacebookLoading(false);
@@ -545,20 +509,13 @@ const LoginScreen = () => {
           if (backendResponse?.data?.user?.id) {
             console.log("[APPLE] 6. Updating auth context...");
 
-            await authContextLogin({
-              accessToken: backendResponse.data.accessToken,
-              refreshToken: backendResponse.data.refreshToken,
-              userId: backendResponse.data.user.id,
-              createdAt: new Date().toISOString(),
+            await handleSuccessfulSocialLogin({
+              authContextLogin,
+              backendResponse,
+              customSuccessTitle: "Logged In Successfully! 🚀",
             });
 
             console.log("[APPLE] 7. Auth context updated");
-
-            Toast.show({
-              type: "success",
-              text1: "Logged In Successfully! 🚀",
-              text2: "Welcome to your secure health vault.",
-            });
           } else {
             throw new Error("Apple backend login failed.");
           }

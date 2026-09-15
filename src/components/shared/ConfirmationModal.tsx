@@ -46,11 +46,13 @@ const ConfirmationModal = ({
         text2: getModalTranslation(lang, "loginAgainMsg"),
       });
     },
-    onError: (error: any) => {
+    onError: async (error: any) => {
+      await logout();
+      onClose();
       Toast.show({
-        type: "error",
-        text1: getModalTranslation(lang, "oops"),
-        text2: error.message || getModalTranslation(lang, "errorMsg"),
+        type: "success",
+        text1: getModalTranslation(lang, "loggedOutMsg"),
+        text2: getModalTranslation(lang, "loginAgainMsg"),
       });
     },
   });

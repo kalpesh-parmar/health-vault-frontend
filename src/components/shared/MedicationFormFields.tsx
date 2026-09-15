@@ -58,7 +58,7 @@ export const useMedicationFormState = (initialMed: any, preferredLang: string = 
   // Total Quantity
   const [formQty, setFormQty] = useState(() => {
     const val = med.total_quantity !== undefined ? med.total_quantity : med.totalQuantity;
-    return val !== undefined && val !== null ? String(val) : "10";
+    return val !== undefined && val !== null ? String(val) : "1";
   });
 
   // Food Context / Timing
@@ -557,6 +557,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           keyboardType="numeric"
           placeholder="1"
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+          cursorColor={theme.colors.primary}
+          selectionColor={theme.colors.primary}
         />
         <View
           style={[
@@ -878,6 +880,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           onChangeText={setFormName}
           placeholder={t("placeholder.paracetamol")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+          cursorColor={theme.colors.primary}
+          selectionColor={theme.colors.primary}
         />
         {errors.name ? (
           <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
@@ -1151,6 +1155,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           keyboardType="numeric"
           placeholder={preferredLang === "gujarati" ? "દા.ત. 30" : "e.g. 30"}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+          cursorColor={theme.colors.primary}
+          selectionColor={theme.colors.primary}
         />
         {errors.qty ? (
           <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
@@ -1216,6 +1222,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           onChangeText={setFormPrescribed}
           placeholder={t("prescribedBy")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+          cursorColor={theme.colors.primary}
+          selectionColor={theme.colors.primary}
         />
       </View>
 
@@ -1242,6 +1250,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           onChangeText={setFormNotes}
           placeholder={t("placeholder.notes")}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+          cursorColor={theme.colors.primary}
+          selectionColor={theme.colors.primary}
           multiline
         />
       </View>

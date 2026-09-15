@@ -3,14 +3,15 @@ import React, {
   useState,
   useContext,
   useEffect,
+  useCallback,
   ReactNode,
 } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { queryClient } from "../config/queryClient";
-import { refreshAuthToken } from "../services/auth.service";
-import { registerForceLogoutHandler, resetForceLogout } from "../services/apiClient";
+import { registerForceLogoutHandler, resetForceLogout, getValidAccessToken } from "../services/apiClient";
 
 interface AuthContextType {
   userId: string | null;
@@ -26,6 +27,29 @@ interface AuthContextType {
 
 const Context = createContext<AuthContextType | undefined>(undefined);
 
+const clearStoredAuth = async () => {
+  await SecureStore.deleteItemAsync("authToken");
+  await SecureStore.deleteItemAsync("accessToken");
+  await SecureStore.deleteItemAsync("refreshDate");
+  await SecureStore.deleteItemAsync("userId");
+};
+
+const calculateRefreshDateString = (createdAt?: string): string => {
+  let refreshDate = new Date();
+  if (createdAt) {
+    const datePart = createdAt.split("T")[0];
+    const [year, month, day] = datePart.split("-").map(Number);
+    if (year && month && day) {
+      refreshDate = new Date(year, month - 1, day);
+    }
+  }
+  refreshDate.setDate(refreshDate.getDate() + 6);
+  const yyyy = refreshDate.getFullYear();
+  const mm = String(refreshDate.getMonth() + 1).padStart(2, "0");
+  const dd = String(refreshDate.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -33,74 +57,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  const clearLocalAuthState = useCallback(() => {
+    setIsAuthenticated(false);
+    setAccessToken(null);
+    setRefreshToken(null);
+    setUserId(null);
+  }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const storedRefreshToken = await SecureStore.getItemAsync("authToken");
         const storedUserId = await SecureStore.getItemAsync("userId");
-        const refreshDateStr = await SecureStore.getItemAsync("refreshDate");
 
+        // If user has just downloaded the app or no userId is found, skip checking/refreshing token
+        if (!storedUserId) {
+          clearLocalAuthState();
+          return;
+        }
+
+        setUserId(storedUserId);
+
+        const storedRefreshToken = await SecureStore.getItemAsync("authToken");
         if (storedRefreshToken) {
           try {
-            let shouldRefresh = false;
-
-            if (refreshDateStr) {
-              const currentDate = new Date();
-              const yyyy = currentDate.getFullYear();
-              const mm = String(currentDate.getMonth() + 1).padStart(2, "0");
-              const dd = String(currentDate.getDate()).padStart(2, "0");
-              const currentDateOnly = `${yyyy}-${mm}-${dd}`;
-              
-              if (currentDateOnly >= refreshDateStr) {
-                shouldRefresh = true;
-              }
-            } else {
-              shouldRefresh = true;
-            }
-
-            if (shouldRefresh) {
-              // Attempt to refresh token using the backend refresh endpoint
-              const refreshResult = await refreshAuthToken(storedRefreshToken);
-              
-              const newAccessToken = refreshResult.data?.accessToken || refreshResult.accessToken;
-              const newRefreshToken = refreshResult.data?.refreshToken || refreshResult.refreshToken;
-
-              if (newAccessToken && newRefreshToken) {
-                await SecureStore.setItemAsync("accessToken", String(newAccessToken));
-                await SecureStore.setItemAsync("authToken", String(newRefreshToken));
-                
-                setAccessToken(newAccessToken);
-                setRefreshToken(newRefreshToken);
-                setIsAuthenticated(true);
-
-                await SecureStore.deleteItemAsync("refreshDate");
-
-                const newRefreshDate = new Date();
-                newRefreshDate.setDate(newRefreshDate.getDate() + 6);
-                
-                const yyyy = newRefreshDate.getFullYear();
-                const mm = String(newRefreshDate.getMonth() + 1).padStart(2, "0");
-                const dd = String(newRefreshDate.getDate()).padStart(2, "0");
-                const newRefreshDateOnly = `${yyyy}-${mm}-${dd}`;
-                
-                await SecureStore.setItemAsync("refreshDate", newRefreshDateOnly);
-              }
-            } else {
-              const storedAccessToken = await SecureStore.getItemAsync("accessToken");
-              setAccessToken(storedAccessToken);
-              setRefreshToken(storedRefreshToken);
+            // Proactively validate / refresh token via getValidAccessToken
+            const validToken = await getValidAccessToken();
+            if (validToken) {
+              const latestRefreshToken = (await SecureStore.getItemAsync("authToken")) || storedRefreshToken;
+              setAccessToken(validToken);
+              setRefreshToken(latestRefreshToken);
               setIsAuthenticated(true);
+            } else {
+              // Refresh failed / invalid credentials
+              await clearStoredAuth();
+              clearLocalAuthState();
             }
           } catch (refreshError) {
             console.error("Token refresh failed on app load:", refreshError);
-            await SecureStore.deleteItemAsync("authToken");
-            await SecureStore.deleteItemAsync("accessToken");
-            await SecureStore.deleteItemAsync("refreshDate");
+            await clearStoredAuth();
+            clearLocalAuthState();
           }
-        }
-
-        if (storedUserId) {
-          setUserId(storedUserId);
+        } else {
+          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error("Failed to restore auth state:", error);
@@ -109,17 +107,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     checkAuth();
-  }, []);
+  }, [clearLocalAuthState]);
+
+  // Proactively check and refresh token when app comes back to foreground
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active" && isAuthenticated) {
+        try {
+          const freshToken = await getValidAccessToken();
+          if (freshToken) {
+            setAccessToken(freshToken);
+            const latestRefreshToken = await SecureStore.getItemAsync("authToken");
+            if (latestRefreshToken) {
+              setRefreshToken(latestRefreshToken);
+            }
+          }
+        } catch (e) {
+          // Handled internally by getValidAccessToken / triggerForceLogout
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => subscription.remove();
+  }, [isAuthenticated]);
 
   useEffect(() => {
     registerForceLogoutHandler(() => {
-      setIsAuthenticated(false);
-      setAccessToken(null);
-      setRefreshToken(null);
-      setUserId(null);
+      clearLocalAuthState();
       queryClient.clear();
     });
-  }, []);
+  }, [clearLocalAuthState]);
 
   const login = async (data: { accessToken: string; refreshToken: string; userId: string; createdAt?: string }) => {
     try {
@@ -128,23 +146,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await SecureStore.setItemAsync("userId", String(data.userId));
       await SecureStore.setItemAsync("accessToken", String(data.accessToken));
       await SecureStore.setItemAsync("authToken", String(data.refreshToken));
-
-      let refreshDate = new Date();
-      if (data.createdAt) {
-        const datePart = data.createdAt.split("T")[0];
-        const [year, month, day] = datePart.split("-").map(Number);
-        if (year && month && day) {
-          refreshDate = new Date(year, month - 1, day);
-        }
-      }
-      refreshDate.setDate(refreshDate.getDate() + 6);
-      
-      const yyyy = refreshDate.getFullYear();
-      const mm = String(refreshDate.getMonth() + 1).padStart(2, "0");
-      const dd = String(refreshDate.getDate()).padStart(2, "0");
-      const formattedRefreshDate = `${yyyy}-${mm}-${dd}`;
-      
-      await SecureStore.setItemAsync("refreshDate", formattedRefreshDate);
+      await SecureStore.setItemAsync("refreshDate", calculateRefreshDateString(data.createdAt));
 
       setUserId(data.userId);
       setAccessToken(data.accessToken);
@@ -161,15 +163,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await signOut(auth);
 
       // Clear all secure store session details
-      await SecureStore.deleteItemAsync("authToken");
-      await SecureStore.deleteItemAsync("accessToken");
-      await SecureStore.deleteItemAsync("userId");
-      await SecureStore.deleteItemAsync("refreshDate");
-      
-      setIsAuthenticated(false);
-      setAccessToken(null);
-      setRefreshToken(null);
-      setUserId(null);
+      await clearStoredAuth();
+      clearLocalAuthState();
       
       queryClient.clear();
     } catch (error) {

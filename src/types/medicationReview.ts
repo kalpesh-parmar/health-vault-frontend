@@ -48,6 +48,12 @@ export interface ExtractedMedicine {
   resolution?: string;
   replaceMedicationId?: string;
   isBackendDuplicate?: boolean;
+  duplicateInfo?: any;
+  matchedMedication?: any;
+  conflictType?: string;
+  hasDuplicate?: boolean;
+  isDuplicate?: boolean;
+  duplicateHasDifference?: boolean;
 }
 
 export interface MedicationReviewState {

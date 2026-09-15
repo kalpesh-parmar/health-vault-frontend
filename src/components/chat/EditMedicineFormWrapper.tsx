@@ -52,7 +52,7 @@ export const EditMedicineFormWrapper = ({
       notes: medicine.notes || "",
       prescribed_by: medicine.prescribedBy || "",
       refill_alert: medicine.refillAlert || false,
-      total_quantity: medicine.totalQuantity || 10,
+      total_quantity: medicine.totalQuantity !== undefined && medicine.totalQuantity !== null ? medicine.totalQuantity : 1,
       foodContext: medicine.foodFrequency || medicine.timing || "AFTER_FOOD",
       startDate: medicine.startDate && medicine.startDate !== "None" ? medicine.startDate : getTodayDateString(),
       medicationSchedule: medicine.medicationSchedule || ["08:00"],
@@ -194,7 +194,7 @@ export const EditMedicineFormWrapper = ({
       <TouchableOpacity
         onPress={handleSave}
         style={{
-          backgroundColor: '#0f766e',
+          backgroundColor: theme?.colors?.primary || '#5B4BFF',
           borderRadius: 14,
           padding: 14,
           alignItems: 'center',

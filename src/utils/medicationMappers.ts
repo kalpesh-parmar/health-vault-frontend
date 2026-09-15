@@ -101,6 +101,26 @@ export const mapApiMedicineToExtractedMedicine = (
     scheduleTimes = ["08:00", "20:00"];
   }
 
+  const isBackendDup = Boolean(
+    apiMed.isBackendDuplicate ||
+    apiMed.hasDuplicate ||
+    apiMed.duplicateInfo?.hasDuplicate ||
+    apiMed.duplicateInfo?.conflictType ||
+    apiMed.matchedMedication ||
+    apiMed.duplicateInfo?.matchedMedication ||
+    (apiMed.duplicateInfo?.matchedMedications && apiMed.duplicateInfo.matchedMedications.length > 0)
+  );
+
+  const matchedMed =
+    apiMed.matchedMedication ||
+    apiMed.duplicateInfo?.matchedMedication ||
+    apiMed.duplicateInfo?.matchedMedications?.[0];
+
+  const replaceMedId =
+    apiMed.replaceMedicationId ||
+    matchedMed?.id ||
+    matchedMed?._id;
+
   return {
     id: `${documentId}-med-${index}-${cleanName.replace(/[^a-zA-Z0-9]/g, "")}`,
     documentId,
@@ -123,6 +143,12 @@ export const mapApiMedicineToExtractedMedicine = (
     confidence,
     selected: confidence >= 0.8,
     startDate: (apiMed.startDate && apiMed.startDate !== "None") ? apiMed.startDate : getTodayDateString(),
+    isBackendDuplicate: isBackendDup,
+    hasDuplicate: isBackendDup,
+    duplicateInfo: apiMed.duplicateInfo || (isBackendDup ? { hasDuplicate: true, matchedMedication: matchedMed, conflictType: apiMed.conflictType || "SIMILAR_NAME" } : undefined),
+    matchedMedication: matchedMed,
+    replaceMedicationId: replaceMedId,
+    resolution: apiMed.resolution || (isBackendDup ? (replaceMedId ? "REPLACE" : "KEEP_NEW") : undefined),
   };
 };
 
@@ -146,6 +172,9 @@ export const mapApiDocumentToProcessedDocument = (
     apiJobResult.structuredExtractedData?.medications ||
     apiJobResult.structuredExtractedData?.medicines ||
     apiJobResult.medications ||
+    apiJobResult.data?.extractedStructuredData?.medications ||
+    apiJobResult.data?.structuredExtractedData?.medications ||
+    apiJobResult.data?.medications ||
     [];
 
   if (Array.isArray(rawMeds)) {

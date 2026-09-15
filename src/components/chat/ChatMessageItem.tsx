@@ -1,8 +1,9 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { formatUTCDateTime } from "../../utils/dateFormatter";
+import { formatUTCDateTime, getRelativeDateLabel } from "../../utils/dateFormatter";
 import { MessageBubble } from "./MessageBubble";
+import { ChatDateHeader } from "./ChatDateHeader";
 import { ResolveProfileSourceCard } from "./widgets/ResolveProfileSourceCard";
 import { AskUploadOrSkipCard } from "./widgets/AskUploadOrSkipCard";
 import { AddMedicineCard } from "./widgets/AddMedicineCard";
@@ -59,7 +60,11 @@ interface ChatMessageItemProps {
   isConfirmingMeds: boolean;
   setMedicineToEdit: (med: any) => void;
   editSheetRef: React.RefObject<any>;
-  handleConfirmSelection: () => Promise<void>;
+  handleConfirmSelection: (
+    checkedMedIds?: string[],
+    formattedMeds?: any[],
+    messageId?: string
+  ) => Promise<void>;
   resolveCurrentConflict: (resolution: "keep" | "replace" | "merge" | "remove_new", mergedPayload?: any) => void;
   navigateConflict: (direction: "prev" | "next") => void;
   handleContinueAnyway: () => void;
@@ -68,6 +73,7 @@ interface ChatMessageItemProps {
   handleGenericOptionPress: (option: any, optLabel?: string) => Promise<void>;
   navigation: any;
   setChatWizardState: React.Dispatch<React.SetStateAction<any>>;
+  setMessages?: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onViewFullReport?: (doc: any) => void;
   onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
 }
@@ -96,6 +102,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   handleGenericOptionPress,
   navigation,
   setChatWizardState,
+  setMessages,
   onViewFullReport,
   onRetryDocument,
 }) => {
@@ -132,26 +139,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 
   const dateHeader =
     showDateHeader && item.createdAt ? (
-      <View style={styles.dateHeaderContainer}>
-        <View
-          style={{
-            backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0",
-            paddingHorizontal: 12,
-            paddingVertical: 4,
-            borderRadius: 12,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              color: isDark ? "#cbd5e1" : "#64748b",
-            }}
-          >
-            {formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true)}
-          </Text>
-        </View>
-      </View>
+      <ChatDateHeader
+        dateLabel={getRelativeDateLabel(item.createdAt, true)}
+        isDark={isDark}
+      />
     ) : null;
 
   const { chosenVal, chosenLabel } = findHistoricalUserReply(mergedMessages, item.id, true);
@@ -328,6 +319,13 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
               actionType: "ADD_MEDICINE",
             });
           }}
+          onCancel={() => {
+            handleGenericOptionPress({
+              label: "Cancel",
+              value: "cancel",
+              actionType: "CANCEL",
+            });
+          }}
           readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -356,7 +354,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       }));
 
       const handleConfirm = (checkedMeds: string[], formattedMeds?: any[]) => {
-        handleConfirmSelection();
+        handleConfirmSelection(checkedMeds, formattedMeds, item.id);
       };
 
       const handleAddNew = () => {
@@ -375,6 +373,24 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       };
 
       const setLocalMedicinesWrapper = (updater: any) => {
+        if (setMessages) {
+          setMessages((prev: any) =>
+            prev.map((msg: any) => {
+              if (msg.id === item.id) {
+                const currentMeds = msg.medicines || [];
+                const updatedMeds =
+                  typeof updater === "function"
+                    ? updater(currentMeds)
+                    : updater;
+                return {
+                  ...msg,
+                  medicines: updatedMeds,
+                };
+              }
+              return msg;
+            })
+          );
+        }
         if (typeof updater === "function") {
           setChatWizardState((prev: any) => ({
             ...prev,
@@ -660,13 +676,12 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                   style={[
                     styles.chipBtn,
                     {
-                      backgroundColor: isDark ? "#1e2d2f" : "#ccfbf1",
-                      borderColor: isDark ? "#2d4d4f" : "#99f6e4",
+                      backgroundColor: theme.colors.primary,
                       opacity: isHistorical || isLoadingResults || isConfirmingMeds ? 0.6 : 1,
                     },
                   ]}
                 >
-                  <Text style={[styles.chipText, { color: isDark ? "#2dd4bf" : "#0f766e" }]}>
+                  <Text style={styles.chipText}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -680,10 +695,6 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 };
 
 const styles = StyleSheet.create({
-  dateHeaderContainer: {
-    alignItems: "center",
-    marginVertical: 16,
-  },
   optionsWrapper: {
     paddingLeft: 48,
     paddingRight: 16,
@@ -714,12 +725,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   chipBtn: {
-    borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
   },
   chipText: {
+    color: "#ffffff",
     fontWeight: "600",
     fontSize: 13,
   },

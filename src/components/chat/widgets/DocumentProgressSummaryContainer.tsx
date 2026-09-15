@@ -418,12 +418,12 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
               styles.headerIconWrapper,
               {
                 backgroundColor: isDark
-                  ? "rgba(15, 118, 110, 0.25)"
-                  : "#ccfbf1",
+                  ? "rgba(91, 75, 255, 0.25)"
+                  : "#ede9fe",
               },
             ]}
           >
-            <Ionicons name="document-text" size={16} color="#0f766e" />
+            <Ionicons name="document-text" size={16} color={theme?.colors?.primary || "#5B4BFF"} />
           </View>
           <Text
             style={[
@@ -587,7 +587,7 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                         ? "#ef4444"
                         : isDone
                           ? "#10b981"
-                          : "#0f766e"
+                          : (theme?.colors?.primary || "#5B4BFF")
                     }
                   />
                 </View>
@@ -615,7 +615,7 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                               ? isDark
                                 ? "#94a3b8"
                                 : "#64748b"
-                              : "#0f766e",
+                              : (theme?.colors?.primary || "#5B4BFF"),
                       },
                     ]}
                   >
@@ -653,9 +653,17 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                         style={[
                           styles.infoButton,
                           {
-                            backgroundColor: isDark
-                              ? "rgba(56, 189, 248, 0.15)"
-                              : "#e0f2fe",
+                            backgroundColor: isRejectionExpanded
+                              ? isDark
+                                ? "rgba(239, 68, 68, 0.25)"
+                                : "#fee2e2"
+                              : isDark
+                                ? "rgba(239, 68, 68, 0.12)"
+                                : "#fef2f2",
+                            borderColor: isDark
+                              ? "rgba(239, 68, 68, 0.35)"
+                              : "#fecaca",
+                            borderWidth: 1,
                           },
                         ]}
                         activeOpacity={0.7}
@@ -664,8 +672,8 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                       >
                         <Ionicons
                           name="information-circle"
-                          size={20}
-                          color={isDark ? "#38bdf8" : "#0284c7"}
+                          size={18}
+                          color="#ef4444"
                         />
                       </TouchableOpacity>
 
@@ -678,7 +686,7 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                             {
                               backgroundColor: isRetrying
                                 ? "#94a3b8"
-                                : (theme?.colors?.primary || "#0f766e"),
+                                : (theme?.colors?.primary || "#5B4BFF"),
                             },
                           ]}
                           accessibilityLabel="Retry document processing"
@@ -699,30 +707,6 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                           )}
                         </TouchableOpacity>
                       )}
-
-                      {/* Tooltip Popover */}
-                      {isRejectionExpanded && (
-                        <View style={styles.tooltipContainer} pointerEvents="box-none">
-                          <TouchableOpacity
-                            activeOpacity={0.9}
-                            onPress={() => toggleRejectionInfo(docId)}
-                            style={[
-                              styles.tooltipBubble,
-                              { backgroundColor: isDark ? "#1e293b" : "#334155" },
-                            ]}
-                          >
-                            <Text style={styles.tooltipText}>
-                              {doc.reason || doc.error || t("defaultRejection")}
-                            </Text>
-                          </TouchableOpacity>
-                          <View
-                            style={[
-                              styles.tooltipArrow,
-                              { borderTopColor: isDark ? "#1e293b" : "#334155" },
-                            ]}
-                          />
-                        </View>
-                      )}
                     </View>
                   )}
 
@@ -737,7 +721,7 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                             {
                               backgroundColor: isRetrying
                                 ? "#94a3b8"
-                                : (theme?.colors?.primary || "#0f766e"),
+                                : (theme?.colors?.primary || "#5B4BFF"),
                             },
                           ]}
                           accessibilityLabel="Retry document processing"
@@ -769,12 +753,54 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
                     <View style={styles.processingIndicator}>
                       <ActivityIndicator
                         size="small"
-                        color={theme?.colors?.primary || "#0f766e"}
+                        color={theme?.colors?.primary || "#5B4BFF"}
                       />
                     </View>
                   )}
                 </View>
               </View>
+
+              {/* Rejection Reason Box (Adaptive Content Height & Clear Rejection Styling) */}
+              {isRejected && isRejectionExpanded && (
+                <View
+                  style={[
+                    styles.rejectionReasonContainer,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(239, 68, 68, 0.15)"
+                        : "#fef2f2",
+                      borderColor: isDark
+                        ? "rgba(239, 68, 68, 0.35)"
+                        : "#fecaca",
+                    },
+                  ]}
+                >
+                  <View style={styles.rejectionReasonHeader}>
+                    <Ionicons
+                      name="alert-circle"
+                      size={15}
+                      color="#ef4444"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.rejectionReasonTitle,
+                        { color: isDark ? "#fca5a5" : "#b91c1c" },
+                      ]}
+                    >
+                      {t("rejectionReason")}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.rejectionReasonText,
+                      { color: isDark ? "#fecaca" : "#991b1b" },
+                    ]}
+                  >
+                    {doc.reason || doc.error || t("defaultRejection")}
+                  </Text>
+                </View>
+              )}
             </View>
           );
         })}
@@ -905,42 +931,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tooltipContainer: {
-    position: "absolute",
-    bottom: "100%",
-    right: 0,
-    marginBottom: 6,
-    alignItems: "flex-end",
-    zIndex: 9999,
-    elevation: 20,
-    maxWidth: 240,
-    minWidth: 160,
-  },
-  tooltipBubble: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+  rejectionReasonContainer: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 8,
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 12,
+    borderWidth: 1,
   },
-  tooltipText: {
-    color: "#ffffff",
-    fontSize: 12,
+  rejectionReasonHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 3,
+  },
+  rejectionReasonTitle: {
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  rejectionReasonText: {
+    fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "500",
-  },
-  tooltipArrow: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 6,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    marginRight: 10,
   },
   failedActionRow: {
     flexDirection: "row",

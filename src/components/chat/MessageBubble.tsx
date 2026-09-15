@@ -235,7 +235,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
     <Animated.View entering={FadeInUp.springify()} style={styles.aiWrapper}>
       <View style={styles.aiAvatar}>
         <LinearGradient
-          colors={["#0f766e", "#0ea5e9"]}
+          colors={["#5B4BFF", "#7C6CFF"]}
           style={styles.aiAvatarGradient}
         >
           <Ionicons name="sparkles" size={14} color="#ffffff" />

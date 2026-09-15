@@ -5,8 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  Keyboard,
-  KeyboardEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -20,38 +18,11 @@ import Animated, {
 } from "react-native-reanimated";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
-type SpeechRecognitionResult = {
-  results?: Array<{ transcript: string }>;
-};
-
-type SpeechRecognitionError = {
-  error?: string;
-  message?: string;
-};
-
-type SpeechRecognitionSubscription = {
-  remove: () => void;
-};
-
-type SpeechRecognitionModuleShape = {
-  addListener: (
-    eventName: string,
-    listener: (event: any) => void,
-  ) => SpeechRecognitionSubscription;
-  stop: () => void;
-  start: (options: { lang: string }) => void;
-  requestPermissionsAsync: () => Promise<unknown>;
-};
-
-let ExpoSpeechRecognitionModule: SpeechRecognitionModuleShape | null = null;
-
-try {
-  const speechRecognition = require("expo-speech-recognition");
-  ExpoSpeechRecognitionModule =
-    speechRecognition.ExpoSpeechRecognitionModule ?? null;
-} catch (error) {
-  ExpoSpeechRecognitionModule = null;
-}
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from "expo-speech-recognition";
+import { usePreferredLanguage } from "../../hooks/usePreferredLanguage";
 
 interface ChatInputProps {
   value: string;
@@ -73,6 +44,56 @@ export const setActiveFormDictationCallback = (
   activeFormDictationCallback = cb;
 };
 
+export const getSpeechLocale = (lang: string | undefined): string => {
+  if (!lang) return "en-IN";
+  const clean = lang.toLowerCase().trim();
+  switch (clean) {
+    case "hindi":
+    case "hi":
+    case "hi-in":
+      return "hi-IN";
+    case "gujarati":
+    case "gu":
+    case "gu-in":
+      return "gu-IN";
+    case "marathi":
+    case "mr":
+    case "mr-in":
+      return "mr-IN";
+    case "tamil":
+    case "ta":
+    case "ta-in":
+      return "ta-IN";
+    case "telugu":
+    case "te":
+    case "te-in":
+      return "te-IN";
+    case "kannada":
+    case "kn":
+    case "kn-in":
+      return "kn-IN";
+    case "bengali":
+    case "bn":
+    case "bn-in":
+      return "bn-IN";
+    case "malayalam":
+    case "ml":
+    case "ml-in":
+      return "ml-IN";
+    case "punjabi":
+    case "pa":
+    case "pa-in":
+      return "pa-IN";
+    case "english":
+    case "en":
+    case "en-in":
+    case "en-us":
+    case "en-gb":
+    default:
+      return "en-IN";
+  }
+};
+
 const AnimatedTouch = Animated.createAnimatedComponent(TouchableOpacity);
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -82,7 +103,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isSending,
   isDark,
   keyboardType = "default",
-  preferredLanguage = "english",
+  preferredLanguage,
   mode = "default",
   onAttachPress,
 }) => {
@@ -90,52 +111,39 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const sendScale = useSharedValue(0.0);
   const [isListening, setIsListening] = useState(false);
   const pulseScale = useSharedValue(1);
+  const storedPreferredLanguage = usePreferredLanguage();
 
-  useEffect(() => {
-    if (!ExpoSpeechRecognitionModule) {
-      return;
-    }
+  const effectiveLanguage = preferredLanguage || storedPreferredLanguage || "english";
 
-    const startSubscription = ExpoSpeechRecognitionModule.addListener(
-      "start",
-      () => {
-        setIsListening(true);
-      },
-    );
-    const endSubscription = ExpoSpeechRecognitionModule.addListener(
-      "end",
-      () => {
-        setIsListening(false);
-      },
-    );
-    const errorSubscription = ExpoSpeechRecognitionModule.addListener(
-      "error",
-      (e: SpeechRecognitionError) => {
-        console.log("Voice Error:", e.error, e.message);
-        setIsListening(false);
-      },
-    );
-    const resultSubscription = ExpoSpeechRecognitionModule.addListener(
-      "result",
-      (e: SpeechRecognitionResult) => {
-        if (e.results && e.results.length > 0) {
-          if (mode === "onboarding" && activeFormDictationCallback) {
-            activeFormDictationCallback(e.results[0].transcript);
-          } else {
-            console.log("Transcript :- ", e.results[0].transcript);
-            onChangeText(e.results[0].transcript);
-          }
+  // Native speech recognition event hooks
+  useSpeechRecognitionEvent("start", () => {
+    setIsListening(true);
+  });
+
+  useSpeechRecognitionEvent("end", () => {
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEvent("error", (e) => {
+    console.log("[ChatInput] Voice recognition error:", e.error, e.message);
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEvent("nomatch", () => {
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEvent("result", (event) => {
+    if (event.results && event.results.length > 0) {
+      const transcript = event.results[0].transcript;
+      if (typeof transcript === "string" && transcript.length > 0) {
+        if (mode === "onboarding" && activeFormDictationCallback) {
+          activeFormDictationCallback(transcript);
         }
-      },
-    );
-
-    return () => {
-      startSubscription.remove();
-      endSubscription.remove();
-      errorSubscription.remove();
-      resultSubscription.remove();
-    };
-  }, [mode, onChangeText]);
+        onChangeText(transcript);
+      }
+    }
+  });
 
   useEffect(() => {
     if (isListening) {
@@ -159,24 +167,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (isListening) {
       ExpoSpeechRecognitionModule.stop();
+      setIsListening(false);
     } else {
       try {
-        let locale = "en-US";
-        const pl = preferredLanguage.toLowerCase();
-        if (pl === "hindi" || pl === "hi") locale = "hi-IN";
-        else if (pl === "gujarati" || pl === "gu") locale = "gu-IN";
-        else if (pl === "marathi" || pl === "mr") locale = "mr-IN";
-        else if (pl === "tamil" || pl === "ta") locale = "ta-IN";
+        const locale = getSpeechLocale(effectiveLanguage);
 
-        await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-        ExpoSpeechRecognitionModule.start({ lang: locale });
+        const permResponse = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        if (!permResponse.granted) {
+          console.warn("[ChatInput] Speech recognition / microphone permission denied");
+          return;
+        }
+
+        ExpoSpeechRecognitionModule.start({
+          lang: locale,
+          interimResults: true,
+          maxAlternatives: 1,
+          continuous: false,
+          addsPunctuation: true,
+        });
       } catch (e) {
-        console.error("Voice start error:", e);
+        console.error("[ChatInput] Voice start error:", e);
+        setIsListening(false);
       }
     }
   };
-
-
 
   useEffect(() => {
     sendScale.value = withSpring(value.trim() ? 1.0 : 0.0, {

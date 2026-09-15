@@ -203,12 +203,16 @@ export const resetForceLogout = () => {
   isForceLoggedOut = false;
 };
 
-function isTokenExpired(token: string | null, bufferSeconds = 60): boolean {
+function isTokenExpired(token: string | null, bufferSeconds = 120): boolean {
   if (!token) return true;
   try {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return false; // Not a JWT, rely on 401 response interceptor
+    }
     const decoded = jwtDecode<{ exp?: number }>(token);
     if (!decoded.exp) return false;
-    // Buffer in seconds to refresh proactively before the token actually expires
+    // Buffer in seconds to refresh proactively before the token actually expires (2 minutes default buffer)
     return decoded.exp * 1000 < Date.now() + bufferSeconds * 1000;
   } catch (e) {
     return true; // Assume expired if it fails to decode
@@ -218,6 +222,10 @@ function isTokenExpired(token: string | null, bufferSeconds = 60): boolean {
 function isRefreshTokenExpired(token: string | null): boolean {
   if (!token) return true;
   try {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return false;
+    }
     const decoded = jwtDecode<{ exp?: number }>(token);
     if (!decoded.exp) return false;
     return decoded.exp * 1000 < Date.now();
@@ -305,8 +313,13 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
     return null;
   }
 
+  const userId = await SecureStore.getItemAsync("userId");
+  if (!userId) {
+    return null;
+  }
+
   let token = await SecureStore.getItemAsync("accessToken");
-  const needsRefresh = forceRefresh || !token || isTokenExpired(token, 60);
+  const needsRefresh = forceRefresh || !token || isTokenExpired(token, 120);
 
   if (!needsRefresh && token) {
     return token;
@@ -394,22 +407,30 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
   }
 }
 
+const PUBLIC_AUTH_ENDPOINTS = [
+  "/auth/social-login",
+  "/auth/firebase-login",
+  "/auth/login",
+  "/auth/verify-otp",
+  "/auth/request-otp",
+  "/auth/refresh-token",
+  "/auth/auth-failure",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+];
+
+export function isAuthEndpoint(url?: string): boolean {
+  if (!url) return false;
+  const cleanUrl = url.split("?")[0].trim();
+  return PUBLIC_AUTH_ENDPOINTS.some((ep) => cleanUrl === ep || cleanUrl.endsWith(ep));
+}
+
 apiClient.interceptors.request.use(
   async (config) => {
     if (config.url && config.url.includes("/ocr/extract")) {
       config.timeout = 240000;
     }
-    const isAuthRequest = Boolean(
-      config.url && (
-        config.url === "/auth/firebase-login" ||
-        config.url === "/auth/login" ||
-        config.url === "/auth/verify-otp" ||
-        config.url === "/auth/request-otp" ||
-        config.url === "/auth/refresh-token" ||
-        config.url.endsWith("/auth/refresh-token") ||
-        config.url.includes("/auth/refresh-token")
-      )
-    );
+    const isAuthRequest = isAuthEndpoint(config.url);
 
     // If in force logout state, abort immediately and do not request (except for auth requests)
     if (isForceLoggedOut && !isAuthRequest) {
@@ -517,15 +538,7 @@ apiClient.interceptors.response.use(
 
     const data = error.response?.data;
     
-    const isAuthRequest = config?.url && (
-      config.url === "/auth/firebase-login" ||
-      config.url === "/auth/login" ||
-      config.url === "/auth/verify-otp" ||
-      config.url === "/auth/request-otp" ||
-      config.url === "/auth/refresh-token" ||
-      config.url.endsWith("/auth/refresh-token") ||
-      config.url.includes("/auth/refresh-token")
-    );
+    const isAuthRequest = isAuthEndpoint(config?.url);
 
     const message =
       data?.error?.message ||

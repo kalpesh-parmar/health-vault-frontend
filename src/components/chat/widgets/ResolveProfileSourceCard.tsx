@@ -8,6 +8,11 @@ import { parseChosenJson } from "./MedicineHelpers";
 import { setActiveFormDictationCallback } from "../ChatInput";
 import { formatLocalDateToYMD, parseYMDToLocalDate } from "../../../utils/dateUtils";
 
+import GoogleLogo from "../../../assets/auth-logos/GoogleLogo";
+import AppleLogo from "../../../assets/auth-logos/AppleLogo";
+import FacebookLogo from "../../../assets/auth-logos/FacebookLogo";
+import MicrosoftLogo from "../../../assets/auth-logos/MicrosoftLogo";
+
 export interface ResolveProfileSourceCardProps {
   activeMsg: any;
   preferredLang: string;
@@ -32,11 +37,18 @@ export function ResolveProfileSourceCard({
   chosenLabel,
 }: ResolveProfileSourceCardProps) {
   const onboardingState = activeMsg?.onboardingState || state;
-  const loginProvider = onboardingState?.loginProvider || activeMsg?.loginProvider;
+  const rawProvider =
+    activeMsg?.loginProvider ||
+    onboardingState?.loginProvider ||
+    state?.loginProvider ||
+    activeMsg?.provider ||
+    onboardingState?.provider ||
+    "";
+  const loginProvider = typeof rawProvider === "string" ? rawProvider.toLowerCase().trim() : "";
 
   const isSocialLogin = !!(
     loginProvider &&
-    ["google", "facebook", "microsoft", "apple", "social"].includes(loginProvider.toLowerCase())
+    ["google", "facebook", "microsoft", "apple", "social"].includes(loginProvider)
   );
 
   // Determine actual mode: if the user hasn't done social login, force CONFIRM mode.
@@ -147,17 +159,112 @@ export function ResolveProfileSourceCard({
     }
   };
 
-  const getProviderIcon = (p: string | undefined): any => {
-    if (!p) return "person-circle-outline";
-    const iconMap: Record<string, string> = {
-      google: "logo-google",
-      facebook: "logo-facebook",
-      microsoft: "logo-windows",
-      apple: "logo-apple",
-      mobile: "call",
-      email: "mail",
-    };
-    return iconMap[p.toLowerCase()] || "person-circle-outline";
+  const renderProviderLogo = (
+    p: string | undefined,
+    size: number = 18,
+    isButton: boolean = false,
+  ) => {
+    if (!p) {
+      return (
+        <Ionicons
+          name="person-circle-outline"
+          size={size}
+          color={isButton ? "#ffffff" : "#3b82f6"}
+          style={{ marginRight: 6 }}
+        />
+      );
+    }
+    const norm = p.toLowerCase().trim();
+    switch (norm) {
+      case "google":
+        return (
+          <View
+            style={{
+              marginRight: 6,
+              width: size,
+              height: size,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <GoogleLogo width={size} height={size} />
+          </View>
+        );
+      case "apple":
+        return (
+          <View
+            style={{
+              marginRight: 6,
+              width: size,
+              height: size,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <AppleLogo
+              width={size}
+              height={size}
+              color={isButton ? "#ffffff" : isDark ? "#ffffff" : "#000000"}
+            />
+          </View>
+        );
+      case "facebook":
+        return (
+          <View
+            style={{
+              marginRight: 6,
+              width: size,
+              height: size,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <FacebookLogo width={size} height={size} />
+          </View>
+        );
+      case "microsoft":
+        return (
+          <View
+            style={{
+              marginRight: 6,
+              width: size,
+              height: size,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <MicrosoftLogo width={size} height={size} />
+          </View>
+        );
+      case "mobile":
+      case "phone":
+        return (
+          <Ionicons
+            name="call"
+            size={size}
+            color={isButton ? "#ffffff" : theme?.colors?.primary || "#5B4BFF"}
+            style={{ marginRight: 6 }}
+          />
+        );
+      case "email":
+        return (
+          <Ionicons
+            name="mail"
+            size={size}
+            color={isButton ? "#ffffff" : theme?.colors?.primary || "#5B4BFF"}
+            style={{ marginRight: 6 }}
+          />
+        );
+      default:
+        return (
+          <Ionicons
+            name="person-circle-outline"
+            size={size}
+            color={isButton ? "#ffffff" : "#3b82f6"}
+            style={{ marginRight: 6 }}
+          />
+        );
+    }
   };
 
   const getProviderIconColor = (p: string | undefined) => {
@@ -166,7 +273,7 @@ export function ResolveProfileSourceCard({
       google: "#4285F4",
       facebook: "#1877F2",
       microsoft: "#00A4EF",
-      apple: theme.colors.textPrimary,
+      apple: isDark ? "#f8fafc" : "#0f172a",
       mobile: theme.colors.primary,
       email: theme.colors.primary,
     };
@@ -185,6 +292,7 @@ export function ResolveProfileSourceCard({
       case "microsoft":
         return uiT("fromMicrosoft");
       case "mobile":
+      case "phone":
         return uiT("fromPhone");
       case "email":
         return uiT("fromEmail");
@@ -718,21 +826,25 @@ export function ResolveProfileSourceCard({
                 },
               ]}
             >
-              <Ionicons
-                name={localEditedData ? "create-outline" : getProviderIcon(activeMsg?.loginProvider)}
-                size={16}
-                color={getProviderIconColor(activeMsg?.loginProvider)}
-                style={{ marginRight: 6 }}
-              />
+              {localEditedData ? (
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={theme.colors.primary}
+                  style={{ marginRight: 6 }}
+                />
+              ) : (
+                renderProviderLogo(loginProvider, 18, false)
+              )}
               <Text
                 style={[
                   styles.columnHeaderTitle,
-                  { color: getProviderIconColor(activeMsg?.loginProvider) },
+                  { color: getProviderIconColor(loginProvider) },
                 ]}
               >
                 {localEditedData
                   ? (uiT("editedInformation") || "Edited Information")
-                  : getProviderLabel(activeMsg?.loginProvider)}
+                  : getProviderLabel(loginProvider)}
               </Text>
             </View>
             <View style={styles.columnBody}>
@@ -1134,6 +1246,7 @@ export function ResolveProfileSourceCard({
               >
                 <View style={{ alignItems: "center", width: "100%" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
+                    {!localEditedData && renderProviderLogo(loginProvider, 16, true)}
                     <Text
                       style={[
                         styles.bigActionButtonTextSide,

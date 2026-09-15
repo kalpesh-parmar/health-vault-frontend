@@ -62,7 +62,7 @@ export function ExtractedMedicinesCard({
         <Text style={styles.sectionLabel}>{t("reportNames")}</Text>
         {documents.map((doc, idx) => (
           <View key={doc.id || idx} style={styles.reportRow}>
-            <Ionicons name="document-text-outline" size={14} color="#0f766e" style={{ marginRight: 6 }} />
+            <Ionicons name="document-text-outline" size={14} color="#5B4BFF" style={{ marginRight: 6 }} />
             <Text style={[styles.reportName, { color: isDark ? "#cbd5e1" : "#334155" }]} numberOfLines={1}>
               {doc.fileName}
             </Text>
@@ -92,8 +92,8 @@ export function ExtractedMedicinesCard({
                   <Text style={styles.medType}>{med.medicineType || "Tablet"}</Text>
                 </View>
                 <TouchableOpacity onPress={() => onEdit(med)} style={[styles.editButton, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9" }]}>
-                  <Ionicons name="pencil" size={14} color="#0f766e" />
-                  <Text style={styles.editButtonText}>✏ Edit</Text>
+                  <Ionicons name="pencil" size={14} color="#5B4BFF" />
+                  <Text style={[styles.editButtonText, { color: "#5B4BFF" }]}>✏ Edit</Text>
                 </TouchableOpacity>
               </View>
 
@@ -615,7 +615,7 @@ export function MedicineExtractionSummaryCard({
         {documents.map((doc, idx) => (
           <View key={doc.id || idx} style={styles.summaryDocRow}>
             <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
-              <Ionicons name="document-text-outline" size={16} color="#0f766e" style={{ marginRight: 6 }} />
+              <Ionicons name="document-text-outline" size={16} color="#5B4BFF" style={{ marginRight: 6 }} />
               <Text style={[styles.summaryDocName, { color: isDark ? "#cbd5e1" : "#334155" }]} numberOfLines={1}>
                 {doc.fileName}
               </Text>
@@ -723,7 +723,7 @@ export function MedicineDocumentAccordionCard({
             {/* Document Header */}
             <TouchableOpacity onPress={() => toggleDoc(doc.id)} style={styles.accordionHeader}>
               <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-                <Ionicons name="document-text-outline" size={18} color="#0f766e" style={{ marginRight: 8 }} />
+                <Ionicons name="document-text-outline" size={18} color="#5B4BFF" style={{ marginRight: 8 }} />
                 <View>
                   <Text style={[styles.accordionDocName, { color: isDark ? "#f8fafc" : "#1e293b" }]} numberOfLines={1}>
                     {doc.fileName}
@@ -763,7 +763,7 @@ export function MedicineDocumentAccordionCard({
                           <View style={{ flexDirection: "row", alignItems: "center" }}>
                             {isLatest && (
                               <TouchableOpacity onPress={() => onEdit(med)} style={styles.medEditIcon}>
-                                <Ionicons name="pencil-outline" size={16} color="#0f766e" />
+                                <Ionicons name="pencil-outline" size={16} color="#5B4BFF" />
                               </TouchableOpacity>
                             )}
                             <Ionicons
@@ -864,7 +864,7 @@ export function MedicineDocumentAccordionCard({
           style={[
             styles.primaryButton,
             {
-              backgroundColor: areActionsDisabled ? "#cbd5e1" : "#0f766e",
+              backgroundColor: areActionsDisabled ? "#cbd5e1" : "#5B4BFF",
               opacity: areActionsDisabled ? 0.55 : 1,
             },
           ]}
@@ -953,7 +953,7 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     fontSize: 11,
-    color: "#0f766e",
+    color: "#5B4BFF",
     fontWeight: "700",
     marginLeft: 3,
   },
@@ -986,14 +986,14 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: "#0f766e",
+    borderLeftColor: "#5B4BFF",
   },
   notesText: {
     fontSize: 11,
     lineHeight: 14,
   },
   primaryButton: {
-    backgroundColor: "#0f766e",
+    backgroundColor: "#5B4BFF",
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   secondaryTextBtnText: {
-    color: "#0f766e",
+    color: "#5B4BFF",
     fontSize: 12,
     fontWeight: "700",
   },

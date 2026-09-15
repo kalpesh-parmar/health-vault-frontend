@@ -80,7 +80,7 @@ export function ReviewMedicinesListCard({
 }: ReviewMedicinesListCardProps) {
   // checkedMeds: holds the IDs of checked/selected medications
   const [checkedMeds, setCheckedMeds] = useState<string[]>(
-    (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
+    (localMedicines || []).filter((m) => m.selected !== false).map((m) => m.id),
   );
 
   // expandedMedId: holds the ID of the single expanded medicine card (accordion design)
@@ -98,7 +98,7 @@ export function ReviewMedicinesListCard({
   // Sync checkedMeds if localMedicines changes from parent component
   useEffect(() => {
     setCheckedMeds(
-      (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
+      (localMedicines || []).filter((m) => m.selected !== false).map((m) => m.id),
     );
   }, [localMedicines]);
 
@@ -159,7 +159,9 @@ export function ReviewMedicinesListCard({
 
   const conflictingMeds = readOnly
     ? []
-    : safeLocalMedicines.filter((m) => hasConflict(m) && resolutions[m.id] === undefined);
+    : safeLocalMedicines.filter(
+        (m) => checkedMeds.includes(m.id) && hasConflict(m) && resolutions[m.id] === undefined
+      );
   const [viewMode, setViewMode] = useState<"conflicts" | "list">("list");
 
   useEffect(() => {
@@ -175,7 +177,9 @@ export function ReviewMedicinesListCard({
   const autoAdvance = () => {
     const remainingCount = readOnly
       ? 0
-      : safeLocalMedicines.filter((m) => hasConflict(m) && resolutions[m.id] === undefined).length;
+      : safeLocalMedicines.filter(
+          (m) => checkedMeds.includes(m.id) && hasConflict(m) && resolutions[m.id] === undefined
+        ).length;
     if (remainingCount <= 1) {
       setViewMode("list");
       setCurrentConflictIdx(0);
@@ -201,15 +205,33 @@ export function ReviewMedicinesListCard({
         prev.map((m) => (m.id === id ? { ...m, selected: false } : m)),
       );
     } else {
-      setCheckedMeds((prev) => [...prev, id]);
+      const nextChecked = [...checkedMeds, id];
+      setCheckedMeds(nextChecked);
       setLocalMedicines((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, selected: true, resolution: undefined } : m)),
+        prev.map((m) =>
+          m.id === id ? { ...m, selected: true, resolution: undefined } : m
+        ),
       );
       setResolutions((prev) => {
         const next = { ...prev };
         delete next[id];
         return next;
       });
+
+      const targetMed = safeLocalMedicines.find((m) => m.id === id);
+      if (targetMed && hasConflict(targetMed)) {
+        const nextConflicting = safeLocalMedicines.filter(
+          (m) =>
+            nextChecked.includes(m.id) &&
+            hasConflict(m) &&
+            (m.id === id ? true : resolutions[m.id] === undefined)
+        );
+        const targetIdx = nextConflicting.findIndex((m) => m.id === id);
+        if (targetIdx !== -1) {
+          setCurrentConflictIdx(targetIdx);
+        }
+        setViewMode("conflicts");
+      }
     }
   };
 
@@ -276,29 +298,59 @@ export function ReviewMedicinesListCard({
 
   const handleConfirm = () => {
     const formattedMedicines = (localMedicines || [])
-      .filter((m) => checkedMeds.includes(m.id))
+      .filter((m) => checkedMeds.includes(m.id) && m.selected !== false)
       .map((m) => {
-        const resValue = resolutions[m.id] || "KEEP_NEW";
-        const matchedMed = m.duplicateInfo?.matchedMedication || m.duplicateInfo?.matchedMedications?.[0];
-        
-        const doseCount = typeof m.dose === "object" && m.dose !== null && m.dose.count !== undefined
-          ? parseFloat(String(m.dose.count)) || 1
-          : parseFloat(String(m.dosePerIntake || "1")) || 1;
+        const resValue = resolutions[m.id] || m.resolution || "KEEP_NEW";
+        const matchedMed =
+          m.duplicateInfo?.matchedMedication ||
+          m.duplicateInfo?.matchedMedications?.[0];
+
+        const doseCount =
+          typeof m.dose === "object" &&
+          m.dose !== null &&
+          m.dose.count !== undefined
+            ? parseFloat(String(m.dose.count)) || 1
+            : typeof m.dose === "object" &&
+              m.dose !== null &&
+              m.dose.value !== undefined
+            ? parseFloat(String(m.dose.value)) || 1
+            : parseFloat(String(m.dosePerIntake || "1")) || 1;
 
         const result: any = {
-          client_med_id: m.id,
+          client_med_id: m.id || m.client_med_id,
+          id: m.id || m.client_med_id,
           name: m.name || m.medicationName || "Unknown",
+          medicationName: m.name || m.medicationName || "Unknown",
           type: String(m.type || m.medicationType || "TABLET").toUpperCase(),
+          medicationType: String(
+            m.type || m.medicationType || "TABLET"
+          ).toUpperCase(),
           frequency: String(m.frequency || "ONCE").toUpperCase(),
-          dose: { count: doseCount },
-          foodFrequency: String(m.foodFrequency || m.foodContext || "AFTER_FOOD").toUpperCase(),
+          dose:
+            typeof m.dose === "object" && m.dose !== null
+              ? m.dose
+              : { count: doseCount },
+          dosePerIntake: doseCount,
+          foodFrequency: String(
+            m.foodFrequency || m.foodContext || "AFTER_FOOD"
+          ).toUpperCase(),
           resolution: resValue,
           startDate: m.startDate || new Date().toISOString().split("T")[0],
-          notes: m.notes || "",
+          endDate: m.endDate || undefined,
+          duration: m.duration || undefined,
+          notes: m.notes || m.instructions || "",
           prescribedBy: m.prescribedBy || m.prescribed_by || "",
-          totalQuantity: m.total_quantity !== undefined ? m.total_quantity : (m.totalQuantity || 10),
-          refillAlert: m.refill_alert !== undefined ? m.refill_alert : (m.refillAlert || false),
-          medicationSchedule: m.medicationSchedule || m.schedule || m.times || [],
+          totalQuantity:
+            m.total_quantity !== undefined
+              ? m.total_quantity
+              : m.totalQuantity || 10,
+          refillAlert:
+            m.refill_alert !== undefined
+              ? m.refill_alert
+              : m.refillAlert || false,
+          medicationSchedule:
+            m.medicationSchedule || m.schedule || m.times || [],
+          duplicateInfo: m.duplicateInfo,
         };
 
         if (resValue === "REPLACE" && matchedMed?.id) {
@@ -351,7 +403,12 @@ export function ReviewMedicinesListCard({
     .filter((m) => checkedMeds.includes(m.id))
     .some((m) => m.startDate && m.startDate !== "None" && isPastDate(m.startDate));
 
-  const isConfirmDisabled = readOnly || conflictingMeds.length > 0 || isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate;
+  const isConfirmDisabled =
+    readOnly ||
+    checkedMeds.length === 0 ||
+    conflictingMeds.length > 0 ||
+    isAnyCheckedMedMissingStartDate ||
+    isAnyCheckedMedPastStartDate;
   const areActionsDisabled = readOnly;
 
 
@@ -512,7 +569,7 @@ export function ReviewMedicinesListCard({
 
                 // Compute next remaining conflicts
                 const nextResolutions: Record<string, string> = { ...resolutions, [med.id]: "REMOVE_NEW" };
-                const nextConflicting = nextMeds.filter((m) => hasConflict(m) && nextResolutions[m.id] === undefined);
+                const nextConflicting = nextMeds.filter((m) => m.id !== med.id && checkedMeds.includes(m.id) && hasConflict(m) && nextResolutions[m.id] === undefined);
                 if (nextConflicting.length === 0) {
                   setViewMode("list");
                 } else if (currentConflictIdx >= nextConflicting.length) {
@@ -545,7 +602,7 @@ export function ReviewMedicinesListCard({
                 
                 autoAdvance();
               }}
-              style={{ flex: 1, backgroundColor: "#0f766e", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+              style={{ flex: 1, backgroundColor: theme?.colors?.primary || "#5B4BFF", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
             >
               <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
                 Replace
@@ -573,35 +630,6 @@ export function ReviewMedicinesListCard({
             >
               <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
                 Edit
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              disabled={readOnly}
-              onPress={() => {
-                setResolutions((prev) => ({ ...prev, [med.id]: "KEEP_NEW" }));
-                setLocalMedicines((prev) =>
-                  prev.map((m) =>
-                    m.id === med.id
-                      ? { ...m, resolution: "KEEP_NEW", selected: true }
-                      : m
-                  )
-                );
-                autoAdvance();
-              }}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: isDark ? "#475569" : "#cbd5e1",
-                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                paddingVertical: 10,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: readOnly ? 0.55 : 1,
-              }}
-            >
-              <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
-                Keep Both
               </Text>
             </TouchableOpacity>
           </View>

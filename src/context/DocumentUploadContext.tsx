@@ -20,6 +20,7 @@ export interface DuplicateConflict {
 }
 export interface ChatWizardState {
   step: "idle" | "processing" | "results" | "conflicts" | "summary" | "completed";
+  fromScreen?: string;
   jobIds: string[];
   filesInfo: { jobId: string; fileName: string; fileKey: string }[];
   extractedMedicines: ExtractedMedicine[];
@@ -48,6 +49,7 @@ export interface UploadingDoc {
   medicineCount?: number;
   batchId?: string;
   skippedPages?: (number | { pageNumber: number; reason?: string })[];
+  fromScreen?: string;
 }
 interface DocumentUploadContextType {
   selectedFiles: SelectedDocument[];
@@ -240,15 +242,42 @@ const extractBatchDocumentEvents = (event: any): any[] => {
   return [];
 };
 
+export const extractMedicinesFromOcrData = (apiResult: any): any[] => {
+  const rawMeds =
+    apiResult?.extractedStructuredData?.medications ||
+    apiResult?.extractedStructuredData?.medicines ||
+    apiResult?.structuredExtractedData?.medications ||
+    apiResult?.structuredExtractedData?.medicines ||
+    apiResult?.medications ||
+    apiResult?.data?.extractedStructuredData?.medications ||
+    apiResult?.data?.extractedStructuredData?.medicines ||
+    apiResult?.data?.structuredExtractedData?.medications ||
+    apiResult?.data?.structuredExtractedData?.medicines ||
+    apiResult?.data?.medications ||
+    apiResult?.data?.data?.extractedStructuredData?.medications ||
+    apiResult?.data?.data?.medicines ||
+    apiResult?.data?.data?.medications ||
+    apiResult?.ocrResult?.extractedStructuredData?.medications ||
+    apiResult?.ocrResult?.extractedStructuredData?.medicines ||
+    [];
+  return Array.isArray(rawMeds) ? rawMeds : [];
+};
+
 const getBatchCounts = (event: any, docs: UploadingDoc[]) => {
   const completed =
     typeof event?.completed === "number"
       ? event.completed
-      : docs.filter((d) => d.status === "COMPLETED").length;
+      : docs.filter((d) => {
+          const s = (d.status || "").toUpperCase();
+          return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
+        }).length;
   const failed =
     typeof event?.failed === "number"
       ? event.failed
-      : docs.filter((d) => d.status === "FAILED").length;
+      : docs.filter((d) => {
+          const s = (d.status || "").toUpperCase();
+          return s === "FAILED" || s === "ERROR" || s === "REJECTED" || s === "CANCELLED";
+        }).length;
 
   return { completed, failed };
 };
@@ -320,6 +349,78 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const hasHandledBatchFinishedRef = useRef(false);
   const activeBatchIdRef = useRef<string | null>(null);
   const lastBatchEventIdRef = useRef<string | null>(null);
+
+  const fetchMedicineCountForDoc = useCallback(async (doc: UploadingDoc): Promise<number> => {
+    try {
+      const targetKey = doc.fileKey || doc.jobId || doc.id;
+      if (!targetKey) return 0;
+      const res = await getOcrStatus(targetKey);
+      const data = res?.data || res;
+      const meds = extractMedicinesFromOcrData(data);
+      return meds.length;
+    } catch (e) {
+      console.log("Failed to fetch medicine count for job", doc.jobId || doc.id, e);
+      return 0;
+    }
+  }, []);
+
+  const updateCompletedBatchFromDocs = useCallback(async (currentDocs: UploadingDoc[], event?: SseEventPayload) => {
+    const updatedDocs = await Promise.all(
+      currentDocs.map(async (doc) => {
+        const statusUpper = (doc.status || "").toUpperCase();
+        const isDocCompleted =
+          statusUpper === "COMPLETED" ||
+          statusUpper === "SUCCESS" ||
+          statusUpper === "DONE" ||
+          doc.progress === 100 ||
+          doc.percentage === 100;
+
+        let medCount = doc.medicineCount;
+        if (isDocCompleted && (medCount === undefined || medCount === null)) {
+          medCount = await fetchMedicineCountForDoc(doc);
+        }
+        return {
+          ...doc,
+          medicineCount: medCount || 0,
+        };
+      })
+    );
+
+    const completedDocs = updatedDocs.filter((d) => {
+      const s = (d.status || "").toUpperCase();
+      return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
+    });
+    const failedDocs = updatedDocs.filter((d) => {
+      const s = (d.status || "").toUpperCase();
+      return s === "FAILED" || s === "ERROR" || s === "REJECTED" || s === "CANCELLED";
+    });
+
+    const completedCount = event?.completed ?? completedDocs.length;
+    const failedCount = event?.failed ?? failedDocs.length;
+    const totalMedicineCount = updatedDocs.reduce((acc, d) => acc + (d.medicineCount || 0), 0);
+
+    setCompletedBatch({
+      jobIds: updatedDocs.map((d) => d.jobId || d.id),
+      filesInfo: updatedDocs.map((d) => ({
+        jobId: d.jobId || d.id,
+        fileName: (d.name || "Document").replace(/%20/g, " "),
+        fileKey: d.fileKey || d.id,
+      })),
+      completedCount,
+      failedCount,
+      medicineCount: totalMedicineCount,
+      fromScreen: activeUploadFromScreenRef.current,
+      documents: updatedDocs.map((d) => ({
+        id: d.jobId || d.id,
+        name: d.name,
+        status: d.status,
+        reason: d.reason || null,
+        fileKey: d.fileKey || d.id,
+        medicineCount: d.medicineCount || 0,
+        retryable: d.retryable ?? true,
+      })),
+    });
+  }, [fetchMedicineCountForDoc]);
 
   useEffect(() => {
     return () => {
@@ -415,8 +516,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         connectSseStream({
           endpoint: streamEndpoint,
           onEvent: (event: SseEventPayload) => {
-            setUploadingDocs((prev) =>
-              prev.map((doc) => {
+            setUploadingDocs((prev) => {
+              const nextDocs = prev.map((doc) => {
                 if (doc.fileKey === fileKey || doc.id === fileKey) {
                   const status = normalizeStatus(event);
                   const nextProgress = extractEventProgress(event) ?? mapStatusToProgress(event);
@@ -456,13 +557,48 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   };
                 }
                 return doc;
-              }),
-            );
+              });
+
+              if (event.type === "stage.completed" || event.stageStatus === "COMPLETED" || event.status === "COMPLETED") {
+                updateCompletedBatchFromDocs(nextDocs);
+              }
+
+              return nextDocs;
+            });
           },
-          onTerminal: (event: SseEventPayload) => {
+          onTerminal: async (event: SseEventPayload) => {
             queryClient.invalidateQueries({ queryKey: ["documents"] });
             queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
             queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
+
+            let retriedMedCount: number | undefined;
+            try {
+              const res = await getOcrStatus(fileKey);
+              const data = res?.data || res;
+              const meds = extractMedicinesFromOcrData(data);
+              retriedMedCount = meds.length;
+            } catch (e) {
+              console.log("Failed to fetch retry status for", fileKey, e);
+            }
+
+            setUploadingDocs((prev) => {
+              const finalizedDocs = prev.map((doc) => {
+                if (doc.fileKey === fileKey || doc.id === fileKey) {
+                  return {
+                    ...doc,
+                    status: "COMPLETED",
+                    stage: "COMPLETED",
+                    progress: 100,
+                    percentage: 100,
+                    medicineCount: retriedMedCount !== undefined ? retriedMedCount : doc.medicineCount,
+                  };
+                }
+                return doc;
+              });
+
+              updateCompletedBatchFromDocs(finalizedDocs, event);
+              return finalizedDocs;
+            });
           },
         });
       } catch (err: any) {
@@ -480,8 +616,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             (errorMsg.toLowerCase().includes("non-retryable") ||
               errorMsg.toLowerCase().includes("cannot be retried")));
 
-        setUploadingDocs((prev) =>
-          prev.map((d) =>
+        setUploadingDocs((prev) => {
+          const nextDocs = prev.map((d) =>
             d.fileKey === fileKey || d.id === fileKey
               ? {
                   ...d,
@@ -493,8 +629,10 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   retryable: !isNonRetryable,
                 }
               : d,
-          ),
-        );
+          );
+          updateCompletedBatchFromDocs(nextDocs);
+          return nextDocs;
+        });
 
         Toast.show({
           type: "error",
@@ -503,7 +641,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         });
       }
     },
-    [],
+    [updateCompletedBatchFromDocs],
   );
 
   const startUpload = useCallback(
@@ -511,6 +649,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       if (selectedFiles.length === 0) return;
       setIsUploading(true);
       setProcessingError(null);
+
+      const uploadSource = fromScreen || activeUploadFromScreenRef.current;
 
       const initialUploading: UploadingDoc[] = selectedFiles.map((file) => ({
         id: file.id,
@@ -521,6 +661,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         stage: "UPLOADING",
         currentStep: "Uploading files...",
         reason: null,
+        fromScreen: uploadSource,
       }));
       setUploadingDocs(initialUploading);
 
@@ -567,6 +708,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           currentStep: "Queued for processing",
           reason: null,
           batchId,
+          fromScreen: uploadSource,
         }));
 
         setUploadingDocs(mappedDocs);
@@ -581,19 +723,38 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           fileKey: d.fileKey || d.id,
         }));
 
-        setChatWizardState({
-          step: "processing",
-          jobIds,
-          filesInfo,
-          extractedMedicines: [],
-          conflicts: [],
-          currentConflictIndex: 0,
-          resolvedMedicines: [],
-          replaceList: [],
-          mergeList: [],
-          summaries: [],
-          hasViewedCompletedOcr: false,
-        });
+        // ONLY trigger chat wizard if the upload was explicitly started from the AI Chat screen
+        if (fromScreen === "AIChat" || fromScreen === "AIChatScreen") {
+          setChatWizardState({
+            step: "processing",
+            fromScreen: "AIChat",
+            jobIds,
+            filesInfo,
+            extractedMedicines: [],
+            conflicts: [],
+            currentConflictIndex: 0,
+            resolvedMedicines: [],
+            replaceList: [],
+            mergeList: [],
+            summaries: [],
+            hasViewedCompletedOcr: false,
+          });
+        } else {
+          setChatWizardState({
+            step: "idle",
+            fromScreen: uploadSource,
+            jobIds: [],
+            filesInfo: [],
+            extractedMedicines: [],
+            conflicts: [],
+            currentConflictIndex: 0,
+            resolvedMedicines: [],
+            replaceList: [],
+            mergeList: [],
+            summaries: [],
+            hasViewedCompletedOcr: false,
+          });
+        }
 
         if (onSuccess) {
           onSuccess(jobIds, filesInfo);
@@ -604,22 +765,19 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         }
 
         const handleBatchFinished = async (currentDocs: UploadingDoc[], event?: SseEventPayload) => {
-          if (hasHandledBatchFinishedRef.current) {
-            return;
-          }
-          hasHandledBatchFinishedRef.current = true;
-
           queryClient.invalidateQueries({ queryKey: ["documents"] });
           queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
           queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
           queryClient.invalidateQueries({ queryKey: ["documentsSummary"] });
 
-          const completedDocs = currentDocs.filter(
-            (d) => d.status === "COMPLETED" || d.progress === 100 || d.percentage === 100
-          );
-          const failedDocs = currentDocs.filter(
-            (d) => d.status === "FAILED" || d.status === "failed" || d.status === "error" || d.status === "REJECTED" || d.status === "rejected"
-          );
+          const completedDocs = currentDocs.filter((d) => {
+            const s = (d.status || "").toUpperCase();
+            return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
+          });
+          const failedDocs = currentDocs.filter((d) => {
+            const s = (d.status || "").toUpperCase();
+            return s === "FAILED" || s === "ERROR" || s === "REJECTED" || s === "CANCELLED";
+          });
 
           const completedCount = event?.completed ?? completedDocs.length;
           const failedCount = event?.failed ?? failedDocs.length;
@@ -631,61 +789,17 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
             });
           }
 
-          let medicineCount = 0;
-          await Promise.all(
-            currentDocs.map(async (doc) => {
-              if (doc.status === "COMPLETED" || doc.progress === 100 || doc.percentage === 100) {
-                try {
-                  const res = await getOcrStatus(doc.fileKey || doc.jobId || doc.id);
-                  const data = res?.data || res;
-                  const meds = data?.extractedStructuredData?.medications || data?.extractedStructuredData?.medicines;
-                  if (Array.isArray(meds)) {
-                    medicineCount += meds.length;
-                    doc.medicineCount = meds.length;
-                  }
-                } catch (e) {
-                  console.log("Failed to fetch medicine count for job", doc.jobId || doc.id, e);
-                }
-              }
-            })
-          );
+          await updateCompletedBatchFromDocs(currentDocs, event);
 
-          setCompletedBatch({
-            jobIds: currentDocs.map((d) => d.jobId || d.id),
-            filesInfo: currentDocs.map((d) => ({
-              jobId: d.jobId || d.id,
-              fileName: d.name.replace(/%20/g, " "),
-              fileKey: d.fileKey || d.id,
-            })),
-            completedCount,
-            failedCount,
-            medicineCount,
-            fromScreen: activeUploadFromScreenRef.current,
-            documents: currentDocs.map((d) => ({
-              id: d.jobId || d.id,
-              name: d.name,
-              status: d.status,
-              reason: d.reason || null,
-              fileKey: d.fileKey || d.id,
-              medicineCount: d.medicineCount || 0,
-              retryable: d.retryable ?? true,
-            })),
-          });
-
-          if (activeUploadFromScreenRef.current !== "AIChat") {
-            if (failedCount > 0 && completedCount === 0) {
-              Toast.show({
-                type: "error",
-                text1: "Processing Failed",
-                text2: "Documents failed to process.",
-              });
-            } else {
+          if (!hasHandledBatchFinishedRef.current) {
+            hasHandledBatchFinishedRef.current = true;
+            if (completedCount > 0) {
               Toast.show({
                 type: "success",
                 text1: "Analysis Complete!",
                 text2: failedCount > 0
-                  ? `Processed with some errors. Found ${medicineCount} medicine(s).`
-                  : `We found ${medicineCount} medicine${medicineCount === 1 ? "" : "s"} in your documents.`,
+                  ? `Processed with some errors.`
+                  : `Your documents have been analyzed successfully.`,
                 props: {
                   buttonText: "Review Now",
                   onPressButton: () => {
@@ -872,10 +986,14 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
               }
 
               if (event.type === "batch.completed" || event.stage === "BATCH_COMPLETED") {
-                handleBatchFinished(nextDocs, {
-                  ...event,
-                  ...getBatchCounts(event, nextDocs),
-                });
+                const batchEventCounts = getBatchCounts(event, nextDocs);
+                const snapshotDocs = [...nextDocs];
+                setTimeout(() => {
+                  handleBatchFinished(snapshotDocs, {
+                    ...event,
+                    ...batchEventCounts,
+                  });
+                }, 0);
               }
 
               return nextDocs;
@@ -906,10 +1024,15 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                 };
               });
 
-              handleBatchFinished(finalizedDocs, {
-                ...event,
-                ...getBatchCounts(event, finalizedDocs),
-              });
+              const batchEventCounts = getBatchCounts(event, finalizedDocs);
+              const snapshotDocs = [...finalizedDocs];
+              setTimeout(() => {
+                handleBatchFinished(snapshotDocs, {
+                  ...event,
+                  ...batchEventCounts,
+                });
+              }, 0);
+
               return finalizedDocs;
             });
           },
@@ -981,6 +1104,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           stage: "QUEUED",
           currentStep: "Queued for processing",
           reason: null,
+          fromScreen: fromScreen || activeUploadFromScreenRef.current,
         };
       });
 
