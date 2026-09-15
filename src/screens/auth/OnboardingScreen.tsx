@@ -74,6 +74,8 @@ import { AskUploadOrSkipCard } from "../../components/chat/widgets/AskUploadOrSk
 import { findHistoricalUserReply } from "../../components/chat/widgets/HistoricalChips";
 import { DocumentProcessingModal } from "../../components/chat/widgets/DocumentProcessingModal";
 import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
+import { StructuredReportSummaryCard } from "../../components/chat/widgets/StructuredReportSummaryCard";
+import { ReportReferenceHeader } from "../../components/chat/widgets/ReportReferenceHeader";
 import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
@@ -2420,6 +2422,39 @@ export default function OnboardingScreen() {
           ? activeMsg.suggestedQuestions
           : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
 
+      const isStructured = Boolean(
+        doc.patientDetails ||
+        (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
+        (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
+        doc.whatThisMayMean ||
+        doc.isLabReport
+      );
+
+      if (isStructured) {
+        return (
+          <StructuredReportSummaryCard
+            document={doc}
+            suggestedQuestions={questions}
+            isDark={isDark}
+            theme={theme}
+            preferredLang={preferredLang}
+            onQuestionPress={(q) => {
+              const newState = {
+                ...state,
+                documentConfirmed: true,
+              };
+              setState(newState);
+              sendMessage(q, newState, q);
+            }}
+            onViewFullReport={() => {
+              setViewerDoc(doc);
+              setIsViewerOpen(true);
+            }}
+            readOnly={isHistorical}
+          />
+        );
+      }
+
       return (
         <ReportSummaryChatCard
           document={doc}
@@ -2556,6 +2591,28 @@ export default function OnboardingScreen() {
 
   const activeAction = messages[messages.length - 1]?.action;
 
+  const activeReportDoc = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.action === "ASK_REPORT" && msg.document) {
+        return msg.document;
+      }
+      if (
+        msg.document &&
+        !Array.isArray(msg.document) &&
+        (msg.document.id || msg.document.summary)
+      ) {
+        return msg.document;
+      }
+    }
+    return null;
+  }, [messages]);
+
+  const showReportReferenceHeader = Boolean(
+    (activeAction === "ASK_REPORT" || state.currentStep === "ASK_REPORT") &&
+      activeReportDoc
+  );
+
   return (
     <LinearGradient
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
@@ -2659,6 +2716,18 @@ export default function OnboardingScreen() {
               >
                 <ChatDateHeader dateLabel={activeDateLabel} isDark={isDark} />
               </View>
+            ) : null}
+            {showReportReferenceHeader && activeReportDoc ? (
+              <ReportReferenceHeader
+                document={activeReportDoc}
+                isDark={isDark}
+                theme={theme}
+                preferredLang={state.preferredLanguage || "english"}
+                onPress={() => {
+                  setViewerDoc(activeReportDoc);
+                  setIsViewerOpen(true);
+                }}
+              />
             ) : null}
             <FlatList
               ref={flatListRef}

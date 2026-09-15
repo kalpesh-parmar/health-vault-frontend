@@ -26,6 +26,7 @@ import {
   ReportSummaryChatCard,
   DocumentSummaryStats,
 } from "./widgets/ReportSummaryChatCard";
+import { StructuredReportSummaryCard } from "./widgets/StructuredReportSummaryCard";
 import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { ChatMessage } from "../../types/chat";
@@ -235,6 +236,37 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           item.suggestedQuestions && item.suggestedQuestions.length > 0
             ? item.suggestedQuestions
             : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+        const isStructured = Boolean(
+          doc.patientDetails ||
+          (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
+          (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
+          doc.whatThisMayMean ||
+          doc.isLabReport
+        );
+
+        if (isStructured) {
+          return renderAssistantPrompt(
+            <StructuredReportSummaryCard
+              document={doc}
+              suggestedQuestions={questions}
+              isDark={isDark}
+              theme={theme}
+              preferredLang={preferredLang}
+              onQuestionPress={(q) =>
+                handleGenericOptionPress({
+                  label: q,
+                  value: q,
+                  actionType: "NORMAL_CHAT",
+                })
+              }
+              onViewFullReport={
+                onViewFullReport ? () => onViewFullReport(doc) : undefined
+              }
+              readOnly={chosenVal !== null}
+            />,
+          );
+        }
 
         return renderAssistantPrompt(
           <ReportSummaryChatCard

@@ -41,6 +41,7 @@ import { DocumentUploadBottomSheet } from "../../components/document-upload/Docu
 import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
 import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
 import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveStates";
+import { ReportReferenceHeader } from "../../components/chat/widgets/ReportReferenceHeader";
 
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
@@ -96,6 +97,7 @@ const AIChatScreen = ({ route }: any) => {
     activeSessionId,
     onboardingSessionId,
     selectedDocument,
+    setSelectedDocument,
     input,
     setInput,
     isSending,
@@ -163,6 +165,13 @@ const AIChatScreen = ({ route }: any) => {
     fetchOnboardingHistory();
     initChatHistory();
   }, [fetchOnboardingHistory, initChatHistory]);
+
+  // Sync route document if provided
+  useEffect(() => {
+    if (route?.params?.document) {
+      setSelectedDocument(route.params.document);
+    }
+  }, [route?.params?.document, setSelectedDocument]);
 
   // Back handler
   useEffect(() => {
@@ -261,6 +270,18 @@ const AIChatScreen = ({ route }: any) => {
           isDark={isDark}
         />
       )}
+
+      {/* Report Reference Header */}
+      {selectedDocument ? (
+        <ReportReferenceHeader
+          document={selectedDocument}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          onPress={() => handleViewFullReport(selectedDocument)}
+          onDismiss={() => setSelectedDocument(null)}
+        />
+      ) : null}
 
       <View style={styles.keyboardContainer}>
         {/* Emergency Alert */}
