@@ -29,6 +29,7 @@ import {
 import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { ChatMessage } from "../../types/chat";
+import { extractMedicationsFromDocuments, normalizeDocumentsList } from "../../utils/documentNormalizer";
 export type { ChatMessage };
 
 interface ChatMessageItemProps {
