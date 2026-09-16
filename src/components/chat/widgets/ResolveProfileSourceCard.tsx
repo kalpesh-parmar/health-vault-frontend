@@ -62,6 +62,22 @@ export function ResolveProfileSourceCard({
   const documentSummary = activeMsg?.documentSummary || "";
   const parsed = parseChosenJson(chosenVal);
 
+  const hasDocumentUploaded = Boolean(
+    onboardingState?.uploadedMedicalDocument ||
+    state?.uploadedMedicalDocument ||
+    onboardingState?.documentUploaded ||
+    state?.documentUploaded ||
+    onboardingState?.documentExtracted ||
+    state?.documentExtracted ||
+    onboardingState?.flowMode === "UPLOAD" ||
+    state?.flowMode === "UPLOAD" ||
+    onboardingState?.documentId ||
+    state?.documentId ||
+    activeMsg?.documentSummary ||
+    activeMsg?.document ||
+    (onboardingState?.documentData && Object.keys(onboardingState.documentData).length > 0)
+  );
+
   // Local state for manual profile editing
   const [isEditingProfileManually, setIsEditingProfileManually] = useState(false);
   const [editedProfileData, setEditedProfileData] = useState<any>({});
@@ -966,9 +982,16 @@ export function ResolveProfileSourceCard({
           {/* Document Column */}
           <View style={[styles.vsColumn, { borderColor: "rgba(16, 185, 129, 0.2)" }]}>
             <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5" }]}>
-              <Ionicons name="document-text" size={16} color="#10b981" style={{ marginRight: 6 }} />
+              <Ionicons
+                name={hasDocumentUploaded ? "document-text" : "person"}
+                size={16}
+                color="#10b981"
+                style={{ marginRight: 6 }}
+              />
               <Text style={[styles.columnHeaderTitle, { color: "#10b981" }]}>
-                {uiT("fromDocument")}
+                {hasDocumentUploaded
+                  ? (uiT("fromDocument") || "From Document")
+                  : (uiT("manualDetails") || "Manual Details")}
               </Text>
             </View>
             <View style={styles.columnBody}>
@@ -1246,7 +1269,6 @@ export function ResolveProfileSourceCard({
               >
                 <View style={{ alignItems: "center", width: "100%" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexShrink: 1, flexWrap: "wrap" }}>
-                    {!localEditedData && renderProviderLogo(loginProvider, 16, true)}
                     <Text
                       style={[
                         styles.bigActionButtonTextSide,
@@ -1293,9 +1315,11 @@ export function ResolveProfileSourceCard({
                     documentConfirmed: true,
                   };
                   sendMessage(
-                    JSON.stringify({ source: "DOCUMENT" }),
+                    JSON.stringify({ source: hasDocumentUploaded ? "DOCUMENT" : "MANUAL" }),
                     updatedState,
-                    uiT("useDocument"),
+                    hasDocumentUploaded
+                      ? (uiT("useDocument") || "Use Document")
+                      : (uiT("manualDetails") || "Manual Details"),
                   );
                 }}
               >
@@ -1307,7 +1331,9 @@ export function ResolveProfileSourceCard({
                         { color: (isHistorical && !isDocChosen) ? theme.colors.textPrimary : "#ffffff", textAlign: "center" },
                       ]}
                     >
-                      {uiT("useDocument")}
+                      {hasDocumentUploaded
+                        ? (uiT("useDocument") || "Use Document")
+                        : (uiT("manualDetails") || "Manual Details")}
                     </Text>
                   </View>
                   {documentSummary ? (

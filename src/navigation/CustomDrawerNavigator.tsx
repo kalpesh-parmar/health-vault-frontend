@@ -22,6 +22,7 @@ const CustomDrawerNavigator = () => {
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
         headerShown: false,
+        swipeEnabled: false,
         drawerStyle: {
           backgroundColor: theme.colors.background,
           width: dimensions.width * 0.82,

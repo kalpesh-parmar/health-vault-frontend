@@ -60,6 +60,7 @@ interface ChatMessageItemProps {
   isConfirmingMeds: boolean;
   setMedicineToEdit: (med: any) => void;
   editSheetRef: React.RefObject<any>;
+  uploadSheetRef?: React.RefObject<any>;
   handleConfirmSelection: (
     checkedMedIds?: string[],
     formattedMeds?: any[],
@@ -87,12 +88,12 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   preferredLang,
   speakingMessageId,
   speakMessage,
-  onboardingSessionId,
   chatWizardState,
   isLoadingResults,
   isConfirmingMeds,
   setMedicineToEdit,
   editSheetRef,
+  uploadSheetRef,
   handleConfirmSelection,
   resolveCurrentConflict,
   navigateConflict,
@@ -290,7 +291,9 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           state={{}}
           setState={() => { }}
           sendMessage={() => { }}
-          handleDocumentUpload={() => { }}
+          handleDocumentUpload={() => {
+            uploadSheetRef?.current?.present();
+          }}
           isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}

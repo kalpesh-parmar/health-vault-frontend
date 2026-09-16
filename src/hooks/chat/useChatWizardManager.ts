@@ -642,6 +642,34 @@ export const useChatWizardManager = ({
       optionLabel = normalizedKey;
     }
 
+    const normKeyUpper = normalizedKey.toUpperCase();
+    const optActionUpper = String(option?.actionType || option?.action || "").toUpperCase();
+    const optValueUpper = String(option?.value || "").toUpperCase();
+    const optLabelLower = optionLabel.toLowerCase();
+
+    const isUploadAction =
+      optActionUpper === "ADD_DOCUMENT" ||
+      optActionUpper === "UPLOAD_DOCUMENT" ||
+      optActionUpper === "UPLOAD" ||
+      normKeyUpper === "ADD_DOCUMENT" ||
+      normKeyUpper === "UPLOAD_DOCUMENT" ||
+      normKeyUpper === "UPLOAD" ||
+      optValueUpper === "ADD_DOCUMENT" ||
+      optValueUpper === "UPLOAD_DOCUMENT" ||
+      optValueUpper === "UPLOAD" ||
+      optLabelLower === "upload document" ||
+      optLabelLower === "add document" ||
+      optLabelLower === "use document" ||
+      optLabelLower.includes("upload document") ||
+      optLabelLower.includes("add document");
+
+    if (isUploadAction) {
+      uploadSheetRef.current?.present();
+      isSendingRef.current = false;
+      setIsSending(false);
+      return;
+    }
+
     const userMsg: ChatMessage = {
       id: `user-opt-${Date.now()}`,
       role: "user",
@@ -649,17 +677,6 @@ export const useChatWizardManager = ({
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
-
-    if (
-      option?.actionType === "ADD_DOCUMENT" ||
-      normalizedKey === "ADD_DOCUMENT" ||
-      option?.value === "ADD_DOCUMENT"
-    ) {
-      uploadSheetRef.current?.present();
-      isSendingRef.current = false;
-      setIsSending(false);
-      return;
-    }
 
     // If saving a medicine from AddMedicineCard
     if (option?.value?.medicine || (option?.actionType === "ADD_MEDICINE" && option?.value?.medicine)) {

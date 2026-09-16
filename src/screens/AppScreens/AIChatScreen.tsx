@@ -374,6 +374,7 @@ const AIChatScreen = ({ route }: any) => {
                 isConfirmingMeds={isConfirmingMeds}
                 setMedicineToEdit={setMedicineToEdit}
                 editSheetRef={editSheetRef}
+                uploadSheetRef={uploadSheetRef}
                 handleConfirmSelection={handleConfirmSelection}
                 resolveCurrentConflict={resolveCurrentConflict}
                 navigateConflict={navigateConflict}

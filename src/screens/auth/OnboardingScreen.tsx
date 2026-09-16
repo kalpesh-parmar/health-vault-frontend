@@ -1865,6 +1865,18 @@ export default function OnboardingScreen() {
         sendMessage("ASK_REPORT", newState, label);
       } else if (value === "LOGOUT") {
         logout();
+      } else if (
+        value === "UPLOAD" ||
+        value === "UPLOAD_DOCUMENT" ||
+        value === "ADD_DOCUMENT" ||
+        value === "USE_DOCUMENT" ||
+        label?.toLowerCase() === "upload document" ||
+        label?.toLowerCase() === "add document" ||
+        label?.toLowerCase() === "use document" ||
+        label?.toLowerCase().includes("upload document")
+      ) {
+        handleDocumentUpload();
+        return;
       } else {
         let newState = { ...state };
         if (activeMsg.action === "ASK_BLOOD_GROUP") {
