@@ -817,18 +817,69 @@ export function AddMedicineCard({
   if (currentInitialIdsKey !== prevInitialIdsKey) {
     setPrevInitialIdsKey(currentInitialIdsKey);
     if (initialMedicines.length === 0) {
+      // Cancel -> reset
       setDrafts([]);
       setCurrentIndex(0);
       setNewDraftId(generateClientMedId([]));
     } else {
-      const deduped = deduplicateDrafts(initialMedicines);
-      setDrafts(deduped);
-      setCurrentIndex(deduped.length);
-      const existingIds = new Set(
-        deduped.map((m: any) => m?.client_med_id || m?.id).filter(Boolean),
+      const incomingDeduped = deduplicateDrafts(initialMedicines);
+      const currentDraftIds = new Set(
+        drafts.map((m: any) => m?.client_med_id || m?.id).filter(Boolean),
       );
-      if (existingIds.has(newDraftId)) {
-        setNewDraftId(generateClientMedId(deduped));
+      const incomingIds = new Set(
+        incomingDeduped.map((m: any) => m?.client_med_id || m?.id).filter(Boolean),
+      );
+
+      const hasOverlap = [...currentDraftIds].some((id) => incomingIds.has(id));
+
+      if (drafts.length === 0) {
+        // Initial population from incoming drafts
+        setDrafts(incomingDeduped);
+        let targetIdx = incomingDeduped.length;
+        if (med?.client_med_id || med?.id) {
+          const foundIdx = incomingDeduped.findIndex(
+            (m: any) => (m.client_med_id || m.id) === (med.client_med_id || med.id),
+          );
+          if (foundIdx >= 0) targetIdx = foundIdx;
+        }
+        setCurrentIndex(targetIdx);
+        if (incomingIds.has(newDraftId)) {
+          setNewDraftId(generateClientMedId(incomingDeduped));
+        }
+      } else if (hasOverlap) {
+        // "Add another" -> APPEND (no reset)
+        const newItems = incomingDeduped.filter(
+          (m: any) => !currentDraftIds.has(m?.client_med_id || m?.id),
+        );
+        if (newItems.length > 0) {
+          const merged = deduplicateDrafts([...drafts, ...newItems]);
+          setDrafts(merged);
+          // If user was on the blank form, advance currentIndex to point to the new blank form
+          if (currentIndex >= drafts.length) {
+            setCurrentIndex(merged.length);
+          }
+          const allIds = new Set(
+            merged.map((m: any) => m?.client_med_id || m?.id).filter(Boolean),
+          );
+          if (allIds.has(newDraftId)) {
+            setNewDraftId(generateClientMedId(merged));
+          }
+        }
+        // If newItems.length === 0, all incoming drafts are already present; do NOT reset drafts or index!
+      } else {
+        // External list replacement -> reset
+        setDrafts(incomingDeduped);
+        let targetIdx = incomingDeduped.length;
+        if (med?.client_med_id || med?.id) {
+          const foundIdx = incomingDeduped.findIndex(
+            (m: any) => (m.client_med_id || m.id) === (med.client_med_id || med.id),
+          );
+          if (foundIdx >= 0) targetIdx = foundIdx;
+        }
+        setCurrentIndex(targetIdx);
+        if (incomingIds.has(newDraftId)) {
+          setNewDraftId(generateClientMedId(incomingDeduped));
+        }
       }
     }
   }

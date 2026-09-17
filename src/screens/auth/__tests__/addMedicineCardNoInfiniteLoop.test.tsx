@@ -149,4 +149,130 @@ describe("AddMedicineCard - Infinite Render Loop Regression Test", () => {
 
     expect(setCurrentClientMedId).not.toHaveBeenCalled();
   });
+
+  describe("R1 & R2 Acceptance Criteria: Draft Persistence & Cancel Reset", () => {
+    it("R1: Persists previous medicines when adding another and opens on blank form with drafts intact", async () => {
+      const initialDrafts = [
+        {
+          client_med_id: "client_med_1",
+          id: "client_med_1",
+          name: "Paracetamol",
+          dose: { count: 1 },
+          frequency: "Once Daily",
+        },
+        {
+          client_med_id: "client_med_2",
+          id: "client_med_2",
+          name: "Amoxicillin",
+          dose: { count: 2 },
+          frequency: "Twice Daily",
+        },
+      ];
+
+      const onSaveMedicines = jest.fn();
+      const onDraftSync = jest.fn();
+
+      const { rerender, getByText, queryByDisplayValue } = await render(
+        <AddMedicineCard
+          med={{}}
+          initialMedicines={initialDrafts}
+          currentClientMedId={null}
+          setCurrentClientMedId={jest.fn()}
+          onSave={jest.fn()}
+          onAddAndContinue={jest.fn()}
+          onDraftSync={onDraftSync}
+          onSaveMedicines={onSaveMedicines}
+          onExitToOptions={jest.fn()}
+          isDark={false}
+          theme={dummyTheme}
+        />
+      );
+
+      // Medicine header should reflect Medicine #3 (since 2 drafts exist)
+      expect(getByText("Medicine #3")).toBeDefined();
+
+      // Form should be blank for the 3rd medicine
+      expect(queryByDisplayValue("Paracetamol")).toBeNull();
+      expect(queryByDisplayValue("Amoxicillin")).toBeNull();
+
+      // Parent updates initialMedicines with an appended 3rd medicine
+      const threeDrafts = [
+        ...initialDrafts,
+        {
+          client_med_id: "client_med_3",
+          id: "client_med_3",
+          name: "Ibuprofen",
+          dose: { count: 1 },
+          frequency: "Once Daily",
+        },
+      ];
+
+      await rerender(
+        <AddMedicineCard
+          med={{}}
+          initialMedicines={threeDrafts}
+          currentClientMedId={null}
+          setCurrentClientMedId={jest.fn()}
+          onSave={jest.fn()}
+          onAddAndContinue={jest.fn()}
+          onDraftSync={onDraftSync}
+          onSaveMedicines={onSaveMedicines}
+          onExitToOptions={jest.fn()}
+          isDark={false}
+          theme={dummyTheme}
+        />
+      );
+
+      // Now points to blank Medicine #4, with all 3 previous medicines preserved
+      expect(getByText("Medicine #4")).toBeDefined();
+    });
+
+    it("R2: Reset draft data ONLY on Cancel when initialMedicines becomes empty", async () => {
+      const initialDrafts = [
+        {
+          client_med_id: "client_med_1",
+          id: "client_med_1",
+          name: "Paracetamol",
+        },
+      ];
+
+      const { rerender, getByText } = await render(
+        <AddMedicineCard
+          med={{}}
+          initialMedicines={initialDrafts}
+          currentClientMedId={null}
+          setCurrentClientMedId={jest.fn()}
+          onSave={jest.fn()}
+          onAddAndContinue={jest.fn()}
+          onDraftSync={jest.fn()}
+          onSaveMedicines={jest.fn()}
+          onExitToOptions={jest.fn()}
+          isDark={false}
+          theme={dummyTheme}
+        />
+      );
+
+      expect(getByText("Medicine #2")).toBeDefined();
+
+      // Simulated Cancel: parent resets initialMedicines to []
+      await rerender(
+        <AddMedicineCard
+          med={{}}
+          initialMedicines={[]}
+          currentClientMedId={null}
+          setCurrentClientMedId={jest.fn()}
+          onSave={jest.fn()}
+          onAddAndContinue={jest.fn()}
+          onDraftSync={jest.fn()}
+          onSaveMedicines={jest.fn()}
+          onExitToOptions={jest.fn()}
+          isDark={false}
+          theme={dummyTheme}
+        />
+      );
+
+      // Now reset to Medicine #1
+      expect(getByText("Medicine #1")).toBeDefined();
+    });
+  });
 });

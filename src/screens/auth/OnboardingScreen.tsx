@@ -257,7 +257,7 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     selectedFileRef.current = selectedFile;
-  }, []);
+  }, [selectedFile]);
 
   useEffect(() => {
     uploadStateRef.current = uploadState;
@@ -409,6 +409,7 @@ export default function OnboardingScreen() {
     };
 
     resumePendingJob();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch initial profile
@@ -568,6 +569,7 @@ export default function OnboardingScreen() {
         fetchOnboardingHistory();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   const startOnboardingChat = async (currentState: typeof state) => {
@@ -835,14 +837,12 @@ export default function OnboardingScreen() {
       AsyncStorage.setItem("preferredLanguage", finalState.preferredLanguage);
     }
     setState(finalState);
-    if (
-      finalState.currentStep === "MEDICINE_OPTIONS" ||
-      Boolean((finalState as any).cancellationNotice) ||
-      (Array.isArray(finalState.medicinesToAdd) && finalState.medicinesToAdd.length === 0)
-    ) {
+    if (Boolean((finalState as any).cancellationNotice)) {
       setLocalMedicines([]);
       setCurrentClientMedId(null);
       setActiveMedicineToEdit(null);
+    } else if (Array.isArray(finalState.medicinesToAdd) && finalState.medicinesToAdd.length > 0) {
+      setLocalMedicines(deduplicateDrafts(finalState.medicinesToAdd));
     }
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
     setCanSkip((prev) => prev || resolvedCanSkip);
@@ -1871,18 +1871,20 @@ export default function OnboardingScreen() {
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
         sendMessage(value, state, label);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
-        setLocalMedicines([]);
+        const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
+        setLocalMedicines(existingMeds);
         setCurrentClientMedId(null);
         setActiveMedicineToEdit(null);
-        const freshState = {
+        const nextState = {
           ...state,
-          medicinesToAdd: [],
+          medicinesFlowStarted: true,
+          medicinesToAdd: existingMeds,
           currentStep: "ADD_MEDICINE",
-          currentMedicineIndex: 0,
+          currentMedicineIndex: existingMeds.length,
           cancellationNotice: false,
         };
-        setState(freshState);
-        sendMessage(value, freshState, label);
+        setState(nextState);
+        sendMessage(value, nextState, label);
       } else if (value === "VIEW_MEDICINES" || value === "VIEW_MY_MEDICINES") {
         setTimeout(() => {
           try {
