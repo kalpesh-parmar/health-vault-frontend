@@ -64,7 +64,7 @@ import DocumentPreview from "../../components/upload/DocumentPreview";
 import UploadValidationDialog from "../../components/upload/UploadValidationDialog";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
 
-import { AddMedicineCard } from "../../components/chat/widgets/AddMedicineCard";
+import { AddMedicineCard, deduplicateDrafts } from "../../components/chat/widgets/AddMedicineCard";
 import { ReviewMedicinesListCard } from "../../components/chat/widgets/ReviewMedicinesListCard";
 import { ConfirmMedicineCard } from "../../components/chat/widgets/ConfirmMedicineCard";
 import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOptionsPanel";
@@ -75,7 +75,6 @@ import { findHistoricalUserReply } from "../../components/chat/widgets/Historica
 import { DocumentProcessingModal } from "../../components/chat/widgets/DocumentProcessingModal";
 import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
 import { StructuredReportSummaryCard } from "../../components/chat/widgets/StructuredReportSummaryCard";
-import { ReportReferenceHeader } from "../../components/chat/widgets/ReportReferenceHeader";
 import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
@@ -98,6 +97,7 @@ type Message = {
   loginProvider?: string;
   medicine?: any;
   medicines?: any[];
+  totalBuffered?: number;
   summary?: any;
   document?: any;
   documents?: any[];
@@ -130,6 +130,8 @@ const normalizeDocumentIds = (...sources: any[]): string[] | undefined => {
 
   return ids.length ? Array.from(new Set(ids)) : undefined;
 };
+
+const STATIC_EMPTY_MED_OBJ: any = {};
 
 type UserData = {
   firstName: string;
@@ -311,12 +313,22 @@ export default function OnboardingScreen() {
     null,
   );
 
-  // Synchronize localMedicines with backend state when it changes
+  // Synchronize localMedicines with backend state when it changes (guarded by content key to avoid unnecessary re-renders)
   useEffect(() => {
     if (state?.medicinesToAdd) {
-      setLocalMedicines(state.medicinesToAdd);
+      setLocalMedicines((prev) => {
+        const prevKey = (prev || []).map((m: any) => m?.client_med_id || m?.id).filter(Boolean).join("|");
+        const nextKey = (state.medicinesToAdd || []).map((m: any) => m?.client_med_id || m?.id).filter(Boolean).join("|");
+        return prevKey === nextKey ? prev : state.medicinesToAdd;
+      });
     }
   }, [state?.medicinesToAdd]);
+
+  // Memoize initialMedicines so we don't pass a fresh array reference on every single render
+  const memoizedInitialMedicines = useMemo(
+    () => deduplicateDrafts(localMedicines || state?.medicinesToAdd || []),
+    [localMedicines, state?.medicinesToAdd],
+  );
 
   const flatListRef = useRef<FlatList>(null);
   const uploadSheetRef = useRef<any>(null);
@@ -626,6 +638,7 @@ export default function OnboardingScreen() {
       loginProvider: aiRes.loginProvider,
       medicine: aiRes.medicine,
       medicines: aiRes.medicines,
+      totalBuffered: aiRes.totalBuffered,
       summary: aiRes.summary,
       document: aiRes.document,
       suggestedQuestions: aiRes.suggestedQuestions,
@@ -728,7 +741,11 @@ export default function OnboardingScreen() {
         const lastAssistantMsg = [...prev]
           .reverse()
           .find((m) => m.role === "assistant");
+        const isInteractiveOptionMsg =
+          newMsg.action === "MEDICINE_OPTIONS" ||
+          (Array.isArray(newMsg.options) && newMsg.options.length > 0);
         const isDuplicateAssistantMsg =
+          !isInteractiveOptionMsg &&
           lastAssistantMsg &&
           lastAssistantMsg.action === newMsg.action &&
           normalizeText(lastAssistantMsg.content) === normReply &&
@@ -818,6 +835,15 @@ export default function OnboardingScreen() {
       AsyncStorage.setItem("preferredLanguage", finalState.preferredLanguage);
     }
     setState(finalState);
+    if (
+      finalState.currentStep === "MEDICINE_OPTIONS" ||
+      Boolean((finalState as any).cancellationNotice) ||
+      (Array.isArray(finalState.medicinesToAdd) && finalState.medicinesToAdd.length === 0)
+    ) {
+      setLocalMedicines([]);
+      setCurrentClientMedId(null);
+      setActiveMedicineToEdit(null);
+    }
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
     setCanSkip((prev) => prev || resolvedCanSkip);
 
@@ -1845,7 +1871,18 @@ export default function OnboardingScreen() {
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
         sendMessage(value, state, label);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
-        sendMessage(value, state, label);
+        setLocalMedicines([]);
+        setCurrentClientMedId(null);
+        setActiveMedicineToEdit(null);
+        const freshState = {
+          ...state,
+          medicinesToAdd: [],
+          currentStep: "ADD_MEDICINE",
+          currentMedicineIndex: 0,
+          cancellationNotice: false,
+        };
+        setState(freshState);
+        sendMessage(value, freshState, label);
       } else if (value === "VIEW_MEDICINES" || value === "VIEW_MY_MEDICINES") {
         setTimeout(() => {
           try {
@@ -2134,7 +2171,7 @@ export default function OnboardingScreen() {
       const med =
         (isHistorical
           ? activeMsg.medicine
-          : activeMedicineToEdit || activeMsg.medicine) || {};
+          : activeMedicineToEdit || activeMsg.medicine) || STATIC_EMPTY_MED_OBJ;
       const isEditingLocal = !isHistorical && !!activeMedicineToEdit;
 
       const handleSave = (updatedMed: any) => {
@@ -2186,16 +2223,18 @@ export default function OnboardingScreen() {
           setCurrentClientMedId(null);
           const displayLabel =
             preferredLang === "gujarati" || preferredLang === "gu"
-              ? `દવા ઉમેરો: ${updatedMed.name}`
+              ? `સાચવો / સમીક્ષા કરો: ${updatedMed.name}`
               : preferredLang === "hindi" || preferredLang === "hi"
-                ? `દવા જોડેં: ${updatedMed.name}`
+                ? `सहेजें / समीक्षा करें: ${updatedMed.name}`
                 : preferredLang === "marathi" || preferredLang === "mr"
-                  ? `औषध जोडा: ${updatedMed.name}`
+                  ? `जतन करा / पुनरावलोकन करा: ${updatedMed.name}`
                   : preferredLang === "tamil" || preferredLang === "ta"
-                    ? `மருந்தைச் சேர்: ${updatedMed.name}`
-                    : `Add medicine: ${updatedMed.name}`;
+                    ? `சேமி / மதிப்பாய்வு: ${updatedMed.name}`
+                    : `Save / Review: ${updatedMed.name}`;
           sendMessage(
             JSON.stringify({
+              action: "SAVE_AND_REVIEW",
+              saveAndReview: true,
               medicine: updatedMed,
               clientMedId: currentClientMedId,
             }),
@@ -2205,10 +2244,74 @@ export default function OnboardingScreen() {
         }
       };
 
+      const handleDraftSync = async (updatedDrafts: any[]) => {
+        const uniqueDrafts = deduplicateDrafts(updatedDrafts);
+        setLocalMedicines(uniqueDrafts);
+        const updatedState = { ...state, medicinesToAdd: uniqueDrafts };
+        setState(updatedState);
+        try {
+          await apiClient.post(
+            "/v1/onboarding/chat",
+            {
+              message: JSON.stringify({
+                action: "DRAFT_SYNC",
+                medicinesToAdd: uniqueDrafts,
+              }),
+              state: updatedState,
+              isSilent: true,
+              stream: false,
+            },
+            { timeout: 30000 },
+          );
+        } catch (e) {
+          console.warn("[Onboarding] Silent draft sync failed:", e);
+        }
+      };
+
+      const handleSaveMedicines = (allDrafts: any[]) => {
+        const uniqueDrafts = deduplicateDrafts(allDrafts);
+        setLocalMedicines(uniqueDrafts);
+        const nextState = {
+          ...state,
+          medicinesToAdd: uniqueDrafts,
+          currentStep: "REVIEW_MEDICINES_LIST",
+        };
+        setState(nextState);
+        const displayLabel = uiT("saveMedicines") || "Save Medicines";
+        sendMessage(
+          JSON.stringify({
+            action: "SAVE_AND_REVIEW",
+            saveAndReview: true,
+            medicines: uniqueDrafts,
+          }),
+          nextState,
+          displayLabel,
+        );
+      };
+
+      const handleExitToOptions = () => {
+        setActiveMedicineToEdit(null);
+        setCurrentClientMedId(null);
+        setLocalMedicines([]);
+        setMessages((prev) =>
+          prev.filter((m) => m.id !== activeMsg.id && m.action !== "ADD_MEDICINE"),
+        );
+        const cancelState = {
+          ...state,
+          currentStep: "MEDICINE_OPTIONS",
+          medicinesToAdd: [],
+          currentMedicineIndex: 0,
+          cancellationNotice: true,
+        };
+        setState(cancelState);
+        sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel");
+      };
+
       return (
         <AddMedicineCard
-          key={med.client_med_id || med.id || "new"}
+          key={activeMsg.id || med.client_med_id || "wizard"}
           med={med}
+          initialMedicines={memoizedInitialMedicines}
           isEditingLocal={isEditingLocal}
           preferredLang={preferredLang}
           isDark={isDark}
@@ -2216,16 +2319,16 @@ export default function OnboardingScreen() {
           currentClientMedId={currentClientMedId}
           setCurrentClientMedId={setCurrentClientMedId}
           onSave={handleSave}
-          onCancel={
-            !isHistorical
-              ? () => {
-                setActiveMedicineToEdit(null);
-                setMessages((prev) =>
-                  prev.filter((m) => m.id !== activeMsg.id),
-                );
-              }
-              : undefined
+          onDraftSync={
+            !isHistorical && !isEditingLocal ? handleDraftSync : undefined
           }
+          onSaveMedicines={
+            !isHistorical && !isEditingLocal ? handleSaveMedicines : undefined
+          }
+          onExitToOptions={
+            !isHistorical && !isEditingLocal ? handleExitToOptions : undefined
+          }
+          onCancel={!isHistorical ? handleExitToOptions : undefined}
           readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -2235,17 +2338,18 @@ export default function OnboardingScreen() {
 
     if (activeMsg.action === "REVIEW_MEDICINES_LIST") {
       const handleConfirm = (checkedMeds: string[]) => {
-        const selectedMedicineObjects = (localMedicines || []).filter((m) =>
-          checkedMeds.includes(m.id || m.client_med_id),
+        const selectedMedicineObjects = deduplicateDrafts(localMedicines || []).filter((m) =>
+          checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
         );
+        const uniqueSelected = deduplicateDrafts(selectedMedicineObjects);
         const newState = {
           ...state,
           medicinesConfirmed: true,
           medicinesFlowStarted: true,
           medicinesToAdd:
-            selectedMedicineObjects.length > 0
-              ? selectedMedicineObjects
-              : localMedicines || state.medicinesToAdd,
+            uniqueSelected.length > 0
+              ? uniqueSelected
+              : deduplicateDrafts(localMedicines || state.medicinesToAdd),
         };
         setState(newState);
         setMessages((prev) =>
@@ -2253,10 +2357,10 @@ export default function OnboardingScreen() {
             msg.id === activeMsg.id
               ? {
                 ...msg,
-                medicines: (msg.medicines || localMedicines || []).map(
+                medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
                   (m) => ({
                     ...m,
-                    selected: checkedMeds.includes(m.id),
+                    selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
                   }),
                 ),
               }
@@ -2264,18 +2368,27 @@ export default function OnboardingScreen() {
           ),
         );
         sendMessage(
-          JSON.stringify({ selected: checkedMeds }),
+          JSON.stringify({
+            selected: checkedMeds,
+            medicines: uniqueSelected,
+          }),
           newState,
           uiT("confirmSelection"),
         );
       };
       const handleAddNew = () => {
+        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
+        setLocalMedicines(currentMeds);
         const newState = {
           ...state,
           medicinesFlowStarted: true,
+          medicinesToAdd: currentMeds,
+          currentStep: "ADD_MEDICINE",
+          currentMedicineIndex: currentMeds.length,
+          cancellationNotice: false,
         };
         setState(newState);
-        sendMessage(JSON.stringify({ addNew: true }), newState, uiT("addNew"));
+        sendMessage(JSON.stringify({ addNew: true, medicines: currentMeds }), newState, uiT("addNew"));
       };
       const handleSkipAll = () => {
         const newState = {
@@ -2301,7 +2414,7 @@ export default function OnboardingScreen() {
       return (
         <ReviewMedicinesListCard
           localMedicines={
-            isHistorical ? activeMsg.medicines || [] : localMedicines
+            isHistorical ? deduplicateDrafts(activeMsg.medicines || []) : deduplicateDrafts(localMedicines)
           }
           setLocalMedicines={setLocalMedicines}
           preferredLang={preferredLang}
@@ -2591,28 +2704,6 @@ export default function OnboardingScreen() {
 
   const activeAction = messages[messages.length - 1]?.action;
 
-  const activeReportDoc = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.action === "ASK_REPORT" && msg.document) {
-        return msg.document;
-      }
-      if (
-        msg.document &&
-        !Array.isArray(msg.document) &&
-        (msg.document.id || msg.document.summary)
-      ) {
-        return msg.document;
-      }
-    }
-    return null;
-  }, [messages]);
-
-  const showReportReferenceHeader = Boolean(
-    (activeAction === "ASK_REPORT" || state.currentStep === "ASK_REPORT") &&
-      activeReportDoc
-  );
-
   return (
     <LinearGradient
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
@@ -2716,18 +2807,6 @@ export default function OnboardingScreen() {
               >
                 <ChatDateHeader dateLabel={activeDateLabel} isDark={isDark} />
               </View>
-            ) : null}
-            {showReportReferenceHeader && activeReportDoc ? (
-              <ReportReferenceHeader
-                document={activeReportDoc}
-                isDark={isDark}
-                theme={theme}
-                preferredLang={state.preferredLanguage || "english"}
-                onPress={() => {
-                  setViewerDoc(activeReportDoc);
-                  setIsViewerOpen(true);
-                }}
-              />
             ) : null}
             <FlatList
               ref={flatListRef}

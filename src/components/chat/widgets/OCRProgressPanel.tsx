@@ -44,7 +44,7 @@ const AnimatedProgressFill = ({ progress, isFailed }: { progress: number; isFail
 
   useEffect(() => {
     animatedWidth.value = withTiming(Math.max(0, Math.min(100, progress)), { duration: 600 });
-  }, [progress]);
+  }, [progress, animatedWidth]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -81,7 +81,7 @@ const OCRProgressPanel: React.FC<OCRProgressPanelProps> = ({
 
   useEffect(() => {
     rotation.value = withTiming(isExpanded ? 180 : 0, { duration: 250 });
-  }, [isExpanded]);
+  }, [isExpanded, rotation]);
 
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],

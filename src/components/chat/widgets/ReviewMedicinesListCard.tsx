@@ -6,6 +6,7 @@ import Toast from "react-native-toast-message";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 import { parseChosenJson } from "./MedicineHelpers";
 import { DocumentProgressSummaryContainer } from "./DocumentProgressSummaryContainer";
+import { deduplicateDrafts } from "./AddMedicineCard";
 
 const formatFoodContext = (val: any): string => {
   if (!val) return "None";
@@ -78,9 +79,17 @@ export function ReviewMedicinesListCard({
   onRetryDocument,
   showDocumentSummary = true,
 }: ReviewMedicinesListCardProps) {
+  const todayDateString = React.useMemo(() => new Date().toISOString().split("T")[0], []);
+  const safeLocalMedicines = React.useMemo(() => {
+    return deduplicateDrafts(localMedicines || []).map((m) => ({
+      ...m,
+      startDate: m.startDate && m.startDate !== "None" ? m.startDate : todayDateString,
+    }));
+  }, [localMedicines, todayDateString]);
+
   // checkedMeds: holds the IDs of checked/selected medications
-  const [checkedMeds, setCheckedMeds] = useState<string[]>(
-    (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
+  const [checkedMeds, setCheckedMeds] = useState<string[]>(() =>
+    safeLocalMedicines.filter((m) => m.selected).map((m) => m.client_med_id || m.id),
   );
 
   // expandedMedId: holds the ID of the single expanded medicine card (accordion design)
@@ -97,8 +106,9 @@ export function ReviewMedicinesListCard({
 
   // Sync checkedMeds if localMedicines changes from parent component
   useEffect(() => {
+    const deduped = deduplicateDrafts(localMedicines || []);
     setCheckedMeds(
-      (localMedicines || []).filter((m) => m.selected).map((m) => m.id),
+      deduped.filter((m) => m.selected).map((m) => m.client_med_id || m.id),
     );
   }, [localMedicines]);
 
@@ -136,25 +146,6 @@ export function ReviewMedicinesListCard({
       });
       return next;
     });
-  }, [localMedicines]);
-
-  const safeLocalMedicines = localMedicines || [];
-
-  // Ensure startDate defaults to today for any medicine lacking it
-  useEffect(() => {
-    const missingStart = (localMedicines || []).some(
-      (m) => !m.startDate || m.startDate === "None",
-    );
-    if (missingStart) {
-      const today = new Date().toISOString().split("T")[0];
-      setLocalMedicines((prev) =>
-        prev.map((m) => ({
-          ...m,
-          startDate:
-            m.startDate && m.startDate !== "None" ? m.startDate : today,
-        })),
-      );
-    }
   }, [localMedicines]);
 
   const conflictingMeds = readOnly
@@ -198,12 +189,12 @@ export function ReviewMedicinesListCard({
     if (checkedMeds.includes(id)) {
       setCheckedMeds((prev) => prev.filter((m) => m !== id));
       setLocalMedicines((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, selected: false } : m)),
+        prev.map((m) => ((m.client_med_id === id || m.id === id) ? { ...m, selected: false } : m)),
       );
     } else {
       setCheckedMeds((prev) => [...prev, id]);
       setLocalMedicines((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, selected: true, resolution: undefined } : m)),
+        prev.map((m) => ((m.client_med_id === id || m.id === id) ? { ...m, selected: true, resolution: undefined } : m)),
       );
       setResolutions((prev) => {
         const next = { ...prev };
@@ -275,10 +266,11 @@ export function ReviewMedicinesListCard({
   };
 
   const handleConfirm = () => {
-    const formattedMedicines = (localMedicines || [])
-      .filter((m) => checkedMeds.includes(m.id))
+    const formattedMedicines = deduplicateDrafts(localMedicines || [])
+      .filter((m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id))
       .map((m) => {
-        const resValue = resolutions[m.id] || "KEEP_NEW";
+        const medKey = m.client_med_id || m.id;
+        const resValue = resolutions[medKey] || resolutions[m.id] || "KEEP_NEW";
         const matchedMed = m.duplicateInfo?.matchedMedication || m.duplicateInfo?.matchedMedications?.[0];
         
         const doseCount = typeof m.dose === "object" && m.dose !== null && m.dose.count !== undefined
@@ -286,7 +278,8 @@ export function ReviewMedicinesListCard({
           : parseFloat(String(m.dosePerIntake || "1")) || 1;
 
         const result: any = {
-          client_med_id: m.id,
+          client_med_id: m.client_med_id || m.id,
+          id: m.id || m.client_med_id,
           name: m.name || m.medicationName || "Unknown",
           type: String(m.type || m.medicationType || "TABLET").toUpperCase(),
           frequency: String(m.frequency || "ONCE").toUpperCase(),
@@ -678,9 +671,11 @@ export function ReviewMedicinesListCard({
     );
   }
 
-  const displayedMedicines = readOnly
-    ? safeLocalMedicines.filter((m) => checkedMeds.includes(m.id))
-    : safeLocalMedicines;
+  const displayedMedicines = deduplicateDrafts(
+    readOnly
+      ? safeLocalMedicines.filter((m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id))
+      : safeLocalMedicines,
+  );
 
   return (
     <View style={{ width: "100%" }}>
@@ -744,21 +739,24 @@ export function ReviewMedicinesListCard({
 
       <View style={{ marginVertical: 12 }}>
         {(isExpanded ? displayedMedicines : displayedMedicines.slice(0, 3)).map((rawMed) => {
+          const medKey = rawMed.client_med_id || rawMed.id;
           const med = {
             ...rawMed,
+            client_med_id: medKey,
+            id: rawMed.id || medKey,
             name: rawMed.name || rawMed.medicationName || "Unknown",
             type: rawMed.type || rawMed.medicationType || "Tablet",
             frequency: rawMed.frequency || rawMed.medicationFrequency || rawMed.doseFrequency || rawMed.timeOfIntake || "None",
             notes: rawMed.notes || rawMed.instructions || "None",
           };
-          const isChecked = checkedMeds.includes(med.id);
-          const isPillExpanded = expandedMedId === med.id;
+          const isChecked = checkedMeds.includes(medKey) || checkedMeds.includes(med.id);
+          const isPillExpanded = expandedMedId === medKey || expandedMedId === med.id;
           const dosageStr = getDosageString(med);
           const timeStr = getTimeString(med);
 
           return (
             <View
-              key={med.id}
+              key={medKey}
               style={{
                 backgroundColor: "#f8fafc",
                 borderColor: "#e2e8f0",
@@ -776,7 +774,7 @@ export function ReviewMedicinesListCard({
               {/* Primary Header Row inside medicine pill */}
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => toggleExpandPill(med.id)}
+                onPress={() => toggleExpandPill(medKey)}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -788,7 +786,7 @@ export function ReviewMedicinesListCard({
                   {/* Checkbox Selector */}
                   <TouchableOpacity
                     disabled={readOnly}
-                    onPress={() => toggleCheck(med.id)}
+                    onPress={() => toggleCheck(medKey)}
                     style={{ padding: 4, marginRight: 8 }}
                   >
                     <Ionicons

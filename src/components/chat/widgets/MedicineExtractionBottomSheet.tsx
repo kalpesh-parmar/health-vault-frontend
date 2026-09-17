@@ -75,6 +75,7 @@ export const MedicineExtractionBottomSheet = forwardRef<
     chatWizardState.step,
     chatWizardState.jobIds,
     chatWizardState.hasViewedCompletedOcr,
+    setChatWizardState,
   ]);
 
   // STEP RENDERING LOGIC
