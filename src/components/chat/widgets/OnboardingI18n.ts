@@ -142,6 +142,12 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     reportNames: "Report Name(s)",
     onboardingCanSkipMessage:
       "Your onboarding is complete! The Skip button is now enabled. You can tap Skip to go directly to the Dashboard and complete any remaining steps later.",
+    addAndContinue: "Add & Continue",
+    saveAndReview: "Save / Review",
+    saveMedicines: "Save Medicines",
+    medicineNumber: "Medicine #{n}",
+    medicinesReadyToReview: "{count} medicine(s) drafted and ready to review",
+    medicineEntryCancelled: "Medicine entry has been cancelled.",
   },
   gujarati: {
     showAll: "બધું બતાવો",
@@ -286,6 +292,12 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     reportNames: "અહેવાલ નામ(ઓ)",
     onboardingCanSkipMessage:
       "તમારું ઓનબોર્ડિંગ પૂર્ણ થઈ ગયું છે! હવે SKIP બટન સક્રિય થઈ ગયું છે. તમે SKIP પર ટેપ કરીને સીધા ડેશબોર્ડ પર જઈ શકો છો અને બાકી રહેલા સ્ટેપ્સ પછીથી પણ પૂર્ણ કરી શકો છો.",
+    addAndContinue: "ઉમેરો અને ચાલુ રાખો",
+    saveAndReview: "સાચવો / સમીક્ષા કરો",
+    saveMedicines: "દવાઓ સાચવો",
+    medicineNumber: "દવા #{n}",
+    medicinesReadyToReview: "{count} દવાઓ તૈયાર છે અને સમીક્ષા માટે ઉપલબ્ધ છે",
+    medicineEntryCancelled: "દવા ઉમેરવાની પ્રક્રિયા રદ કરવામાં આવી છે.",
   },
   hindi: {
     showAll: "सभी दिखाएं",
@@ -430,6 +442,12 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     reportNames: "रिपोर्ट नाम",
     onboardingCanSkipMessage:
       "आपका ऑनबोर्डिंग पूरा हो गया है! अब SKIP बटन सक्रिय हो गया है। आप SKIP पर टैप करके सीधे डैशबोर्ड पर जा सकते हैं और बाकी चरण बाद में भी पूरे कर सकते हैं।",
+    addAndContinue: "जोड़ें और जारी रखें",
+    saveAndReview: "सहेजें / समीक्षा करें",
+    saveMedicines: "दवाएँ सहेजें",
+    medicineNumber: "दवा #{n}",
+    medicinesReadyToReview: "{count} दवाएँ तैयार हैं और समीक्षा के लिए उपलब्ध हैं",
+    medicineEntryCancelled: "दवा जोड़ने की प्रक्रिया रद्द कर दी गई है।",
   },
   marathi: {
     showAll: "सर्व दाखवा",
@@ -574,6 +592,12 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     reportNames: "अहवाल नाव(ये)",
     onboardingCanSkipMessage:
       "तुमचे ऑनबोर्डिंग पूर्ण झाले आहे! आता SKIP बटण सक्रिय झाले आहे. तुम्ही SKIP वर टॅप करून थेट डॅशबोर्डवर जाऊ शकता आणि उर्वरित स्टेप्स नंतरही पूर्ण करू शकता.",
+    addAndContinue: "जोडा आणि पुढे सुरू ठेवा",
+    saveAndReview: "जतन करा / पुनरावलोकन करा",
+    saveMedicines: "औषधे जतन करा",
+    medicineNumber: "औषध #{n}",
+    medicinesReadyToReview: "{count} औषधे तयार आहेत आणि पुनरावलोकनासाठी उपलब्ध आहेत",
+    medicineEntryCancelled: "औषध नोंदणी रद्द केली आहे.",
   },
   tamil: {
     showAll: "அனைத்தையும் காட்டு",
@@ -719,5 +743,11 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     reportNames: "அறிக்கை பெயர்(கள்)",
     onboardingCanSkipMessage:
       "உங்கள் ஆன்போர்டிங் முடிந்துவிட்டது! இப்போது SKIP பொத்தான் செயல்படுத்தப்பட்டுள்ளது. SKIP என்பதைத் தட்டி நேரடியாக Dashboard-க்கு செல்லலாம் மற்றும் மீதமுள்ள படிகளை பின்னரும் முடிக்கலாம்.",
+    addAndContinue: "சேர்த்து தொடரவும்",
+    saveAndReview: "சேமி / மதிப்பாய்வு",
+    saveMedicines: "மருந்துகளைச் சேமி",
+    medicineNumber: "மருந்து #{n}",
+    medicinesReadyToReview: "{count} மருந்துகள் வரைவு செய்யப்பட்டு மதிப்பாய்வுக்கு தயார்",
+    medicineEntryCancelled: "மருந்து பதிவு ரத்து செய்யப்பட்டது.",
   }
 };

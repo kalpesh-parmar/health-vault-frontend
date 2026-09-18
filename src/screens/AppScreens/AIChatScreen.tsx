@@ -43,6 +43,7 @@ import { DocumentUploadBottomSheet } from "../../components/document-upload/Docu
 import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
 import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
 import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveStates";
+import { ReportReferenceHeader } from "../../components/chat/widgets/ReportReferenceHeader";
 import { getRelativeDateLabel } from "../../utils/dateFormatter";
 
 const AIChatScreen = ({ route }: any) => {
@@ -130,6 +131,7 @@ const AIChatScreen = ({ route }: any) => {
     activeSessionId,
     onboardingSessionId,
     selectedDocument,
+    setSelectedDocument,
     input,
     setInput,
     isSending,
@@ -198,18 +200,12 @@ const AIChatScreen = ({ route }: any) => {
     initChatHistory();
   }, [fetchOnboardingHistory, initChatHistory]);
 
-  // Initialize active date label from latest messages if not yet set
+  // Sync route document if provided
   useEffect(() => {
-    if (!activeDateLabel && mergedMessages.length > 0) {
-      const topMsg = mergedMessages[mergedMessages.length - 1];
-      if (topMsg && topMsg.createdAt) {
-        const label = getRelativeDateLabel(topMsg.createdAt, true);
-        if (label) {
-          setActiveDateLabel(label);
-        }
-      }
+    if (route?.params?.document) {
+      setSelectedDocument(route.params.document);
     }
-  }, [mergedMessages, activeDateLabel]);
+  }, [route?.params?.document, setSelectedDocument]);
 
   // Back handler
   useEffect(() => {
@@ -326,6 +322,18 @@ const AIChatScreen = ({ route }: any) => {
           isDark={isDark}
         />
       )}
+
+      {/* Report Reference Header */}
+      {selectedDocument ? (
+        <ReportReferenceHeader
+          document={selectedDocument}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          onPress={() => handleViewFullReport(selectedDocument)}
+          onDismiss={() => setSelectedDocument(null)}
+        />
+      ) : null}
 
       <View style={styles.keyboardContainer}>
         {/* Emergency Alert */}

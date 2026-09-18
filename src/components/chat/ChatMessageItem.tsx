@@ -27,6 +27,7 @@ import {
   ReportSummaryChatCard,
   DocumentSummaryStats,
 } from "./widgets/ReportSummaryChatCard";
+import { StructuredReportSummaryCard } from "./widgets/StructuredReportSummaryCard";
 import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { ChatMessage } from "../../types/chat";
@@ -213,13 +214,13 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       const doc = item.document;
       const hasDoc = Boolean(
         doc &&
-          !Array.isArray(doc) &&
-          (doc.id ||
-            doc.summary ||
-            (doc.keyFindings && doc.keyFindings.length > 0) ||
-            doc.extractedStructuredData ||
-            doc.fileName ||
-            doc.s3Key),
+        !Array.isArray(doc) &&
+        (doc.id ||
+          doc.summary ||
+          (doc.keyFindings && doc.keyFindings.length > 0) ||
+          doc.extractedStructuredData ||
+          doc.fileName ||
+          doc.s3Key),
       );
 
       if (hasDoc) {
@@ -227,6 +228,37 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           item.suggestedQuestions && item.suggestedQuestions.length > 0
             ? item.suggestedQuestions
             : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+        const isStructured = Boolean(
+          doc.patientDetails ||
+          (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
+          (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
+          doc.whatThisMayMean ||
+          doc.isLabReport
+        );
+
+        if (isStructured) {
+          return renderAssistantPrompt(
+            <StructuredReportSummaryCard
+              document={doc}
+              suggestedQuestions={questions}
+              isDark={isDark}
+              theme={theme}
+              preferredLang={preferredLang}
+              onQuestionPress={(q) =>
+                handleGenericOptionPress({
+                  label: q,
+                  value: q,
+                  actionType: "NORMAL_CHAT",
+                })
+              }
+              onViewFullReport={
+                onViewFullReport ? () => onViewFullReport(doc) : undefined
+              }
+              readOnly={chosenVal !== null}
+            />,
+          );
+        }
 
         return renderAssistantPrompt(
           <ReportSummaryChatCard
@@ -345,10 +377,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       const rawMeds = item.medicines?.length
         ? item.medicines
         : (isReadOnly
-            ? extractMedicationsFromDocuments(msgDocs)
-            : (chatWizardState.extractedMedicines.length > 0
-                ? chatWizardState.extractedMedicines
-                : extractMedicationsFromDocuments(msgDocs)));
+          ? extractMedicationsFromDocuments(msgDocs)
+          : (chatWizardState.extractedMedicines.length > 0
+            ? chatWizardState.extractedMedicines
+            : extractMedicationsFromDocuments(msgDocs)));
 
       const displayMeds = rawMeds.map((m: any, idx: number) => ({
         ...m,

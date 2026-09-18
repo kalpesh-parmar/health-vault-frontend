@@ -237,6 +237,7 @@ const LoginScreen = () => {
   const handleMicrosoftSignIn = useCallback(async () => {
     if (!request || isMicrosoftLoading) return;
 
+    resetForceLogout();
     setIsMicrosoftLoading(true);
     try {
       const result = await promptAsync({
@@ -257,6 +258,7 @@ const LoginScreen = () => {
 
   const handleContinue = useCallback(async () => {
     if (loading) return; // Prevent duplicate clicks
+    resetForceLogout();
     Keyboard.dismiss();
 
     const currentMobile = mobileRef.current;
@@ -332,6 +334,7 @@ const LoginScreen = () => {
     const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     console.log(webClientId);
     if (isGoogleLoading) return;
+    resetForceLogout();
     setIsGoogleLoading(true);
     let firebaseToken = "";
     try {
@@ -381,6 +384,7 @@ const LoginScreen = () => {
 
   const handleFacebookSignIn = async () => {
     if (isFacebookLoading) return;
+    resetForceLogout();
     setIsFacebookLoading(true);
     let firebaseToken = "";
     try {
@@ -454,6 +458,7 @@ const LoginScreen = () => {
   const handleAppleSignIn = async () => {
     console.log("Apple Sign-In initiated...");
     if (isAppleLoading) return;
+    resetForceLogout();
     setIsAppleLoading(true);
     let firebaseToken = "";
     try {

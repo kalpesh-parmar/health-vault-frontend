@@ -159,7 +159,7 @@ function decodeFileNamesInPayload(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map(decodeFileNamesInPayload);
   }
-  
+
   const res: any = {};
   for (const key of Object.keys(obj)) {
     let value = obj[key];
@@ -306,6 +306,39 @@ const addRefreshSubscriber = (cb: (token: string | null) => void) => {
 };
 
 /**
+ * Normalizes a URL to a clean pathname for exact path comparison (no regex/includes()).
+ * Strips protocol, domain/port, query params, hash, and trailing slashes.
+ */
+export function normalizePath(url?: string): string {
+  if (!url) return "";
+  const pathWithoutHost = url.replace(/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\/[^\/]+/, "");
+  const pathOnly = pathWithoutHost.split("?")[0].split("#")[0];
+  const clean = pathOnly.replace(/\/+/g, "/");
+  return clean.length > 1 && clean.endsWith("/") ? clean.slice(0, -1) : clean;
+}
+
+export const PUBLIC_AUTH_PATHS = new Set([
+  "/auth/social-login",
+  "/auth/firebase-login",
+  "/auth/auth-failure",
+  "/auth/refresh-token",
+  "/auth/login",
+  "/auth/verify-otp",
+  "/auth/request-otp",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+]);
+
+export function shouldSkipAuth(config: any): boolean {
+  if (!config) return false;
+  if (config.skipAuth === true) {
+    return true;
+  }
+  const path = normalizePath(config.url);
+  return PUBLIC_AUTH_PATHS.has(path);
+}
+
+/**
  * Returns a valid access token, automatically refreshing it if expired or nearing expiry.
  */
 export async function getValidAccessToken(forceRefresh = false): Promise<string | null> {
@@ -335,6 +368,15 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
 
   try {
     const refreshToken = await SecureStore.getItemAsync("authToken"); // refreshToken is stored as authToken
+
+    // If NEITHER token nor refreshToken exists, and this is NOT an explicit forceRefresh retry,
+    // the user simply has no session (never logged in / logged out). Do NOT trigger force logout!
+    const hadExistingSession = Boolean(token || refreshToken);
+    if (!hadExistingSession && !forceRefresh) {
+      isRefreshing = false;
+      onRerefreshed(null);
+      return null;
+    }
 
     if (!refreshToken || isRefreshTokenExpired(refreshToken)) {
       isRefreshing = false;
@@ -427,10 +469,15 @@ export function isAuthEndpoint(url?: string): boolean {
 
 apiClient.interceptors.request.use(
   async (config) => {
-    if (config.url && config.url.includes("/ocr/extract")) {
+    if (config.url && normalizePath(config.url) === "/ocr/extract") {
       config.timeout = 240000;
     }
-    const isAuthRequest = isAuthEndpoint(config.url);
+    const isAuthRequest = shouldSkipAuth(config);
+
+    // If an auth/skipAuth request is being made, automatically reset force logout state
+    if (isAuthRequest) {
+      resetForceLogout();
+    }
 
     // If in force logout state, abort immediately and do not request (except for auth requests)
     if (isForceLoggedOut && !isAuthRequest) {
@@ -492,7 +539,7 @@ apiClient.interceptors.request.use(
         timestamp: new Date().toISOString(),
         message: error.message,
       };
-        console.error(`[API LOG] OUTGOING REQUEST ERROR:\n${JSON.stringify(errLog, null, 2)}`);
+      console.error(`[API LOG] OUTGOING REQUEST ERROR:\n${JSON.stringify(errLog, null, 2)}`);
     }
     return Promise.reject(error);
   }
@@ -537,8 +584,8 @@ apiClient.interceptors.response.use(
     }
 
     const data = error.response?.data;
-    
-    const isAuthRequest = isAuthEndpoint(config?.url);
+
+    const isAuthRequest = shouldSkipAuth(config);
 
     const message =
       data?.error?.message ||
@@ -549,10 +596,8 @@ apiClient.interceptors.response.use(
       error.message ||
       "An unexpected error occurred";
 
-    const isMedicationUrl = config?.url && (
-      config.url.includes("/medications/create") ||
-      config.url.includes("/medications/")
-    );
+    const normalizedErrPath = config?.url ? normalizePath(config.url) : "";
+    const isMedicationUrl = normalizedErrPath.startsWith("/medications");
     const isDuplicate = isMedicationUrl && (
       error.response?.status === 409 ||
       data?.errorCode === "CONFLICT" ||
@@ -587,12 +632,12 @@ apiClient.interceptors.response.use(
         responseBody: error.response ? truncatePayload(maskSensitiveData(error.response.data)) : undefined,
       };
 
-        console.error(`[API LOG] OUTGOING RESPONSE ERROR:\n${JSON.stringify(errorLog, null, 2)}`);
+      console.error(`[API LOG] OUTGOING RESPONSE ERROR:\n${JSON.stringify(errorLog, null, 2)}`);
     }
 
-    const isSessionExpiredError = 
+    const isSessionExpiredError =
       error.response?.status === 401 ||
-      data?.forceLogout === true || 
+      data?.forceLogout === true ||
       data?.errorCode === "SESSION_EXPIRED" ||
       (typeof message === "string" && (
         message.toLowerCase().includes("session expired") ||

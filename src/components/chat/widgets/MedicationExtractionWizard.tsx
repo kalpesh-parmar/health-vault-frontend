@@ -48,9 +48,8 @@ const formatLocalDate = (date: Date) => {
 };
 
 const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }: EditMedicineModalProps) => {
-  if (!medicine) return null;
-
   const initialData = useMemo(() => {
+    if (!medicine) return null;
     return {
       id: medicine.id,
       medicationName: medicine.name,
@@ -91,9 +90,7 @@ const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }:
   const [localErrors, setLocalErrors] = useState<string[]>([]);
 
   useEffect(() => {
-    if (localErrors.length > 0) {
-      setLocalErrors([]);
-    }
+    setLocalErrors((prev) => (prev.length > 0 ? [] : prev));
   }, [
     formName,
     formType,
@@ -109,6 +106,8 @@ const EditMedicineModal = ({ medicine, preferredLang, isDark, onClose, onSave }:
     formUnit,
     selectedSlots,
   ]);
+
+  if (!medicine) return null;
 
   const handleSave = () => {
     const errors: string[] = [];
@@ -243,7 +242,7 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
       };
       getResults();
     }
-  }, [chatWizardState.step, isAllTerminal, chatWizardState.jobIds]);
+  }, [chatWizardState.step, isAllTerminal, chatWizardState.jobIds, chatWizardState.filesInfo, isLoadingResults, setChatWizardState]);
 
   const handleContinueToConflicts = async () => {
     try {

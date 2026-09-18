@@ -46,10 +46,14 @@ describe("Auth Flow & Utilities Unit Tests", () => {
       });
 
       const result = await authService.loginWithFirebaseToken("firebase-id-token-abc", "fcm-device-token");
-      expect(apiClient.post).toHaveBeenCalledWith("/auth/firebase-login", {
-        firebaseToken: "firebase-id-token-abc",
-        deviceToken: "fcm-device-token",
-      });
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/auth/firebase-login",
+        {
+          firebaseToken: "firebase-id-token-abc",
+          deviceToken: "fcm-device-token",
+        },
+        { skipAuth: true }
+      );
       expect(result).toEqual(mockData);
     });
 
@@ -80,7 +84,8 @@ describe("Auth Flow & Utilities Unit Tests", () => {
           providerToken: "provider-token",
           deviceToken: "device-token",
           email: "user@example.com",
-        })
+        }),
+        { skipAuth: true }
       );
       expect(result).toEqual({ success: true, data: mockData });
     });
