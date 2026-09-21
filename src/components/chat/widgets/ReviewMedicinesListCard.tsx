@@ -52,6 +52,7 @@ export interface ReviewMedicinesListCardProps {
   onAddNew: () => void;
   onSkipAll: () => void;
   onEdit: (med: any) => void;
+  onCancel?: () => void;
   readOnly?: boolean;
   canRetry?: boolean;
   chosenVal?: string | null;
@@ -71,6 +72,7 @@ export function ReviewMedicinesListCard({
   onAddNew,
   onSkipAll,
   onEdit,
+  onCancel,
   readOnly,
   canRetry,
   chosenVal,
@@ -272,18 +274,52 @@ export function ReviewMedicinesListCard({
         const medKey = m.client_med_id || m.id;
         const resValue = resolutions[medKey] || resolutions[m.id] || "KEEP_NEW";
         const matchedMed = m.duplicateInfo?.matchedMedication || m.duplicateInfo?.matchedMedications?.[0];
-        
-        const doseCount = typeof m.dose === "object" && m.dose !== null && m.dose.count !== undefined
-          ? parseFloat(String(m.dose.count)) || 1
-          : parseFloat(String(m.dosePerIntake || "1")) || 1;
+
+        const medTypeUpper = String(m.type || m.medicationType || "TABLET").toUpperCase();
+        let doseObj: any;
+        if (medTypeUpper === "TABLET" || medTypeUpper === "CAPSULE") {
+          const doseCount =
+            typeof m.dose === "object" && m.dose !== null && m.dose.count !== undefined
+              ? parseFloat(String(m.dose.count)) || 1
+              : parseFloat(String(m.dosePerIntake || "1")) || 1;
+          doseObj = { count: doseCount };
+        } else {
+          let val =
+            typeof m.dose === "object" && m.dose !== null && m.dose.value !== undefined
+              ? parseFloat(String(m.dose.value))
+              : typeof m.dose === "object" && m.dose !== null && m.dose.count !== undefined
+                ? parseFloat(String(m.dose.count))
+                : parseFloat(String(m.dosePerIntake || "1"));
+          if (isNaN(val) || val <= 0) val = 1;
+
+          let unit =
+            typeof m.dose === "object" && m.dose !== null && m.dose.unit
+              ? String(m.dose.unit)
+              : m.unit || "";
+
+          if (!unit && typeof m.dosePerIntake === "string") {
+            const parts = m.dosePerIntake.trim().split(/\s+/);
+            if (parts.length > 1) {
+              unit = parts.slice(1).join(" ");
+            }
+          }
+          if (!unit) {
+            unit = medTypeUpper.toLowerCase();
+          }
+          doseObj = { value: val, unit };
+        }
 
         const result: any = {
           client_med_id: m.client_med_id || m.id,
           id: m.id || m.client_med_id,
           name: m.name || m.medicationName || "Unknown",
-          type: String(m.type || m.medicationType || "TABLET").toUpperCase(),
+          type: medTypeUpper,
           frequency: String(m.frequency || "ONCE").toUpperCase(),
-          dose: { count: doseCount },
+          dose: doseObj,
+          dosePerIntake:
+            medTypeUpper === "TABLET" || medTypeUpper === "CAPSULE"
+              ? String(doseObj.count)
+              : `${doseObj.value} ${doseObj.unit}`.trim(),
           foodFrequency: String(m.foodFrequency || m.foodContext || "AFTER_FOOD").toUpperCase(),
           resolution: resValue,
           startDate: m.startDate || new Date().toISOString().split("T")[0],
@@ -312,26 +348,11 @@ export function ReviewMedicinesListCard({
   };
 
   const getStartDateWarningText = () => {
-    const lang = preferredLang || "english";
     if (isAnyCheckedMedMissingStartDate) {
-      const dict: Record<string, string> = {
-        english: "One or more selected medicines are missing a Start Date. Please edit them to add a Start Date.",
-        gujarati: "એક અથવા વધુ પસંદ કરેલી દવાઓમાં શરૂઆતની તારીખ ખૂટે છે. શરૂઆતની તારીખ ઉમેરવા માટે કૃપા કરીને તેને સંપાદિત કરો.",
-        hindi: "एक या अधिक चयनित दवाओं में आरंभ तिथि गायब है। कृपया आरंभ तिथि जोड़ने के लिए उन्हें संपादित करें।",
-        marathi: "निवडलेल्या औषधांपैकी एक किंवा अधिक औषधांना सुरू होण्याची तारीख नाही. सुरू होण्याची तारीख जोडण्यासाठी कृपया त्यांना संपादित करा.",
-        tamil: "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு தொடக்க தேதி இல்லை. தொடக்க தேதியை சேர்க்க அவற்றை திருத்தவும்.",
-      };
-      return dict[lang] || dict.english;
+      return t("missingStartDateWarning");
     }
     if (isAnyCheckedMedPastStartDate) {
-      const dict: Record<string, string> = {
-        english: "One or more selected medicines have a past Start Date. Please edit them to set a current or future Start Date.",
-        gujarati: "એક અથવા વધુ પસંદ કરેલી દવાઓમાં શરૂઆતની તારીખ ભૂતકાળની છે. કૃપા કરીને ચાલુ અથવા ભવિષ્યની શરૂઆતની તારીખ સેટ કરવા માટે તેને સંપાદિત કરો.",
-        hindi: "एक या अधिक चयनित दवाओं की आरंभ तिथि बीत चुकी है। कृपया वर्तमान या भविष्य की आरंभ तिथि सेट करने के लिए उन्हें संपादित करें।",
-        marathi: "निवडलेल्या औषधांपैकी एक किंवा अधिक औषधांना भूतकाळातील सुरू होण्याची तारीख आहे. कृपया चालू किंवा भविष्यातील सुरू होण्याची तारीख सेट करण्यासाठी त्यांना संपादित करा.",
-        tamil: "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு கடந்த கால தொடக்க தேதி உள்ளது. தற்போதைய அல்லது எதிர்கால தொடக்க தேதியை அமைக்க அவற்றை திருத்தவும்.",
-      };
-      return dict[lang] || dict.english;
+      return t("pastStartDateWarning");
     }
     return "";
   };
@@ -1181,6 +1202,37 @@ export function ReviewMedicinesListCard({
               </Text>
             </View>
           </TouchableOpacity>
+
+          {onCancel && (
+            <TouchableOpacity
+              disabled={areActionsDisabled}
+              style={[
+                styles.bigActionButtonSide,
+                {
+                  backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                  borderColor: isDark ? "#475569" : "#cbd5e1",
+                  borderWidth: 1,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  marginTop: 8,
+                  width: "100%",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: areActionsDisabled ? 0.55 : 1,
+                },
+              ]}
+              onPress={onCancel}
+            >
+              <Text
+                style={[
+                  styles.bigActionButtonTextSide,
+                  { color: theme.colors.textSecondary, fontSize: 13 },
+                ]}
+              >
+                {t("cancel")}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <>
@@ -1288,50 +1340,90 @@ export function ReviewMedicinesListCard({
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            disabled={areActionsDisabled}
-            style={[
-              styles.bigActionButtonSide,
-              {
-                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                borderColor: isDark ? "#475569" : "#cbd5e1",
-                borderWidth: 1,
-                paddingVertical: 10,
-                borderRadius: 12,
-                marginTop: 10,
-                width: "100%",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
-              },
-            ]}
-            onPress={onSkipAll}
+          <View
+            style={{
+              flexDirection: onCancel ? "row" : "column",
+              justifyContent: "space-between",
+              marginTop: 10,
+            }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+            <TouchableOpacity
+              disabled={areActionsDisabled}
+              style={[
+                styles.bigActionButtonSide,
+                {
+                  backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                  borderColor: isDark ? "#475569" : "#cbd5e1",
+                  borderWidth: 1,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  flex: onCancel ? 1 : undefined,
+                  width: onCancel ? undefined : "100%",
+                  marginRight: onCancel ? 6 : 0,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
+                },
+              ]}
+              onPress={onSkipAll}
             >
-              {isSkipAllChosen && (
-                <Ionicons
-                  name="checkmark"
-                  size={14}
-                  color={theme.colors.textSecondary}
-                  style={{ marginRight: 4 }}
-                />
-              )}
-              <Text
-                style={[
-                  styles.bigActionButtonTextSide,
-                  { color: theme.colors.textSecondary, fontSize: 13 },
-                ]}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                {t("skipAll")}
-              </Text>
-            </View>
-          </TouchableOpacity>
+                {isSkipAllChosen && (
+                  <Ionicons
+                    name="checkmark"
+                    size={14}
+                    color={theme.colors.textSecondary}
+                    style={{ marginRight: 4 }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.bigActionButtonTextSide,
+                    { color: theme.colors.textSecondary, fontSize: 13 },
+                  ]}
+                >
+                  {t("skipAll")}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {onCancel && (
+              <TouchableOpacity
+                disabled={areActionsDisabled}
+                style={[
+                  styles.bigActionButtonSide,
+                  {
+                    backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                    borderColor: isDark ? "#475569" : "#cbd5e1",
+                    borderWidth: 1,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    flex: 1,
+                    marginLeft: 6,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: areActionsDisabled ? 0.55 : 1,
+                  },
+                ]}
+                onPress={onCancel}
+              >
+                <Text
+                  style={[
+                    styles.bigActionButtonTextSide,
+                    { color: theme.colors.textSecondary, fontSize: 13 },
+                  ]}
+                >
+                  {t("cancel")}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </>
       )}
     </View>

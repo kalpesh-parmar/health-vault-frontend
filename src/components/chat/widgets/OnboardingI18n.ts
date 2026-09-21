@@ -147,6 +147,10 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     medicineNumber: "Medicine #{n}",
     medicinesReadyToReview: "{count} medicine(s) drafted and ready to review",
     medicineEntryCancelled: "Medicine entry has been cancelled.",
+    missingStartDateWarning:
+      "One or more selected medicines are missing a Start Date. Please edit them to add a Start Date.",
+    pastStartDateWarning:
+      "One or more selected medicines have a past Start Date. Please edit them to set a current or future Start Date.",
   },
   gujarati: {
     showAll: "બધું બતાવો",
@@ -296,6 +300,10 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     medicineNumber: "દવા #{n}",
     medicinesReadyToReview: "{count} દવાઓ તૈયાર છે અને સમીક્ષા માટે ઉપલબ્ધ છે",
     medicineEntryCancelled: "દવા ઉમેરવાની પ્રક્રિયા રદ કરવામાં આવી છે.",
+    missingStartDateWarning:
+      "એક અથવા વધુ પસંદ કરેલી દવાઓમાં શરૂઆતની તારીખ ખૂટે છે. શરૂઆતની તારીખ ઉમેરવા માટે કૃપા કરીને તેને સંપાદિત કરો.",
+    pastStartDateWarning:
+      "એક અથવા વધુ પસંદ કરેલી દવાઓમાં શરૂઆતની તારીખ ભૂતકાળની છે. કૃપા કરીને ચાલુ અથવા ભવિષ્યની શરૂઆતની તારીખ સેટ કરવા માટે તેને સંપાદિત કરો.",
   },
   hindi: {
     showAll: "सभी दिखाएं",
@@ -445,6 +453,10 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     medicineNumber: "दवा #{n}",
     medicinesReadyToReview: "{count} दवाएँ तैयार हैं और समीक्षा के लिए उपलब्ध हैं",
     medicineEntryCancelled: "दवा जोड़ने की प्रक्रिया रद्द कर दी गई है।",
+    missingStartDateWarning:
+      "एक या अधिक चयनित दवाओं में आरंभ तिथि गायब है। कृपया आरंभ तिथि जोड़ने के लिए उन्हें संपादित करें।",
+    pastStartDateWarning:
+      "एक या अधिक चयनित दवाओं की आरंभ तिथि बीत चुकी है। कृपया वर्तमान या भविष्य की आरंभ तिथि सेट करने के लिए उन्हें संपादित करें।",
   },
   marathi: {
     showAll: "सर्व दाखवा",
@@ -594,6 +606,10 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     medicineNumber: "औषध #{n}",
     medicinesReadyToReview: "{count} औषधे तयार आहेत आणि पुनरावलोकनासाठी उपलब्ध आहेत",
     medicineEntryCancelled: "औषध नोंदणी रद्द केली आहे.",
+    missingStartDateWarning:
+      "निवडलेल्या औषधांपैकी एक किंवा अधिक औषधांना सुरू होण्याची तारीख नाही. सुरू होण्याची तारीख जोडण्यासाठी कृपया त्यांना संपादित करा.",
+    pastStartDateWarning:
+      "निवडलेल्या औषधांपैकी एक किंवा अधिक औषधांना भूतकाळातील सुरू होण्याची तारीख आहे. कृपया चालू किंवा भविष्यातील सुरू होण्याची तारीख सेट करण्यासाठी त्यांना संपादित करा.",
   },
   tamil: {
     showAll: "அனைத்தையும் காட்டு",
@@ -744,5 +760,9 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     medicineNumber: "மருந்து #{n}",
     medicinesReadyToReview: "{count} மருந்துகள் வரைவு செய்யப்பட்டு மதிப்பாய்வுக்கு தயார்",
     medicineEntryCancelled: "மருந்து பதிவு ரத்து செய்யப்பட்டது.",
+    missingStartDateWarning:
+      "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு தொடக்க தேதி இல்லை. தொடக்க தேதியை சேர்க்க அவற்றை திருத்தவும்.",
+    pastStartDateWarning:
+      "தேர்ந்தெடுக்கப்பட்ட ஒன்று அல்லது அதற்கு மேற்பட்ட மருந்துகளுக்கு கடந்த கால தொடக்க தேதி உள்ளது. தற்போதைய அல்லது எதிர்கால தொடக்க தேதியை அமைக்க அவற்றை திருத்தவும்.",
   }
 };
