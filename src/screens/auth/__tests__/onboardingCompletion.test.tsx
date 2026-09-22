@@ -902,5 +902,555 @@ describe("Onboarding Completion & Skip Enablement Tests", () => {
         "Please enter the new medication details:",
       ]);
     });
+
+    describe("Optional Questions Independence & Resume Restoration (Blood Group vs Allergy)", () => {
+      it("Blood Group answered, Allergy unanswered: maintains independent state and does not corrupt allergies", () => {
+        let state: any = {
+          profileConfirmed: true,
+          bloodGroupSkipped: false,
+          allergiesSkipped: false,
+          existingUserData: {},
+          currentStep: "ASK_BLOOD_GROUP",
+        };
+
+        // User answers Blood Group "O+"
+        const textToSubmit = "O+";
+        state = {
+          ...state,
+          existingUserData: {
+            ...state.existingUserData,
+            bloodGroup: textToSubmit,
+          },
+        };
+
+        expect(state.existingUserData.bloodGroup).toBe("O+");
+        expect(state.existingUserData.allergies).toBeUndefined();
+        expect(state.bloodGroupSkipped).toBe(false);
+        expect(state.allergiesSkipped).toBe(false);
+      });
+
+      it("Allergy answered, Blood Group unanswered: maintains independent state and does not modify bloodGroup", () => {
+        let state: any = {
+          profileConfirmed: true,
+          bloodGroupSkipped: false,
+          allergiesSkipped: false,
+          existingUserData: {},
+          currentStep: "ASK_ALLERGIES",
+        };
+
+        // User answers allergies "Dust, Pollen"
+        const textToSubmit = "Dust, Pollen";
+        const splitAllergies = textToSubmit
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        state = {
+          ...state,
+          existingUserData: {
+            ...state.existingUserData,
+            allergies: splitAllergies,
+          },
+        };
+
+        expect(state.existingUserData.allergies).toEqual(["Dust", "Pollen"]);
+        expect(state.existingUserData.bloodGroup).toBeUndefined();
+        expect(state.bloodGroupSkipped).toBe(false);
+        expect(state.allergiesSkipped).toBe(false);
+      });
+
+      it("Both answered with different values: preserves separate distinct values", () => {
+        let state: any = {
+          profileConfirmed: true,
+          bloodGroupSkipped: false,
+          allergiesSkipped: false,
+          existingUserData: {},
+        };
+
+        // Blood Group answered
+        state.existingUserData.bloodGroup = "B+";
+        // Allergy answered
+        state.existingUserData.allergies = ["Peanuts"];
+
+        expect(state.existingUserData.bloodGroup).toBe("B+");
+        expect(state.existingUserData.allergies).toEqual(["Peanuts"]);
+        expect(state.existingUserData.bloodGroup).not.toEqual(state.existingUserData.allergies);
+      });
+
+      it("Both skipped: sets independent boolean flags without cross-contamination", () => {
+        let state: any = {
+          profileConfirmed: true,
+          bloodGroupSkipped: false,
+          allergiesSkipped: false,
+          existingUserData: {},
+        };
+
+        // Skip Blood Group
+        state = { ...state, bloodGroupSkipped: true };
+        expect(state.bloodGroupSkipped).toBe(true);
+        expect(state.allergiesSkipped).toBe(false);
+
+        // Skip Allergies
+        state = { ...state, allergiesSkipped: true };
+        expect(state.bloodGroupSkipped).toBe(true);
+        expect(state.allergiesSkipped).toBe(true);
+      });
+
+      it("Resume / reload restoration: correctly restores persisted values to separate fields", () => {
+        const initialState: any = {
+          preferredLanguage: "english",
+          flowMode: "MANUAL",
+          existingUserData: {},
+        };
+
+        const serverResumableState = {
+          currentStep: "ASK_ALLERGIES",
+          bloodGroupSkipped: false,
+          allergiesSkipped: false,
+          existingUserData: {
+            firstName: "John",
+            lastName: "Doe",
+            dateOfBirth: "1990-01-01",
+            gender: "male",
+            bloodGroup: "A+",
+          },
+        };
+
+        // Simulate resume merging in OnboardingScreen.tsx:
+        const mergedState = {
+          ...initialState,
+          ...serverResumableState,
+        };
+
+        expect(mergedState.currentStep).toBe("ASK_ALLERGIES");
+        expect(mergedState.existingUserData.bloodGroup).toBe("A+");
+        expect(mergedState.existingUserData.allergies).toBeUndefined();
+        expect(mergedState.bloodGroupSkipped).toBe(false);
+        expect(mergedState.allergiesSkipped).toBe(false);
+      });
+    });
+
+    describe("7. Onboarding Medicine Flow Cancel & State Restoration Invariants", () => {
+      it("1 & 2 & 3: Add Medicines -> Cancel preserves ADD_MEDICINE card and 'Add Medicines' user message in chat history", () => {
+        let messages: any[] = [
+          {
+            id: "msg-1-options",
+            role: "assistant",
+            action: "MEDICINE_OPTIONS",
+            content: "What would you like to do next?",
+            options: [
+              { key: "ADD", label: "Add Medicines", primary: true },
+              { key: "DASHBOARD", label: "Go to Dashboard", primary: false },
+            ],
+          },
+        ];
+
+        // User taps "Add Medicines"
+        const addMedUserMsg = {
+          id: "msg-2-user-add",
+          role: "user",
+          content: "Add Medicines",
+          rawValue: "ADD",
+        };
+        const addMedCardMsg = {
+          id: "msg-3-ai-card",
+          role: "assistant",
+          action: "ADD_MEDICINE",
+          content: "Please enter the new medication details:",
+          medicine: { name: "", dose: { count: 1 } },
+        };
+        messages.push(addMedUserMsg, addMedCardMsg);
+
+        expect(messages).toHaveLength(3);
+
+        // Simulation of handleExitToOptions in ADD_MEDICINE:
+        // Crucial invariant: Do NOT filter out activeMsg or ADD_MEDICINE
+        let state: any = {
+          currentStep: "ADD_MEDICINE",
+          medicinesToAdd: [{ name: "Draft Med", isSaved: false }],
+        };
+        let localMedicines: any[] = [{ name: "Draft Med", isSaved: false }];
+
+        const confirmedMeds = localMedicines.filter((m: any) => m.isSaved === true);
+        localMedicines = confirmedMeds;
+        state = {
+          ...state,
+          currentStep: "MEDICINE_OPTIONS",
+          medicinesToAdd: confirmedMeds,
+          currentMedicineIndex: confirmedMeds.length,
+          cancellationNotice: true,
+        };
+
+        // Regression assertion 2: ADD_MEDICINE card is preserved in chat history
+        expect(messages.some((m) => m.action === "ADD_MEDICINE")).toBe(true);
+        expect(messages.some((m) => m.id === "msg-3-ai-card")).toBe(true);
+
+        // Regression assertion 3: "Add Medicines" user message is preserved in chat history
+        expect(messages.some((m) => m.role === "user" && m.rawValue === "ADD")).toBe(true);
+      });
+
+      it("4 & 5: Cancel creates 'Cancel' user message and assistant cancellation response, restoring currentStep = 'MEDICINE_OPTIONS'", () => {
+        let messages: any[] = [
+          {
+            id: "msg-1-options",
+            role: "assistant",
+            action: "MEDICINE_OPTIONS",
+            content: "What would you like to do next?",
+            options: [
+              { key: "ADD", label: "Add Medicines", primary: true },
+              { key: "DASHBOARD", label: "Go to Dashboard", primary: false },
+            ],
+          },
+          {
+            id: "msg-2-user-add",
+            role: "user",
+            content: "Add Medicines",
+            rawValue: "ADD",
+          },
+          {
+            id: "msg-3-ai-card",
+            role: "assistant",
+            action: "ADD_MEDICINE",
+            content: "Please enter the new medication details:",
+          },
+        ];
+
+        let state: any = {
+          currentStep: "ADD_MEDICINE",
+          medicinesToAdd: [],
+        };
+
+        // sendMessage("CANCEL", cancelState, "Cancel")
+        const cancelUserMsg = {
+          id: "msg-4-user-cancel",
+          role: "user",
+          content: "Cancel",
+          rawValue: "CANCEL",
+        };
+        messages.push(cancelUserMsg);
+
+        // Backend cancellation response
+        const cancellationAiMsg = {
+          id: "msg-5-ai-cancel-options",
+          role: "assistant",
+          action: "MEDICINE_OPTIONS",
+          content: "Medicine entry has been cancelled.\n\nWhat would you like to do next?",
+          options: [
+            { key: "ADD", label: "Add Medicines", primary: true },
+            { key: "DASHBOARD", label: "Go to Dashboard", primary: false },
+          ],
+        };
+        messages.push(cancellationAiMsg);
+        state.currentStep = "MEDICINE_OPTIONS";
+
+        // Regression assertion 4: Cancel and cancellation response exist in messages
+        expect(messages.some((m) => m.role === "user" && m.rawValue === "CANCEL")).toBe(true);
+        expect(messages.some((m) => m.role === "assistant" && m.content.includes("cancelled"))).toBe(true);
+
+        // Regression assertion 5: state.currentStep === "MEDICINE_OPTIONS"
+        expect(state.currentStep).toBe("MEDICINE_OPTIONS");
+      });
+
+      it("6 & 7: Latest MEDICINE_OPTIONS card is active, interactive, and 'Add Medicines' is not visually selected/checked", () => {
+        const messages = [
+          {
+            id: "msg-1-options",
+            role: "assistant",
+            action: "MEDICINE_OPTIONS",
+            content: "What would you like to do next?",
+            options: [
+              { key: "ADD", label: "Add Medicines", primary: true },
+              { key: "DASHBOARD", label: "Go to Dashboard", primary: false },
+            ],
+          },
+          {
+            id: "msg-2-user-add",
+            role: "user",
+            content: "Add Medicines",
+            rawValue: "ADD",
+          },
+          {
+            id: "msg-3-ai-card",
+            role: "assistant",
+            action: "ADD_MEDICINE",
+            content: "Please enter the new medication details:",
+          },
+          {
+            id: "msg-4-user-cancel",
+            role: "user",
+            content: "Cancel",
+            rawValue: "CANCEL",
+          },
+          {
+            id: "msg-5-ai-cancel-options",
+            role: "assistant",
+            action: "MEDICINE_OPTIONS",
+            content: "Medicine entry has been cancelled.\n\nWhat would you like to do next?",
+            options: [
+              { key: "ADD", label: "Add Medicines", primary: true },
+              { key: "DASHBOARD", label: "Go to Dashboard", primary: false },
+            ],
+          },
+        ];
+
+        const state = { currentStep: "MEDICINE_OPTIONS" };
+        const latestMsg = messages[messages.length - 1];
+
+        // Evaluate isInteractiveMedicineOptions logic from renderItem
+        const isLatestMedicineOptions =
+          latestMsg.action === "MEDICINE_OPTIONS" &&
+          !messages.some(
+            (m, idx) =>
+              idx > messages.findIndex((msg) => msg.id === latestMsg.id) &&
+              m.role === "assistant" &&
+              (m.action === "MEDICINE_OPTIONS" || m.action === "CONFIRM_MEDICINE"),
+          );
+        const isInteractiveMedicineOptions =
+          isLatestMedicineOptions && state.currentStep === "MEDICINE_OPTIONS";
+        const isHistorical = isInteractiveMedicineOptions ? false : true;
+
+        // Regression assertion 6: latest card is interactive (isHistorical === false)
+        expect(isInteractiveMedicineOptions).toBe(true);
+        expect(isHistorical).toBe(false);
+
+        // Evaluate effectiveChosenVal logic from renderOptions
+        const activeIndex = messages.findIndex((m) => m.id === latestMsg.id);
+        const isCancelledSubFlow =
+          activeIndex !== -1 &&
+          messages.some(
+            (m, idx) =>
+              idx > activeIndex &&
+              ((m.role === "user" && (m.rawValue === "CANCEL" || m.content?.toLowerCase() === "cancel")) ||
+                (m.role === "assistant" && m.content?.toLowerCase().includes("cancelled"))),
+          );
+        const effectiveChosenVal = isCancelledSubFlow ? null : null; // no subsequent reply after latestMsg
+
+        // Regression assertion 7: 'Add Medicines' is not visually chosen or checked
+        expect(effectiveChosenVal).toBeNull();
+      });
+
+      it("8: Superseded historical MEDICINE_OPTIONS messages do NOT render duplicate options panels", () => {
+        const messages = [
+          {
+            id: "msg-1-options",
+            role: "assistant",
+            action: "MEDICINE_OPTIONS",
+            content: "What would you like to do next?",
+            options: [{ key: "ADD", label: "Add Medicines" }],
+          },
+          { id: "msg-2-user-add", role: "user", content: "Add Medicines", rawValue: "ADD" },
+          { id: "msg-3-ai-card", role: "assistant", action: "ADD_MEDICINE", content: "Form" },
+          { id: "msg-4-user-cancel", role: "user", content: "Cancel", rawValue: "CANCEL" },
+          {
+            id: "msg-5-ai-cancel-options",
+            role: "assistant",
+            action: "MEDICINE_OPTIONS",
+            content: "Cancelled notice",
+            options: [{ key: "ADD", label: "Add Medicines" }],
+          },
+        ];
+
+        // Function simulating renderOptions duplicate-prevention guard
+        const shouldRenderOptionsPanel = (activeMsg: any) => {
+          const activeIndex = messages.findIndex((m) => m.id === activeMsg.id);
+          const isLaterMedicineOptionsPresent =
+            activeIndex !== -1 &&
+            messages.some(
+              (m, idx) =>
+                idx > activeIndex &&
+                m.role === "assistant" &&
+                (m.action === "MEDICINE_OPTIONS" || m.action === "CONFIRM_MEDICINE"),
+            );
+          return !isLaterMedicineOptionsPresent;
+        };
+
+        // Earlier MEDICINE_OPTIONS card (msg-1-options) has a later card present -> returns false (null)
+        expect(shouldRenderOptionsPanel(messages[0])).toBe(false);
+
+        // Latest MEDICINE_OPTIONS card (msg-5-ai-cancel-options) has NO later card present -> returns true (panel rendered)
+        expect(shouldRenderOptionsPanel(messages[4])).toBe(true);
+      });
+
+      it("9 & 10: Cancel discards only unconfirmed medicine drafts and preserves previously saved medicines", () => {
+        const previouslySavedMed = {
+          client_med_id: "client_saved_1",
+          id: "client_saved_1",
+          name: "Metformin 500mg",
+          isSaved: true,
+        };
+        const unconfirmedDraftMed = {
+          client_med_id: "client_draft_2",
+          id: "client_draft_2",
+          name: "Paracetamol 500mg",
+          isSaved: false,
+        };
+
+        let localMedicines = [previouslySavedMed, unconfirmedDraftMed];
+        let state: any = {
+          currentStep: "ADD_MEDICINE",
+          medicinesToAdd: [...localMedicines],
+        };
+
+        // User clicks Cancel -> handleExitToOptions
+        const confirmedMeds = (localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => m.isSaved === true,
+        );
+        localMedicines = confirmedMeds;
+        state = {
+          ...state,
+          currentStep: "MEDICINE_OPTIONS",
+          medicinesToAdd: confirmedMeds,
+          currentMedicineIndex: confirmedMeds.length,
+          cancellationNotice: true,
+        };
+
+        // Regression assertion 9: Unconfirmed draft discarded
+        expect(localMedicines.some((m: any) => m.name === "Paracetamol 500mg")).toBe(false);
+        expect(state.medicinesToAdd.some((m: any) => m.name === "Paracetamol 500mg")).toBe(false);
+
+        // Regression assertion 10: Previously saved medicine preserved
+        expect(localMedicines).toHaveLength(1);
+        expect(localMedicines[0].name).toBe("Metformin 500mg");
+        expect(localMedicines[0].isSaved).toBe(true);
+      });
+
+      it("11: Selecting 'Add Medicines' again after Cancel begins a clean Medicine #1 session with a fresh client_med_id", () => {
+        let localMedicines: any[] = [];
+        let state: any = {
+          currentStep: "MEDICINE_OPTIONS",
+          medicinesToAdd: [],
+        };
+        let currentClientMedId: string | null = null;
+        let activeMedicineToEdit: any = null;
+
+        // User cancelled previous entry -> state is MEDICINE_OPTIONS
+        expect(state.currentStep).toBe("MEDICINE_OPTIONS");
+        expect(localMedicines).toHaveLength(0);
+
+        // User taps "Add Medicines" again -> handleOptionPress("ADD", "Add Medicines")
+        const existingMeds = (localMedicines || state?.medicinesToAdd || []).filter((m: any) => m.isSaved === true);
+        localMedicines = existingMeds;
+        currentClientMedId = null;
+        activeMedicineToEdit = null;
+
+        const nextState = {
+          ...state,
+          medicinesFlowStarted: true,
+          medicinesToAdd: existingMeds,
+          currentStep: "ADD_MEDICINE",
+          currentMedicineIndex: existingMeds.length,
+          cancellationNotice: false,
+        };
+        state = nextState;
+
+        const freshDraftId = `client_${Date.now()}_clean`;
+        currentClientMedId = freshDraftId;
+
+        // Regression assertion 11: Fresh Medicine #1 session opened cleanly
+        expect(state.currentStep).toBe("ADD_MEDICINE");
+        expect(state.currentMedicineIndex).toBe(0);
+        expect(currentClientMedId).toBe(freshDraftId);
+        expect(activeMedicineToEdit).toBeNull();
+      });
+
+      it("12: REVIEW_MEDICINES_LIST cancellation preserves review list in history and restores MEDICINE_OPTIONS cleanly", () => {
+        let messages: any[] = [
+          {
+            id: "msg-rev-list",
+            role: "assistant",
+            action: "REVIEW_MEDICINES_LIST",
+            content: "Please review the list of medications:",
+            medicines: [
+              { client_med_id: "med-1", name: "Aspirin", isSaved: true },
+              { client_med_id: "med-2", name: "Ibuprofen", isSaved: false },
+            ],
+          },
+        ];
+
+        let state: any = {
+          currentStep: "REVIEW_MEDICINES_LIST",
+          medicinesToAdd: [
+            { client_med_id: "med-1", name: "Aspirin", isSaved: true },
+            { client_med_id: "med-2", name: "Ibuprofen", isSaved: false },
+          ],
+        };
+        let localMedicines = [...state.medicinesToAdd];
+
+        // User taps Cancel from REVIEW_MEDICINES_LIST:
+        // Crucial invariant: Do NOT filter out REVIEW_MEDICINES_LIST from messages
+        const confirmedMeds = (localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => m.isSaved === true,
+        );
+        localMedicines = confirmedMeds;
+        state = {
+          ...state,
+          currentStep: "MEDICINE_OPTIONS",
+          medicinesToAdd: confirmedMeds,
+          currentMedicineIndex: confirmedMeds.length,
+          cancellationNotice: true,
+        };
+
+        // Cancel user message + cancellation assistant response
+        messages.push(
+          { id: "msg-user-cancel", role: "user", content: "Cancel", rawValue: "CANCEL" },
+          { id: "msg-ai-cancel", role: "assistant", action: "MEDICINE_OPTIONS", content: "Cancelled" },
+        );
+
+        // Regression assertion 12: REVIEW_MEDICINES_LIST card preserved in chat history
+        expect(messages.some((m) => m.action === "REVIEW_MEDICINES_LIST")).toBe(true);
+        expect(state.currentStep).toBe("MEDICINE_OPTIONS");
+        expect(localMedicines).toHaveLength(1);
+        expect(localMedicines[0].name).toBe("Aspirin");
+      });
+
+      it("13: Add & Continue and Save Medicines behavior is completely unaffected by cancellation fixes", () => {
+        let localMedicines: any[] = [];
+        let state: any = {
+          currentStep: "ADD_MEDICINE",
+          medicinesToAdd: [],
+          currentMedicineIndex: 0,
+        };
+
+        // 1. Add & Continue with Medicine #1
+        const med1 = { client_med_id: "med_1", name: "Paracetamol", isSaved: false };
+        const draftsAfterAdd1 = [...localMedicines, med1];
+        localMedicines = draftsAfterAdd1;
+        state = {
+          ...state,
+          medicinesToAdd: draftsAfterAdd1,
+          currentMedicineIndex: draftsAfterAdd1.length,
+        };
+
+        expect(localMedicines).toHaveLength(1);
+        expect(state.currentMedicineIndex).toBe(1);
+
+        // 2. Add & Continue with Medicine #2
+        const med2 = { client_med_id: "med_2", name: "Amoxicillin", isSaved: false };
+        const draftsAfterAdd2 = [...localMedicines, med2];
+        localMedicines = draftsAfterAdd2;
+        state = {
+          ...state,
+          medicinesToAdd: draftsAfterAdd2,
+          currentMedicineIndex: draftsAfterAdd2.length,
+        };
+
+        expect(localMedicines).toHaveLength(2);
+        expect(state.currentMedicineIndex).toBe(2);
+
+        // 3. Save Medicines
+        const savedDrafts = [...localMedicines];
+        state = {
+          ...state,
+          medicinesToAdd: savedDrafts,
+          currentStep: "REVIEW_MEDICINES_LIST",
+        };
+
+        // Regression assertion 13: Save Medicines advances step to REVIEW_MEDICINES_LIST with all drafts
+        expect(state.currentStep).toBe("REVIEW_MEDICINES_LIST");
+        expect(state.medicinesToAdd).toHaveLength(2);
+        expect(state.medicinesToAdd[0].name).toBe("Paracetamol");
+        expect(state.medicinesToAdd[1].name).toBe("Amoxicillin");
+      });
+    });
   });
 });

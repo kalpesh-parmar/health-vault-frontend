@@ -49,7 +49,7 @@ export interface AddMedicineCardProps {
   currentClientMedId?: string | null;
   setCurrentClientMedId?: (id: string | null) => void;
   onSave: (med: any) => void;
-  onAddAndContinue?: (med: any) => void;
+  onAddAndContinue?: (med: any, allDrafts?: any[]) => void;
   onDraftSync?: (updatedDrafts: any[]) => void;
   onSaveMedicines?: (allDrafts: any[]) => void;
   onExitToOptions?: () => void;
@@ -264,6 +264,64 @@ function MedicineFormFieldsWrapper({
     };
   };
 
+  const buildCurrentSnapshot = () => {
+    const dose =
+      formType === "TABLET" || formType === "CAPSULE"
+        ? { count: parseFloat(String(formCount)) || 0 }
+        : { value: parseFloat(String(formVal)) || 0, unit: formUnit };
+
+    const sortedTimes = [...selectedSlots].sort((a, b) => {
+      const [ha, ma] = a.split(":").map(Number);
+      const [hb, mb] = b.split(":").map(Number);
+      if (ha !== hb) return ha - hb;
+      return ma - mb;
+    });
+
+    const clientMedId =
+      med?.client_med_id ||
+      med?.id ||
+      generateClientMedId();
+
+    const parsedQty = parseInt(formQty.trim(), 10);
+
+    return {
+      name: formName.trim(),
+      medicationName: formName.trim(),
+      type: formType,
+      medicationType: formType,
+      dose,
+      dosePerIntake:
+        formType === "TABLET" || formType === "CAPSULE"
+          ? String(formCount)
+          : `${formVal} ${formUnit}`,
+      frequency:
+        formFreq === "ONCE"
+          ? "Once Daily"
+          : formFreq === "TWICE"
+            ? "Twice Daily"
+            : "3x Daily",
+      notes: formNotes.trim(),
+      prescribed_by: formPrescribed.trim() || null,
+      prescribedBy: formPrescribed.trim() || null,
+      refill_alert: formRefill,
+      refillAlert: formRefill,
+      total_quantity: !isNaN(parsedQty) ? parsedQty : 0,
+      totalQuantity: !isNaN(parsedQty) ? parsedQty : 0,
+      startDate: startDate ? format(startDate, "yyyy-MM-dd") : null,
+      client_med_id: clientMedId,
+      id: med?.id || clientMedId,
+      source: med?.source || "MANUAL",
+      medicationSchedule: sortedTimes,
+      foodFrequency: formFoodFreq,
+      ongoing: true,
+      selected: true,
+      isSaved: med?.isSaved || false,
+      dbId: med?.dbId || null,
+    };
+  };
+
+  const isConfirmedMed = !isEditingLocal && (med?.isSaved === true || !!med?.dbId);
+
   const handleAddAndContinuePress = () => {
     const valid = validateAndBuildMed();
     if (!valid) return;
@@ -290,10 +348,17 @@ function MedicineFormFieldsWrapper({
 
   const handlePrevPress = () => {
     const currentName = formName.trim();
-    if (currentName && currentIndex < totalDraftsCount) {
-      const valid = validateAndBuildMed();
-      if (valid) {
-        onPrev(valid);
+    if (currentName) {
+      if (currentIndex < totalDraftsCount) {
+        const valid = validateAndBuildMed();
+        if (valid) {
+          onPrev(valid);
+          return;
+        }
+      } else {
+        // Active uncommitted new draft at index totalDraftsCount: capture snapshot
+        const snapshot = buildCurrentSnapshot();
+        onPrev(snapshot);
         return;
       }
     }
@@ -348,19 +413,36 @@ function MedicineFormFieldsWrapper({
             />
           </TouchableOpacity>
 
-          <Text
-            style={[
-              styles.medCardTitle,
-              {
-                color: theme.colors.textPrimary,
-                marginBottom: 0,
-                fontSize: 16,
-                fontWeight: "700",
-              },
-            ]}
-          >
-            {t("medicineNumber", { n: currentIndex + 1 })}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text
+              style={[
+                styles.medCardTitle,
+                {
+                  color: theme.colors.textPrimary,
+                  marginBottom: 0,
+                  fontSize: 16,
+                  fontWeight: "700",
+                },
+              ]}
+            >
+              {t("medicineNumber", { n: currentIndex + 1 })}
+            </Text>
+            {isConfirmedMed && (
+              <View
+                style={{
+                  marginLeft: 8,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                  backgroundColor: isDark ? "#064e3b" : "#d1fae5",
+                }}
+              >
+                <Text style={{ fontSize: 10, fontWeight: "700", color: isDark ? "#6ee7b7" : "#047857" }}>
+                  {t("confirmed") || "Saved"}
+                </Text>
+              </View>
+            )}
+          </View>
 
           <TouchableOpacity
             disabled={!canGoRight || readOnly}
@@ -433,7 +515,7 @@ function MedicineFormFieldsWrapper({
         isDark={isDark}
         theme={theme}
         preferredLang={preferredLang}
-        readOnly={readOnly}
+        readOnly={readOnly || isConfirmedMed}
         isInBottomSheet={isInBottomSheet}
         errors={localErrors}
       />
@@ -801,6 +883,9 @@ export function AddMedicineCard({
     return generateClientMedId(initialMedicines);
   });
 
+  // Temporary buffer for uncommitted new draft at currentIndex = drafts.length
+  const [wipNewDraft, setWipNewDraft] = useState<any | null>(null);
+
   // Track incoming initialMedicines IDs key during render to adjust state if props change externally
   const [prevInitialIdsKey, setPrevInitialIdsKey] = useState<string>(() =>
     (initialMedicines || [])
@@ -820,6 +905,7 @@ export function AddMedicineCard({
       // Cancel -> reset
       setDrafts([]);
       setCurrentIndex(0);
+      setWipNewDraft(null);
       setNewDraftId(generateClientMedId([]));
     } else {
       const incomingDeduped = deduplicateDrafts(initialMedicines);
@@ -888,27 +974,32 @@ export function AddMedicineCard({
   const activeMed =
     currentIndex < drafts.length
       ? drafts[currentIndex]
-      : {
-        client_med_id: newDraftId,
-        id: newDraftId,
-      };
+      : (wipNewDraft || {
+          client_med_id: newDraftId,
+          id: newDraftId,
+        });
 
   const canGoLeft = !isEditingLocal && currentIndex > 0;
-  const canGoRight = !isEditingLocal && currentIndex < drafts.length - 1;
+  const canGoRight = !isEditingLocal && currentIndex < drafts.length;
 
   const handlePrev = (currentValidData: any) => {
     if (currentIndex <= 0) return;
-    if (currentValidData && currentIndex < drafts.length) {
-      const updated = [...drafts];
-      updated[currentIndex] = {
-        ...drafts[currentIndex],
-        ...currentValidData,
-        client_med_id: drafts[currentIndex].client_med_id || currentValidData.client_med_id,
-        id: drafts[currentIndex].id || currentValidData.id,
-      };
-      const deduped = deduplicateDrafts(updated);
-      setDrafts(deduped);
-      onDraftSync?.(deduped);
+    if (currentValidData) {
+      if (currentIndex < drafts.length) {
+        const updated = [...drafts];
+        updated[currentIndex] = {
+          ...drafts[currentIndex],
+          ...currentValidData,
+          client_med_id: drafts[currentIndex].client_med_id || currentValidData.client_med_id,
+          id: drafts[currentIndex].id || currentValidData.id,
+        };
+        const deduped = deduplicateDrafts(updated);
+        setDrafts(deduped);
+        onDraftSync?.(deduped);
+      } else if (currentIndex === drafts.length) {
+        // User was on new uncommitted draft and moved left: save current data into wipNewDraft
+        setWipNewDraft(currentValidData);
+      }
     }
     const nextIdx = currentIndex - 1;
     setCurrentIndex(nextIdx);
@@ -919,7 +1010,7 @@ export function AddMedicineCard({
   };
 
   const handleNext = (currentValidData: any) => {
-    if (currentIndex >= drafts.length - 1) return;
+    if (currentIndex >= drafts.length) return;
     if (currentValidData && currentIndex < drafts.length) {
       const updated = [...drafts];
       updated[currentIndex] = {
@@ -934,13 +1025,16 @@ export function AddMedicineCard({
     }
     const nextIdx = currentIndex + 1;
     setCurrentIndex(nextIdx);
-    const targetMed = nextIdx < drafts.length ? drafts[nextIdx] : null;
+    const targetMed = nextIdx < drafts.length ? drafts[nextIdx] : (wipNewDraft || null);
     if (targetMed) {
       setCurrentClientMedId?.(targetMed.client_med_id || targetMed.id || null);
+    } else {
+      setCurrentClientMedId?.(newDraftId);
     }
   };
 
   const handleAddAndContinueAction = (validMed: any) => {
+    setWipNewDraft(null);
     let updated = [...drafts];
     if (currentIndex < updated.length) {
       updated[currentIndex] = validMed;
@@ -959,7 +1053,7 @@ export function AddMedicineCard({
     onDraftSync?.(updated);
 
     if (onAddAndContinue) {
-      onAddAndContinue(validMed);
+      onAddAndContinue(validMed, updated);
     }
 
     // Generate a fresh unique client_med_id for the next blank form
@@ -972,6 +1066,7 @@ export function AddMedicineCard({
   };
 
   const handleSaveMedicinesAction = (validMed?: any) => {
+    setWipNewDraft(null);
     if (isEditingLocal) {
       if (validMed) {
         onSave(validMed);
@@ -1009,6 +1104,7 @@ export function AddMedicineCard({
   };
 
   const handleCancelAction = () => {
+    setWipNewDraft(null);
     if (isEditingLocal) {
       onCancel?.();
       return;

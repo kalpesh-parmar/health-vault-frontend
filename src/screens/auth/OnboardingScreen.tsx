@@ -256,10 +256,6 @@ export default function OnboardingScreen() {
   }, [isOffline]);
 
   useEffect(() => {
-    selectedFileRef.current = selectedFile;
-  }, [selectedFile]);
-
-  useEffect(() => {
     uploadStateRef.current = uploadState;
   }, [uploadState]);
 
@@ -271,6 +267,11 @@ export default function OnboardingScreen() {
     size?: number;
     fileType: "pdf" | "image" | "document";
   } | null>(null);
+
+  useEffect(() => {
+    selectedFileRef.current = selectedFile;
+  }, [selectedFile]);
+
   const [validationDialogVisible, setValidationDialogVisible] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -312,6 +313,7 @@ export default function OnboardingScreen() {
   const [currentClientMedId, setCurrentClientMedId] = useState<string | null>(
     null,
   );
+  const [medicineCardMode, setMedicineCardMode] = useState<"default" | "wizard" | "review">("default");
 
   // Synchronize localMedicines with backend state when it changes (guarded by content key to avoid unnecessary re-renders)
   useEffect(() => {
@@ -332,6 +334,7 @@ export default function OnboardingScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const uploadSheetRef = useRef<any>(null);
+  const pendingDraftSyncRef = useRef<Promise<any> | null>(null);
 
   // Scroll to end when messages length changes
   useEffect(() => {
@@ -1847,6 +1850,48 @@ export default function OnboardingScreen() {
     sendMessage("MANUAL", newState);
   };
 
+  const handleDraftSync = async (updatedDrafts: any[]) => {
+    const uniqueDrafts = deduplicateDrafts(updatedDrafts);
+    setLocalMedicines(uniqueDrafts);
+    const nextState = {
+      ...state,
+      medicinesToAdd: uniqueDrafts,
+      currentMedicineIndex: uniqueDrafts.length,
+    };
+    setState((prev) => ({
+      ...prev,
+      medicinesToAdd: uniqueDrafts,
+      currentMedicineIndex: uniqueDrafts.length,
+    }));
+    const syncPromise = (async () => {
+      try {
+        await apiClient.post(
+          "/v1/onboarding/chat",
+          {
+            message: JSON.stringify({
+              action: "DRAFT_SYNC",
+              medicinesToAdd: uniqueDrafts,
+            }),
+            state: nextState,
+            isSilent: true,
+            stream: false,
+          },
+          { timeout: 30000 },
+        );
+      } catch (e) {
+        console.warn("[Onboarding] Silent draft sync failed:", e);
+      }
+    })();
+    pendingDraftSyncRef.current = syncPromise;
+    try {
+      await syncPromise;
+    } finally {
+      if (pendingDraftSyncRef.current === syncPromise) {
+        pendingDraftSyncRef.current = null;
+      }
+    }
+  };
+
   const renderOptions = (activeMsg: Message, isHistorical: boolean = false) => {
     const preferredLang = state.preferredLanguage || "english";
     if (preferredLang) {
@@ -1936,6 +1981,11 @@ export default function OnboardingScreen() {
         if (activeMsg.action === "ASK_ALLERGIES") {
           if (value === "SKIP") {
             newState.allergiesSkipped = true;
+          } else {
+            newState.existingUserData = {
+              ...newState.existingUserData,
+              allergies: [value],
+            };
           }
           setState(newState);
           sendMessage(value, newState, label);
@@ -2188,7 +2238,7 @@ export default function OnboardingScreen() {
           : activeMedicineToEdit || activeMsg.medicine) || STATIC_EMPTY_MED_OBJ;
       const isEditingLocal = !isHistorical && !!activeMedicineToEdit;
 
-      const handleSave = (updatedMed: any) => {
+      const handleSave = async (updatedMed: any) => {
         if (isEditingLocal) {
           const updatedMeds = localMedicines.map((m) =>
             (m.client_med_id || m.id) === (med.client_med_id || med.id)
@@ -2234,6 +2284,11 @@ export default function OnboardingScreen() {
               .filter((m) => m.id !== activeMsg.id),
           );
         } else {
+          if (pendingDraftSyncRef.current) {
+            try {
+              await pendingDraftSyncRef.current;
+            } catch {}
+          }
           setCurrentClientMedId(null);
           const displayLabel =
             preferredLang === "gujarati" || preferredLang === "gu"
@@ -2258,31 +2313,12 @@ export default function OnboardingScreen() {
         }
       };
 
-      const handleDraftSync = async (updatedDrafts: any[]) => {
-        const uniqueDrafts = deduplicateDrafts(updatedDrafts);
-        setLocalMedicines(uniqueDrafts);
-        const updatedState = { ...state, medicinesToAdd: uniqueDrafts };
-        setState(updatedState);
-        try {
-          await apiClient.post(
-            "/v1/onboarding/chat",
-            {
-              message: JSON.stringify({
-                action: "DRAFT_SYNC",
-                medicinesToAdd: uniqueDrafts,
-              }),
-              state: updatedState,
-              isSilent: true,
-              stream: false,
-            },
-            { timeout: 30000 },
-          );
-        } catch (e) {
-          console.warn("[Onboarding] Silent draft sync failed:", e);
+      const handleSaveMedicines = async (allDrafts: any[]) => {
+        if (pendingDraftSyncRef.current) {
+          try {
+            await pendingDraftSyncRef.current;
+          } catch {}
         }
-      };
-
-      const handleSaveMedicines = (allDrafts: any[]) => {
         const uniqueDrafts = deduplicateDrafts(allDrafts);
         setLocalMedicines(uniqueDrafts);
         const nextState = {
@@ -2303,18 +2339,37 @@ export default function OnboardingScreen() {
         );
       };
 
-      const handleExitToOptions = () => {
+      const handleAddAndContinue = (newMed: any, allDrafts?: any[]) => {
+        const uniqueDrafts = deduplicateDrafts(allDrafts || [...localMedicines, newMed]);
+        setLocalMedicines(uniqueDrafts);
+        const updatedState = {
+          ...state,
+          medicinesToAdd: uniqueDrafts,
+          currentMedicineIndex: uniqueDrafts.length,
+        };
+        setState(updatedState);
+        handleDraftSync(uniqueDrafts);
+      };
+
+      const handleExitToOptions = async () => {
+        if (pendingDraftSyncRef.current) {
+          try {
+            await pendingDraftSyncRef.current;
+          } catch {}
+        }
         setActiveMedicineToEdit(null);
         setCurrentClientMedId(null);
-        setLocalMedicines([]);
-        setMessages((prev) =>
-          prev.filter((m) => m.id !== activeMsg.id && m.action !== "ADD_MEDICINE"),
+        setMedicineCardMode("default");
+        const confirmedMeds = (localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => m.isSaved === true,
         );
+        setLocalMedicines(confirmedMeds);
+        // Preserve ADD_MEDICINE in chat history: do NOT filter out activeMsg or ADD_MEDICINE
         const cancelState = {
           ...state,
           currentStep: "MEDICINE_OPTIONS",
-          medicinesToAdd: [],
-          currentMedicineIndex: 0,
+          medicinesToAdd: confirmedMeds,
+          currentMedicineIndex: confirmedMeds.length,
           cancellationNotice: true,
         };
         setState(cancelState);
@@ -2333,6 +2388,7 @@ export default function OnboardingScreen() {
           currentClientMedId={currentClientMedId}
           setCurrentClientMedId={setCurrentClientMedId}
           onSave={handleSave}
+          onAddAndContinue={handleAddAndContinue}
           onDraftSync={
             !isHistorical && !isEditingLocal ? handleDraftSync : undefined
           }
@@ -2351,10 +2407,18 @@ export default function OnboardingScreen() {
     }
 
     if (activeMsg.action === "REVIEW_MEDICINES_LIST") {
-      const handleConfirm = (checkedMeds: string[]) => {
-        const selectedMedicineObjects = deduplicateDrafts(localMedicines || []).filter((m) =>
-          checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
-        );
+      const handleConfirm = async (checkedMeds: string[], formattedMeds?: any[]) => {
+        if (pendingDraftSyncRef.current) {
+          try {
+            await pendingDraftSyncRef.current;
+          } catch {}
+        }
+        const selectedMedicineObjects =
+          formattedMeds && formattedMeds.length > 0
+            ? formattedMeds
+            : deduplicateDrafts(localMedicines || []).filter(
+                (m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
+              );
         const uniqueSelected = deduplicateDrafts(selectedMedicineObjects);
         const newState = {
           ...state,
@@ -2366,18 +2430,22 @@ export default function OnboardingScreen() {
               : deduplicateDrafts(localMedicines || state.medicinesToAdd),
         };
         setState(newState);
+        setLocalMedicines([]);
+        setActiveMedicineToEdit(null);
+        setCurrentClientMedId(null);
+        setMedicineCardMode("default");
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === activeMsg.id
               ? {
-                ...msg,
-                medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
-                  (m) => ({
-                    ...m,
-                    selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
-                  }),
-                ),
-              }
+                  ...msg,
+                  medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
+                    (m) => ({
+                      ...m,
+                      selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
+                    }),
+                  ),
+                }
               : msg,
           ),
         );
@@ -2390,21 +2458,16 @@ export default function OnboardingScreen() {
           uiT("confirmSelection"),
         );
       };
+
       const handleAddNew = () => {
         const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
         setLocalMedicines(currentMeds);
-        const newState = {
-          ...state,
-          medicinesFlowStarted: true,
-          medicinesToAdd: currentMeds,
-          currentStep: "ADD_MEDICINE",
-          currentMedicineIndex: currentMeds.length,
-          cancellationNotice: false,
-        };
-        setState(newState);
-        sendMessage(JSON.stringify({ addNew: true, medicines: currentMeds }), newState, uiT("addNew"));
+        setActiveMedicineToEdit(null);
+        setMedicineCardMode("wizard");
       };
+
       const handleSkipAll = () => {
+        setMedicineCardMode("default");
         const newState = {
           ...state,
           medicinesFlowStarted: true,
@@ -2413,17 +2476,103 @@ export default function OnboardingScreen() {
         setState(newState);
         sendMessage(JSON.stringify({ skipAll: true }), newState, uiT("skipAll"));
       };
+
       const handleEdit = (med: any) => {
         setActiveMedicineToEdit(med);
-        const newMsg: Message = {
-          id: `ai-${Date.now()}`,
-          role: "assistant",
-          content: uiT("editMedicationDetails"),
-          action: "EDIT_MEDICINE",
-          medicine: med,
-        };
-        setMessages((prev) => [...prev, newMsg]);
+        setMedicineCardMode("wizard");
       };
+
+      const handleExitToOptions = async () => {
+        if (pendingDraftSyncRef.current) {
+          try {
+            await pendingDraftSyncRef.current;
+          } catch {}
+        }
+        setActiveMedicineToEdit(null);
+        setCurrentClientMedId(null);
+        setMedicineCardMode("default");
+        const confirmedMeds = (localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => m.isSaved === true,
+        );
+        setLocalMedicines(confirmedMeds);
+        // Preserve REVIEW_MEDICINES_LIST in chat history: do NOT filter out activeMsg or REVIEW_MEDICINES_LIST
+        const cancelState = {
+          ...state,
+          currentStep: "MEDICINE_OPTIONS",
+          medicinesToAdd: confirmedMeds,
+          currentMedicineIndex: confirmedMeds.length,
+          cancellationNotice: true,
+        };
+        setState(cancelState);
+        sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel");
+      };
+
+      if (!isHistorical && medicineCardMode === "wizard") {
+        return (
+          <AddMedicineCard
+            key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
+            med={activeMedicineToEdit || null}
+            initialMedicines={memoizedInitialMedicines}
+            isEditingLocal={!!activeMedicineToEdit}
+            preferredLang={preferredLang}
+            isDark={isDark}
+            theme={theme}
+            currentClientMedId={currentClientMedId}
+            setCurrentClientMedId={setCurrentClientMedId}
+            onSave={(updatedMed) => {
+              if (activeMedicineToEdit) {
+                const updatedMeds = localMedicines.map((m) =>
+                  (m.client_med_id || m.id) === (activeMedicineToEdit.client_med_id || activeMedicineToEdit.id)
+                    ? {
+                        ...m,
+                        ...updatedMed,
+                        subtitle:
+                          updatedMed.type === "TABLET" || updatedMed.type === "CAPSULE"
+                            ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
+                            : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
+                      }
+                    : m,
+                );
+                setLocalMedicines(updatedMeds);
+                setState((prev) => ({ ...prev, medicinesToAdd: updatedMeds }));
+                handleDraftSync(updatedMeds);
+              }
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            onAddAndContinue={(newMed: any, allDrafts?: any[]) => {
+              const uniqueDrafts = deduplicateDrafts(allDrafts || [...localMedicines, newMed]);
+              setLocalMedicines(uniqueDrafts);
+              setState((prev) => ({
+                ...prev,
+                medicinesToAdd: uniqueDrafts,
+                currentMedicineIndex: uniqueDrafts.length,
+              }));
+              handleDraftSync(uniqueDrafts);
+            }}
+            onDraftSync={handleDraftSync}
+            onSaveMedicines={(allDrafts) => {
+              const uniqueDrafts = deduplicateDrafts(allDrafts);
+              setLocalMedicines(uniqueDrafts);
+              setState((prev) => ({ ...prev, medicinesToAdd: uniqueDrafts }));
+              handleDraftSync(uniqueDrafts);
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            onExitToOptions={() => {
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            onCancel={() => {
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            readOnly={false}
+            chosenVal={null}
+            chosenLabel={null}
+          />
+        );
+      }
 
       return (
         <ReviewMedicinesListCard
@@ -2438,6 +2587,7 @@ export default function OnboardingScreen() {
           onAddNew={handleAddNew}
           onSkipAll={handleSkipAll}
           onEdit={handleEdit}
+          onCancel={!isHistorical ? handleExitToOptions : undefined}
           readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -2528,16 +2678,43 @@ export default function OnboardingScreen() {
       activeMsg.action === "MEDICINE_OPTIONS" ||
       activeMsg.action === "CONFIRM_MEDICINE"
     ) {
+      const activeIndex = messages.findIndex((m) => m.id === activeMsg.id);
+      const isLaterMedicineOptionsPresent =
+        activeIndex !== -1 &&
+        messages.some(
+          (m, idx) =>
+            idx > activeIndex &&
+            m.role === "assistant" &&
+            (m.action === "MEDICINE_OPTIONS" || m.action === "CONFIRM_MEDICINE"),
+        );
+      if (isLaterMedicineOptionsPresent) {
+        return null;
+      }
+
+      const isCancelledSubFlow =
+        activeIndex !== -1 &&
+        messages.some(
+          (m, idx) =>
+            idx > activeIndex &&
+            ((m.role === "user" &&
+              (m.rawValue === "CANCEL" ||
+                m.content?.toLowerCase() === "cancel")) ||
+              (m.role === "assistant" &&
+                m.content?.toLowerCase().includes("cancelled"))),
+        );
+      const effectiveChosenVal = isCancelledSubFlow ? null : chosenVal;
+      const effectiveChosenLabel = isCancelledSubFlow ? null : chosenLabel;
+
       return (
         <MedicineOptionsPanel
           optionsList={activeMsg.options || []}
           isDark={isDark}
           theme={theme}
           onOptionPress={handleOptionPress}
-          readOnly={isHistorical}
+          readOnly={isHistorical && !isCancelledSubFlow}
           loading={loading}
-          chosenVal={chosenVal}
-          chosenLabel={chosenLabel}
+          chosenVal={effectiveChosenVal}
+          chosenLabel={effectiveChosenLabel}
         />
       );
     }
@@ -2873,7 +3050,20 @@ export default function OnboardingScreen() {
                   false,
                 );
                 const isAnswered = chosenVal !== null || chosenLabel !== null;
-                const isHistorical = isAnswered || !isLast;
+                const isLatestMedicineOptions =
+                  item.action === "MEDICINE_OPTIONS" &&
+                  !messages.some(
+                    (m, idx) =>
+                      idx > messages.findIndex((msg) => msg.id === item.id) &&
+                      m.role === "assistant" &&
+                      (m.action === "MEDICINE_OPTIONS" || m.action === "CONFIRM_MEDICINE"),
+                  );
+                const isInteractiveMedicineOptions =
+                  isLatestMedicineOptions && state.currentStep === "MEDICINE_OPTIONS";
+                const isHistorical =
+                  isInteractiveMedicineOptions
+                    ? false
+                    : isAnswered || !isLast;
                 const options = renderOptions(item, isHistorical);
                 const isJson =
                   item.content && item.content.trim().startsWith("{");
