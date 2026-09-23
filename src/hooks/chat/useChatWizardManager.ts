@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Toast from "react-native-toast-message";
+import { useQueryClient } from "@tanstack/react-query";
 import apiClient from "../../services/apiClient";
 import { MedicationReviewService } from "../../services/medicationReviewService";
 import {
@@ -54,6 +55,7 @@ export const useChatWizardManager = ({
   setIsOnboardingCompleted,
   setPendingStep,
 }: UseChatWizardManagerProps) => {
+  const queryClient = useQueryClient();
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [isConfirmingMeds, setIsConfirmingMeds] = useState(false);
   const [medicineToEdit, setMedicineToEdit] = useState<ExtractedMedicine | null>(null);
@@ -315,9 +317,9 @@ export const useChatWizardManager = ({
           prev.map((msg) =>
             msg.id === checkingMsgId
               ? {
-                  ...msg,
-                  text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed`,
-                }
+                ...msg,
+                text: `Checking your medicines for duplicates... ${i + 1} / ${total} completed`,
+              }
               : msg
           )
         );
@@ -338,9 +340,9 @@ export const useChatWizardManager = ({
           prev.map((msg) =>
             msg.id === checkingMsgId
               ? {
-                  ...msg,
-                  text: `I detected duplicate conflicts with your existing medications. Let's resolve them.`,
-                }
+                ...msg,
+                text: `I detected duplicate conflicts with your existing medications. Let's resolve them.`,
+              }
               : msg
           )
         );
@@ -364,9 +366,9 @@ export const useChatWizardManager = ({
           prev.map((msg) =>
             msg.id === checkingMsgId
               ? {
-                  ...msg,
-                  text: `No duplicates found. All medicines are ready to be added.`,
-                }
+                ...msg,
+                text: `No duplicates found. All medicines are ready to be added.`,
+              }
               : msg
           )
         );
@@ -473,7 +475,7 @@ export const useChatWizardManager = ({
         } else if (c.resolvedAction === "merge") {
           const payload =
             c.extractedMedicine.id === currentConflict.extractedMedicine.id &&
-            mergedPayload
+              mergedPayload
               ? mergedPayload
               : buildMedicationPayload(c.extractedMedicine);
           nextMergeList.push({
@@ -678,14 +680,41 @@ export const useChatWizardManager = ({
       return;
     }
 
-    if (
-      option?.actionType === "ADD_MEDICINE" ||
-      normalizedKey === "ADD_MEDICINE" ||
-      option?.value === "ADD_MEDICINE"
-    ) {
-      navigation.navigate("MEDICATION");
-      isSendingRef.current = false;
-      setIsSending(false);
+    if (option?.value?.medicine) {
+      const medToSave = option.value.medicine;
+      const medName = medToSave.name || medToSave.medicationName || "Medication";
+      try {
+        const payload = buildMedicationPayload(medToSave);
+        await addMedication(payload);
+        queryClient.invalidateQueries({ queryKey: ["medications"] });
+
+        const confirmMsg: ChatMessage = {
+          id: `ai-med-saved-${Date.now()}`,
+          role: "ai",
+          text: `Medication "${medName}" has been saved successfully.`,
+          action: "NORMAL_CHAT",
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, confirmMsg]);
+        Toast.show({
+          type: "success",
+          text1: "Medication Saved",
+          text2: `${medName} added successfully.`,
+        });
+      } catch (err: any) {
+        console.error("Failed to save medication in chat:", err);
+        Toast.show({
+          type: "error",
+          text1: "Save Failed",
+          text2:
+            err?.response?.data?.message ||
+            err?.message ||
+            "Failed to save medication.",
+        });
+      } finally {
+        isSendingRef.current = false;
+        setIsSending(false);
+      }
       return;
     }
 
@@ -693,6 +722,7 @@ export const useChatWizardManager = ({
       const payload: any = {
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
+        fromScreen: "Dashboard",
         history: messages.map((m) => ({
           role: m.role === "ai" ? "assistant" : "user",
           content: m.text,
@@ -713,6 +743,13 @@ export const useChatWizardManager = ({
         }
         payload.actionData = sanitizedData;
         payload.message = "CONFIRM_MEDICINES";
+      } else if (
+        option?.actionType === "ADD_MEDICINE" ||
+        normalizedKey === "ADD_MEDICINE" ||
+        option?.value === "ADD_MEDICINE"
+      ) {
+        payload.actionType = "ADD_MEDICINE";
+        payload.message = "ADD_MEDICINE";
       } else {
         payload.message = normalizedKey;
         if (normalizedKey === "ASK_REPORT") {
@@ -722,14 +759,16 @@ export const useChatWizardManager = ({
 
       const res = await apiClient.post("/v1/onboarding/chat", payload);
       const resData = res.data?.data;
-      if (resData?.reply) {
+      if (resData && (resData.reply || resData.message || resData.actionType || resData.action)) {
+        const replyText = resData.reply || resData.message || "";
         const aiMsg: ChatMessage = {
           id: `ai-opt-res-${Date.now()}`,
           role: "ai",
-          text: resData.reply,
+          text: replyText,
           action: resData.actionType || resData.action || "NORMAL_CHAT",
           options: resData.options || [],
           medicines: resData.medicines || [],
+          medicine: resData.medicine || null,
           document: resData.document || null,
           documentSummary: resData.documentSummary || null,
           documents: resData.documents || [],
@@ -756,9 +795,9 @@ export const useChatWizardManager = ({
           null;
         const isNowCompleted = Boolean(
           resData?.onboardingState?.isOnboardingCompleted ??
-            resData?.state?.isOnboardingCompleted ??
-            resData?.isOnboardingCompleted ??
-            (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE")
+          resData?.state?.isOnboardingCompleted ??
+          resData?.isOnboardingCompleted ??
+          (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE")
         );
         setIsOnboardingCompleted(isNowCompleted);
         setPendingStep(isNowCompleted ? null : nextPendingStep);

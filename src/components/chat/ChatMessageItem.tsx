@@ -5,6 +5,7 @@ import { formatUTCDateTime } from "../../utils/dateFormatter";
 import { MessageBubble } from "./MessageBubble";
 import { ResolveProfileSourceCard } from "./widgets/ResolveProfileSourceCard";
 import { AskUploadOrSkipCard } from "./widgets/AskUploadOrSkipCard";
+import { AskAllergiesCard } from "./widgets/AskAllergiesCard";
 import { AddMedicineCard } from "./widgets/AddMedicineCard";
 import { ReviewMedicinesListCard } from "./widgets/ReviewMedicinesListCard";
 import { ConfirmMedicineCard } from "./widgets/ConfirmMedicineCard";
@@ -71,6 +72,7 @@ interface ChatMessageItemProps {
   setChatWizardState: React.Dispatch<React.SetStateAction<any>>;
   onViewFullReport?: (doc: any) => void;
   onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
+  isOnboardingCompleted?: boolean;
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
@@ -99,6 +101,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   setChatWizardState,
   onViewFullReport,
   onRetryDocument,
+  isOnboardingCompleted,
 }) => {
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
@@ -158,7 +161,18 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   const { chosenVal, chosenLabel } = findHistoricalUserReply(mergedMessages, item.id, true);
   const isAnswered = chosenVal !== null || chosenLabel !== null;
   const isLatest = isLatestActiveMessage(item.id);
-  const isHistorical = isAnswered || !isLatest;
+  const isHistorical =
+    isAnswered ||
+    !isLatest ||
+    (Boolean(onboardingSessionId || isOnboardingCompleted) &&
+      (item.action === "ASK_BLOOD_GROUP" ||
+        item.action === "ASK_ALLERGIES" ||
+        item.action === "ASK_LANGUAGE" ||
+        item.action === "ASK_GENDER" ||
+        item.action === "ASK_DOB" ||
+        item.action === "RESOLVE_PROFILE_SOURCE" ||
+        item.action === "ASK_UPLOAD_OR_SKIP" ||
+        item.action === "MEDICINE_OPTIONS"));
   const isReadOnly = isHistorical || Boolean((item as any).isConfirmed);
 
   const isComplexStep =
@@ -179,6 +193,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     item.action === "MEDICINE_SUMMARY" ||
     item.action === "MEDICINE_REVIEW_ACCORDION" ||
     item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE" ||
+    item.action === "ASK_ALLERGIES" ||
     item.action === "ASK_REPORT";
 
   const isExcludedStep =
@@ -235,7 +250,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         const questions =
           item.suggestedQuestions && item.suggestedQuestions.length > 0
             ? item.suggestedQuestions
-            : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+            : SUGGESTED_QUESTIONS_I18N.english.document;
 
         const isStructured = Boolean(
           doc.patientDetails ||
@@ -332,6 +347,21 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           setState={() => { }}
           sendMessage={() => { }}
           handleDocumentUpload={() => { }}
+          isHistorical={isHistorical}
+          chosenVal={chosenVal}
+          chosenLabel={chosenLabel}
+        />,
+      );
+    }
+    if (item.action === "ASK_ALLERGIES") {
+      return renderAssistantPrompt(
+        <AskAllergiesCard
+          activeMsg={item}
+          preferredLang={preferredLang}
+          isDark={isDark}
+          theme={theme}
+          sendMessage={() => { }}
+          state={(item as any).onboardingState || {}}
           isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -680,21 +710,24 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       {showChips && (
         <View
           style={styles.optionsWrapper}
-          pointerEvents={isHistorical || isLoadingResults || isConfirmingMeds ? "none" : "auto"}
+          pointerEvents={isHistorical || isLoadingResults || isConfirmingMeds || isOnboardingCompleted ? "none" : "auto"}
         >
           <View style={styles.chipsContainer}>
             {item.options?.map((opt: any, idx: number) => {
               return (
                 <TouchableOpacity
                   key={idx}
-                  disabled={isHistorical || isLoadingResults || isConfirmingMeds}
-                  onPress={() => handleGenericOptionPress(opt, opt.label)}
+                  disabled={isHistorical || isLoadingResults || isConfirmingMeds || isOnboardingCompleted}
+                  onPress={() => {
+                    if (isHistorical || isLoadingResults || isConfirmingMeds || isOnboardingCompleted) return;
+                    handleGenericOptionPress(opt, opt.label);
+                  }}
                   style={[
                     styles.chipBtn,
                     {
                       backgroundColor: isDark ? "#1e2d2f" : "#ccfbf1",
                       borderColor: isDark ? "#2d4d4f" : "#99f6e4",
-                      opacity: isHistorical || isLoadingResults || isConfirmingMeds ? 0.6 : 1,
+                      opacity: isHistorical || isLoadingResults || isConfirmingMeds || isOnboardingCompleted ? 0.6 : 1,
                     },
                   ]}
                 >

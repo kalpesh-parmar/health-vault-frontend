@@ -170,7 +170,7 @@ export const useChatSession = ({
           .then((res) => {
             setSessions(res.data?.data?.items || res.data?.items || []);
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     };
 
@@ -255,17 +255,17 @@ export const useChatSession = ({
 
       const completedFromState = Boolean(
         resumableState?.isOnboardingCompleted ||
-          resumableState?.currentStep === "POST_ONBOARDING" ||
-          resumableState?.currentStep === "COMPLETE" ||
-          resolvedPendingStep === "POST_ONBOARDING" ||
-          resolvedPendingStep === "COMPLETE"
+        resumableState?.currentStep === "POST_ONBOARDING" ||
+        resumableState?.currentStep === "COMPLETE" ||
+        resolvedPendingStep === "POST_ONBOARDING" ||
+        resolvedPendingStep === "COMPLETE"
       );
       const completedFromHistory = Array.isArray(historyItems)
         ? historyItems.some((dbMsg: any) => {
-            const action =
-              dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
-            return action === "POST_ONBOARDING" || action === "COMPLETE";
-          })
+          const action =
+            dbMsg?.metadata?.action || dbMsg?.metadata?.actionType;
+          return action === "POST_ONBOARDING" || action === "COMPLETE";
+        })
         : false;
       const isComplete = completedFromState || completedFromHistory;
       setIsOnboardingCompleted(isComplete);
@@ -543,10 +543,10 @@ export const useChatSession = ({
             null;
           const isNowCompleted = Boolean(
             resData?.onboardingState?.isOnboardingCompleted ??
-              resData?.state?.isOnboardingCompleted ??
-              resData?.isOnboardingCompleted ??
-              (nextPendingStep === "POST_ONBOARDING" ||
-                nextPendingStep === "COMPLETE")
+            resData?.state?.isOnboardingCompleted ??
+            resData?.isOnboardingCompleted ??
+            (nextPendingStep === "POST_ONBOARDING" ||
+              nextPendingStep === "COMPLETE")
           );
           setIsOnboardingCompleted(isNowCompleted);
           setPendingStep(isNowCompleted ? null : nextPendingStep);
@@ -609,11 +609,10 @@ export const useChatSession = ({
   }, [messages]);
 
   const suggestedQuestions = useMemo(() => {
-    const langKey = preferredLang || "english";
-    const dict =
-      SUGGESTED_QUESTIONS_I18N[langKey] || SUGGESTED_QUESTIONS_I18N.english;
+    // Dashboard chatbot suggested question chips must unconditionally remain in English
+    const dict = SUGGESTED_QUESTIONS_I18N.english;
     return selectedDocument ? dict.document : dict.general;
-  }, [preferredLang, selectedDocument]);
+  }, [selectedDocument]);
 
   const mergedMessages = useMemo(() => {
     const liveNewestFirst = [...messages].reverse();

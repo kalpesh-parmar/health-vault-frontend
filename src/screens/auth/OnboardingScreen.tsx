@@ -71,6 +71,7 @@ import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOpti
 import { ResolveProfileSourceCard } from "../../components/chat/widgets/ResolveProfileSourceCard";
 import { I18N_ONBOARDING_UI as ONBOARDING_I18N } from "../../components/chat/widgets/OnboardingI18n";
 import { AskUploadOrSkipCard } from "../../components/chat/widgets/AskUploadOrSkipCard";
+import { AskAllergiesCard } from "../../components/chat/widgets/AskAllergiesCard";
 import { findHistoricalUserReply } from "../../components/chat/widgets/HistoricalChips";
 import { DocumentProcessingModal } from "../../components/chat/widgets/DocumentProcessingModal";
 import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
@@ -530,6 +531,16 @@ export default function OnboardingScreen() {
               const msgAction =
                 meta?.action ||
                 (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : undefined);
+              const contentText = (dbMsg.content || "").toLowerCase();
+              if (
+                dbMsg.role === "assistant" &&
+                (msgAction === "COMPLETE" ||
+                  msgAction === "POST_ONBOARDING" ||
+                  contentText.includes("thank you! onboarding is complete") ||
+                  contentText.includes("thank you! your onboarding is complete"))
+              ) {
+                continue;
+              }
               const isDuplicateOfPrev =
                 mappedMessages.length > 0 &&
                 mappedMessages[mappedMessages.length - 1].role === dbMsg.role &&
@@ -749,6 +760,17 @@ export default function OnboardingScreen() {
         const isInteractiveOptionMsg =
           newMsg.action === "MEDICINE_OPTIONS" ||
           (Array.isArray(newMsg.options) && newMsg.options.length > 0);
+        const isRedundantCompletionMsg =
+          newMsg.action === "COMPLETE" ||
+          newMsg.action === "POST_ONBOARDING" ||
+          !newMsg.content?.trim() ||
+          normReply.includes("thankyouonboardingiscomplete") ||
+          normReply.includes("thankyouyouronboardingiscomplete");
+
+        if (isRedundantCompletionMsg) {
+          return itemsToAdd.length > 0 ? [...prev, ...itemsToAdd] : prev;
+        }
+
         const isDuplicateAssistantMsg =
           !isInteractiveOptionMsg &&
           lastAssistantMsg &&
@@ -832,6 +854,9 @@ export default function OnboardingScreen() {
         existingUserData: updatedUserData,
       };
     }
+
+    finalState.currentStep =
+      serverState?.currentStep || action || finalState.currentStep;
 
     finalState.preferredLanguage = getNormalizedLang(
       finalState.preferredLanguage,
@@ -1011,7 +1036,17 @@ export default function OnboardingScreen() {
     if (selectedFile) {
       uploadSelectedFile(selectedFile);
     } else if (textToSubmit) {
-      const activeAction = messages[messages.length - 1]?.action;
+      const latestAssistantMsg = [...messages]
+        .reverse()
+        .find(
+          (m) =>
+            m.role === "assistant" &&
+            m.action !== "ONBOARDING_COMPLETED_NOTICE",
+        );
+      const activeAction =
+        latestAssistantMsg?.action ||
+        messages[messages.length - 1]?.action ||
+        state.currentStep;
       let updatedState = { ...state };
       if (activeAction === "ASK_FIRST_NAME" || activeAction === "ASK_NAME") {
         updatedState = {
@@ -1032,6 +1067,7 @@ export default function OnboardingScreen() {
         };
         setState(updatedState);
       } else if (activeAction === "ASK_BLOOD_GROUP") {
+        updatedState.currentStep = "ASK_BLOOD_GROUP";
         if (textToSubmit.toLowerCase() === "skip") {
           updatedState = {
             ...updatedState,
@@ -1040,6 +1076,7 @@ export default function OnboardingScreen() {
         } else {
           updatedState = {
             ...updatedState,
+            bloodGroupSkipped: false,
             existingUserData: {
               ...updatedState.existingUserData,
               bloodGroup: textToSubmit,
@@ -1048,23 +1085,43 @@ export default function OnboardingScreen() {
         }
         setState(updatedState);
       } else if (activeAction === "ASK_ALLERGIES") {
-        if (textToSubmit.toLowerCase() === "skip") {
+        const lower = textToSubmit.trim().toLowerCase();
+        if (lower === "skip" || lower === "no" || lower === "not_sure" || lower === "not sure") {
           updatedState = {
             ...updatedState,
             allergiesSkipped: true,
-          };
-        } else {
-          const splitAllergies = textToSubmit
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-          updatedState = {
-            ...updatedState,
             existingUserData: {
               ...updatedState.existingUserData,
-              allergies: splitAllergies,
+              allergies: [],
             },
           };
+        } else {
+          try {
+            const parsed = JSON.parse(textToSubmit);
+            if (parsed && Array.isArray(parsed.allergies)) {
+              updatedState = {
+                ...updatedState,
+                allergiesSkipped: true,
+                existingUserData: {
+                  ...updatedState.existingUserData,
+                  allergies: parsed.allergies,
+                },
+              };
+            }
+          } catch {
+            const splitAllergies = textToSubmit
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            updatedState = {
+              ...updatedState,
+              allergiesSkipped: true,
+              existingUserData: {
+                ...updatedState.existingUserData,
+                allergies: splitAllergies,
+              },
+            };
+          }
         }
         setState(updatedState);
       }
@@ -1914,7 +1971,7 @@ export default function OnboardingScreen() {
     const handleOptionPress = (value: string, label: string) => {
       if (loading || isSendingRef.current) return;
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
-        sendMessage(value, state, label);
+        handleSkipOnboarding();
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
         const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
         setLocalMedicines(existingMeds);
@@ -1954,9 +2011,11 @@ export default function OnboardingScreen() {
       } else {
         let newState = { ...state };
         if (activeMsg.action === "ASK_BLOOD_GROUP") {
+          newState.currentStep = "ASK_BLOOD_GROUP";
           if (value === "SKIP") {
             newState.bloodGroupSkipped = true;
           } else {
+            newState.bloodGroupSkipped = false;
             newState.existingUserData = {
               ...newState.existingUserData,
               bloodGroup: value,
@@ -1967,13 +2026,48 @@ export default function OnboardingScreen() {
           return;
         }
         if (activeMsg.action === "ASK_ALLERGIES") {
-          if (value === "SKIP") {
+          newState.currentStep = "ASK_ALLERGIES";
+          const upper = String(value).trim().toUpperCase();
+          if (upper === "SKIP" || upper === "NO" || upper === "NOT_SURE") {
             newState.allergiesSkipped = true;
-          } else {
             newState.existingUserData = {
               ...newState.existingUserData,
-              allergies: [value],
+              allergies: [],
             };
+          } else if (upper === "YES") {
+            // User selected Yes chip; do not set allergies to ["YES"]
+            newState.existingUserData = {
+              ...newState.existingUserData,
+              allergies: Array.isArray(newState.existingUserData?.allergies)
+                ? newState.existingUserData.allergies.filter(
+                    (a: any) =>
+                      !["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].includes(
+                        String(a).toUpperCase().replace(/\s+/g, ""),
+                      ),
+                  )
+                : [],
+            };
+          } else {
+            try {
+              const parsed = JSON.parse(value);
+              if (parsed && Array.isArray(parsed.allergies)) {
+                newState.allergiesSkipped = true;
+                newState.existingUserData = {
+                  ...newState.existingUserData,
+                  allergies: parsed.allergies,
+                };
+              } else {
+                newState.existingUserData = {
+                  ...newState.existingUserData,
+                  allergies: [value],
+                };
+              }
+            } catch {
+              newState.existingUserData = {
+                ...newState.existingUserData,
+                allergies: [value],
+              };
+            }
           }
           setState(newState);
           sendMessage(value, newState, label);
@@ -1995,6 +2089,24 @@ export default function OnboardingScreen() {
           isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
+        />
+      );
+    }
+
+    if (activeMsg.action === "ASK_ALLERGIES") {
+      return (
+        <AskAllergiesCard
+          activeMsg={activeMsg}
+          preferredLang={preferredLang}
+          isDark={isDark}
+          theme={theme}
+          sendMessage={sendMessage}
+          state={state}
+          setState={setState}
+          isHistorical={isHistorical}
+          chosenVal={chosenVal}
+          chosenLabel={chosenLabel}
+          loading={loading}
         />
       );
     }
@@ -2275,7 +2387,7 @@ export default function OnboardingScreen() {
           if (pendingDraftSyncRef.current) {
             try {
               await pendingDraftSyncRef.current;
-            } catch {}
+            } catch { }
           }
           setCurrentClientMedId(null);
           const displayLabel =
@@ -2305,7 +2417,7 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         const uniqueDrafts = deduplicateDrafts(allDrafts);
         setLocalMedicines(uniqueDrafts);
@@ -2343,7 +2455,7 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         setActiveMedicineToEdit(null);
         setCurrentClientMedId(null);
@@ -2399,14 +2511,14 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         const selectedMedicineObjects =
           formattedMeds && formattedMeds.length > 0
             ? formattedMeds
             : deduplicateDrafts(localMedicines || []).filter(
-                (m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
-              );
+              (m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
+            );
         const uniqueSelected = deduplicateDrafts(selectedMedicineObjects);
         const newState = {
           ...state,
@@ -2426,14 +2538,14 @@ export default function OnboardingScreen() {
           prev.map((msg) =>
             msg.id === activeMsg.id
               ? {
-                  ...msg,
-                  medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
-                    (m) => ({
-                      ...m,
-                      selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
-                    }),
-                  ),
-                }
+                ...msg,
+                medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
+                  (m) => ({
+                    ...m,
+                    selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
+                  }),
+                ),
+              }
               : msg,
           ),
         );
@@ -2474,7 +2586,7 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         setActiveMedicineToEdit(null);
         setCurrentClientMedId(null);
@@ -2512,13 +2624,13 @@ export default function OnboardingScreen() {
                 const updatedMeds = localMedicines.map((m) =>
                   (m.client_med_id || m.id) === (activeMedicineToEdit.client_med_id || activeMedicineToEdit.id)
                     ? {
-                        ...m,
-                        ...updatedMed,
-                        subtitle:
-                          updatedMed.type === "TABLET" || updatedMed.type === "CAPSULE"
-                            ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
-                            : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
-                      }
+                      ...m,
+                      ...updatedMed,
+                      subtitle:
+                        updatedMed.type === "TABLET" || updatedMed.type === "CAPSULE"
+                          ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
+                          : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
+                    }
                     : m,
                 );
                 setLocalMedicines(updatedMeds);
@@ -2881,7 +2993,37 @@ export default function OnboardingScreen() {
     return displayArr;
   }, [messages]);
 
-  const activeAction = messages[messages.length - 1]?.action;
+  const latestAssistantMessage = useMemo(() => {
+    return [...messages]
+      .reverse()
+      .find(
+        (m) =>
+          m.role === "assistant" &&
+          m.action !== "ONBOARDING_COMPLETED_NOTICE",
+      );
+  }, [messages]);
+
+  const activeAction =
+    latestAssistantMessage?.action ||
+    messages[messages.length - 1]?.action ||
+    state.currentStep;
+
+  const isChatInputHidden =
+    activeAction === "ASK_LANGUAGE" ||
+    activeAction === "ASK_UPLOAD_OR_SKIP" ||
+    activeAction === "RESOLVE_PROFILE_SOURCE" ||
+    activeAction === "ASK_GENDER" ||
+    activeAction === "ASK_DOB" ||
+    activeAction === "ASK_BLOOD_GROUP" ||
+    activeAction === "ASK_ALLERGIES" ||
+    activeAction === "REVIEW_MEDICINES_LIST" ||
+    activeAction === "ADD_MEDICINE" ||
+    activeAction === "EDIT_MEDICINE" ||
+    activeAction === "CONFIRM_MEDICINE" ||
+    activeAction === "MEDICINE_OPTIONS" ||
+    activeAction === "ASK_REPORT" ||
+    activeAction === "POST_ONBOARDING" ||
+    activeAction === "COMPLETE";
 
   return (
     <LinearGradient
@@ -2996,20 +3138,9 @@ export default function OnboardingScreen() {
               contentContainerStyle={[
                 styles.listContent,
                 {
-                  paddingBottom:
-                    activeAction === "ASK_LANGUAGE" ||
-                      activeAction === "ASK_UPLOAD_OR_SKIP" ||
-                      activeAction === "ASK_GENDER" ||
-                      activeAction === "ASK_DOB" ||
-                      activeAction === "REVIEW_MEDICINES_LIST" ||
-                      activeAction === "ADD_MEDICINE" ||
-                      activeAction === "EDIT_MEDICINE" ||
-                      activeAction === "CONFIRM_MEDICINE" ||
-                      activeAction === "MEDICINE_OPTIONS" ||
-                      activeAction === "ASK_REPORT" ||
-                      activeAction === "POST_ONBOARDING"
-                      ? Math.max(insets.bottom, 16) + 16
-                      : 16,
+                  paddingBottom: isChatInputHidden
+                    ? Math.max(insets.bottom, 16) + 16
+                    : 16,
                 },
               ]}
               keyboardShouldPersistTaps="handled"
@@ -3103,31 +3234,22 @@ export default function OnboardingScreen() {
           )} */}
 
           {/* Floating Input Capsule */}
-          {activeAction !== "ASK_LANGUAGE" &&
-            activeAction !== "ASK_UPLOAD_OR_SKIP" &&
-            activeAction !== "ASK_GENDER" &&
-            activeAction !== "ASK_DOB" &&
-            activeAction !== "REVIEW_MEDICINES_LIST" &&
-            activeAction !== "ADD_MEDICINE" &&
-            activeAction !== "EDIT_MEDICINE" &&
-            activeAction !== "CONFIRM_MEDICINE" &&
-            activeAction !== "MEDICINE_OPTIONS" &&
-            activeAction !== "POST_ONBOARDING" && (
-              <ChatInput
-                value={input}
-                onChangeText={setInput}
-                onSend={handleSend}
-                isSending={loading}
-                isDark={isDark}
-                mode="onboarding"
-                keyboardType={
-                  activeAction === "ASK_MEDICINE_QUANTITY"
-                    ? "numeric"
-                    : "default"
-                }
-                preferredLanguage={state.preferredLanguage!}
-              />
-            )}
+          {!isChatInputHidden && (
+            <ChatInput
+              value={input}
+              onChangeText={setInput}
+              onSend={handleSend}
+              isSending={loading}
+              isDark={isDark}
+              mode="onboarding"
+              keyboardType={
+                activeAction === "ASK_MEDICINE_QUANTITY"
+                  ? "numeric"
+                  : "default"
+              }
+              preferredLanguage={state.preferredLanguage!}
+            />
+          )}
         </Animated.View>
 
         {/* Modal Date Picker */}

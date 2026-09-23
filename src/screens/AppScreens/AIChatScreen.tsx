@@ -344,6 +344,7 @@ const AIChatScreen = ({ route }: any) => {
                 navigation={navigation}
                 setChatWizardState={setChatWizardState}
                 onViewFullReport={handleViewFullReport}
+                isOnboardingCompleted={isOnboardingCompleted}
               />
             )}
             contentContainerStyle={styles.listContent}
