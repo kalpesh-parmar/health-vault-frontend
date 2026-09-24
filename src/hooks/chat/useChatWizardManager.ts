@@ -680,45 +680,14 @@ export const useChatWizardManager = ({
       return;
     }
 
-    if (option?.value?.medicine) {
-      const medToSave = option.value.medicine;
-      const medName = medToSave.name || medToSave.medicationName || "Medication";
-      try {
-        const payload = buildMedicationPayload(medToSave);
-        await addMedication(payload);
-        queryClient.invalidateQueries({ queryKey: ["medications"] });
-
-        const confirmMsg: ChatMessage = {
-          id: `ai-med-saved-${Date.now()}`,
-          role: "ai",
-          text: `Medication "${medName}" has been saved successfully.`,
-          action: "NORMAL_CHAT",
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, confirmMsg]);
-        Toast.show({
-          type: "success",
-          text1: "Medication Saved",
-          text2: `${medName} added successfully.`,
-        });
-      } catch (err: any) {
-        console.error("Failed to save medication in chat:", err);
-        Toast.show({
-          type: "error",
-          text1: "Save Failed",
-          text2:
-            err?.response?.data?.message ||
-            err?.message ||
-            "Failed to save medication.",
-        });
-      } finally {
-        isSendingRef.current = false;
-        setIsSending(false);
-      }
-      return;
-    }
-
     try {
+      if (option?.state && lastKnownStateRef) {
+        lastKnownStateRef.current = {
+          ...(lastKnownStateRef.current || {}),
+          ...option.state,
+        };
+      }
+
       const payload: any = {
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
@@ -732,17 +701,51 @@ export const useChatWizardManager = ({
 
       if (option?.actionType === "CONFIRM_MEDICINES") {
         payload.actionType = "CONFIRM_MEDICINES";
-        let sanitizedData = option.value;
-        if (Array.isArray(option.value)) {
-          sanitizedData = option.value.map(sanitizeMedicineForPayload);
-        } else if (option.value && Array.isArray(option.value.medicines)) {
+        let rawVal = option.value;
+        if (typeof rawVal === "string") {
+          try {
+            rawVal = JSON.parse(rawVal);
+          } catch {
+            // keep as-is if not valid JSON
+          }
+        }
+        let sanitizedData: any = rawVal;
+        if (Array.isArray(rawVal)) {
           sanitizedData = {
-            ...option.value,
-            medicines: option.value.medicines.map(sanitizeMedicineForPayload),
+            selected: rawVal.map((m: any) => m.client_med_id || m.id).filter(Boolean),
+            medicines: rawVal.map(sanitizeMedicineForPayload),
+          };
+        } else if (rawVal && typeof rawVal === "object" && Array.isArray(rawVal.medicines)) {
+          sanitizedData = {
+            ...rawVal,
+            medicines: rawVal.medicines.map(sanitizeMedicineForPayload),
           };
         }
         payload.actionData = sanitizedData;
-        payload.message = "CONFIRM_MEDICINES";
+        payload.message = sanitizedData;
+      } else if (option?.actionType === "SAVE_AND_REVIEW") {
+        payload.actionType = "SAVE_AND_REVIEW";
+        let rawVal = option.value;
+        if (typeof rawVal === "string") {
+          try {
+            rawVal = JSON.parse(rawVal);
+          } catch {
+            // keep
+          }
+        }
+        let parsedSave: any = rawVal;
+        if (parsedSave && typeof parsedSave === "object" && Array.isArray(parsedSave.medicines)) {
+          parsedSave = {
+            ...parsedSave,
+            medicines: parsedSave.medicines.map(sanitizeMedicineForPayload),
+          };
+        }
+        payload.actionData = parsedSave;
+        payload.message = parsedSave;
+      } else if (option?.actionType === "SKIP_MEDICINES" || normalizedKey === "SKIP_MEDICINES") {
+        payload.actionType = "SKIP_MEDICINES";
+        payload.actionData = { skipAll: true };
+        payload.message = "SKIP";
       } else if (
         option?.actionType === "ADD_MEDICINE" ||
         normalizedKey === "ADD_MEDICINE" ||
@@ -787,20 +790,28 @@ export const useChatWizardManager = ({
           return [...prev, aiMsg];
         });
 
+        if (lastKnownStateRef && (resData?.onboardingState || resData?.state)) {
+          lastKnownStateRef.current = resData.onboardingState || resData.state;
+        }
+
         const nextPendingStep =
           resData?.onboardingState?.currentStep ||
           resData?.state?.currentStep ||
           resData?.actionType ||
           resData?.action ||
           null;
+        const isTerminalStep =
+          nextPendingStep === "POST_ONBOARDING" ||
+          nextPendingStep === "COMPLETE" ||
+          !nextPendingStep;
         const isNowCompleted = Boolean(
           resData?.onboardingState?.isOnboardingCompleted ??
           resData?.state?.isOnboardingCompleted ??
           resData?.isOnboardingCompleted ??
-          (nextPendingStep === "POST_ONBOARDING" || nextPendingStep === "COMPLETE")
+          isTerminalStep
         );
         setIsOnboardingCompleted(isNowCompleted);
-        setPendingStep(isNowCompleted ? null : nextPendingStep);
+        setPendingStep(isTerminalStep ? null : nextPendingStep);
       }
     } catch (err) {
       console.warn("[AI_CHAT] Error handling generic option:", err);

@@ -894,32 +894,41 @@ export default function OnboardingScreen() {
   };
 
   const sendMessage = async (
-    userText: string,
+    userText: string | any,
     updatedState = state,
     displayLabel?: string,
+    actionType?: string,
   ) => {
-    if (isSendingRef.current || loading || !userText.trim()) return;
+    if (isSendingRef.current || loading) return;
+    if (typeof userText === "string" && !userText.trim()) return;
+    if (!userText) return;
     isSendingRef.current = true;
 
     let isEditSave = false;
     try {
-      if (userText.startsWith("{") && userText.includes('"edited"')) {
+      if (typeof userText === "string" && userText.startsWith("{") && userText.includes('"edited"')) {
         const parsed = JSON.parse(userText);
         if (parsed && parsed.edited && !parsed.confirmed) {
           isEditSave = true;
         }
+      } else if (typeof userText === "object" && userText?.edited && !userText?.confirmed) {
+        isEditSave = true;
       }
     } catch {
       // ignore non-json
     }
 
     if (!isEditSave) {
-      const userContent = displayLabel || userText;
+      const userContent =
+        displayLabel ||
+        (typeof userText === "string"
+          ? userText
+          : userText?.name || userText?.action || "Medicine Selection");
       const userMsg: Message = {
         id: `user-${Date.now()}`,
         role: "user",
         content: userContent,
-        rawValue: userText, // Store raw value for live matching!
+        rawValue: typeof userText === "string" ? userText : JSON.stringify(userText), // Store raw value for live matching!
         createdAt: new Date().toISOString(),
       };
 
@@ -948,7 +957,23 @@ export default function OnboardingScreen() {
         .reverse()
         .find((m) => m.role === "assistant");
 
-      const payload = {
+      let resolvedActionType = actionType;
+      let actionData: any = undefined;
+
+      if (userText && typeof userText === "object") {
+        if (userText.selected !== undefined || userText.medicines !== undefined) {
+          resolvedActionType = resolvedActionType || "CONFIRM_MEDICINES";
+          actionData = userText;
+        } else if (userText.action === "SAVE_AND_REVIEW") {
+          resolvedActionType = resolvedActionType || "SAVE_AND_REVIEW";
+          actionData = userText;
+        } else if (userText.skipAll) {
+          resolvedActionType = resolvedActionType || "SKIP_MEDICINES";
+          actionData = userText;
+        }
+      }
+
+      const payload: any = {
         message: userText,
         history,
         state: updatedState,
@@ -961,6 +986,13 @@ export default function OnboardingScreen() {
         ),
         stream: false,
       };
+
+      if (resolvedActionType) {
+        payload.actionType = resolvedActionType;
+      }
+      if (actionData) {
+        payload.actionData = actionData;
+      }
 
       const response = await apiClient.post("/v1/onboarding/chat", payload, {
         timeout: 90000,
@@ -1971,7 +2003,19 @@ export default function OnboardingScreen() {
     const handleOptionPress = (value: string, label: string) => {
       if (loading || isSendingRef.current) return;
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
-        handleSkipOnboarding();
+        const optionLabel =
+          label ||
+          (preferredLang && ONBOARDING_I18N[preferredLang.toLowerCase()]?.dashboard) ||
+          "Go to Dashboard";
+        const nextState = {
+          ...state,
+          medicationFlowDone: true,
+          medicinesConfirmed: true,
+          currentStep: "COMPLETE",
+          isOnboardingCompleted: true,
+        };
+        setState(nextState);
+        sendMessage(value, nextState, optionLabel);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
         const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
         setLocalMedicines(existingMeds);
@@ -2401,14 +2445,15 @@ export default function OnboardingScreen() {
                     ? `சேமி / மதிப்பாய்வு: ${updatedMed.name}`
                     : `Save / Review: ${updatedMed.name}`;
           sendMessage(
-            JSON.stringify({
+            {
               action: "SAVE_AND_REVIEW",
               saveAndReview: true,
               medicine: updatedMed,
               clientMedId: currentClientMedId,
-            }),
+            },
             state,
             displayLabel,
+            "SAVE_AND_REVIEW",
           );
         }
       };
@@ -2429,13 +2474,14 @@ export default function OnboardingScreen() {
         setState(nextState);
         const displayLabel = uiT("saveMedicines") || "Save Medicines";
         sendMessage(
-          JSON.stringify({
+          {
             action: "SAVE_AND_REVIEW",
             saveAndReview: true,
             medicines: uniqueDrafts,
-          }),
+          },
           nextState,
           displayLabel,
+          "SAVE_AND_REVIEW",
         );
       };
 
@@ -2550,12 +2596,13 @@ export default function OnboardingScreen() {
           ),
         );
         sendMessage(
-          JSON.stringify({
+          {
             selected: checkedMeds,
             medicines: uniqueSelected,
-          }),
+          },
           newState,
           uiT("confirmSelection"),
+          "CONFIRM_MEDICINES",
         );
       };
 
@@ -2574,7 +2621,7 @@ export default function OnboardingScreen() {
           medicinesConfirmed: false,
         };
         setState(newState);
-        sendMessage(JSON.stringify({ skipAll: true }), newState, uiT("skipAll"));
+        sendMessage({ skipAll: true }, newState, uiT("skipAll"), "SKIP_MEDICINES");
       };
 
       const handleEdit = (med: any) => {

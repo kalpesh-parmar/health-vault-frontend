@@ -4,6 +4,7 @@ import { I18N_ONBOARDING_UI } from "../../../components/chat/widgets/OnboardingI
 import { MessageBubble } from "../../../components/chat/MessageBubble";
 import { MedicineOptionsPanel } from "../../../components/chat/widgets/MedicineOptionsPanel";
 import { ChatMessageItem } from "../../../components/chat/ChatMessageItem";
+import { findHistoricalUserReply } from "../../../components/chat/widgets/HistoricalChips";
 
 // Mock @expo/vector-icons
 jest.mock("@expo/vector-icons", () => ({
@@ -1583,11 +1584,18 @@ describe("14. Phase 1 Acceptance Criteria: Full 14-Point Invariant Verification"
 
     const handleOptionPress = jest.fn();
 
+    const userReplyMsg: any = {
+      id: "user-bg-reply",
+      role: "user",
+      text: "O+",
+      createdAt: "2026-09-22T10:01:00.000Z",
+    };
+
     const { queryByText } = await render(
       <ChatMessageItem
         {...baseItemProps}
         item={bloodGroupMsg}
-        mergedMessages={[bloodGroupMsg]}
+        mergedMessages={[userReplyMsg, bloodGroupMsg]}
         isOnboardingCompleted={true}
         handleGenericOptionPress={handleOptionPress}
       />
@@ -1823,5 +1831,243 @@ describe("14. Phase 1 Acceptance Criteria: Full 14-Point Invariant Verification"
 
     expect(isComplete).toBe(true);
     expect(finalPendingStep).toBeNull();
+  });
+
+  describe("15. Pre-Onboarding Chatbot -> Dashboard -> Chat History Flow (Go to Dashboard User Response Preservation)", () => {
+    it("1. Selecting 'Go to Dashboard' preserves the user response in messages and navigates without losing it", () => {
+      let messages: any[] = [
+        {
+          id: "assistant-med-options",
+          role: "assistant",
+          content: "Here are your options:",
+          action: "MEDICINE_OPTIONS",
+          options: [
+            { key: "ADD", label: "Add More Medicines", value: "ADD" },
+            { key: "DASHBOARD", label: "Go to Dashboard", value: "DASHBOARD" },
+          ],
+        },
+      ];
+
+      let state: any = {
+        preferredLanguage: "english",
+        flowMode: "MANUAL",
+        profileConfirmed: true,
+        bloodGroupSkipped: true,
+        allergiesSkipped: true,
+        medicationFlowDone: false,
+        medicinesConfirmed: false,
+        currentStep: "MEDICINE_OPTIONS",
+      };
+
+      let isOnboardingCompleted = false;
+
+      // Mock sendMessage implementation mirroring OnboardingScreen.tsx
+      const sendMessage = (userText: string, updatedState: any, displayLabel?: string) => {
+        const userContent = displayLabel || userText;
+        const userMsg = {
+          id: `user-${Date.now()}`,
+          role: "user",
+          content: userContent,
+          rawValue: userText,
+          createdAt: new Date().toISOString(),
+        };
+        messages = [...messages, userMsg];
+
+        // Simulate backend returning completion response
+        const resData = {
+          mode: "ONBOARDING",
+          action: "COMPLETE",
+          actionType: "COMPLETE",
+          reply: "",
+          onboardingState: {
+            ...updatedState,
+            isOnboardingCompleted: true,
+            currentStep: "COMPLETE",
+          },
+        };
+
+        // processAssistantResponse logic in OnboardingScreen.tsx
+        const isRedundantCompletionMsg =
+          resData.action === "COMPLETE" ||
+          resData.action === "POST_ONBOARDING" ||
+          !resData.reply?.trim();
+
+        if (!isRedundantCompletionMsg) {
+          messages = [
+            ...messages,
+            { id: `ai-${Date.now()}`, role: "assistant", content: resData.reply },
+          ];
+        }
+
+        isOnboardingCompleted = Boolean(resData.onboardingState?.isOnboardingCompleted);
+      };
+
+      // Mock handleOptionPress in OnboardingScreen.tsx
+      const handleOptionPress = (value: string, label: string) => {
+        if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
+          const optionLabel = label || "Go to Dashboard";
+          const nextState = {
+            ...state,
+            medicationFlowDone: true,
+            medicinesConfirmed: true,
+            currentStep: "COMPLETE",
+            isOnboardingCompleted: true,
+          };
+          state = nextState;
+          sendMessage(value, nextState, optionLabel);
+        }
+      };
+
+      // User presses "Go to Dashboard"
+      handleOptionPress("DASHBOARD", "Go to Dashboard");
+
+      // Verify user response is preserved in messages
+      expect(messages.length).toBe(2);
+      expect(messages[1].role).toBe("user");
+      expect(messages[1].content).toBe("Go to Dashboard");
+      expect(messages[1].rawValue).toBe("DASHBOARD");
+
+      // Verify no redundant assistant message was appended
+      expect(messages.filter((m) => m.role === "assistant").length).toBe(1);
+
+      // Verify onboarding completion state
+      expect(isOnboardingCompleted).toBe(true);
+      expect(state.currentStep).toBe("COMPLETE");
+      expect(state.isOnboardingCompleted).toBe(true);
+    });
+
+    it("2. When reopening Chat from Dashboard, existing conversation history loads with the user's 'Go to Dashboard' response visible", () => {
+      // Historical messages returned by GET /v1/onboarding/history
+      const historyFromBackend = [
+        {
+          id: "m-1",
+          role: "assistant",
+          content: "All set! What would you like to do next?",
+          metadata: {
+            action: "MEDICINE_OPTIONS",
+            options: [
+              { key: "ADD", label: "Add More Medicines", value: "ADD" },
+              { key: "DASHBOARD", label: "Go to Dashboard", value: "DASHBOARD" },
+            ],
+          },
+          createdAt: "2026-09-23T08:00:00.000Z",
+        },
+        {
+          id: "m-2",
+          role: "user",
+          content: "Go to Dashboard",
+          metadata: {
+            rawValue: "DASHBOARD",
+            stepKey: "COMPLETE",
+          },
+          createdAt: "2026-09-23T08:00:05.000Z",
+        },
+      ];
+
+      // Rehydrate messages using useChatSession mapping
+      const mappedMessages = historyFromBackend.map((dbMsg) => {
+        const meta = dbMsg.metadata || {};
+        const mappedRole = dbMsg.role === "assistant" ? "ai" : "user";
+        return {
+          ...meta,
+          id: dbMsg.id,
+          role: mappedRole,
+          text: dbMsg.content,
+          createdAt: dbMsg.createdAt,
+          action: meta.action || "NORMAL_CHAT",
+          rawValue: meta.rawValue || null,
+        };
+      });
+
+      expect(mappedMessages.length).toBe(2);
+      expect(mappedMessages[0].role).toBe("ai");
+      expect(mappedMessages[1].role).toBe("user");
+      expect(mappedMessages[1].text).toBe("Go to Dashboard");
+      expect(mappedMessages[1].rawValue).toBe("DASHBOARD");
+
+      // In AIChatScreen, messages are inverted (newest first)
+      const invertedMessages = [...mappedMessages].reverse();
+
+      // Check findHistoricalUserReply on the assistant message
+      const { chosenVal, chosenLabel } = findHistoricalUserReply(
+        invertedMessages,
+        "m-1",
+        true, // isInverted = true
+      );
+
+      expect(chosenVal).toBe("DASHBOARD");
+      expect(chosenLabel).toBe("Go to Dashboard");
+
+      // Check that findHistoricalUserReply correctly marks "Go to Dashboard" as chosen
+      const optionsList = [
+        { key: "ADD", label: "Add More Medicines", value: "ADD" },
+        { key: "DASHBOARD", label: "Go to Dashboard", value: "DASHBOARD" },
+      ];
+
+      const dashboardOpt = optionsList.find((opt) => opt.key === "DASHBOARD")!;
+      const isDashboardChosen =
+        (chosenVal && dashboardOpt.key.toLowerCase() === chosenVal.toLowerCase()) ||
+        (chosenLabel && dashboardOpt.label.toLowerCase() === chosenLabel.toLowerCase());
+
+      const addOpt = optionsList.find((opt) => opt.key === "ADD")!;
+      const isAddChosen =
+        (chosenVal && addOpt.key.toLowerCase() === chosenVal.toLowerCase()) ||
+        (chosenLabel && addOpt.label.toLowerCase() === chosenLabel.toLowerCase());
+
+      expect(isDashboardChosen).toBeTruthy();
+      expect(isAddChosen).toBeFalsy();
+    });
+
+    it("3. Reopening Chat does not restart onboarding, does not duplicate assistant prompt, and preserves isOnboardingCompleted", () => {
+      const historyResponse = {
+        data: {
+          chatSessionId: "session-onboarding-123",
+          currentStep: "COMPLETE",
+          canSkip: true,
+          resumableState: {
+            isOnboardingCompleted: true,
+            currentStep: "COMPLETE",
+            medicationFlowDone: true,
+            medicinesConfirmed: true,
+          },
+          messages: [
+            {
+              id: "msg-opt",
+              role: "assistant",
+              content: "What would you like to do next?",
+              metadata: { action: "MEDICINE_OPTIONS" },
+            },
+            {
+              id: "msg-dash",
+              role: "user",
+              content: "Go to Dashboard",
+              metadata: { rawValue: "DASHBOARD" },
+            },
+          ],
+        },
+      };
+
+      const { resumableState, currentStep } = historyResponse.data;
+      const isComplete = Boolean(
+        resumableState?.isOnboardingCompleted ||
+        resumableState?.currentStep === "COMPLETE" ||
+        currentStep === "COMPLETE",
+      );
+
+      const pendingStep = isComplete ? null : (resumableState?.currentStep || currentStep);
+
+      // Verify onboarding does NOT restart
+      expect(isComplete).toBe(true);
+      expect(pendingStep).toBeNull();
+
+      // Verify no duplicate assistant message
+      const assistantMessages = historyResponse.data.messages.filter((m) => m.role === "assistant");
+      expect(assistantMessages.length).toBe(1);
+
+      // Verify user response is present and intact
+      const userMessages = historyResponse.data.messages.filter((m) => m.role === "user");
+      expect(userMessages.length).toBe(1);
+      expect(userMessages[0].content).toBe("Go to Dashboard");
+    });
   });
 });

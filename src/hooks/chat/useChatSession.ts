@@ -23,6 +23,7 @@ interface UseChatSessionProps {
   setPendingStep: (step: string | null) => void;
   filesInfo?: any[];
   lastKnownStateRef?: React.MutableRefObject<any>;
+  setPreferredLang?: (lang: string) => void;
 }
 
 export const useChatSession = ({
@@ -35,6 +36,7 @@ export const useChatSession = ({
   setPendingStep,
   filesInfo = [],
   lastKnownStateRef,
+  setPreferredLang,
 }: UseChatSessionProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onboardingMessages, setOnboardingMessages] = useState<ChatMessage[]>([]);
@@ -253,12 +255,14 @@ export const useChatSession = ({
       const resolvedPendingStep =
         resumableState?.currentStep || topLevelCurrentStep || null;
 
+      const isTerminalStep =
+        !resolvedPendingStep ||
+        resolvedPendingStep === "POST_ONBOARDING" ||
+        resolvedPendingStep === "COMPLETE";
+
       const completedFromState = Boolean(
         resumableState?.isOnboardingCompleted ||
-        resumableState?.currentStep === "POST_ONBOARDING" ||
-        resumableState?.currentStep === "COMPLETE" ||
-        resolvedPendingStep === "POST_ONBOARDING" ||
-        resolvedPendingStep === "COMPLETE"
+        isTerminalStep
       );
       const completedFromHistory = Array.isArray(historyItems)
         ? historyItems.some((dbMsg: any) => {
@@ -269,10 +273,13 @@ export const useChatSession = ({
         : false;
       const isComplete = completedFromState || completedFromHistory;
       setIsOnboardingCompleted(isComplete);
-      setPendingStep(isComplete ? null : resolvedPendingStep);
+      setPendingStep(isTerminalStep ? null : resolvedPendingStep);
 
       if (lastKnownStateRef && resumableState) {
         lastKnownStateRef.current = resumableState;
+      }
+      if (resumableState?.preferredLanguage && setPreferredLang) {
+        setPreferredLang(resumableState.preferredLanguage);
       }
       if (chatSessionId && Array.isArray(historyItems)) {
         const seenNotice = new Set<string>();
@@ -453,7 +460,14 @@ export const useChatSession = ({
     if (isSending || isSendingRef.current) return;
     isSendingRef.current = true;
 
-    if (!isOnboardingCompleted && pendingStep) {
+    const isPendingOnboarding = Boolean(
+      pendingStep &&
+      pendingStep !== "POST_ONBOARDING" &&
+      pendingStep !== "COMPLETE" &&
+      pendingStep !== "NORMAL_CHAT"
+    );
+
+    if (isPendingOnboarding) {
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -535,21 +549,28 @@ export const useChatSession = ({
             return [...prev, ...newMessages];
           });
 
+          if (lastKnownStateRef && (resData?.onboardingState || resData?.state)) {
+            lastKnownStateRef.current = resData.onboardingState || resData.state;
+          }
+
           const nextPendingStep =
             resData?.onboardingState?.currentStep ||
             resData?.state?.currentStep ||
             resData?.actionType ||
             resData?.action ||
             null;
+          const isTerminalStep =
+            nextPendingStep === "POST_ONBOARDING" ||
+            nextPendingStep === "COMPLETE" ||
+            !nextPendingStep;
           const isNowCompleted = Boolean(
             resData?.onboardingState?.isOnboardingCompleted ??
             resData?.state?.isOnboardingCompleted ??
             resData?.isOnboardingCompleted ??
-            (nextPendingStep === "POST_ONBOARDING" ||
-              nextPendingStep === "COMPLETE")
+            isTerminalStep
           );
           setIsOnboardingCompleted(isNowCompleted);
-          setPendingStep(isNowCompleted ? null : nextPendingStep);
+          setPendingStep(isTerminalStep ? null : nextPendingStep);
         }
       } catch (err) {
         console.warn("[AI_CHAT] Failed to send onboarding message:", err);
