@@ -75,6 +75,8 @@ import { findHistoricalUserReply } from "../../components/chat/widgets/Historica
 import { DocumentProcessingModal } from "../../components/chat/widgets/DocumentProcessingModal";
 import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
 import { StructuredReportSummaryCard } from "../../components/chat/widgets/StructuredReportSummaryCard";
+import { StructuredMedicationListCard } from "../../components/chat/widgets/StructuredMedicationListCard";
+import { parseMedicationListMessage, normalizeMedicationItem } from "../../utils/medicationListNormalizer";
 import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
@@ -85,6 +87,7 @@ type Message = {
   content: string;
   rawValue?: string;
   action?: string;
+  task?: string;
   options?: any[];
   fields?: any[];
   onboardingState?: any;
@@ -97,6 +100,8 @@ type Message = {
   loginProvider?: string;
   medicine?: any;
   medicines?: any[];
+  items?: any[];
+  pagination?: any;
   totalBuffered?: number;
   summary?: any;
   document?: any;
@@ -527,14 +532,16 @@ export default function OnboardingScreen() {
                 }
                 seenNotice.add("ONBOARDING_COMPLETED_NOTICE");
               }
+              const medListResult = parseMedicationListMessage(dbMsg.content, meta);
               const msgAction =
+                (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined) ||
                 meta?.action ||
                 (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : undefined);
               const isDuplicateOfPrev =
                 mappedMessages.length > 0 &&
                 mappedMessages[mappedMessages.length - 1].role === dbMsg.role &&
                 mappedMessages[mappedMessages.length - 1].content?.trim() ===
-                dbMsg.content?.trim() &&
+                (medListResult.isMedicationList ? (medListResult.rawText || "") : dbMsg.content)?.trim() &&
                 mappedMessages[mappedMessages.length - 1].action === msgAction;
               if (isDuplicateOfPrev) {
                 continue;
@@ -543,8 +550,12 @@ export default function OnboardingScreen() {
                 ...(meta || {}),
                 id: dbMsg.id,
                 role: dbMsg.role,
-                content: dbMsg.content,
+                content: medListResult.isMedicationList ? (medListResult.rawText || "") : dbMsg.content,
                 action: msgAction,
+                task: meta?.task || (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined),
+                medicines: medListResult.isMedicationList && medListResult.items.length > 0 ? medListResult.items : (meta?.medicines || []),
+                items: medListResult.items,
+                pagination: medListResult.pagination || meta?.pagination,
                 createdAt: dbMsg.createdAt,
               });
             }
@@ -612,7 +623,11 @@ export default function OnboardingScreen() {
     const messageContent =
       aiRes.reply || aiRes.message || aiRes.message_en || aiRes.message_gu;
 
-    const action = aiRes.actionType || aiRes.action;
+    const medListResult = parseMedicationListMessage(messageContent, aiRes);
+    const action =
+      (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined) ||
+      aiRes.actionType ||
+      aiRes.action;
     const resolvedOnboardingCompleted = Boolean(
       aiRes.onboardingState?.isOnboardingCompleted ??
       aiRes.state?.isOnboardingCompleted ??
@@ -629,8 +644,13 @@ export default function OnboardingScreen() {
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
-      content: action === "ASK_REPORT" ? "" : (messageContent || "Please provide the information."),
+      content: action === "ASK_REPORT"
+        ? ""
+        : (medListResult.isMedicationList
+            ? (medListResult.rawText || "")
+            : (messageContent || "Please provide the information.")),
       action,
+      task: aiRes.task || (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined),
       options: aiRes.options,
       fields: aiRes.fields,
       onboardingState: aiRes.onboardingState,
@@ -642,7 +662,9 @@ export default function OnboardingScreen() {
       explainer: aiRes.explainer,
       loginProvider: aiRes.loginProvider,
       medicine: aiRes.medicine,
-      medicines: aiRes.medicines,
+      medicines: medListResult.isMedicationList ? medListResult.items : aiRes.medicines,
+      items: medListResult.items,
+      pagination: medListResult.pagination || aiRes.pagination,
       totalBuffered: aiRes.totalBuffered,
       summary: aiRes.summary,
       document: aiRes.document,
@@ -2229,8 +2251,7 @@ export default function OnboardingScreen() {
 
     if (
       activeMsg.action === "ADD_MEDICINE" || // "EXTRACTED_MEDICINES"
-      activeMsg.action === "EDIT_MEDICINE" ||
-      (activeMedicineToEdit && !isHistorical)
+      activeMsg.action === "EDIT_MEDICINE"
     ) {
       const med =
         (isHistorical
@@ -2240,19 +2261,30 @@ export default function OnboardingScreen() {
 
       const handleSave = async (updatedMed: any) => {
         if (isEditingLocal) {
-          const updatedMeds = localMedicines.map((m) =>
-            (m.client_med_id || m.id) === (med.client_med_id || med.id)
-              ? {
-                ...m,
-                ...updatedMed,
-                subtitle:
-                  updatedMed.type === "TABLET" ||
-                    updatedMed.type === "CAPSULE"
-                    ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
-                    : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
-              }
-              : m,
-          );
+          const targetKey = med.client_med_id || med.id;
+          const currentMeds = (localMedicines && localMedicines.length > 0)
+            ? localMedicines
+            : (activeMsg.medicines && activeMsg.medicines.length > 0 ? activeMsg.medicines : state?.medicinesToAdd || []);
+
+          const updatedMeds = currentMeds.map((m: any) => {
+            const isMatch = (
+              (med.client_med_id && m.client_med_id === med.client_med_id) ||
+              (med.id && m.id === med.id) ||
+              (m.client_med_id === targetKey || m.id === targetKey)
+            );
+            if (!isMatch) return m;
+
+            return {
+              ...m,
+              ...updatedMed,
+              selected: m.selected !== undefined ? m.selected : true,
+              subtitle:
+                updatedMed.type === "TABLET" ||
+                  updatedMed.type === "CAPSULE"
+                  ? `${updatedMed.dose?.count || 1} ${(updatedMed.type || "tablet").toLowerCase()}(s) · ${(updatedMed.frequency || "once").toLowerCase()}`
+                  : `${updatedMed.dose?.value || 1} ${updatedMed.dose?.unit || ""} · ${(updatedMed.frequency || "once").toLowerCase()}`,
+            };
+          });
           setLocalMedicines(updatedMeds);
           setState((prev) => ({
             ...prev,
@@ -2261,28 +2293,17 @@ export default function OnboardingScreen() {
 
           setActiveMedicineToEdit(null);
           setMessages((prev) =>
-            prev
-              .map((msg) => {
-                // if (msg.action === "CONFIRM_MEDICINE") {
-                //   return {
-                //     ...msg,
-                //     summary: {
-                //       ...msg.summary,
-                //       medicines: updatedMeds,
-                //     },
-                //     medicines: updatedMeds,
-                //   };
-                // }
-                if (msg.action === "REVIEW_MEDICINES_LIST") {
-                  return {
-                    ...msg,
-                    medicines: updatedMeds,
-                  };
-                }
-                return msg;
-              })
-              .filter((m) => m.id !== activeMsg.id),
+            prev.map((msg) => {
+              if (msg.action === "REVIEW_MEDICINES_LIST" || msg.id === activeMsg.id) {
+                return {
+                  ...msg,
+                  medicines: updatedMeds,
+                };
+              }
+              return msg;
+            }),
           );
+          handleDraftSync(updatedMeds);
         } else {
           if (pendingDraftSyncRef.current) {
             try {
@@ -2396,9 +2417,25 @@ export default function OnboardingScreen() {
             !isHistorical && !isEditingLocal ? handleSaveMedicines : undefined
           }
           onExitToOptions={
-            !isHistorical && !isEditingLocal ? handleExitToOptions : undefined
+            !isHistorical
+              ? isEditingLocal
+                ? () => {
+                    setActiveMedicineToEdit(null);
+                    setMedicineCardMode("review");
+                  }
+                : handleExitToOptions
+              : undefined
           }
-          onCancel={!isHistorical ? handleExitToOptions : undefined}
+          onCancel={
+            !isHistorical
+              ? isEditingLocal
+                ? () => {
+                    setActiveMedicineToEdit(null);
+                    setMedicineCardMode("review");
+                  }
+                : handleExitToOptions
+              : undefined
+          }
           readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -2513,7 +2550,7 @@ export default function OnboardingScreen() {
             key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
             med={activeMedicineToEdit || null}
             initialMedicines={memoizedInitialMedicines}
-            isEditingLocal={!!activeMedicineToEdit}
+            isEditingLocal={Boolean(activeMedicineToEdit)}
             preferredLang={preferredLang}
             isDark={isDark}
             theme={theme}
@@ -2521,20 +2558,41 @@ export default function OnboardingScreen() {
             setCurrentClientMedId={setCurrentClientMedId}
             onSave={(updatedMed) => {
               if (activeMedicineToEdit) {
-                const updatedMeds = localMedicines.map((m) =>
-                  (m.client_med_id || m.id) === (activeMedicineToEdit.client_med_id || activeMedicineToEdit.id)
-                    ? {
-                        ...m,
-                        ...updatedMed,
-                        subtitle:
-                          updatedMed.type === "TABLET" || updatedMed.type === "CAPSULE"
-                            ? `${updatedMed.dose.count} ${updatedMed.type.toLowerCase()}(s) · ${updatedMed.frequency.toLowerCase()}`
-                            : `${updatedMed.dose.value} ${updatedMed.dose.unit} · ${updatedMed.frequency.toLowerCase()}`,
-                      }
-                    : m,
-                );
+                const targetKey = activeMedicineToEdit.client_med_id || activeMedicineToEdit.id;
+                const currentMeds = (localMedicines && localMedicines.length > 0)
+                  ? localMedicines
+                  : (activeMsg.medicines && activeMsg.medicines.length > 0 ? activeMsg.medicines : state?.medicinesToAdd || []);
+
+                const updatedMeds = currentMeds.map((m: any) => {
+                  const isMatch = (
+                    (activeMedicineToEdit.client_med_id && m.client_med_id === activeMedicineToEdit.client_med_id) ||
+                    (activeMedicineToEdit.id && m.id === activeMedicineToEdit.id) ||
+                    (m.client_med_id === targetKey || m.id === targetKey)
+                  );
+                  if (!isMatch) return m;
+
+                  return {
+                    ...m,
+                    ...updatedMed,
+                    selected: m.selected !== undefined ? m.selected : true,
+                    subtitle:
+                      updatedMed.type === "TABLET" || updatedMed.type === "CAPSULE"
+                        ? `${updatedMed.dose?.count || 1} ${(updatedMed.type || "tablet").toLowerCase()}(s) · ${(updatedMed.frequency || "once").toLowerCase()}`
+                        : `${updatedMed.dose?.value || 1} ${updatedMed.dose?.unit || ""} · ${(updatedMed.frequency || "once").toLowerCase()}`,
+                  };
+                });
                 setLocalMedicines(updatedMeds);
                 setState((prev) => ({ ...prev, medicinesToAdd: updatedMeds }));
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === activeMsg.id
+                      ? {
+                          ...msg,
+                          medicines: updatedMeds,
+                        }
+                      : msg
+                  )
+                );
                 handleDraftSync(updatedMeds);
               }
               setActiveMedicineToEdit(null);
@@ -2777,6 +2835,49 @@ export default function OnboardingScreen() {
           onViewFullReport={() => {
             setViewerDoc(doc);
             setIsViewerOpen(true);
+          }}
+          readOnly={isHistorical}
+        />
+      );
+    }
+
+    if (
+      activeMsg.action === "MEDICATION_LIST" ||
+      (activeMsg as any).task === "MEDICATION_LIST" ||
+      (activeMsg as any).mode === "STRUCTURED_LIST"
+    ) {
+      const rawMeds = activeMsg.medicines?.length
+        ? activeMsg.medicines
+        : ((activeMsg as any).items?.length ? (activeMsg as any).items : []);
+
+      const normalizedList = rawMeds.map((m: any) =>
+        typeof m === "object" && m.name && m.medicationType
+          ? m
+          : normalizeMedicationItem(m)
+      );
+
+      return (
+        <StructuredMedicationListCard
+          medicines={normalizedList}
+          pagination={(activeMsg as any).pagination}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          onViewAllMedications={() => navigation.navigate("MEDICATION")}
+          onAddMedication={() => {
+            setActiveMedicineToEdit(null);
+            setMedicineCardMode("default");
+            const addMsg: Message = {
+              id: `ai-${Date.now()}`,
+              role: "assistant",
+              content: "Please enter the medication details below:",
+              action: "ADD_MEDICINE",
+              medicine: {},
+            };
+            setMessages((prev) => [...prev, addMsg]);
+          }}
+          onUploadPrescription={() => {
+            handleDocumentUpload();
           }}
           readOnly={isHistorical}
         />

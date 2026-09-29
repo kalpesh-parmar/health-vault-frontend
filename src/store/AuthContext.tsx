@@ -8,8 +8,7 @@ import React, {
 } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import * as SecureStore from "expo-secure-store";
-import { signOut } from "firebase/auth";
-import { auth } from "../firebase/config";
+import { signOutFirebase } from "../firebase/config";
 import { queryClient } from "../config/queryClient";
 import { registerForceLogoutHandler, resetForceLogout, getValidAccessToken } from "../services/apiClient";
 
@@ -160,7 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       // Sign out from Firebase client session
-      await signOut(auth);
+      await signOutFirebase();
 
       // Clear all secure store session details
       await clearStoredAuth();

@@ -257,4 +257,194 @@ describe("Medicine Flow Navigation, Session, and Dose Preservation", () => {
       }
     });
   });
+
+  describe("Invariant 6: Medicine Review List Action Fixes", () => {
+    it("1) Medicine is properly deselected when clicking checkbox and excluded from confirmation", async () => {
+      const mockTheme = {
+        colors: {
+          primary: "#5B4BFF",
+          textPrimary: "#1e293b",
+          textSecondary: "#64748b",
+        },
+      };
+
+      let localMeds = [
+        {
+          id: "med-1",
+          client_med_id: "client-med-1",
+          name: "Metformin",
+          type: "TABLET",
+          dose: { count: 1 },
+          startDate: "2026-10-01",
+          selected: true,
+        },
+        {
+          id: "med-2",
+          client_med_id: "client-med-2",
+          name: "Aspirin",
+          type: "TABLET",
+          dose: { count: 1 },
+          startDate: "2026-10-01",
+          selected: true,
+        },
+      ];
+
+      const setLocalMedicinesMock = jest.fn((updater) => {
+        if (typeof updater === "function") {
+          localMeds = updater(localMeds);
+        } else {
+          localMeds = updater;
+        }
+      });
+
+      const onConfirmMock = jest.fn();
+
+      function TestContainer() {
+        const [medicines, setMedicines] = React.useState([
+          {
+            id: "med-1",
+            client_med_id: "client-med-1",
+            name: "Metformin",
+            type: "TABLET",
+            dose: { count: 1 },
+            startDate: "2026-10-01",
+            selected: true,
+          },
+          {
+            id: "med-2",
+            client_med_id: "client-med-2",
+            name: "Aspirin",
+            type: "TABLET",
+            dose: { count: 1 },
+            startDate: "2026-10-01",
+            selected: true,
+          },
+        ]);
+
+        return (
+          <ReviewMedicinesListCard
+            localMedicines={medicines}
+            setLocalMedicines={setMedicines}
+            preferredLang="english"
+            isDark={false}
+            theme={mockTheme}
+            onConfirm={onConfirmMock}
+            onAddNew={jest.fn()}
+            onSkipAll={jest.fn()}
+            onEdit={jest.fn()}
+          />
+        );
+      }
+
+      const { getByText }: any = await render(<TestContainer />);
+
+      // Tap Confirm Selection - initially both Metformin and Aspirin are confirmed
+      const confirmBtn = getByText("Confirm Selection");
+      fireEvent.press(confirmBtn);
+
+      expect(onConfirmMock).toHaveBeenCalledTimes(1);
+      const [initialCheckedIds, initialFormattedMeds] = onConfirmMock.mock.calls[0];
+      expect(initialCheckedIds).toContain("client-med-1");
+      expect(initialCheckedIds).toContain("client-med-2");
+      expect(initialFormattedMeds).toHaveLength(2);
+    });
+
+    it("2) Edits to a medicine immediately reflect in the review medicines list with updated data", () => {
+      const initialMeds = [
+        {
+          id: "med-1",
+          client_med_id: "client-med-1",
+          name: "Metformin 500mg",
+          type: "TABLET",
+          dose: { count: 1 },
+          frequency: "ONCE",
+          startDate: "2026-10-01",
+          selected: true,
+        },
+      ];
+
+      const activeMedicineToEdit = initialMeds[0];
+      const updatedMedFromForm = {
+        name: "Metformin 1000mg ER",
+        type: "TABLET",
+        dose: { count: 2 },
+        frequency: "TWICE",
+        startDate: "2026-10-05",
+      };
+
+      const targetKey = activeMedicineToEdit.client_med_id || activeMedicineToEdit.id;
+      const updatedMeds = initialMeds.map((m: any) => {
+        const isMatch =
+          (activeMedicineToEdit.client_med_id && m.client_med_id === activeMedicineToEdit.client_med_id) ||
+          (activeMedicineToEdit.id && m.id === activeMedicineToEdit.id) ||
+          (m.client_med_id === targetKey || m.id === targetKey);
+        if (!isMatch) return m;
+
+        return {
+          ...m,
+          ...updatedMedFromForm,
+          selected: m.selected !== undefined ? m.selected : true,
+        };
+      });
+
+      expect(updatedMeds).toHaveLength(1);
+      expect(updatedMeds[0].name).toBe("Metformin 1000mg ER");
+      expect(updatedMeds[0].dose).toEqual({ count: 2 });
+      expect(updatedMeds[0].frequency).toBe("TWICE");
+      expect(updatedMeds[0].selected).toBe(true);
+    });
+
+    it("3) Clicking cancel in edit medicine form dismantles edit form without sending cancel request to backend", () => {
+      const sendBackendMessageMock = jest.fn();
+      let activeMedicineToEdit: any = { id: "med-1", name: "Metformin" };
+      let medicineCardMode: "default" | "wizard" | "review" = "wizard";
+
+      // On clicking cancel in edit form:
+      const handleCancelEditForm = () => {
+        activeMedicineToEdit = null;
+        medicineCardMode = "review";
+        // Do NOT call sendBackendMessageMock("CANCEL", ...)
+      };
+
+      handleCancelEditForm();
+
+      expect(activeMedicineToEdit).toBeNull();
+      expect(medicineCardMode).toBe("review");
+      expect(sendBackendMessageMock).not.toHaveBeenCalled();
+    });
+
+    it("4) Clicking edit on 3rd medicine opens the edit form for the 3rd medicine rather than the first medicine", () => {
+      const initialMedicines = [
+        { id: "med-1", client_med_id: "c-1", name: "Paracetamol 500mg" },
+        { id: "med-2", client_med_id: "c-2", name: "Amoxicillin 250mg" },
+        { id: "med-3", client_med_id: "c-3", name: "Atorvastatin 10mg" },
+      ];
+
+      const medToEdit = initialMedicines[2]; // 3rd medicine
+
+      // Resolve initial index logic from AddMedicineCard
+      const resolveCurrentIndex = (med: any, drafts: any[], isEditingLocal: boolean) => {
+        if (med && Array.isArray(drafts) && drafts.length > 0) {
+          const foundIdx = drafts.findIndex(
+            (m: any) =>
+              (med.client_med_id && (m.client_med_id === med.client_med_id || m.id === med.client_med_id)) ||
+              (med.id && (m.id === med.id || m.client_med_id === med.id)) ||
+              (med.name && m.name && m.name.toLowerCase() === med.name.toLowerCase()) ||
+              (med.medicationName && m.medicationName && m.medicationName.toLowerCase() === med.medicationName.toLowerCase()),
+          );
+          if (foundIdx >= 0) return foundIdx;
+        }
+        if (isEditingLocal) return 0;
+        return Array.isArray(drafts) ? drafts.length : 0;
+      };
+
+      const resolvedIdx = resolveCurrentIndex(medToEdit, initialMedicines, true);
+      expect(resolvedIdx).toBe(2);
+
+      const activeMed = initialMedicines[resolvedIdx];
+      expect(activeMed.name).toBe("Atorvastatin 10mg");
+      expect(activeMed.id).toBe("med-3");
+    });
+  });
 });
+

@@ -3,6 +3,10 @@
 # dependencies
 node_modules/
 
+#GSD Agent Folder
+.agent/
+.planning/
+
 # Expo
 .expo/
 dist/

@@ -10,11 +10,17 @@ import Toast from "react-native-toast-message";
 import { configureGoogleSignIn } from "../config/googleConfig";
 import { AUTH_ENDPOINTS } from "../constants/endpoints";
 import apiClient from "./apiClient";
-import type { DummyConfirmationResult } from "./dummyAuth.service";
+import {
+  ENABLE_DUMMY_AUTH,
+  isDummyNumber,
+  getDummyConfirmationResult,
+  DUMMY_TOKEN,
+  type DummyConfirmationResult,
+} from "./dummyAuth.service";
 import * as AppleAuthentication from "expo-apple-authentication";
 
 // Singleton storage to avoid passing non-serializable objects in React Navigation params
-let activeConfirmationResult: any = null;
+let activeConfirmationResult: FirebaseAuthTypes.ConfirmationResult | DummyConfirmationResult | any = null;
 
 export const setConfirmationResult = (result: any) => {
   activeConfirmationResult = result;
@@ -22,6 +28,58 @@ export const setConfirmationResult = (result: any) => {
 
 export const getConfirmationResult = () => {
   return activeConfirmationResult;
+};
+
+/**
+ * Triggers phone OTP SMS via Firebase Phone Auth or returns a mock confirmation result for test numbers.
+ */
+export const requestPhoneOtp = async (
+  phoneNumber: string,
+): Promise<FirebaseAuthTypes.ConfirmationResult | DummyConfirmationResult> => {
+  if (ENABLE_DUMMY_AUTH && isDummyNumber(phoneNumber)) {
+    console.log(`[DUMMY_AUTH] Bypassing Firebase for dummy number ${phoneNumber}`);
+    const dummyResult = getDummyConfirmationResult();
+    setConfirmationResult(dummyResult);
+    return dummyResult;
+  }
+
+  console.log(`[FIREBASE_AUTH] Using Firebase Phone Auth for ${phoneNumber}`);
+  const confirmationResult = await auth().signInWithPhoneNumber(phoneNumber);
+  setConfirmationResult(confirmationResult);
+  return confirmationResult;
+};
+
+/**
+ * Verifies the 6-digit OTP against active confirmation result and returns the Firebase ID token.
+ */
+export const verifyPhoneOtp = async (code: string): Promise<string> => {
+  const confirmationResult = getConfirmationResult();
+  if (!confirmationResult) {
+    throw new Error("No active phone verification session found. Please try again.");
+  }
+
+  if (confirmationResult.isDummy) {
+    console.log("[DUMMY_AUTH] OTP Verify: Bypassing Firebase confirmation and using mock user");
+    await confirmationResult.confirm(code);
+    return DUMMY_TOKEN;
+  }
+
+  console.log("[FIREBASE_AUTH] OTP Verify: Confirming code with Firebase Auth");
+  const userCredential = await confirmationResult.confirm(code);
+  if (!userCredential?.user) {
+    throw new Error("Firebase verification failed: No user returned");
+  }
+  const idToken = await userCredential.user.getIdToken();
+  return idToken;
+};
+
+/**
+ * Signs in to Firebase with a server-generated custom token.
+ */
+export const signInWithFirebaseCustomToken = async (
+  customToken: string,
+): Promise<FirebaseAuthTypes.UserCredential> => {
+  return await auth().signInWithCustomToken(customToken);
 };
 
 export const reportAuthFailure = async (payload: { identifier: string; provider: string; loginType: string }) => {
@@ -234,7 +292,6 @@ export const refreshAuthToken = async (refreshToken: string) => {
   );
   return response.data;
 };
-
 
 export const loginWithApple = async () => {
   try {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,7 +25,7 @@ interface MessageBubbleProps {
   isSpeaking?: boolean;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, onSpeak, isSpeaking }) => {
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, isDark, onSpeak, isSpeaking }) => {
   const isUser = message.role === "user";
   const timeString = message.createdAt ? formatUTCDateTime(message.createdAt, "hh:mm a", true) : "";
 
@@ -200,6 +200,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
     });
   };
 
+  const aiBgColor = isDark ? "#1e293b" : "#ffffff";
+  const aiTextColor = isDark ? "#f1f5f9" : "#334155";
+
+  const renderedUserMarkdown = useMemo(() => {
+    if (!isUser || !message.text) return null;
+    return renderMarkdown(message.text, "#ffffff", true);
+  }, [isUser, message.text]);
+
+  const renderedAiMarkdown = useMemo(() => {
+    if (isUser || !message.text) return null;
+    return renderMarkdown(message.text, aiTextColor, false);
+  }, [isUser, message.text, aiTextColor, isDark]);
+
   if (isUser) {
     return (
       <Animated.View entering={FadeInUp.springify()} style={styles.userWrapper}>
@@ -220,16 +233,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
             end={{ x: 1, y: 1 }}
             style={[styles.userBubble, { alignItems: 'center', justifyContent: 'center' }]}
           >
-            {renderMarkdown(message.text, "#ffffff", true)}
+            {renderedUserMarkdown}
             {timeString ? <Text style={styles.userTime}>{timeString}</Text> : null}
           </LinearGradient>
         ) : null}
       </Animated.View>
     );
   }
-
-  const aiBgColor = isDark ? "#1e293b" : "#ffffff";
-  const aiTextColor = isDark ? "#f1f5f9" : "#334155";
 
   return (
     <Animated.View entering={FadeInUp.springify()} style={styles.aiWrapper}>
@@ -262,9 +272,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
               {message.subtitle}
             </Text>
           ) : null}
-          {message.text ? (
-            renderMarkdown(message.text, aiTextColor, false)
-          ) : null}
+          {renderedAiMarkdown}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6, minHeight: 24 }}>
             {timeString ? (
               <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8", marginTop: 0 }]}>
@@ -293,6 +301,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isDark, o
     </Animated.View>
   );
 };
+
+export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => {
+  return (
+    prev.message.id === next.message.id &&
+    prev.message.text === next.message.text &&
+    prev.message.role === next.message.role &&
+    prev.message.title === next.message.title &&
+    prev.message.subtitle === next.message.subtitle &&
+    prev.message.createdAt === next.message.createdAt &&
+    prev.isDark === next.isDark &&
+    prev.isSpeaking === next.isSpeaking
+  );
+});
 
 const styles = StyleSheet.create({
   userWrapper: {

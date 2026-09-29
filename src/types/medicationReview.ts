@@ -10,6 +10,7 @@ export interface ProcessedDocument {
 
 export interface ExtractedMedicine {
   id: string;
+  client_med_id?: string;
   documentId: string;
   documentName: string;
 

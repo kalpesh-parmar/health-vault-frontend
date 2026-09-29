@@ -8,6 +8,7 @@ import {
   Text,
   ActivityIndicator,
   StyleSheet,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
@@ -288,6 +289,95 @@ const AIChatScreen = ({ route }: any) => {
     setIsViewerOpen(true);
   }, [documentsList]);
 
+  const keyExtractor = useCallback((item: any, index: number) => item.id || `msg-${index}`, []);
+
+  const renderChatItem = useCallback(
+    ({ item, index }: { item: any; index: number }) => (
+      <ChatMessageItem
+        item={item}
+        index={index}
+        mergedMessages={mergedMessages}
+        isDark={isDark}
+        theme={theme}
+        preferredLang={preferredLang}
+        speakingMessageId={speakingMessageId}
+        speakMessage={speakMessage}
+        onboardingSessionId={onboardingSessionId}
+        chatWizardState={chatWizardState}
+        isLoadingResults={isLoadingResults}
+        isConfirmingMeds={isConfirmingMeds}
+        setMedicineToEdit={setMedicineToEdit}
+        editSheetRef={editSheetRef}
+        uploadSheetRef={uploadSheetRef}
+        handleConfirmSelection={handleConfirmSelection}
+        resolveCurrentConflict={resolveCurrentConflict}
+        navigateConflict={navigateConflict}
+        handleContinueAnyway={handleContinueAnyway}
+        handleReviewMedicines={handleReviewMedicines}
+        handleConfirmAndAddMeds={handleConfirmAndAddMeds}
+        handleGenericOptionPress={handleGenericOptionPress}
+        navigation={navigation}
+        setChatWizardState={setChatWizardState}
+        setMessages={setMessages}
+        onViewFullReport={handleViewFullReport}
+      />
+    ),
+    [
+      mergedMessages,
+      isDark,
+      theme,
+      preferredLang,
+      speakingMessageId,
+      speakMessage,
+      onboardingSessionId,
+      chatWizardState,
+      isLoadingResults,
+      isConfirmingMeds,
+      setMedicineToEdit,
+      editSheetRef,
+      uploadSheetRef,
+      handleConfirmSelection,
+      resolveCurrentConflict,
+      navigateConflict,
+      handleContinueAnyway,
+      handleReviewMedicines,
+      handleConfirmAndAddMeds,
+      handleGenericOptionPress,
+      navigation,
+      setChatWizardState,
+      setMessages,
+      handleViewFullReport,
+    ]
+  );
+
+  const renderListHeader = useCallback(() => {
+    if (isSending && !isActivelyStreaming) {
+      return (
+        <View style={styles.typingWrapper}>
+          <LinearGradient
+            colors={["#5B4BFF", "#7C6CFF"]}
+            style={styles.typingAvatar}
+          >
+            <Ionicons name="sparkles" size={14} color="#ffffff" />
+          </LinearGradient>
+          <TypingIndicator isDark={isDark} />
+        </View>
+      );
+    }
+    return null;
+  }, [isSending, isActivelyStreaming, isDark]);
+
+  const renderListFooter = useCallback(() => {
+    if (isLoadingMore) {
+      return (
+        <View style={{ paddingVertical: 10 }}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
+      );
+    }
+    return null;
+  }, [isLoadingMore, theme.colors.primary]);
+
   if (isLoadingDocs || isLoadingHistory) {
     return <LoadingScreen />;
   }
@@ -362,65 +452,27 @@ const AIChatScreen = ({ route }: any) => {
           <FlatList
             ref={flatListRef}
             data={mergedMessages}
-            keyExtractor={(item, index) => item.id || `msg-${index}`}
+            keyExtractor={keyExtractor}
             inverted
             onViewableItemsChanged={onViewableItemsChanged.current}
             viewabilityConfig={viewabilityConfig.current}
-            renderItem={({ item, index }) => (
-              <ChatMessageItem
-                item={item}
-                index={index}
-                mergedMessages={mergedMessages}
-                isDark={isDark}
-                theme={theme}
-                preferredLang={preferredLang}
-                speakingMessageId={speakingMessageId}
-                speakMessage={speakMessage}
-                onboardingSessionId={onboardingSessionId}
-                chatWizardState={chatWizardState}
-                isLoadingResults={isLoadingResults}
-                isConfirmingMeds={isConfirmingMeds}
-                setMedicineToEdit={setMedicineToEdit}
-                editSheetRef={editSheetRef}
-                uploadSheetRef={uploadSheetRef}
-                handleConfirmSelection={handleConfirmSelection}
-                resolveCurrentConflict={resolveCurrentConflict}
-                navigateConflict={navigateConflict}
-                handleContinueAnyway={handleContinueAnyway}
-                handleReviewMedicines={handleReviewMedicines}
-                handleConfirmAndAddMeds={handleConfirmAndAddMeds}
-                handleGenericOptionPress={handleGenericOptionPress}
-                navigation={navigation}
-                setChatWizardState={setChatWizardState}
-                setMessages={setMessages}
-                onViewFullReport={handleViewFullReport}
-              />
-            )}
+            renderItem={renderChatItem}
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={false}
+            maintainVisibleContentPosition={{
+              minIndexForVisible: 0,
+            }}
+            automaticallyAdjustKeyboardInsets={false}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             onEndReached={loadMoreMessages}
             onEndReachedThreshold={0.1}
-            ListFooterComponent={
-              isLoadingMore ? (
-                <View style={{ paddingVertical: 10 }}>
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                </View>
-              ) : null
-            }
-            ListHeaderComponent={
-              isSending && !isActivelyStreaming ? (
-                <View style={styles.typingWrapper}>
-                  <LinearGradient
-                    colors={["#5B4BFF", "#7C6CFF"]}
-                    style={styles.typingAvatar}
-                  >
-                    <Ionicons name="sparkles" size={14} color="#ffffff" />
-                  </LinearGradient>
-                  <TypingIndicator isDark={isDark} />
-                </View>
-              ) : null
-            }
+            ListFooterComponent={renderListFooter}
+            ListHeaderComponent={renderListHeader}
           />
         </View>
 

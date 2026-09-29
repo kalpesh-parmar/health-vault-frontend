@@ -1,5 +1,4 @@
-import { auth, db, storage } from "../firebase/config";
-import app from "../firebase/config";
+import app, { auth, signOutFirebase, firebaseConfig } from "../firebase/config";
 
-export { auth, db, storage };
+export { auth, signOutFirebase, firebaseConfig };
 export default app;

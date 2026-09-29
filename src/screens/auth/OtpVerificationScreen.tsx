@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { getAuth, signInWithPhoneNumber, getIdToken } from "@react-native-firebase/auth";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useRef, useState, useEffect } from "react";
@@ -25,20 +24,14 @@ import OtpInput, { OtpInputRef } from "../../components/auth/OtpInput";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import {
-  getConfirmationResult,
+  verifyPhoneOtp,
+  requestPhoneOtp,
   socialLogin,
-  setConfirmationResult,
   reportAuthFailure,
 } from "../../services/auth.service";
 import { resetForceLogout } from "../../services/apiClient";
 import { AuthStackParamList } from "../../types/navigation";
 import { maskPhoneNumber } from "../../utils/auth.utils";
-import {
-  ENABLE_DUMMY_AUTH,
-  isDummyNumber,
-  getDummyConfirmationResult,
-  DUMMY_TOKEN,
-} from "../../services/dummyAuth.service";
 
 type OtpVerificationRouteProp = RouteProp<
   AuthStackParamList,
@@ -120,33 +113,10 @@ const OtpVerificationScreen = () => {
     let firebaseToken;
 
     try {
-      const confirmationResult = getConfirmationResult();
-      if (!confirmationResult) {
-        throw new Error(
-          "No active phone verification session found. Please try again.",
-        );
-      }
-
       console.log(`[OTP_LOG] OTP Verify Start: Verifying OTP code of length ${code.length}`);
       
-      if (confirmationResult.isDummy) {
-        console.log("[DUMMY_AUTH] OTP Verify: Bypassing Firebase confirmation and using mock user");
-        const dummyUserCredential = await confirmationResult.confirm(code);
-        console.log("[DUMMY_AUTH] OTP Verify Success: Dummy authentication completed");
-        console.log(`[DUMMY_AUTH] Dummy User UID: ${dummyUserCredential.user.uid}`);
-        firebaseToken = DUMMY_TOKEN;
-      } else {
-        console.log("[FIREBASE_AUTH] OTP Verify: Confirming code with Firebase Auth");
-        // Verify OTP with Firebase
-        const userCredential = await confirmationResult.confirm(code);
-
-        console.log("[OTP_LOG] OTP Verify Success: Firebase authentication completed");
-        console.log(`[OTP_LOG] Firebase User UID: ${userCredential.user.uid}`);
-
-        // Get Firebase ID Token using modular API
-        firebaseToken = await getIdToken(userCredential.user);
-        console.log("[OTP_LOG] Firebase ID Token Generated", firebaseToken);
-      }
+      firebaseToken = await verifyPhoneOtp(code);
+      console.log("[OTP_LOG] Firebase ID Token Generated", firebaseToken);
 
       // Submit Firebase token to backend
       console.log("[OTP_LOG] Backend Login Start: Authenticating token with server");
@@ -218,19 +188,9 @@ const OtpVerificationScreen = () => {
         text1: "Requesting New OTP...",
       });
       
-      let confirmationResult;
-      if (ENABLE_DUMMY_AUTH && isDummyNumber(mobile)) {
-        console.log(`[DUMMY_AUTH] Resending: Bypassing Firebase for dummy number ${mobile}`);
-        confirmationResult = getDummyConfirmationResult();
-      } else {
-        console.log(`[FIREBASE_AUTH] Resending: Using Firebase for ${mobile}`);
-        // Re-trigger SMS using modular firebase auth
-        const authInstance = getAuth();
-        confirmationResult = await signInWithPhoneNumber(authInstance, mobile);
-      }
+      await requestPhoneOtp(mobile);
 
       console.log("[OTP_LOG] OTP Send Success: Resent verification code to " + mobile);
-      setConfirmationResult(confirmationResult);
 
       Toast.show({
         type: "success",

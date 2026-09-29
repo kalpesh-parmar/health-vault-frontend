@@ -1,11 +1,7 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import {
-  getAuth,
-} from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import app from "@react-native-firebase/app";
+import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
 
-// Load configuration and clean whitespace/spaces from environment variables
+// Environment configuration for reference / web fallback
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim(),
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim(),
@@ -15,11 +11,20 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID?.trim(),
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+/**
+ * Cleanly signs out current user from native Firebase Auth session.
+ */
+export const signOutFirebase = async (): Promise<void> => {
+  try {
+    const authInstance = auth();
+    if (authInstance?.currentUser) {
+      await authInstance.signOut();
+    }
+  } catch (error) {
+    console.warn("[Firebase] Error during signOutFirebase:", error);
+  }
+};
 
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-export { app, auth, db, storage, firebaseConfig };
+export { app, auth, firebaseConfig };
+export type { FirebaseAuthTypes };
 export default app;

@@ -11,7 +11,12 @@ import {
   getLocalDayKey,
   parseToLocalDate,
 } from "../../utils/chatUtils";
-import { I18N_CHAT_UI, SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
+import { parseMedicationListMessage } from "../../utils/medicationListNormalizer";
+import { parseReportListMessage } from "../../utils/reportListNormalizer";
+import {
+  I18N_CHAT_UI,
+  SUGGESTED_QUESTIONS_I18N,
+} from "../../constants/chatConstants";
 
 interface UseChatSessionProps {
   initialSessionId?: string;
@@ -25,6 +30,56 @@ interface UseChatSessionProps {
   lastKnownStateRef?: React.MutableRefObject<any>;
 }
 
+const resolveStructuredContent = (content: any, meta: any) => {
+  const reportListResult = parseReportListMessage(content, meta);
+  if (reportListResult.isReportList) {
+    return {
+      isReportList: true,
+      isMedicationList: false,
+      action: "REPORT_LIST",
+      task: "REPORT_LIST",
+      text:
+        reportListResult.rawText ||
+        (typeof content === "string" ? content : ""),
+      reports: reportListResult.items,
+      medicines: [] as any[],
+      items: reportListResult.items,
+      pagination: reportListResult.pagination,
+      documents: reportListResult.items,
+    };
+  }
+
+  const medListResult = parseMedicationListMessage(content, meta);
+  if (medListResult.isMedicationList) {
+    return {
+      isReportList: false,
+      isMedicationList: true,
+      action: "MEDICATION_LIST",
+      task: "MEDICATION_LIST",
+      text:
+        medListResult.rawText || (typeof content === "string" ? content : ""),
+      reports: [] as any[],
+      medicines: medListResult.items,
+      items: medListResult.items,
+      pagination: medListResult.pagination,
+      documents: undefined,
+    };
+  }
+
+  return {
+    isReportList: false,
+    isMedicationList: false,
+    action: undefined,
+    task: undefined,
+    text: typeof content === "string" ? content : "",
+    reports: [] as any[],
+    medicines: [] as any[],
+    items: [] as any[],
+    pagination: undefined,
+    documents: undefined,
+  };
+};
+
 export const useChatSession = ({
   initialSessionId,
   documentsList,
@@ -37,9 +92,15 @@ export const useChatSession = ({
   lastKnownStateRef,
 }: UseChatSessionProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [onboardingMessages, setOnboardingMessages] = useState<ChatMessage[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(initialSessionId || null);
-  const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(null);
+  const [onboardingMessages, setOnboardingMessages] = useState<ChatMessage[]>(
+    [],
+  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(
+    initialSessionId || null,
+  );
+  const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(
+    null,
+  );
   const [sessions, setSessions] = useState<any[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
   const [input, setInput] = useState("");
@@ -55,10 +116,7 @@ export const useChatSession = ({
   const hasInitializedHistory = useRef(false);
   const isSendingRef = useRef<boolean>(false);
 
-  const {
-    speakingMessageId,
-    speakMessage,
-  } = useTextToSpeech();
+  const { speakingMessageId, speakMessage } = useTextToSpeech();
 
   const t = useCallback(
     (key: string) => {
@@ -66,7 +124,7 @@ export const useChatSession = ({
       const dict = I18N_CHAT_UI[lang] || I18N_CHAT_UI.english;
       return dict?.[key] || I18N_CHAT_UI.english[key] || key;
     },
-    [preferredLang]
+    [preferredLang],
   );
 
   const clearStreamingTimer = () => {
@@ -98,7 +156,7 @@ export const useChatSession = ({
         return next;
       });
     },
-    []
+    [],
   );
 
   const streamNormalChat = async (payload: any) => {
@@ -123,6 +181,17 @@ export const useChatSession = ({
         finalData?.text ||
         "";
 
+      const structRes = resolveStructuredContent(
+        replyText || displayedText || finalData,
+        finalData,
+      );
+
+      const actionType =
+        structRes.action ||
+        finalData?.actionType ||
+        finalData?.action ||
+        "NORMAL_CHAT";
+
       upsertAssistantMessage(messageId, (current) => {
         const baseMessage = current || {
           id: messageId,
@@ -133,17 +202,35 @@ export const useChatSession = ({
 
         return {
           ...baseMessage,
-          text: displayedText || replyText || baseMessage.text,
+          text:
+            structRes.isReportList || structRes.isMedicationList
+              ? structRes.text || displayedText || replyText || baseMessage.text
+              : displayedText || replyText || baseMessage.text,
           sessionId: finalData?.sessionId ?? baseMessage.sessionId,
           mode: finalData?.mode ?? baseMessage.mode,
-          action:
-            finalData?.actionType ||
-            finalData?.action ||
-            baseMessage.action ||
-            "NORMAL_CHAT",
+          action: actionType || baseMessage.action || "NORMAL_CHAT",
+          task: finalData?.task || structRes.task,
           options: finalData?.options ?? baseMessage.options ?? [],
-          medicines: finalData?.medicines ?? baseMessage.medicines ?? [],
-          documents: finalData?.documents ?? baseMessage.documents,
+          reports:
+            structRes.reports.length > 0
+              ? structRes.reports
+              : (finalData?.reports ?? baseMessage.reports ?? []),
+          medicines:
+            structRes.medicines.length > 0
+              ? structRes.medicines
+              : (finalData?.medicines ?? baseMessage.medicines ?? []),
+          items:
+            structRes.items.length > 0
+              ? structRes.items
+              : (finalData?.items ?? (baseMessage as any).items),
+          pagination:
+            structRes.pagination ||
+            finalData?.pagination ||
+            (baseMessage as any).pagination,
+          documents:
+            structRes.documents ||
+            finalData?.documents ||
+            baseMessage.documents,
           document: finalData?.document ?? baseMessage.document ?? null,
           suggestedQuestions:
             finalData?.suggestedQuestions ??
@@ -158,7 +245,7 @@ export const useChatSession = ({
             normalizeDocumentIds(
               finalData?.documentId,
               finalData?.documentIds,
-              finalData?.documents
+              finalData?.documents,
             ) ?? baseMessage.documentIds,
         };
       });
@@ -226,7 +313,7 @@ export const useChatSession = ({
             console.warn("[AI_CHAT] Streaming request failed:", error.message);
           },
         },
-        { signal: controller.signal }
+        { signal: controller.signal },
       );
     } finally {
       if (streamingAbortRef.current === controller) {
@@ -255,10 +342,10 @@ export const useChatSession = ({
 
       const completedFromState = Boolean(
         resumableState?.isOnboardingCompleted ||
-          resumableState?.currentStep === "POST_ONBOARDING" ||
-          resumableState?.currentStep === "COMPLETE" ||
-          resolvedPendingStep === "POST_ONBOARDING" ||
-          resolvedPendingStep === "COMPLETE"
+        resumableState?.currentStep === "POST_ONBOARDING" ||
+        resumableState?.currentStep === "COMPLETE" ||
+        resolvedPendingStep === "POST_ONBOARDING" ||
+        resolvedPendingStep === "COMPLETE",
       );
       const completedFromHistory = Array.isArray(historyItems)
         ? historyItems.some((dbMsg: any) => {
@@ -298,7 +385,9 @@ export const useChatSession = ({
             }
             seenNotice.add("ONBOARDING_COMPLETED_NOTICE");
           }
+          const structRes = resolveStructuredContent(dbMsg.content, meta);
           const msgAction =
+            structRes.action ||
             meta.action ||
             meta.actionType ||
             (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : "NORMAL_CHAT");
@@ -306,7 +395,11 @@ export const useChatSession = ({
           const isDuplicateOfPrev =
             mapped.length > 0 &&
             mapped[mapped.length - 1].role === mappedRole &&
-            mapped[mapped.length - 1].text?.trim() === dbMsg.content?.trim() &&
+            mapped[mapped.length - 1].text?.trim() ===
+              (structRes.isReportList || structRes.isMedicationList
+                ? structRes.text || ""
+                : dbMsg.content
+              )?.trim() &&
             mapped[mapped.length - 1].action === msgAction;
           if (isDuplicateOfPrev) {
             continue;
@@ -315,20 +408,35 @@ export const useChatSession = ({
             ...meta,
             id: dbMsg.id,
             role: mappedRole,
-            text: dbMsg.content,
+            text:
+              structRes.isReportList || structRes.isMedicationList
+                ? structRes.text || ""
+                : dbMsg.content,
             sessionId: chatSessionId,
             createdAt: dbMsg.createdAt,
             action: msgAction,
+            task: meta.task || structRes.task,
+            reports:
+              structRes.reports.length > 0
+                ? structRes.reports
+                : meta.reports || [],
+            medicines:
+              structRes.medicines.length > 0
+                ? structRes.medicines
+                : meta.medicines || [],
+            items:
+              structRes.items.length > 0 ? structRes.items : meta.items || [],
+            pagination: structRes.pagination || meta.pagination,
             document: meta.document || null,
             documentSummary: meta.documentSummary || null,
+            documents: structRes.documents || meta.documents,
             suggestedQuestions: meta.suggestedQuestions || [],
-            keyFindings:
-              meta.document?.keyFindings || meta.keyFindings || [],
+            keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
             documentIds: normalizeDocumentIds(
               meta.document?.id,
               meta.documentId,
               meta.documentIds,
-              meta.documents
+              meta.documents,
             ),
             isOnboardingMessage: true,
           });
@@ -357,7 +465,7 @@ export const useChatSession = ({
 
         if (mostRecent.documentId) {
           const matchedDoc = documentsList.find(
-            (d) => d.id === mostRecent.documentId
+            (d) => d.id === mostRecent.documentId,
           );
           setSelectedDocument(matchedDoc || null);
         } else {
@@ -366,7 +474,7 @@ export const useChatSession = ({
 
         const messagesRes = await apiClient.get(
           `/chat/session/${mostRecent.id}/messages`,
-          { params: { limit: 20 } }
+          { params: { limit: 20 } },
         );
         const msgItems =
           messagesRes.data?.data?.items || messagesRes.data?.items || [];
@@ -387,12 +495,34 @@ export const useChatSession = ({
           } else {
             meta = meta || {};
           }
+          const structRes = resolveStructuredContent(dbMsg.content, meta);
           return {
             ...meta,
             id: dbMsg.id,
             role: dbMsg.role === "assistant" ? "ai" : "user",
-            text: dbMsg.content,
+            text:
+              structRes.isReportList || structRes.isMedicationList
+                ? structRes.text || ""
+                : dbMsg.content,
             mode: meta.mode as ChatMode,
+            action:
+              structRes.action ||
+              meta.action ||
+              meta.actionType ||
+              "NORMAL_CHAT",
+            task: meta.task || structRes.task,
+            reports:
+              structRes.reports.length > 0
+                ? structRes.reports
+                : meta.reports || [],
+            medicines:
+              structRes.medicines.length > 0
+                ? structRes.medicines
+                : meta.medicines || [],
+            items:
+              structRes.items.length > 0 ? structRes.items : meta.items || [],
+            pagination: structRes.pagination || meta.pagination,
+            documents: structRes.documents || meta.documents,
             createdAt: dbMsg.createdAt,
           };
         });
@@ -413,7 +543,7 @@ export const useChatSession = ({
         `/chat/session/${activeSessionId}/messages`,
         {
           params: { limit: 20, cursor: nextCursor },
-        }
+        },
       );
       const items = res.data?.data?.items || res.data?.items || [];
       const newCursor =
@@ -431,11 +561,30 @@ export const useChatSession = ({
         } else {
           meta = meta || {};
         }
+        const structRes = resolveStructuredContent(dbMsg.content, meta);
         return {
           ...meta,
           id: dbMsg.id,
           role: dbMsg.role === "assistant" ? "ai" : "user",
-          text: dbMsg.content,
+          text:
+            structRes.isReportList || structRes.isMedicationList
+              ? structRes.text || ""
+              : dbMsg.content,
+          action:
+            structRes.action || meta.action || meta.actionType || "NORMAL_CHAT",
+          task: meta.task || structRes.task,
+          reports:
+            structRes.reports.length > 0
+              ? structRes.reports
+              : meta.reports || [],
+          medicines:
+            structRes.medicines.length > 0
+              ? structRes.medicines
+              : meta.medicines || [],
+          items:
+            structRes.items.length > 0 ? structRes.items : meta.items || [],
+          pagination: structRes.pagination || meta.pagination,
+          documents: structRes.documents || meta.documents,
           createdAt: dbMsg.createdAt,
         };
       });
@@ -476,7 +625,7 @@ export const useChatSession = ({
           documentId: normalizeDocumentIds(
             latestAssistantMessage?.documentIds,
             latestAssistantMessage?.documents,
-            filesInfo
+            filesInfo,
           ),
           message: textToSubmit,
         };
@@ -484,20 +633,41 @@ export const useChatSession = ({
         const response = await apiClient.post("/v1/onboarding/chat", payload);
         const resData = response.data?.data;
         if (resData?.reply) {
+          const structRes = resolveStructuredContent(resData.reply, resData);
           const aiMsg: ChatMessage = {
             id: `ai-opt-res-${Date.now()}`,
             role: "ai",
-            text: resData.reply,
-            action: resData.actionType || resData.action || "NORMAL_CHAT",
+            text:
+              structRes.isReportList || structRes.isMedicationList
+                ? structRes.text || ""
+                : resData.reply,
+            action:
+              structRes.action ||
+              resData.actionType ||
+              resData.action ||
+              "NORMAL_CHAT",
+            task: resData.task || structRes.task,
             options: resData.options || [],
-            medicines: resData.medicines || [],
+            reports:
+              structRes.reports.length > 0
+                ? structRes.reports
+                : resData.reports || [],
+            medicines:
+              structRes.medicines.length > 0
+                ? structRes.medicines
+                : resData.medicines || [],
+            items:
+              structRes.items.length > 0
+                ? structRes.items
+                : resData.items || [],
+            pagination: structRes.pagination || resData.pagination,
             document: resData.document || null,
             documentSummary: resData.documentSummary || null,
-            documents: resData.documents || [],
+            documents: structRes.documents || resData.documents || [],
             documentIds: normalizeDocumentIds(
               resData.documentId,
               resData.documentIds,
-              resData.documents
+              resData.documents,
             ),
             createdAt: new Date().toISOString(),
           };
@@ -517,8 +687,9 @@ export const useChatSession = ({
                 (m) =>
                   m.action === "ONBOARDING_COMPLETED_NOTICE" ||
                   m.id?.startsWith("ai-comp-") ||
-                  (resData.completionMessageId && m.id === resData.completionMessageId) ||
-                  m.text === resData.completionMessage
+                  (resData.completionMessageId &&
+                    m.id === resData.completionMessageId) ||
+                  m.text === resData.completionMessage,
               );
               if (!hasComp) {
                 const compMsg: ChatMessage = {
@@ -543,10 +714,10 @@ export const useChatSession = ({
             null;
           const isNowCompleted = Boolean(
             resData?.onboardingState?.isOnboardingCompleted ??
-              resData?.state?.isOnboardingCompleted ??
-              resData?.isOnboardingCompleted ??
-              (nextPendingStep === "POST_ONBOARDING" ||
-                nextPendingStep === "COMPLETE")
+            resData?.state?.isOnboardingCompleted ??
+            resData?.isOnboardingCompleted ??
+            (nextPendingStep === "POST_ONBOARDING" ||
+              nextPendingStep === "COMPLETE"),
           );
           setIsOnboardingCompleted(isNowCompleted);
           setPendingStep(isNowCompleted ? null : nextPendingStep);
@@ -643,7 +814,8 @@ export const useChatSession = ({
       const isDuplicateOfPrev =
         deduplicated.length > 0 &&
         deduplicated[deduplicated.length - 1].role === msg.role &&
-        deduplicated[deduplicated.length - 1].text?.trim() === msg.text?.trim() &&
+        deduplicated[deduplicated.length - 1].text?.trim() ===
+          msg.text?.trim() &&
         deduplicated[deduplicated.length - 1].action === msg.action;
       if (isDuplicateOfPrev) {
         continue;

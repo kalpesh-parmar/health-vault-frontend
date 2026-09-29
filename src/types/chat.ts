@@ -41,6 +41,10 @@ export interface ChatMessage {
   suggestedQuestions?: string[];
   keyFindings?: any[];
   isOnboardingMessage?: boolean;
+  task?: string;
+  pagination?: any;
+  items?: any[];
+  reports?: any[];
 }
 
 export type { ChatWizardState, DuplicateConflict };

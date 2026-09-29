@@ -192,13 +192,20 @@ export const useChatWizardManager = ({
   ]);
 
   const handleEditSave = (updated: ExtractedMedicine) => {
+    const isTargetMed = (m: any) =>
+      Boolean(
+        (updated.client_med_id && m.client_med_id === updated.client_med_id) ||
+        (updated.id && m.id === updated.id) ||
+        ((m.client_med_id || m.id) === (updated.client_med_id || updated.id))
+      );
+
     const updatedExtracted = chatWizardState.extractedMedicines.map((m) =>
-      m.id === updated.id ? { ...m, ...updated } : m
+      isTargetMed(m) ? { ...m, ...updated } : m
     );
 
     setChatWizardState((prev) => {
       const updatedConflicts = prev.conflicts.map((c) => {
-        if (c.extractedMedicine.id === updated.id) {
+        if (isTargetMed(c.extractedMedicine)) {
           return {
             ...c,
             extractedMedicine: { ...c.extractedMedicine, ...updated },
@@ -222,7 +229,7 @@ export const useChatWizardManager = ({
             return {
               ...msg,
               medicines: msg.medicines.map((m) =>
-                m.id === updated.id ? { ...m, ...updated } : m
+                isTargetMed(m) ? { ...m, ...updated } : m
               ),
             };
           }

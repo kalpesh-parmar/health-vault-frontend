@@ -1,6 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
-  ScrollView,
+  FlatList,
   StatusBar,
   ActivityIndicator,
 } from "react-native";
@@ -19,10 +19,8 @@ import { useAuth } from "../../context/ContextAPI";
 import { useDocumentMedia, PickedFile } from "../../hooks/useDocumentMedia";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { uploadPatientDocuments } from "../../services/documentService";
-
-interface SelectedFile extends PickedFile {
-  originalName: string;
-}
+import { SelectedFileCard, SelectedFile } from "../../components/upload/SelectedFileCard";
+import { batchCompressFiles } from "../../utils/mediaCompressor";
 
 export const MultiUploadScreen = () => {
   const navigation = useAppNavigation();
@@ -96,9 +94,81 @@ export const MultiUploadScreen = () => {
     }
   };
 
-  const handleRemoveFile = (index: number) => {
+  const handleRemoveFile = useCallback((index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
+  }, []);
+
+  const handleEditFile = useCallback((_index: number) => {
+    editSheetRef.current?.present();
+  }, []);
+
+  const fileKeyExtractor = useCallback(
+    (item: SelectedFile, index: number) => `${item.name}-${index}`,
+    []
+  );
+
+  const renderFileItem = useCallback(
+    ({ item, index }: { item: SelectedFile; index: number }) => (
+      <SelectedFileCard
+        file={item}
+        index={index}
+        isUploading={isUploading}
+        onEdit={handleEditFile}
+        onRemove={handleRemoveFile}
+      />
+    ),
+    [isUploading, handleEditFile, handleRemoveFile]
+  );
+
+  const renderListHeader = useCallback(() => (
+    <>
+      <SectionTitle>Select Documents (Max 5)</SectionTitle>
+      <SubText>
+        Upload up to 5 medical documents (PDF, PNG, JPG, WEBP, TIFF up to 150MB each).
+      </SubText>
+
+      {selectedFiles.length === 0 ? (
+        <EmptyDropZone onPress={handlePickMoreFiles}>
+          <IconCircle>
+            <MaterialCommunityIcons name="cloud-upload" size={40} color="#0d9488" />
+          </IconCircle>
+          <DropZoneTitle>Tap to Select Documents</DropZoneTitle>
+          <DropZoneSubtitle>Support PDF and Image formats</DropZoneSubtitle>
+        </EmptyDropZone>
+      ) : null}
+    </>
+  ), [selectedFiles.length]);
+
+  const renderListFooter = useCallback(() => (
+    <>
+      {selectedFiles.length > 0 && selectedFiles.length < 5 && !isUploading && (
+        <AddMoreButton onPress={handlePickMoreFiles}>
+          <Ionicons name="add-circle-outline" size={22} color="#0d9488" />
+          <AddMoreText>Add Another Document ({selectedFiles.length}/5)</AddMoreText>
+        </AddMoreButton>
+      )}
+
+      {isUploading && (
+        <ProgressCard>
+          <ProgressHeader>
+            <ProgressTitle>{currentActionText}</ProgressTitle>
+            <ProgressPct>{uploadProgress}%</ProgressPct>
+          </ProgressHeader>
+
+          <ProgressBarBackground>
+            <ProgressBarFill style={{ width: `${uploadProgress}%` }} />
+          </ProgressBarBackground>
+
+          <RowCenter style={{ marginTop: 10 }}>
+            <ActivityIndicator size="small" color="#0d9488" />
+            <LoaderSubtitle style={{ marginLeft: 8 }}>
+              Processing files, please do not close the app.
+            </LoaderSubtitle>
+          </RowCenter>
+        </ProgressCard>
+      )}
+    </>
+  ), [selectedFiles.length, isUploading, currentActionText, uploadProgress]);
 
   const getFileNameAndExtension = (fileName: string) => {
     const parts = fileName.split(".");
@@ -178,13 +248,18 @@ export const MultiUploadScreen = () => {
 
     setIsUploading(true);
     setUploadProgress(0);
-    setCurrentActionText("Uploading files to server...");
+    setCurrentActionText("Optimizing & compressing documents...");
 
     try {
-      // 1. Upload files
+      // 1. Compress image documents client-side
+      const filesToUpload = await batchCompressFiles(selectedFiles);
+
+      setCurrentActionText("Uploading files to server...");
+
+      // 2. Upload files
       const uploadRes = await uploadPatientDocuments(
         userId,
-        selectedFiles,
+        filesToUpload,
         (progressEvent) => {
           if (progressEvent.total) {
             const pct = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -257,86 +332,18 @@ export const MultiUploadScreen = () => {
       </HeaderWrapper>
 
       <ContentContainer>
-        <ScrollView
+        <FlatList
+          data={selectedFiles}
+          keyExtractor={fileKeyExtractor}
+          renderItem={renderFileItem}
+          ListHeaderComponent={renderListHeader}
+          ListFooterComponent={renderListFooter}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
           contentContainerStyle={{ padding: 20, paddingBottom: 90 + bottomPadding }}
           keyboardShouldPersistTaps="handled"
-        >
-          <SectionTitle>Select Documents (Max 5)</SectionTitle>
-          <SubText>
-            Upload up to 5 medical documents (PDF, PNG, JPG, WEBP, TIFF up to 150MB each).
-          </SubText>
-
-          {selectedFiles.length === 0 ? (
-            <EmptyDropZone onPress={handlePickMoreFiles}>
-              <IconCircle>
-                <MaterialCommunityIcons name="cloud-upload" size={40} color="#0d9488" />
-              </IconCircle>
-              <DropZoneTitle>Tap to Select Documents</DropZoneTitle>
-              <DropZoneSubtitle>Support PDF and Image formats</DropZoneSubtitle>
-            </EmptyDropZone>
-          ) : (
-            <FileList>
-              {selectedFiles.map((file, index) => {
-                const iconInfo = getFileIcon(file.type, file.name);
-                return (
-                  <FileCard key={`${file.name}-${index}`}>
-                    <FileIconBox>
-                      <MaterialCommunityIcons name={iconInfo.name as any} size={28} color={iconInfo.color} />
-                    </FileIconBox>
-
-                    <FileInfo>
-                      <FileName numberOfLines={1}>{file.name}</FileName>
-                      <OriginalFileName numberOfLines={1}>
-                        Original: {file.originalName}
-                      </OriginalFileName>
-                      <FileMeta>
-                        {formatFileSize(file.size)} • {file.type.split("/")[1]?.toUpperCase() || "FILE"}
-                      </FileMeta>
-                    </FileInfo>
-
-                    {!isUploading && (
-                      <ActionButtonsRow>
-                        <EditButton onPress={() => editSheetRef.current?.present()}>
-                          <Ionicons name="pencil-outline" size={20} color="#0d9488" />
-                        </EditButton>
-                        <RemoveButton onPress={() => handleRemoveFile(index)}>
-                          <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                        </RemoveButton>
-                      </ActionButtonsRow>
-                    )}
-                  </FileCard>
-                );
-              })}
-            </FileList>
-          )}
-
-          {selectedFiles.length > 0 && selectedFiles.length < 5 && !isUploading && (
-            <AddMoreButton onPress={handlePickMoreFiles}>
-              <Ionicons name="add-circle-outline" size={22} color="#0d9488" />
-              <AddMoreText>Add Another Document ({selectedFiles.length}/5)</AddMoreText>
-            </AddMoreButton>
-          )}
-
-          {isUploading && (
-            <ProgressCard>
-              <ProgressHeader>
-                <ProgressTitle>{currentActionText}</ProgressTitle>
-                <ProgressPct>{uploadProgress}%</ProgressPct>
-              </ProgressHeader>
-
-              <ProgressBarBackground>
-                <ProgressBarFill style={{ width: `${uploadProgress}%` }} />
-              </ProgressBarBackground>
-
-              <RowCenter style={{ marginTop: 10 }}>
-                <ActivityIndicator size="small" color="#0d9488" />
-                <LoaderSubtitle style={{ marginLeft: 8 }}>
-                  Processing files, please do not close the app.
-                </LoaderSubtitle>
-              </RowCenter>
-            </ProgressCard>
-          )}
-        </ScrollView>
+          showsVerticalScrollIndicator={false}
+        />
 
         <FooterContainer bottomPadding={bottomPadding}>
           <SubmitButton

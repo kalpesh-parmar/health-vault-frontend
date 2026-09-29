@@ -1,9 +1,8 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { signOut } from "firebase/auth";
 import Toast from "react-native-toast-message";
-import { auth } from "../firebase/config";
+import { signOutFirebase } from "../firebase/config";
 import { BASE_URL, API_TIMEOUT, ENABLE_API_LOGS } from "../config/api";
 
 const apiClient = axios.create({
@@ -282,7 +281,7 @@ export const triggerForceLogout = async () => {
 
   // 4. Sign out Firebase
   try {
-    await signOut(auth);
+    await signOutFirebase();
   } catch (err) {
     console.error("[apiClient] Failed to sign out Firebase:", err);
   }

@@ -23,21 +23,8 @@ export const generateClientMedId = (existingDrafts?: any[]): string => {
   return id;
 };
 
-export const deduplicateDrafts = (medList: any[]): any[] => {
-  if (!Array.isArray(medList)) return [];
-  const seenIds = new Set<string>();
-  const result: any[] = [];
-  for (const m of medList) {
-    if (!m) continue;
-    const key = m.client_med_id || m.id;
-    if (key && seenIds.has(key)) {
-      continue;
-    }
-    if (key) seenIds.add(key);
-    result.push(m);
-  }
-  return result;
-};
+import { deduplicateDrafts } from "../../../utils/medicationListNormalizer";
+export { deduplicateDrafts };
 
 export interface AddMedicineCardProps {
   med?: any;
@@ -861,13 +848,17 @@ export function AddMedicineCard({
 
   // Current active index in the carousel
   const [currentIndex, setCurrentIndex] = useState<number>(() => {
-    if (isEditingLocal) return 0;
-    if (med?.client_med_id && Array.isArray(initialMedicines)) {
+    if (med && Array.isArray(initialMedicines) && initialMedicines.length > 0) {
       const foundIdx = initialMedicines.findIndex(
-        (m) => m.client_med_id === med.client_med_id || m.id === med.id,
+        (m: any) =>
+          (med.client_med_id && (m.client_med_id === med.client_med_id || m.id === med.client_med_id)) ||
+          (med.id && (m.id === med.id || m.client_med_id === med.id)) ||
+          (med.name && m.name && m.name.toLowerCase() === med.name.toLowerCase()) ||
+          (med.medicationName && m.medicationName && m.medicationName.toLowerCase() === med.medicationName.toLowerCase()),
       );
       if (foundIdx >= 0) return foundIdx;
     }
+    if (isEditingLocal) return 0;
     // By default, start at blank form for new medicine if drafts exist, or 0
     return Array.isArray(initialMedicines) ? initialMedicines.length : 0;
   });
@@ -922,11 +913,21 @@ export function AddMedicineCard({
         // Initial population from incoming drafts
         setDrafts(incomingDeduped);
         let targetIdx = incomingDeduped.length;
-        if (med?.client_med_id || med?.id) {
+        if (med) {
           const foundIdx = incomingDeduped.findIndex(
-            (m: any) => (m.client_med_id || m.id) === (med.client_med_id || med.id),
+            (m: any) =>
+              (med.client_med_id && (m.client_med_id === med.client_med_id || m.id === med.client_med_id)) ||
+              (med.id && (m.id === med.id || m.client_med_id === med.id)) ||
+              (med.name && m.name && m.name.toLowerCase() === med.name.toLowerCase()) ||
+              (med.medicationName && m.medicationName && m.medicationName.toLowerCase() === med.medicationName.toLowerCase()),
           );
-          if (foundIdx >= 0) targetIdx = foundIdx;
+          if (foundIdx >= 0) {
+            targetIdx = foundIdx;
+          } else if (isEditingLocal) {
+            targetIdx = 0;
+          }
+        } else if (isEditingLocal) {
+          targetIdx = 0;
         }
         setCurrentIndex(targetIdx);
         if (incomingIds.has(newDraftId)) {
@@ -956,11 +957,21 @@ export function AddMedicineCard({
         // External list replacement -> reset
         setDrafts(incomingDeduped);
         let targetIdx = incomingDeduped.length;
-        if (med?.client_med_id || med?.id) {
+        if (med) {
           const foundIdx = incomingDeduped.findIndex(
-            (m: any) => (m.client_med_id || m.id) === (med.client_med_id || med.id),
+            (m: any) =>
+              (med.client_med_id && (m.client_med_id === med.client_med_id || m.id === med.client_med_id)) ||
+              (med.id && (m.id === med.id || m.client_med_id === med.id)) ||
+              (med.name && m.name && m.name.toLowerCase() === med.name.toLowerCase()) ||
+              (med.medicationName && m.medicationName && m.medicationName.toLowerCase() === med.medicationName.toLowerCase()),
           );
-          if (foundIdx >= 0) targetIdx = foundIdx;
+          if (foundIdx >= 0) {
+            targetIdx = foundIdx;
+          } else if (isEditingLocal) {
+            targetIdx = 0;
+          }
+        } else if (isEditingLocal) {
+          targetIdx = 0;
         }
         setCurrentIndex(targetIdx);
         if (incomingIds.has(newDraftId)) {

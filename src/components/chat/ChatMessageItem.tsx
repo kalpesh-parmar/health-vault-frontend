@@ -28,10 +28,14 @@ import {
   DocumentSummaryStats,
 } from "./widgets/ReportSummaryChatCard";
 import { StructuredReportSummaryCard } from "./widgets/StructuredReportSummaryCard";
+import { StructuredMedicationListCard } from "./widgets/StructuredMedicationListCard";
+import { StructuredReportListCard } from "./widgets/StructuredReportListCard";
 import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { ChatMessage } from "../../types/chat";
 import { extractMedicationsFromDocuments, normalizeDocumentsList } from "../../utils/documentNormalizer";
+import { normalizeMedicationItem } from "../../utils/medicationListNormalizer";
+import { normalizeReportItem } from "../../utils/reportListNormalizer";
 export type { ChatMessage };
 
 interface ChatMessageItemProps {
@@ -80,7 +84,7 @@ interface ChatMessageItemProps {
   onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
 }
 
-export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
+const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   item,
   index,
   mergedMessages,
@@ -171,7 +175,14 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     item.action === "MEDICINE_SUMMARY" ||
     item.action === "MEDICINE_REVIEW_ACCORDION" ||
     item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE" ||
-    item.action === "ASK_REPORT";
+    item.action === "ASK_REPORT" ||
+    item.action === "MEDICATION_LIST" ||
+    item.task === "MEDICATION_LIST" ||
+    item.action === "REPORT_LIST" ||
+    item.task === "REPORT_LIST" ||
+    item.action === "DOCUMENT_LIST" ||
+    item.task === "DOCUMENT_LIST" ||
+    (item as any).mode === "STRUCTURED_LIST";
 
   const isExcludedStep =
     item.action === "FILE_UPLOAD" ||
@@ -341,7 +352,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         <AddMedicineCard
           key={item.id}
           med={med}
-          isEditingLocal={false}
+          isEditingLocal={item.action === "EDIT_MEDICINE"}
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
@@ -355,11 +366,17 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             });
           }}
           onCancel={() => {
-            handleGenericOptionPress({
-              label: "Cancel",
-              value: "cancel",
-              actionType: "CANCEL",
-            });
+            if (item.action === "EDIT_MEDICINE") {
+              if (setMessages) {
+                setMessages((prev: any) => prev.filter((m: any) => m.id !== item.id));
+              }
+            } else {
+              handleGenericOptionPress({
+                label: "Cancel",
+                value: "cancel",
+                actionType: "CANCEL",
+              });
+            }
           }}
           readOnly={isHistorical}
           chosenVal={chosenVal}
@@ -412,7 +429,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           setMessages((prev: any) =>
             prev.map((msg: any) => {
               if (msg.id === item.id) {
-                const currentMeds = msg.medicines || [];
+                const currentMeds = (msg.medicines && msg.medicines.length > 0) ? msg.medicines : displayMeds;
                 const updatedMeds =
                   typeof updater === "function"
                     ? updater(currentMeds)
@@ -429,7 +446,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         if (typeof updater === "function") {
           setChatWizardState((prev: any) => ({
             ...prev,
-            extractedMedicines: updater(prev.extractedMedicines || []),
+            extractedMedicines: updater(prev.extractedMedicines?.length ? prev.extractedMedicines : displayMeds),
           }));
         } else {
           setChatWizardState((prev: any) => ({
@@ -661,6 +678,162 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         </View>
       );
     }
+
+    if (
+      item.action === "REPORT_LIST" ||
+      item.task === "REPORT_LIST" ||
+      item.action === "DOCUMENT_LIST" ||
+      item.task === "DOCUMENT_LIST"
+    ) {
+      const rawReports = (item as any).reports?.length
+        ? (item as any).reports
+        : (item.documents?.length
+          ? item.documents
+          : (item.items?.length ? item.items : []));
+
+      const normalizedList = rawReports.map((r: any, idx: number) =>
+        normalizeReportItem(r, idx)
+      );
+
+      return renderAssistantPrompt(
+        <StructuredReportListCard
+          reports={normalizedList}
+          pagination={item.pagination}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          onViewAllReports={() => {
+            try {
+              navigation.navigate("DocumentStack", { screen: "DocumentList" });
+            } catch {
+              try {
+                navigation.navigate("DocumentList");
+              } catch {
+                try {
+                  navigation.navigate("Home");
+                } catch (e) {
+                  console.warn("[ChatMessageItem] View all documents navigation error:", e);
+                }
+              }
+            }
+          }}
+          onViewReport={(rep) => {
+            if (onViewFullReport) {
+              onViewFullReport(rep.raw || rep);
+            } else {
+              try {
+                navigation.navigate("DocumentStack", {
+                  screen: "DocumentSummary",
+                  params: { document: rep.raw || rep },
+                });
+              } catch (e) {
+                console.warn("[ChatMessageItem] View report navigation error:", e);
+              }
+            }
+          }}
+          onUploadReport={() => {
+            uploadSheetRef?.current?.present();
+          }}
+          readOnly={isHistorical}
+        />
+      );
+    }
+
+    if (
+      item.action === "MEDICATION_LIST" ||
+      item.task === "MEDICATION_LIST" ||
+      (item as any).mode === "STRUCTURED_LIST"
+    ) {
+      const rawItems = item.medicines?.length
+        ? item.medicines
+        : ((item as any).reports?.length
+          ? (item as any).reports
+          : (item.items?.length ? item.items : []));
+
+      const isDocList =
+        (item as any).reports?.length > 0 ||
+        (item.documents?.length! > 0 && !item.medicines?.length) ||
+        (rawItems.length > 0 &&
+          rawItems.some((it: any) =>
+            Boolean(
+              it?.documentType ||
+                it?.ocrStatus ||
+                (it?.fileName && !it?.medicationName && !it?.dosage)
+            )
+          ));
+
+      if (isDocList) {
+        const normalizedReports = rawItems.map((r: any, idx: number) =>
+          normalizeReportItem(r, idx)
+        );
+        return renderAssistantPrompt(
+          <StructuredReportListCard
+            reports={normalizedReports}
+            pagination={item.pagination}
+            isDark={isDark}
+            theme={theme}
+            preferredLang={preferredLang}
+            onViewAllReports={() => {
+              try {
+                navigation.navigate("DocumentStack", { screen: "DocumentList" });
+              } catch {
+                try {
+                  navigation.navigate("DocumentList");
+                } catch {
+                  try {
+                    navigation.navigate("Home");
+                  } catch {}
+                }
+              }
+            }}
+            onViewReport={(rep) => {
+              if (onViewFullReport) {
+                onViewFullReport(rep.raw || rep);
+              } else {
+                try {
+                  navigation.navigate("DocumentStack", {
+                    screen: "DocumentSummary",
+                    params: { document: rep.raw || rep },
+                  });
+                } catch {}
+              }
+            }}
+            onUploadReport={() => {
+              uploadSheetRef?.current?.present();
+            }}
+            readOnly={isHistorical}
+          />
+        );
+      }
+
+      const normalizedList = rawItems.map((m: any) =>
+        typeof m === "object" && m.name && m.medicationType
+          ? m
+          : normalizeMedicationItem(m)
+      );
+
+      return renderAssistantPrompt(
+        <StructuredMedicationListCard
+          medicines={normalizedList}
+          pagination={item.pagination}
+          isDark={isDark}
+          theme={theme}
+          preferredLang={preferredLang}
+          onViewAllMedications={() => navigation.navigate("MEDICATION")}
+          onAddMedication={() => {
+            handleGenericOptionPress({
+              label: "Add Medicine",
+              value: "ADD",
+              actionType: "ADD_MEDICINE",
+            });
+          }}
+          onUploadPrescription={() => {
+            uploadSheetRef?.current?.present();
+          }}
+          readOnly={isHistorical}
+        />
+      );
+    }
   }
 
   if (isHistorical && isChipStep) {
@@ -728,6 +901,38 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     </View>
   );
 };
+
+export const ChatMessageItem = React.memo(ChatMessageItemComponent, (prevProps, nextProps) => {
+  const sameItem =
+    prevProps.item === nextProps.item ||
+    (prevProps.item.id === nextProps.item.id &&
+      prevProps.item.text === nextProps.item.text &&
+      prevProps.item.action === nextProps.item.action &&
+      (prevProps.item as any).isConfirmed === (nextProps.item as any).isConfirmed &&
+      prevProps.item.createdAt === nextProps.item.createdAt);
+
+  if (!sameItem) return false;
+  if (prevProps.index !== nextProps.index) return false;
+  if (prevProps.isDark !== nextProps.isDark) return false;
+  if (prevProps.preferredLang !== nextProps.preferredLang) return false;
+  if (prevProps.isLoadingResults !== nextProps.isLoadingResults) return false;
+  if (prevProps.isConfirmingMeds !== nextProps.isConfirmingMeds) return false;
+  if (prevProps.chatWizardState !== nextProps.chatWizardState) return false;
+
+  const prevSpeaking = prevProps.speakingMessageId === prevProps.item.id;
+  const nextSpeaking = nextProps.speakingMessageId === nextProps.item.id;
+  if (prevSpeaking !== nextSpeaking) return false;
+
+  const prevIsLatest = prevProps.mergedMessages[0]?.id === prevProps.item.id;
+  const nextIsLatest = nextProps.mergedMessages[0]?.id === nextProps.item.id;
+  if (prevIsLatest !== nextIsLatest) return false;
+
+  const prevNextItem = prevProps.mergedMessages[prevProps.index + 1];
+  const nextNextItem = nextProps.mergedMessages[nextProps.index + 1];
+  if (prevNextItem?.createdAt !== nextNextItem?.createdAt) return false;
+
+  return true;
+});
 
 const styles = StyleSheet.create({
   optionsWrapper: {

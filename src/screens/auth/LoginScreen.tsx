@@ -21,12 +21,9 @@ import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import Toast from "react-native-toast-message";
-import auth, {
-  getAuth,
-  signInWithPhoneNumber,
-} from "@react-native-firebase/auth";
 import {
-  setConfirmationResult,
+  requestPhoneOtp,
+  signInWithFirebaseCustomToken,
   loginSocialWithFirebase,
   socialLogin,
   reportAuthFailure,
@@ -46,11 +43,6 @@ import { validateMobileNumber } from "../../validations/auth.validation";
 import { formatPhoneNumberE164 } from "../../utils/auth.utils";
 import PhoneInput from "../../components/auth/PhoneInput";
 import AuthButton from "../../components/auth/AuthButton";
-import {
-  ENABLE_DUMMY_AUTH,
-  isDummyNumber,
-  getDummyConfirmationResult,
-} from "../../services/dummyAuth.service";
 import { useAuth } from "../../hooks/useAuth";
 import SocialAuthButton from "../../components/auth/SocialAuthButton";
 
@@ -197,7 +189,7 @@ const LoginScreen = () => {
             backendResponse?.data?.firebaseCustomToken;
           if (firebaseCustomToken) {
             console.log("Signing in with Firebase Custom Token...");
-            await auth().signInWithCustomToken(firebaseCustomToken);
+            await signInWithFirebaseCustomToken(firebaseCustomToken);
           } else {
             console.warn(
               "No firebaseCustomToken returned from backend for Microsoft login.",
@@ -276,29 +268,11 @@ const LoginScreen = () => {
         `[OTP_LOG] OTP Send Start: Sending OTP to ${formattedMobile}`,
       );
 
-      let confirmationResult;
-      if (ENABLE_DUMMY_AUTH && isDummyNumber(formattedMobile)) {
-        console.log(
-          `[DUMMY_AUTH] Bypassing Firebase and returning dummy confirmation for ${formattedMobile}`,
-        );
-        confirmationResult = getDummyConfirmationResult();
-      } else {
-        console.log(
-          `[FIREBASE_AUTH] Using Firebase Phone Auth for ${formattedMobile}`,
-        );
-        const authInstance = getAuth();
-        confirmationResult = await signInWithPhoneNumber(
-          authInstance,
-          formattedMobile,
-        );
-      }
+      const confirmationResult = await requestPhoneOtp(formattedMobile);
 
       console.log(
         `[OTP_LOG] OTP Send Success: Verification code sent successfully to ${formattedMobile}`,
       );
-
-      // Save confirmation result in service singleton
-      setConfirmationResult(confirmationResult);
 
       Toast.show({
         type: "success",
@@ -419,7 +393,7 @@ const LoginScreen = () => {
 
           const firebaseCustomToken = backendResponse?.data?.firebaseCustomToken;
           if (firebaseCustomToken) {
-            await auth().signInWithCustomToken(firebaseCustomToken);
+            await signInWithFirebaseCustomToken(firebaseCustomToken);
           }
         }
 

@@ -11,7 +11,7 @@ interface SuggestedQuestionChipProps {
 
 const AnimatedTouch = Animated.createAnimatedComponent(TouchableOpacity);
 
-const ChipItem: React.FC<{
+const ChipItemComponent: React.FC<{
   text: string;
   onPress: () => void;
   isDark: boolean;
@@ -57,7 +57,9 @@ const ChipItem: React.FC<{
   );
 };
 
-export const SuggestedQuestionChip: React.FC<SuggestedQuestionChipProps> = ({
+const ChipItem = React.memo(ChipItemComponent);
+
+const SuggestedQuestionChipComponent: React.FC<SuggestedQuestionChipProps> = ({
   questions,
   onPressQuestion,
   isDark,
@@ -68,7 +70,9 @@ export const SuggestedQuestionChip: React.FC<SuggestedQuestionChipProps> = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-       keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         {questions.map((q, idx) => (
           <ChipItem
             key={`chip-${idx}`}
@@ -81,6 +85,8 @@ export const SuggestedQuestionChip: React.FC<SuggestedQuestionChipProps> = ({
     </View>
   );
 };
+
+export const SuggestedQuestionChip = React.memo(SuggestedQuestionChipComponent);
 
 const styles = StyleSheet.create({
   scrollContainer: {

@@ -1,3 +1,4 @@
+import React from "react";
 import Toast from "react-native-toast-message";
 import { toastConfig } from "./src/config/ToastConfig";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -6,100 +7,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./src/config/queryClient";
 import { AuthProvider } from "./src/context/ContextAPI";
 import RootNavigator from "./src/navigation/RootNavigator";
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
-import { useEffect } from "react";
-import { Platform } from "react-native";
 import { AppThemeProvider } from "./src/context/ThemeContext";
-import * as SecureStore from "expo-secure-store";
-import Constants from "expo-constants";
-import {
-  getMessaging,
-  getToken,
-  onTokenRefresh,
-} from "@react-native-firebase/messaging";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DocumentUploadProvider } from "./src/context/DocumentUploadContext";
 import { MedicationReviewProvider } from "./src/context/MedicationReviewContext";
-// Setting up the notification handler for notifications.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+import { usePushNotifications } from "./src/hooks/usePushNotifications";
 
 export default function App() {
-  useEffect(() => {
-    const iosGoogleServicesFile = Constants.expoConfig?.ios?.googleServicesFile;
-    const shouldEnableFirebaseMessaging =
-      Platform.OS !== "ios" || Boolean(iosGoogleServicesFile);
-
-    async function registerForPushNotifications() {
-      try {
-        if (!shouldEnableFirebaseMessaging) {
-          console.warn(
-            "Skipping Firebase messaging on iOS because ios.googleServicesFile / GoogleService-Info.plist is not configured.",
-          );
-          return;
-        }
-
-        if (!Device.isDevice) {
-          console.warn("Must use a physical device for push notifications");
-          return;
-        }
-
-        // FCM Token Generation for Push Notifications using Firebase Cloud Messaging.
-        const fcmToken = await getToken(getMessaging());
-
-        await SecureStore.setItemAsync("deviceToken", String(fcmToken));
-
-        const { status: existingStatus } =
-          await Notifications.getPermissionsAsync();
-
-        let finalStatus = existingStatus;
-
-        if (existingStatus !== "granted") {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-
-        if (finalStatus !== "granted") {
-          console.warn("Permission not granted!");
-          return;
-        }
-
-        if (Platform.OS === "android") {
-          await Notifications.setNotificationChannelAsync("HealthVault", {
-            name: "HealthVault",
-            importance: Notifications.AndroidImportance.MAX,
-          });
-        }
-      } catch (error) {
-        console.warn("Error getting push token:", error);
-      }
-    }
-
-    registerForPushNotifications();
-
-    if (!shouldEnableFirebaseMessaging) {
-      return;
-    }
-
-    // --- FCM Token Refresh Listener ---
-    const unsubscribeFCM = onTokenRefresh(
-      getMessaging(),
-      (newToken: string) => {
-        SecureStore.setItemAsync("deviceToken", String(newToken));
-      },
-    );
-
-    return () => {
-      unsubscribeFCM();
-    };
-  }, []);
+  usePushNotifications();
 
   return (
     <SafeAreaProvider>
