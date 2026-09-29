@@ -527,9 +527,15 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       >
         <BottomSheetView style={{ paddingHorizontal: 20, paddingBottom: bottomPadding }}>
           {/* Header Section & Upload Options - FIXED */}
-          <HeaderSection>
-            <SheetTitle isDark={isDark}>Add Document</SheetTitle>
-            <SheetSubtitle>Select documents and edit metadata before starting processing.</SheetSubtitle>
+          <HeaderSection style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <SheetTitle isDark={isDark}>Add Document</SheetTitle>
+              <SheetSubtitle>Select documents and edit metadata before starting processing.</SheetSubtitle>
+            </View>
+              <ModalCloseButton onPress={() => ref?.current?.dismiss()}>
+                <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#64748b"} />
+              </ModalCloseButton>
+            
           </HeaderSection>
 
           {/* Document selection options - FIXED */}
