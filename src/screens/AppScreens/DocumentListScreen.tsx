@@ -37,7 +37,11 @@ import {
   listDocument,
   deleteDocument,
 } from "../../services/documentService";
+import { getUser } from "../../services/userService";
+import { getFileSource } from "../../services/fileService";
+import { getInitials } from "../../utils/avatarUtils";
 import { useAuth } from "../../context/ContextAPI";
+import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import DocumentCard from "../../components/Documents/DocumentCard";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
 import { useAppNavigation } from "../../types/navigation";
@@ -94,6 +98,62 @@ const DocumentList = () => {
   const shareSheetRef = useRef<BottomSheetModal>(null);
   const cameraRef = useRef<any>(null);
   const { userId } = useAuth();
+  const { uploadingDocs, isUploading } = useDocumentUpload();
+
+  const hasActiveUploads = useMemo(() => {
+    return (
+      isUploading ||
+      (uploadingDocs &&
+        uploadingDocs.some(
+          (doc) =>
+            doc.status === "UPLOADING" ||
+            doc.status === "QUEUED" ||
+            doc.status === "PROCESSING" ||
+            (doc.progress !== undefined &&
+              doc.progress > 0 &&
+              doc.progress < 100 &&
+              doc.status !== "FAILED" &&
+              doc.status !== "REJECTED" &&
+              doc.status !== "COMPLETED")
+        ))
+    );
+  }, [isUploading, uploadingDocs]);
+
+  const { data: userDetails } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const response = await getUser();
+      return response?.data || response;
+    },
+    enabled: !!userId,
+  });
+
+  const [profileImageSource, setProfileImageSource] = useState<any>(null);
+  const [imageError, setImageError] = useState(false);
+
+  React.useEffect(() => {
+    setImageError(false);
+    if (userDetails?.profileImageKey && !userDetails.profileImageKey.includes("placeholder")) {
+      const fetchImage = async () => {
+        try {
+          const res = await getFileSource(userDetails.profileImageKey!);
+          setProfileImageSource(res);
+        } catch (e) {
+          console.log("Failed to load profile image URL", e);
+          setProfileImageSource(null);
+        }
+      };
+      fetchImage();
+    } else {
+      setProfileImageSource(null);
+    }
+  }, [userDetails?.profileImageKey]);
+
+  const userFirstName = userDetails?.firstName?.trim();
+  const userDisplayName = userFirstName ? `${userFirstName} (You)` : "Me (You)";
+  const initials = useMemo(() => {
+    return getInitials(userDetails?.firstName, userDetails?.lastName) || "U";
+  }, [userDetails?.firstName, userDetails?.lastName]);
 
   const [selectedEditDoc, setSelectedEditDoc] = useState<MedicalDocument | null>(null);
   const [selectedShareDoc, setSelectedShareDoc] = useState<MedicalDocument | null>(null);
@@ -275,6 +335,15 @@ const DocumentList = () => {
       if (prev.includes(id)) {
         return prev.filter((item) => item !== id);
       } else {
+        if (prev.length >= 5) {
+          Toast.show({
+            type: "error",
+            position: "top",
+            text1: "Limit Exceeded",
+            text2: "You can select up to 5 documents at a time.",
+          });
+          return prev;
+        }
         return [...prev, id];
       }
     });
@@ -351,8 +420,6 @@ const DocumentList = () => {
         backgroundColor="rgba(0,0,0,0.2)"
       />
 
-
-
       <HeaderWrapper edges={["top"]}>
         <HeaderMain>
           <BackButton onPress={() => navigation.goBack()}>
@@ -363,7 +430,20 @@ const DocumentList = () => {
             <IconButton onPress={() => filterSheetRef.current?.present()}>
               <MaterialCommunityIcons name="filter" size={20} color="white" />
             </IconButton>
-            <RightButton onPress={() => refRBSheet.current?.present()}>
+            <RightButton
+              onPress={() => {
+                if (hasActiveUploads) {
+                  Toast.show({
+                    type: "info",
+                    position: "top",
+                    text1: "Processing in Progress",
+                    text2: "A document is currently being processed. Please wait for it to complete.",
+                  });
+                  return;
+                }
+                refRBSheet.current?.present();
+              }}
+            >
               <Ionicons name="add" size={30} color="black" />
             </RightButton>
           </RightActions>
@@ -381,13 +461,19 @@ const DocumentList = () => {
           <FamilyScroll>
             <MemberItem activeOpacity={0.8}>
               <SelectedOuterCircle>
-                <AvatarImage
-                  source={{
-                    uri: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80",
-                  }}
-                />
+                {profileImageSource && !imageError ? (
+                  <AvatarImage
+                    source={profileImageSource}
+                    onError={() => setImageError(true)}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <InitialsCircle isDark={isDark}>
+                    <InitialsText>{initials}</InitialsText>
+                  </InitialsCircle>
+                )}
               </SelectedOuterCircle>
-              <MemberName active>Me (You)</MemberName>
+              <MemberName active numberOfLines={1}>{userDisplayName}</MemberName>
             </MemberItem>
             <MemberItem activeOpacity={0.7} onPress={handleFeatureComingSoon}>
               <AddCircle>
@@ -691,6 +777,21 @@ const AvatarImage = styled.Image`
   width: 56px;
   height: 56px;
   borderRadius: 28px;
+`;
+
+const InitialsCircle = styled.View<{ isDark: boolean }>`
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background-color: ${({ isDark }: { isDark: boolean }) => (isDark ? "#334155" : "rgba(255, 255, 255, 0.25)")};
+  justify-content: center;
+  align-items: center;
+`;
+
+const InitialsText = styled.Text`
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
 `;
 
 const AddCircle = styled.View`

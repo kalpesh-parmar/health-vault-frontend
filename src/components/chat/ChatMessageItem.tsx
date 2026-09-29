@@ -6,7 +6,9 @@ import { MessageBubble } from "./MessageBubble";
 import { ChatDateHeader } from "./ChatDateHeader";
 import { ResolveProfileSourceCard } from "./widgets/ResolveProfileSourceCard";
 import { AskUploadOrSkipCard } from "./widgets/AskUploadOrSkipCard";
-import { AddMedicineCard } from "./widgets/AddMedicineCard";
+import { AskAllergiesCard } from "./widgets/AskAllergiesCard";
+import { AddMedicineCard, deduplicateDrafts } from "./widgets/AddMedicineCard";
+import { widgetStyles } from "./widgets/WidgetStyles";
 import { ReviewMedicinesListCard } from "./widgets/ReviewMedicinesListCard";
 import { ConfirmMedicineCard } from "./widgets/ConfirmMedicineCard";
 import { MedicineOptionsPanel } from "./widgets/MedicineOptionsPanel";
@@ -82,6 +84,7 @@ interface ChatMessageItemProps {
   setMessages?: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onViewFullReport?: (doc: any) => void;
   onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
+  isOnboardingCompleted?: boolean;
 }
 
 const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
@@ -111,8 +114,10 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   setMessages,
   onViewFullReport,
   onRetryDocument,
+  isOnboardingCompleted,
 }) => {
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
+  const [localDrafts, setLocalDrafts] = React.useState<any[]>([]);
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
@@ -126,8 +131,12 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   };
 
   const isLatestActiveMessage = (msgId: string) => {
-    return mergedMessages[0]?.id === msgId;
+    const latestNonNotice = mergedMessages.find(
+      (m) => m.action !== "ONBOARDING_COMPLETED_NOTICE"
+    );
+    return latestNonNotice?.id === msgId;
   };
+
 
   const nextItem = mergedMessages[index + 1];
   let showDateHeader = false;
@@ -238,7 +247,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         const questions =
           item.suggestedQuestions && item.suggestedQuestions.length > 0
             ? item.suggestedQuestions
-            : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+            : SUGGESTED_QUESTIONS_I18N.english.document;
 
         const isStructured = Boolean(
           doc.patientDetails ||
@@ -343,11 +352,87 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         />,
       );
     }
+    if (item.action === "ASK_ALLERGIES") {
+      return renderAssistantPrompt(
+        <AskAllergiesCard
+          activeMsg={item}
+          preferredLang={preferredLang}
+          isDark={isDark}
+          theme={theme}
+          sendMessage={(userText, updatedState, displayLabel) => {
+            handleGenericOptionPress(
+              {
+                key: userText,
+                value: userText,
+                label: displayLabel || (userText === "NO" ? "No Allergies" : userText),
+                state: updatedState,
+              },
+              displayLabel || (userText === "NO" ? "No Allergies" : userText)
+            );
+          }}
+          state={(item as any).onboardingState || (item as any).state || {}}
+          isHistorical={isHistorical}
+          chosenVal={chosenVal}
+          chosenLabel={chosenLabel}
+          loading={isLoadingResults || isConfirmingMeds}
+        />,
+      );
+    }
     if (
       item.action === "ADD_MEDICINE" ||
       item.action === "EDIT_MEDICINE"
     ) {
       const med = item.medicine || {};
+      const handleSaveMedicines = (allDrafts: any[]) => {
+        const rawArray = Array.isArray(allDrafts) ? allDrafts : (allDrafts ? [allDrafts] : []);
+        const combined = [...localDrafts, ...rawArray];
+        const uniqueDrafts = deduplicateDrafts(combined);
+        const displayLabel = tOnboarding("saveMedicines") || "Save Medicines";
+        const savePayload = {
+          action: "SAVE_AND_REVIEW",
+          saveAndReview: true,
+          medicines: uniqueDrafts,
+        };
+        handleGenericOptionPress(
+          {
+            key: "SAVE_AND_REVIEW",
+            value: savePayload,
+            actionType: "SAVE_AND_REVIEW",
+            label: displayLabel,
+            state: {
+              medicinesToAdd: uniqueDrafts,
+              currentStep: "REVIEW_MEDICINES_LIST",
+            },
+          },
+          displayLabel,
+        );
+      };
+
+      const handleAddAndContinue = (newMed: any, allDrafts?: any[]) => {
+        const updated = deduplicateDrafts(allDrafts || [...localDrafts, newMed]);
+        setLocalDrafts(updated);
+      };
+
+      const handleDraftSync = (updatedDrafts: any[]) => {
+        setLocalDrafts(deduplicateDrafts(updatedDrafts));
+      };
+
+      const handleExitToOptions = () => {
+        const displayLabel = tOnboarding("cancel") || "Cancel";
+        handleGenericOptionPress(
+          {
+            key: "CANCEL",
+            value: "CANCEL",
+            label: displayLabel,
+            state: {
+              currentStep: "MEDICINE_OPTIONS",
+              cancellationNotice: true,
+            },
+          },
+          displayLabel,
+        );
+      };
+
       return renderAssistantPrompt(
         <AddMedicineCard
           key={item.id}
@@ -388,6 +473,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       item.action === "ACTION" ||
       (item as any).mode === "ACTION" ||
       item.action === "REVIEW_MEDICINES_LIST" ||
+      item.action === "CONFIRM_MEDICINE" ||
       item.action === "ADD_DOCUMENT"
     ) {
       const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
@@ -410,11 +496,53 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       };
 
       const handleAddNew = () => {
-        handleGenericOptionPress({ value: "ADD", actionType: "ADD_MEDICINE", label: "Add New" });
+        const displayLabel = tOnboarding("addAnotherMedicine") || "Add New";
+        handleGenericOptionPress(
+          {
+            key: "ADD",
+            value: "ADD",
+            actionType: "ADD_MEDICINE",
+            label: displayLabel,
+            state: {
+              currentStep: "ADD_MEDICINE",
+              cancellationNotice: false,
+            },
+          },
+          displayLabel,
+        );
       };
 
       const handleSkipAll = () => {
-        handleGenericOptionPress({ value: "SKIP", actionType: "SKIP_MEDICINES", label: "Skip All" });
+        const displayLabel = tOnboarding("skipAll") || "Skip All";
+        handleGenericOptionPress(
+          {
+            key: "SKIP_MEDICINES",
+            value: { skipAll: true },
+            actionType: "SKIP_MEDICINES",
+            label: displayLabel,
+            state: {
+              medicinesFlowStarted: true,
+              medicinesConfirmed: false,
+            },
+          },
+          displayLabel,
+        );
+      };
+
+      const handleCancelReview = () => {
+        const displayLabel = tOnboarding("cancel") || "Cancel";
+        handleGenericOptionPress(
+          {
+            key: "CANCEL",
+            value: "CANCEL",
+            label: displayLabel,
+            state: {
+              currentStep: "MEDICINE_OPTIONS",
+              cancellationNotice: true,
+            },
+          },
+          displayLabel,
+        );
       };
 
       const handleEdit = (med: any) => {
@@ -468,6 +596,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             onAddNew={handleAddNew}
             onSkipAll={handleSkipAll}
             onEdit={handleEdit}
+            onCancel={handleCancelReview}
             readOnly={isReadOnly}
             chosenVal={chosenVal}
             chosenLabel={chosenLabel}
@@ -874,15 +1003,20 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           style={styles.optionsWrapper}
           pointerEvents={isHistorical || isLoadingResults || isConfirmingMeds ? "none" : "auto"}
         >
-          <View style={styles.chipsContainer}>
+          <View style={widgetStyles.chipRow}>
             {item.options?.map((opt: any, idx: number) => {
+              const label = typeof opt === "string" ? opt : opt.label;
+              const value = typeof opt === "string" ? opt : opt.value;
               return (
                 <TouchableOpacity
-                  key={idx}
+                  key={value || idx}
                   disabled={isHistorical || isLoadingResults || isConfirmingMeds}
-                  onPress={() => handleGenericOptionPress(opt, opt.label)}
+                  onPress={() => {
+                    if (isHistorical || isLoadingResults || isConfirmingMeds) return;
+                    handleGenericOptionPress(opt, typeof label === "string" ? label : undefined);
+                  }}
                   style={[
-                    styles.chipBtn,
+                    widgetStyles.chip,
                     {
                       backgroundColor: theme.colors.primary,
                       opacity: isHistorical || isLoadingResults || isConfirmingMeds ? 0.6 : 1,

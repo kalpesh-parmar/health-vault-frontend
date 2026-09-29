@@ -32,19 +32,28 @@ export const MultiUploadScreen = () => {
   const route = useRoute<any>();
   const { initialFiles = [], fromScreen } = route.params || {};
 
-  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>(
-    initialFiles.map((file: any) => ({
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>(() => {
+    const rawFiles = initialFiles.slice(0, 5);
+    return rawFiles.map((file: any) => ({
       ...file,
       originalName: file.originalName || file.name,
       name: file.name || file.originalName || "document",
       type: file.type || file.mimeType || "application/octet-stream",
-    }))
-  );
+    }));
+  });
 
   React.useEffect(() => {
     if (initialFiles && initialFiles.length > 0) {
+      if (initialFiles.length > 5) {
+        Toast.show({
+          type: "error",
+          position: "top",
+          text1: "Limit Exceeded",
+          text2: "You can select up to 5 documents at a time.",
+        });
+      }
       setSelectedFiles(
-        initialFiles.map((file: any) => ({
+        initialFiles.slice(0, 5).map((file: any) => ({
           ...file,
           originalName: file.originalName || file.name,
           name: file.name || file.originalName || "document",
@@ -77,20 +86,70 @@ export const MultiUploadScreen = () => {
     if (selectedFiles.length >= 5) {
       Toast.show({
         type: "error",
-        text1: "Limit Reached",
+        position: "top",
+        text1: "Limit Exceeded",
         text2: "You can select up to 5 documents at a time.",
       });
       return;
     }
     const newFiles = await handleMultiDocumentPick(selectedFiles.length);
     if (newFiles.length > 0) {
-      setSelectedFiles((prev) => [
-        ...prev,
-        ...newFiles.map((file) => ({
-          ...file,
-          originalName: file.name,
-        })),
-      ]);
+      const duplicates: PickedFile[] = [];
+      const uniqueFiles: PickedFile[] = [];
+
+      for (const file of newFiles) {
+        const isDuplicate = selectedFiles.some((s) => {
+          if (s.uri && file.uri && s.uri === file.uri) return true;
+          const sName = (s.originalName || s.name || "").trim().toLowerCase();
+          const fName = (file.name || "").trim().toLowerCase();
+          return Boolean(sName && fName && sName === fName);
+        });
+
+        const isDuplicateInUnique = uniqueFiles.some((u) => {
+          if (u.uri && file.uri && u.uri === file.uri) return true;
+          const uName = (u.name || "").trim().toLowerCase();
+          const fName = (file.name || "").trim().toLowerCase();
+          return Boolean(uName && fName && uName === fName);
+        });
+
+        if (isDuplicate || isDuplicateInUnique) {
+          duplicates.push(file);
+        } else {
+          uniqueFiles.push(file);
+        }
+      }
+
+      if (duplicates.length > 0) {
+        Toast.show({
+          type: "error",
+          position: "top",
+          text1: "Document Already Selected",
+          text2:
+            duplicates.length === 1
+              ? `"${duplicates[0].name}" has already been selected.`
+              : "Some selected documents have already been added.",
+        });
+      }
+
+      if (uniqueFiles.length > 0) {
+        const availableSlots = Math.max(0, 5 - selectedFiles.length);
+        const filesToAdd = uniqueFiles.slice(0, availableSlots);
+        if (uniqueFiles.length > availableSlots) {
+          Toast.show({
+            type: "error",
+            position: "top",
+            text1: "Limit Exceeded",
+            text2: "You can select up to 5 documents at a time.",
+          });
+        }
+        setSelectedFiles((prev) => [
+          ...prev,
+          ...filesToAdd.map((file) => ({
+            ...file,
+            originalName: file.name,
+          })),
+        ]);
+      }
     }
   };
 

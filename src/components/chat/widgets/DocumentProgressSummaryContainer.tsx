@@ -253,14 +253,24 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
 
           const rawPct =
             typeof event.percentage === "number"
-              ? event.percentage
+              ? Math.round(event.percentage)
               : typeof event.progress === "number"
                 ? event.progress <= 1
                   ? Math.round(event.progress * 100)
-                  : event.progress
+                  : Math.round(event.progress)
                 : typeof event.data?.percentage === "number"
-                  ? event.data.percentage
-                  : undefined;
+                  ? Math.round(event.data.percentage)
+                  : typeof event.data?.progress === "number"
+                    ? event.data.progress <= 1
+                      ? Math.round(event.data.progress * 100)
+                      : Math.round(event.data.progress)
+                    : typeof event.extra?.percentage === "number"
+                      ? Math.round(event.extra.percentage)
+                      : typeof event.extra?.progress === "number"
+                        ? event.extra.progress <= 1
+                          ? Math.round(event.extra.progress * 100)
+                          : Math.round(event.extra.progress)
+                        : undefined;
 
           const stage = event.stage || event.stageStatus || event.status;
           const currentStep = event.message || event.data?.message || stage;

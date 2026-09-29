@@ -8,15 +8,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 
 import {
   ExpoSpeechRecognitionModule,
@@ -107,13 +104,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   mode = "default",
   onAttachPress,
 }) => {
-  const insets = useSafeAreaInsets();
-  const sendScale = useSharedValue(0.0);
   const [isListening, setIsListening] = useState(false);
   const pulseScale = useSharedValue(1);
   const storedPreferredLanguage = usePreferredLanguage();
 
-  const effectiveLanguage = preferredLanguage || storedPreferredLanguage || "english";
+  const effectiveLanguage =
+    preferredLanguage || storedPreferredLanguage || "english";
 
   // Native speech recognition event hooks
   useSpeechRecognitionEvent("start", () => {
@@ -166,15 +162,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     if (isListening) {
-      ExpoSpeechRecognitionModule.stop();
+      try {
+        await ExpoSpeechRecognitionModule.stop();
+      } catch (e) {
+        console.warn("[ChatInput] Stop speech recognition error:", e);
+      }
       setIsListening(false);
     } else {
       try {
         const locale = getSpeechLocale(effectiveLanguage);
 
-        const permResponse = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        const permResponse =
+          await ExpoSpeechRecognitionModule.requestPermissionsAsync();
         if (!permResponse.granted) {
-          console.warn("[ChatInput] Speech recognition / microphone permission denied");
+          console.warn(
+            "[ChatInput] Speech recognition / microphone permission denied",
+          );
           return;
         }
 
@@ -192,21 +195,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  useEffect(() => {
-    sendScale.value = withSpring(value.trim() ? 1.0 : 0.0, {
-      damping: 12,
-      stiffness: 150,
-    });
-  }, [value]);
-
-  const sendStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: sendScale.value }],
-      opacity: sendScale.value,
-      width: sendScale.value === 0 ? 0 : 44, // collapse width when scale is 0 to let input take up space
-      marginLeft: sendScale.value === 0 ? 0 : 8,
-    };
-  });
+  const hasText = Boolean(value && value.trim().length > 0);
+  const isSendDisabled = !hasText || isSending;
 
   const cardBgColor = isDark ? "#1e293b" : "#ffffff";
   const inputTextColor = isDark ? "#ffffff" : "#1e293b";
@@ -265,49 +255,53 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         keyboardType={keyboardType}
       />
 
-      {/* Mic Button */}
-      {sendScale.value === 0 && !value.trim() && (
-        <AnimatedTouch
-          onPress={toggleListening}
-          disabled={!ExpoSpeechRecognitionModule}
-          style={[
-            styles.iconButton,
-            pulseStyle,
-            {
-              backgroundColor: isListening ? themePrimaryColor : "transparent",
-            },
-          ]}
-          activeOpacity={0.7}>
-          <Ionicons
-            name="mic"
-            size={22}
-            color={
-              !ExpoSpeechRecognitionModule
-                ? "#cbd5e1"
-                : isListening
-                  ? "#fff"
-                  : isDark
-                    ? "#94a3b8"
-                    : "#64748b"
-            }
-          />
-        </AnimatedTouch>
-      )}
-
-      {/* Send Button */}
+      {/* Mic / Voice Button - Always Visible */}
       <AnimatedTouch
-        disabled={!value.trim() || isSending}
+        onPress={toggleListening}
+        disabled={!ExpoSpeechRecognitionModule}
+        style={[
+          styles.iconButton,
+          pulseStyle,
+          {
+            backgroundColor: isListening ? themePrimaryColor : "transparent",
+            marginRight: 6,
+          },
+        ]}
+        activeOpacity={0.7}>
+        <Ionicons
+          name="mic"
+          size={22}
+          color={
+            !ExpoSpeechRecognitionModule
+              ? "#cbd5e1"
+              : isListening
+                ? "#fff"
+                : isDark
+                  ? "#94a3b8"
+                  : "#64748b"
+          }
+        />
+      </AnimatedTouch>
+
+      {/* Send Button - Static without animation, disabled with low opacity when no text */}
+      <TouchableOpacity
+        disabled={isSendDisabled}
         onPress={onSend}
-        style={[styles.sendButtonContainer, sendStyle]}
+        style={[
+          styles.sendButtonContainer,
+          {
+            opacity: isSendDisabled ? 0.35 : 1.0,
+          },
+        ]}
         activeOpacity={0.8}>
         <LinearGradient
           colors={["#5B4BFF", "#7C6CFF"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.sendGradient}>
-          <Ionicons name="arrow-up" size={22} color="#ffffff" />
+          <Ionicons name="arrow-up" size={20} color="#ffffff" />
         </LinearGradient>
-      </AnimatedTouch>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -335,9 +329,9 @@ const styles = StyleSheet.create({
     }),
   },
   iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -350,16 +344,17 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   sendButtonContainer: {
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
   sendGradient: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -59,18 +59,20 @@ import { MessageBubble } from "../../components/chat/MessageBubble";
 import { ChatDateHeader } from "../../components/chat/ChatDateHeader";
 import { useTextToSpeech } from "../../hooks/useTextToSpeech";
 import TypingIndicator from "../../components/chat/TypingIndicator";
-import UploadBottomSheet from "../../components/upload/UploadBottomSheet";
+import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
 import DocumentPreview from "../../components/upload/DocumentPreview";
 import UploadValidationDialog from "../../components/upload/UploadValidationDialog";
 import ConfirmationModal from "../../components/shared/ConfirmationModal";
 
 import { AddMedicineCard, deduplicateDrafts } from "../../components/chat/widgets/AddMedicineCard";
+import { sanitizeMedicineForPayload } from "../../components/chat/widgets/MedicineHelpers";
 import { ReviewMedicinesListCard } from "../../components/chat/widgets/ReviewMedicinesListCard";
 import { ConfirmMedicineCard } from "../../components/chat/widgets/ConfirmMedicineCard";
 import { MedicineOptionsPanel } from "../../components/chat/widgets/MedicineOptionsPanel";
 import { ResolveProfileSourceCard } from "../../components/chat/widgets/ResolveProfileSourceCard";
 import { I18N_ONBOARDING_UI as ONBOARDING_I18N } from "../../components/chat/widgets/OnboardingI18n";
 import { AskUploadOrSkipCard } from "../../components/chat/widgets/AskUploadOrSkipCard";
+import { AskAllergiesCard } from "../../components/chat/widgets/AskAllergiesCard";
 import { findHistoricalUserReply } from "../../components/chat/widgets/HistoricalChips";
 import { DocumentProcessingModal } from "../../components/chat/widgets/DocumentProcessingModal";
 import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
@@ -134,6 +136,42 @@ const normalizeDocumentIds = (...sources: any[]): string[] | undefined => {
     .filter(Boolean);
 
   return ids.length ? Array.from(new Set(ids)) : undefined;
+};
+
+const extractEventProgress = (event: any): number | undefined => {
+  if (typeof event?.percentage === "number") return Math.round(event.percentage);
+  if (typeof event?.progress === "number") {
+    return event.progress <= 1 ? Math.round(event.progress * 100) : Math.round(event.progress);
+  }
+  if (typeof event?.data?.percentage === "number") return Math.round(event.data.percentage);
+  if (typeof event?.data?.progress === "number") {
+    return event.data.progress <= 1
+      ? Math.round(event.data.progress * 100)
+      : Math.round(event.data.progress);
+  }
+  if (typeof event?.extra?.percentage === "number") return Math.round(event.extra.percentage);
+  if (typeof event?.extra?.progress === "number") {
+    return event.extra.progress <= 1
+      ? Math.round(event.extra.progress * 100)
+      : Math.round(event.extra.progress);
+  }
+  const docItem =
+    event?.documents?.[0] ||
+    event?.files?.[0] ||
+    event?.data?.documents?.[0] ||
+    event?.data?.files?.[0];
+  if (docItem) {
+    if (typeof docItem.percentage === "number") return Math.round(docItem.percentage);
+    if (typeof docItem.progress === "number") {
+      return docItem.progress <= 1
+        ? Math.round(docItem.progress * 100)
+        : Math.round(docItem.progress);
+    }
+  }
+  if (event?.extra?.totalPages && event?.extra?.page) {
+    return Math.round((event.extra.page / event.extra.totalPages) * 100);
+  }
+  return undefined;
 };
 
 const STATIC_EMPTY_MED_OBJ: any = {};
@@ -537,6 +575,16 @@ export default function OnboardingScreen() {
                 (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined) ||
                 meta?.action ||
                 (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : undefined);
+              const contentText = (dbMsg.content || "").toLowerCase();
+              if (
+                dbMsg.role === "assistant" &&
+                (msgAction === "COMPLETE" ||
+                  msgAction === "POST_ONBOARDING" ||
+                  contentText.includes("thank you! onboarding is complete") ||
+                  contentText.includes("thank you! your onboarding is complete"))
+              ) {
+                continue;
+              }
               const isDuplicateOfPrev =
                 mappedMessages.length > 0 &&
                 mappedMessages[mappedMessages.length - 1].role === dbMsg.role &&
@@ -771,6 +819,17 @@ export default function OnboardingScreen() {
         const isInteractiveOptionMsg =
           newMsg.action === "MEDICINE_OPTIONS" ||
           (Array.isArray(newMsg.options) && newMsg.options.length > 0);
+        const isRedundantCompletionMsg =
+          newMsg.action === "COMPLETE" ||
+          newMsg.action === "POST_ONBOARDING" ||
+          !newMsg.content?.trim() ||
+          normReply.includes("thankyouonboardingiscomplete") ||
+          normReply.includes("thankyouyouronboardingiscomplete");
+
+        if (isRedundantCompletionMsg) {
+          return itemsToAdd.length > 0 ? [...prev, ...itemsToAdd] : prev;
+        }
+
         const isDuplicateAssistantMsg =
           !isInteractiveOptionMsg &&
           lastAssistantMsg &&
@@ -855,6 +914,9 @@ export default function OnboardingScreen() {
       };
     }
 
+    finalState.currentStep =
+      serverState?.currentStep || action || finalState.currentStep;
+
     finalState.preferredLanguage = getNormalizedLang(
       finalState.preferredLanguage,
     );
@@ -891,32 +953,41 @@ export default function OnboardingScreen() {
   };
 
   const sendMessage = async (
-    userText: string,
+    userText: string | any,
     updatedState = state,
     displayLabel?: string,
+    actionType?: string,
   ) => {
-    if (isSendingRef.current || loading || !userText.trim()) return;
+    if (isSendingRef.current || loading) return;
+    if (typeof userText === "string" && !userText.trim()) return;
+    if (!userText) return;
     isSendingRef.current = true;
 
     let isEditSave = false;
     try {
-      if (userText.startsWith("{") && userText.includes('"edited"')) {
+      if (typeof userText === "string" && userText.startsWith("{") && userText.includes('"edited"')) {
         const parsed = JSON.parse(userText);
         if (parsed && parsed.edited && !parsed.confirmed) {
           isEditSave = true;
         }
+      } else if (typeof userText === "object" && userText?.edited && !userText?.confirmed) {
+        isEditSave = true;
       }
     } catch {
       // ignore non-json
     }
 
     if (!isEditSave) {
-      const userContent = displayLabel || userText;
+      const userContent =
+        displayLabel ||
+        (typeof userText === "string"
+          ? userText
+          : userText?.name || userText?.action || "Medicine Selection");
       const userMsg: Message = {
         id: `user-${Date.now()}`,
         role: "user",
         content: userContent,
-        rawValue: userText, // Store raw value for live matching!
+        rawValue: typeof userText === "string" ? userText : JSON.stringify(userText), // Store raw value for live matching!
         createdAt: new Date().toISOString(),
       };
 
@@ -945,8 +1016,194 @@ export default function OnboardingScreen() {
         .reverse()
         .find((m) => m.role === "assistant");
 
-      const payload = {
-        message: userText,
+      let resolvedActionType = actionType;
+      let actionData: any = undefined;
+      let messageString: string = "";
+
+      if (typeof userText === "string") {
+        try {
+          const parsed = JSON.parse(userText);
+          if (parsed && typeof parsed === "object") {
+            if (parsed.action === "SAVE_AND_REVIEW" || parsed.saveAndReview) {
+              resolvedActionType = resolvedActionType || "SAVE_AND_REVIEW";
+              actionData = {
+                ...parsed,
+                medicines: Array.isArray(parsed.medicines)
+                  ? parsed.medicines.map(sanitizeMedicineForPayload)
+                  : parsed.medicines,
+                medicine: parsed.medicine
+                  ? sanitizeMedicineForPayload(parsed.medicine)
+                  : parsed.medicine,
+              };
+              messageString = displayLabel || "Save Medicines";
+            } else if (parsed.selected !== undefined || parsed.medicines !== undefined) {
+              resolvedActionType = resolvedActionType || "CONFIRM_MEDICINES";
+              actionData = {
+                ...parsed,
+                medicines: Array.isArray(parsed.medicines)
+                  ? parsed.medicines.map(sanitizeMedicineForPayload)
+                  : parsed.medicines,
+              };
+              messageString = displayLabel || "Confirm Selection";
+            } else if (parsed.skipAll) {
+              resolvedActionType = resolvedActionType || "SKIP_MEDICINES";
+              actionData = { skipAll: true };
+              messageString = displayLabel || "Skip";
+            } else if (parsed.action === "ASK_ALLERGIES" && Array.isArray(parsed.allergies)) {
+              resolvedActionType = resolvedActionType || "ASK_ALLERGIES";
+              actionData = parsed;
+              messageString = displayLabel || parsed.allergies.join(", ");
+            } else {
+              messageString = displayLabel || userText;
+            }
+          } else {
+            messageString = userText;
+          }
+        } catch {
+          if (userText === "ADD_MEDICINE" || userText === "ADD") {
+            resolvedActionType = resolvedActionType || "ADD_MEDICINE";
+            actionData = { action: "ADD_MEDICINE" };
+            messageString = displayLabel || "Add Medicines";
+          } else if (userText === "GO_TO_DASHBOARD" || userText === "DASHBOARD") {
+            resolvedActionType = resolvedActionType || "GO_TO_DASHBOARD";
+            messageString = displayLabel || "Go to Dashboard";
+          } else if (userText === "CANCEL") {
+            resolvedActionType = resolvedActionType || "CANCEL";
+            messageString = displayLabel || "Cancel";
+          } else {
+            messageString = userText;
+          }
+        }
+      } else if (userText && typeof userText === "object") {
+        if (userText.action === "SAVE_AND_REVIEW" || userText.saveAndReview) {
+          resolvedActionType = resolvedActionType || "SAVE_AND_REVIEW";
+          actionData = {
+            ...userText,
+            medicines: Array.isArray(userText.medicines)
+              ? userText.medicines.map(sanitizeMedicineForPayload)
+              : userText.medicines,
+            medicine: userText.medicine
+              ? sanitizeMedicineForPayload(userText.medicine)
+              : userText.medicine,
+          };
+          messageString = displayLabel || "Save Medicines";
+        } else if (userText.selected !== undefined || userText.medicines !== undefined) {
+          resolvedActionType = resolvedActionType || "CONFIRM_MEDICINES";
+          actionData = {
+            ...userText,
+            medicines: Array.isArray(userText.medicines)
+              ? userText.medicines.map(sanitizeMedicineForPayload)
+              : userText.medicines,
+          };
+          messageString = displayLabel || "Confirm Selection";
+        } else if (userText.skipAll) {
+          resolvedActionType = resolvedActionType || "SKIP_MEDICINES";
+          actionData = { skipAll: true };
+          messageString = displayLabel || "Skip";
+        } else if (userText.action === "ASK_ALLERGIES" && Array.isArray(userText.allergies)) {
+          resolvedActionType = resolvedActionType || "ASK_ALLERGIES";
+          actionData = userText;
+          messageString = displayLabel || userText.allergies.join(", ");
+        } else if (userText.action === "ADD_MEDICINE" || userText.action === "ADD") {
+          resolvedActionType = resolvedActionType || "ADD_MEDICINE";
+          actionData = userText;
+          messageString = displayLabel || "Add Medicines";
+        } else {
+          actionData = userText;
+          messageString = displayLabel || userText.name || userText.action || "Continue";
+        }
+      } else {
+        messageString = String(userText || displayLabel || "Continue");
+      }
+
+      if (actionType === "CONFIRM_MEDICINES") {
+        resolvedActionType = "CONFIRM_MEDICINES";
+        if (!actionData && userText && typeof userText === "object") {
+          actionData = {
+            ...userText,
+            medicines: Array.isArray(userText.medicines)
+              ? userText.medicines.map(sanitizeMedicineForPayload)
+              : userText.medicines,
+          };
+        }
+        messageString = messageString || displayLabel || "Confirm Selection";
+      } else if (actionType === "SAVE_AND_REVIEW") {
+        resolvedActionType = "SAVE_AND_REVIEW";
+        if (!actionData && userText && typeof userText === "object") {
+          actionData = {
+            ...userText,
+            medicines: Array.isArray(userText.medicines)
+              ? userText.medicines.map(sanitizeMedicineForPayload)
+              : userText.medicines,
+            medicine: userText.medicine
+              ? sanitizeMedicineForPayload(userText.medicine)
+              : userText.medicine,
+          };
+        }
+        messageString = messageString || displayLabel || "Save Medicines";
+      } else if (actionType === "ADD_MEDICINE") {
+        resolvedActionType = "ADD_MEDICINE";
+        actionData = actionData || { action: "ADD_MEDICINE" };
+        messageString = messageString || displayLabel || "Add Medicines";
+      } else if (actionType === "SKIP_MEDICINES") {
+        resolvedActionType = "SKIP_MEDICINES";
+        actionData = actionData || { skipAll: true };
+        messageString = messageString || displayLabel || "Skip";
+      } else if (actionType === "GO_TO_DASHBOARD") {
+        resolvedActionType = "GO_TO_DASHBOARD";
+        messageString = messageString || displayLabel || "Go to Dashboard";
+      } else if (actionType === "CANCEL") {
+        resolvedActionType = "CANCEL";
+        messageString = messageString || displayLabel || "Cancel";
+      }
+
+      // Sanitize allergies in updatedState so that raw JSON strings or corrupted array fragments are properly cleaned
+      if (updatedState?.existingUserData?.allergies) {
+        let cleanedAllergies: string[] = [];
+        const rawAllergies = updatedState.existingUserData.allergies;
+        if (Array.isArray(rawAllergies)) {
+          for (const item of rawAllergies) {
+            if (typeof item === "string") {
+              if (item.includes('"action":"ASK_ALLERGIES"') || item.includes('"allergies"') || item.startsWith("{")) {
+                try {
+                  const parsed = JSON.parse(item);
+                  if (parsed && Array.isArray(parsed.allergies)) {
+                    cleanedAllergies.push(...parsed.allergies.map(String));
+                    continue;
+                  }
+                } catch {
+                  const matches = item.match(/"allergies":\s*\[(.*?)\]/);
+                  if (matches && matches[1]) {
+                    try {
+                      const arr = JSON.parse(`[${matches[1]}]`);
+                      if (Array.isArray(arr)) {
+                        cleanedAllergies.push(...arr.map(String));
+                        continue;
+                      }
+                    } catch {}
+                  }
+                }
+              }
+              if (!item.startsWith("{") && !item.includes('"action"') && !item.includes('"allergies"')) {
+                cleanedAllergies.push(item);
+              }
+            }
+          }
+        } else if (typeof rawAllergies === "string") {
+          cleanedAllergies = [rawAllergies];
+        }
+
+        updatedState = {
+          ...updatedState,
+          existingUserData: {
+            ...updatedState.existingUserData,
+            allergies: cleanedAllergies,
+          },
+        };
+      }
+
+      const payload: any = {
+        message: messageString || displayLabel || "Continue",
         history,
         state: updatedState,
         displayLabel,
@@ -958,6 +1215,13 @@ export default function OnboardingScreen() {
         ),
         stream: false,
       };
+
+      if (resolvedActionType) {
+        payload.actionType = resolvedActionType;
+      }
+      if (actionData) {
+        payload.actionData = actionData;
+      }
 
       const response = await apiClient.post("/v1/onboarding/chat", payload, {
         timeout: 90000,
@@ -1033,7 +1297,17 @@ export default function OnboardingScreen() {
     if (selectedFile) {
       uploadSelectedFile(selectedFile);
     } else if (textToSubmit) {
-      const activeAction = messages[messages.length - 1]?.action;
+      const latestAssistantMsg = [...messages]
+        .reverse()
+        .find(
+          (m) =>
+            m.role === "assistant" &&
+            m.action !== "ONBOARDING_COMPLETED_NOTICE",
+        );
+      const activeAction =
+        latestAssistantMsg?.action ||
+        messages[messages.length - 1]?.action ||
+        state.currentStep;
       let updatedState = { ...state };
       if (activeAction === "ASK_FIRST_NAME" || activeAction === "ASK_NAME") {
         updatedState = {
@@ -1054,6 +1328,7 @@ export default function OnboardingScreen() {
         };
         setState(updatedState);
       } else if (activeAction === "ASK_BLOOD_GROUP") {
+        updatedState.currentStep = "ASK_BLOOD_GROUP";
         if (textToSubmit.toLowerCase() === "skip") {
           updatedState = {
             ...updatedState,
@@ -1062,6 +1337,7 @@ export default function OnboardingScreen() {
         } else {
           updatedState = {
             ...updatedState,
+            bloodGroupSkipped: false,
             existingUserData: {
               ...updatedState.existingUserData,
               bloodGroup: textToSubmit,
@@ -1070,23 +1346,43 @@ export default function OnboardingScreen() {
         }
         setState(updatedState);
       } else if (activeAction === "ASK_ALLERGIES") {
-        if (textToSubmit.toLowerCase() === "skip") {
+        const lower = textToSubmit.trim().toLowerCase();
+        if (lower === "skip" || lower === "no" || lower === "not_sure" || lower === "not sure") {
           updatedState = {
             ...updatedState,
             allergiesSkipped: true,
-          };
-        } else {
-          const splitAllergies = textToSubmit
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-          updatedState = {
-            ...updatedState,
             existingUserData: {
               ...updatedState.existingUserData,
-              allergies: splitAllergies,
+              allergies: [],
             },
           };
+        } else {
+          try {
+            const parsed = JSON.parse(textToSubmit);
+            if (parsed && Array.isArray(parsed.allergies)) {
+              updatedState = {
+                ...updatedState,
+                allergiesSkipped: true,
+                existingUserData: {
+                  ...updatedState.existingUserData,
+                  allergies: parsed.allergies,
+                },
+              };
+            }
+          } catch {
+            const splitAllergies = textToSubmit
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            updatedState = {
+              ...updatedState,
+              allergiesSkipped: true,
+              existingUserData: {
+                ...updatedState.existingUserData,
+                allergies: splitAllergies,
+              },
+            };
+          }
         }
         setState(updatedState);
       }
@@ -1350,8 +1646,58 @@ export default function OnboardingScreen() {
 
   const handleDocumentUpload = () => {
     if (loading) return;
+    const isProcessing =
+      pollActiveRef.current ||
+      uploadState === "uploading" ||
+      uploadState === "queued" ||
+      uploadState === "processing" ||
+      uploadState === "validating";
+    if (isProcessing) {
+      Toast.show({
+        type: "info",
+        position: "top",
+        text1: "Processing in Progress",
+        text2: "A document is currently being processed. Please wait for it to complete.",
+      });
+      return;
+    }
     Keyboard.dismiss();
     uploadSheetRef.current?.present();
+  };
+
+  const handleUploadStart = () => {
+    setUploadState("uploading");
+    setUploadPercent(0);
+  };
+
+  const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
+    if (!jobIds || jobIds.length === 0) return;
+    const primaryJobId = jobIds[0];
+    const primaryFile = filesInfo?.[0];
+    const primaryDocId = primaryFile?.id || primaryJobId;
+    const primaryFileName =
+      primaryFile?.originalName ||
+      primaryFile?.displayName ||
+      primaryFile?.name ||
+      "report.pdf";
+
+    currentDocIdRef.current = primaryDocId;
+    selectedFileRef.current = primaryFile
+      ? {
+          uri: primaryFile.uri,
+          name: primaryFileName,
+          type: primaryFile.mimeType || "application/pdf",
+          size: primaryFile.size,
+          fileType: "document",
+        }
+      : null;
+
+    await AsyncStorage.setItem("onboarding_pending_job_id", primaryJobId);
+    await AsyncStorage.setItem("onboarding_pending_document_id", primaryDocId);
+
+    setUploadState("queued");
+    setUploadPercent(0);
+    startJobPolling(primaryJobId, primaryDocId);
   };
 
   const uploadAbortControllerRef = useRef<AbortController | null>(null);
@@ -1413,6 +1759,7 @@ export default function OnboardingScreen() {
           }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadPercent(100);
           setUploadState("success");
           setTimeout(() => {
             setUploadState("idle");
@@ -1476,10 +1823,9 @@ export default function OnboardingScreen() {
         }
 
         setUploadState("processing");
-        if (typeof event.percentage === "number") {
-          setUploadPercent(event.percentage);
-        } else if (typeof event.progress === "number") {
-          setUploadPercent(event.progress);
+        const streamPct = extractEventProgress(event);
+        if (typeof streamPct === "number") {
+          setUploadPercent(streamPct);
         }
         if (event.extra?.totalPages) {
           setPollTotalPages(event.extra.totalPages);
@@ -1528,6 +1874,7 @@ export default function OnboardingScreen() {
         if (isCompleted) {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
+          setUploadPercent(100);
           setUploadState("success");
           setTimeout(() => {
             setUploadState("idle");
@@ -1936,8 +2283,20 @@ export default function OnboardingScreen() {
     const handleOptionPress = (value: string, label: string) => {
       if (loading || isSendingRef.current) return;
       if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
-        sendMessage(value, state, label);
-      } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
+        const optionLabel =
+          label ||
+          (preferredLang && ONBOARDING_I18N[preferredLang.toLowerCase()]?.dashboard) ||
+          "Go to Dashboard";
+        const nextState = {
+          ...state,
+          medicationFlowDone: true,
+          medicinesConfirmed: true,
+          currentStep: "COMPLETE",
+          isOnboardingCompleted: true,
+        };
+        setState(nextState);
+        sendMessage(value, nextState, optionLabel, "GO_TO_DASHBOARD");
+      } else if (value === "ADD_MORE_MEDICINES" || value === "ADD" || value === "ADD_MEDICINE") {
         const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
         setLocalMedicines(existingMeds);
         setCurrentClientMedId(null);
@@ -1951,7 +2310,7 @@ export default function OnboardingScreen() {
           cancellationNotice: false,
         };
         setState(nextState);
-        sendMessage(value, nextState, label);
+        sendMessage("ADD_MEDICINE", nextState, label || "Add Medicines", "ADD_MEDICINE");
       } else if (value === "VIEW_MEDICINES" || value === "VIEW_MY_MEDICINES") {
         setTimeout(() => {
           try {
@@ -1970,7 +2329,7 @@ export default function OnboardingScreen() {
           documentConfirmed: true,
         };
         setState(newState);
-        sendMessage("ASK_REPORT", newState, label);
+        sendMessage("ASK_REPORT", newState, label, "ASK_REPORT");
       } else if (value === "LOGOUT") {
         logout();
       } else if (
@@ -1988,9 +2347,11 @@ export default function OnboardingScreen() {
       } else {
         let newState = { ...state };
         if (activeMsg.action === "ASK_BLOOD_GROUP") {
+          newState.currentStep = "ASK_BLOOD_GROUP";
           if (value === "SKIP") {
             newState.bloodGroupSkipped = true;
           } else {
+            newState.bloodGroupSkipped = false;
             newState.existingUserData = {
               ...newState.existingUserData,
               bloodGroup: value,
@@ -2001,13 +2362,48 @@ export default function OnboardingScreen() {
           return;
         }
         if (activeMsg.action === "ASK_ALLERGIES") {
-          if (value === "SKIP") {
+          newState.currentStep = "ASK_ALLERGIES";
+          const upper = String(value).trim().toUpperCase();
+          if (upper === "SKIP" || upper === "NO" || upper === "NOT_SURE") {
             newState.allergiesSkipped = true;
-          } else {
             newState.existingUserData = {
               ...newState.existingUserData,
-              allergies: [value],
+              allergies: [],
             };
+          } else if (upper === "YES") {
+            // User selected Yes chip; do not set allergies to ["YES"]
+            newState.existingUserData = {
+              ...newState.existingUserData,
+              allergies: Array.isArray(newState.existingUserData?.allergies)
+                ? newState.existingUserData.allergies.filter(
+                    (a: any) =>
+                      !["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].includes(
+                        String(a).toUpperCase().replace(/\s+/g, ""),
+                      ),
+                  )
+                : [],
+            };
+          } else {
+            try {
+              const parsed = JSON.parse(value);
+              if (parsed && Array.isArray(parsed.allergies)) {
+                newState.allergiesSkipped = true;
+                newState.existingUserData = {
+                  ...newState.existingUserData,
+                  allergies: parsed.allergies,
+                };
+              } else {
+                newState.existingUserData = {
+                  ...newState.existingUserData,
+                  allergies: [value],
+                };
+              }
+            } catch {
+              newState.existingUserData = {
+                ...newState.existingUserData,
+                allergies: [value],
+              };
+            }
           }
           setState(newState);
           sendMessage(value, newState, label);
@@ -2029,6 +2425,24 @@ export default function OnboardingScreen() {
           isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
+        />
+      );
+    }
+
+    if (activeMsg.action === "ASK_ALLERGIES") {
+      return (
+        <AskAllergiesCard
+          activeMsg={activeMsg}
+          preferredLang={preferredLang}
+          isDark={isDark}
+          theme={theme}
+          sendMessage={sendMessage}
+          state={state}
+          setState={setState}
+          isHistorical={isHistorical}
+          chosenVal={chosenVal}
+          chosenLabel={chosenLabel}
+          loading={loading}
         />
       );
     }
@@ -2308,7 +2722,7 @@ export default function OnboardingScreen() {
           if (pendingDraftSyncRef.current) {
             try {
               await pendingDraftSyncRef.current;
-            } catch {}
+            } catch { }
           }
           setCurrentClientMedId(null);
           const displayLabel =
@@ -2322,14 +2736,15 @@ export default function OnboardingScreen() {
                     ? `சேமி / மதிப்பாய்வு: ${updatedMed.name}`
                     : `Save / Review: ${updatedMed.name}`;
           sendMessage(
-            JSON.stringify({
+            {
               action: "SAVE_AND_REVIEW",
               saveAndReview: true,
               medicine: updatedMed,
               clientMedId: currentClientMedId,
-            }),
+            },
             state,
             displayLabel,
+            "SAVE_AND_REVIEW",
           );
         }
       };
@@ -2338,7 +2753,7 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         const uniqueDrafts = deduplicateDrafts(allDrafts);
         setLocalMedicines(uniqueDrafts);
@@ -2350,13 +2765,14 @@ export default function OnboardingScreen() {
         setState(nextState);
         const displayLabel = uiT("saveMedicines") || "Save Medicines";
         sendMessage(
-          JSON.stringify({
+          {
             action: "SAVE_AND_REVIEW",
             saveAndReview: true,
             medicines: uniqueDrafts,
-          }),
+          },
           nextState,
           displayLabel,
+          "SAVE_AND_REVIEW",
         );
       };
 
@@ -2376,7 +2792,7 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         setActiveMedicineToEdit(null);
         setCurrentClientMedId(null);
@@ -2394,7 +2810,7 @@ export default function OnboardingScreen() {
           cancellationNotice: true,
         };
         setState(cancelState);
-        sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel");
+        sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel", "CANCEL");
       };
 
       return (
@@ -2448,14 +2864,14 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         const selectedMedicineObjects =
           formattedMeds && formattedMeds.length > 0
             ? formattedMeds
             : deduplicateDrafts(localMedicines || []).filter(
-                (m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
-              );
+              (m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
+            );
         const uniqueSelected = deduplicateDrafts(selectedMedicineObjects);
         const newState = {
           ...state,
@@ -2475,24 +2891,25 @@ export default function OnboardingScreen() {
           prev.map((msg) =>
             msg.id === activeMsg.id
               ? {
-                  ...msg,
-                  medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
-                    (m) => ({
-                      ...m,
-                      selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
-                    }),
-                  ),
-                }
+                ...msg,
+                medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
+                  (m) => ({
+                    ...m,
+                    selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
+                  }),
+                ),
+              }
               : msg,
           ),
         );
         sendMessage(
-          JSON.stringify({
+          {
             selected: checkedMeds,
             medicines: uniqueSelected,
-          }),
+          },
           newState,
           uiT("confirmSelection"),
+          "CONFIRM_MEDICINES",
         );
       };
 
@@ -2511,7 +2928,7 @@ export default function OnboardingScreen() {
           medicinesConfirmed: false,
         };
         setState(newState);
-        sendMessage(JSON.stringify({ skipAll: true }), newState, uiT("skipAll"));
+        sendMessage({ skipAll: true }, newState, uiT("skipAll"), "SKIP_MEDICINES");
       };
 
       const handleEdit = (med: any) => {
@@ -2523,7 +2940,7 @@ export default function OnboardingScreen() {
         if (pendingDraftSyncRef.current) {
           try {
             await pendingDraftSyncRef.current;
-          } catch {}
+          } catch { }
         }
         setActiveMedicineToEdit(null);
         setCurrentClientMedId(null);
@@ -2541,7 +2958,7 @@ export default function OnboardingScreen() {
           cancellationNotice: true,
         };
         setState(cancelState);
-        sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel");
+        sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel", "CANCEL");
       };
 
       if (!isHistorical && medicineCardMode === "wizard") {
@@ -2994,7 +3411,37 @@ export default function OnboardingScreen() {
     return displayArr;
   }, [messages]);
 
-  const activeAction = messages[messages.length - 1]?.action;
+  const latestAssistantMessage = useMemo(() => {
+    return [...messages]
+      .reverse()
+      .find(
+        (m) =>
+          m.role === "assistant" &&
+          m.action !== "ONBOARDING_COMPLETED_NOTICE",
+      );
+  }, [messages]);
+
+  const activeAction =
+    latestAssistantMessage?.action ||
+    messages[messages.length - 1]?.action ||
+    state.currentStep;
+
+  const isChatInputHidden =
+    activeAction === "ASK_LANGUAGE" ||
+    activeAction === "ASK_UPLOAD_OR_SKIP" ||
+    activeAction === "RESOLVE_PROFILE_SOURCE" ||
+    activeAction === "ASK_GENDER" ||
+    activeAction === "ASK_DOB" ||
+    activeAction === "ASK_BLOOD_GROUP" ||
+    activeAction === "ASK_ALLERGIES" ||
+    activeAction === "REVIEW_MEDICINES_LIST" ||
+    activeAction === "ADD_MEDICINE" ||
+    activeAction === "EDIT_MEDICINE" ||
+    activeAction === "CONFIRM_MEDICINE" ||
+    activeAction === "MEDICINE_OPTIONS" ||
+    activeAction === "ASK_REPORT" ||
+    activeAction === "POST_ONBOARDING" ||
+    activeAction === "COMPLETE";
 
   return (
     <LinearGradient
@@ -3109,20 +3556,9 @@ export default function OnboardingScreen() {
               contentContainerStyle={[
                 styles.listContent,
                 {
-                  paddingBottom:
-                    activeAction === "ASK_LANGUAGE" ||
-                      activeAction === "ASK_UPLOAD_OR_SKIP" ||
-                      activeAction === "ASK_GENDER" ||
-                      activeAction === "ASK_DOB" ||
-                      activeAction === "REVIEW_MEDICINES_LIST" ||
-                      activeAction === "ADD_MEDICINE" ||
-                      activeAction === "EDIT_MEDICINE" ||
-                      activeAction === "CONFIRM_MEDICINE" ||
-                      activeAction === "MEDICINE_OPTIONS" ||
-                      activeAction === "ASK_REPORT" ||
-                      activeAction === "POST_ONBOARDING"
-                      ? Math.max(insets.bottom, 16) + 16
-                      : 16,
+                  paddingBottom: isChatInputHidden
+                    ? Math.max(insets.bottom, 16) + 16
+                    : 16,
                 },
               ]}
               keyboardShouldPersistTaps="handled"
@@ -3216,31 +3652,22 @@ export default function OnboardingScreen() {
           )} */}
 
           {/* Floating Input Capsule */}
-          {activeAction !== "ASK_LANGUAGE" &&
-            activeAction !== "ASK_UPLOAD_OR_SKIP" &&
-            activeAction !== "ASK_GENDER" &&
-            activeAction !== "ASK_DOB" &&
-            activeAction !== "REVIEW_MEDICINES_LIST" &&
-            activeAction !== "ADD_MEDICINE" &&
-            activeAction !== "EDIT_MEDICINE" &&
-            activeAction !== "CONFIRM_MEDICINE" &&
-            activeAction !== "MEDICINE_OPTIONS" &&
-            activeAction !== "POST_ONBOARDING" && (
-              <ChatInput
-                value={input}
-                onChangeText={setInput}
-                onSend={handleSend}
-                isSending={loading}
-                isDark={isDark}
-                mode="onboarding"
-                keyboardType={
-                  activeAction === "ASK_MEDICINE_QUANTITY"
-                    ? "numeric"
-                    : "default"
-                }
-                preferredLanguage={state.preferredLanguage!}
-              />
-            )}
+          {!isChatInputHidden && (
+            <ChatInput
+              value={input}
+              onChangeText={setInput}
+              onSend={handleSend}
+              isSending={loading}
+              isDark={isDark}
+              mode="onboarding"
+              keyboardType={
+                activeAction === "ASK_MEDICINE_QUANTITY"
+                  ? "numeric"
+                  : "default"
+              }
+              preferredLanguage={state.preferredLanguage!}
+            />
+          )}
         </Animated.View>
 
         {/* Modal Date Picker */}
@@ -3255,13 +3682,13 @@ export default function OnboardingScreen() {
           onCancel={() => setDatePickerVisible(false)}
         />
 
-        {/* Custom Upload Bottom Sheet */}
-        <UploadBottomSheet
+        {/* Document Selection / Upload Bottom Sheet */}
+        <DocumentUploadBottomSheet
           ref={uploadSheetRef}
-          fromScreen={true}
-          onTakePhoto={handleTakePhoto}
-          onChooseGallery={handleChooseGallery}
-          onChooseDocument={handleChooseDocument}
+          fromScreen="Onboarding"
+          singleDocument={true}
+          onSuccess={handleUploadSuccess}
+          onUploadStart={handleUploadStart}
         />
 
         <UploadValidationDialog

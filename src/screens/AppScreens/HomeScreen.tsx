@@ -375,7 +375,18 @@ const HomeScreen = () => {
 
         <ActionsRow>
           <ActionItem
-            onPress={() => refRBSheet?.current?.present()}
+            onPress={() => {
+              if (hasActiveUploads) {
+                Toast.show({
+                  type: "info",
+                  position: "top",
+                  text1: "Processing in Progress",
+                  text2: "A document is currently being processed. Please wait for it to complete.",
+                });
+                return;
+              }
+              refRBSheet?.current?.present();
+            }}
             icon="add"
             label="Add Documents"
             color="#ecfdf5"

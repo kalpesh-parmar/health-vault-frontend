@@ -11,6 +11,29 @@ export interface UploadedFile {
   fileType: string;
 }
 
+const extractEventProgress = (event: any): number | undefined => {
+  if (typeof event?.percentage === "number") return Math.round(event.percentage);
+  if (typeof event?.progress === "number") {
+    return event.progress <= 1 ? Math.round(event.progress * 100) : Math.round(event.progress);
+  }
+  if (typeof event?.data?.percentage === "number") return Math.round(event.data.percentage);
+  if (typeof event?.data?.progress === "number") {
+    return event.data.progress <= 1
+      ? Math.round(event.data.progress * 100)
+      : Math.round(event.data.progress);
+  }
+  if (typeof event?.extra?.percentage === "number") return Math.round(event.extra.percentage);
+  if (typeof event?.extra?.progress === "number") {
+    return event.extra.progress <= 1
+      ? Math.round(event.extra.progress * 100)
+      : Math.round(event.extra.progress);
+  }
+  if (event?.extra?.totalPages && event?.extra?.page) {
+    return Math.round((event.extra.page / event.extra.totalPages) * 100);
+  }
+  return undefined;
+};
+
 export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) => {
   const queryClient = useQueryClient();
   const [progressStage, setProgressStage] = useState<string>("IDLE");
@@ -29,7 +52,7 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
     }) => {
       // Step 1: Upload
       setProgressStage("UPLOADING_FILE");
-      setProgressPercentage(10);
+      setProgressPercentage(0);
       setProgressMessage("Uploading report to secure storage...");
 
       const formData = new FormData();
@@ -59,7 +82,6 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
 
       // Step 2: Trigger run-ocr
       setProgressStage("VALIDATING");
-      setProgressPercentage(25);
       setProgressMessage("Checking whether the document is medical.");
 
       await runOcr({ fileKey, documentType });
@@ -70,13 +92,10 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
         const unsubscribe = connectSseStream({
           endpoint: DOCUMENT_ENDPOINTS.SSE_FILE_STREAM(fileKey),
           onEvent: (event: SseEventPayload) => {
-            const pct =
-              typeof event.percentage === "number"
-                ? event.percentage
-                : typeof event.progress === "number"
-                  ? event.progress
-                  : 50;
-            setProgressPercentage(pct);
+            const streamPct = extractEventProgress(event);
+            if (typeof streamPct === "number") {
+              setProgressPercentage(streamPct);
+            }
             if (event.message) {
               setProgressMessage(event.message);
             }
@@ -88,7 +107,7 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
               event.stage === "COMPLETED" ||
               event.stageStatus === "COMPLETED" ||
               event.type === "document.completed" ||
-              (event.status === "SUCCESS" && pct === 100);
+              (event.status === "SUCCESS" && (streamPct === 100 || event.percentage === 100));
 
             const isFailed =
               event.stage === "FAILED" ||
@@ -98,6 +117,7 @@ export const useSaveDocument = (onSuccessGlobal?: (file: UploadedFile) => void) 
 
             if (isCompleted && !terminalReceived) {
               terminalReceived = true;
+              setProgressPercentage(100);
               unsubscribe();
               resolve(event);
             } else if (isFailed && !terminalReceived) {

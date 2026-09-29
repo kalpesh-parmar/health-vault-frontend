@@ -61,7 +61,12 @@ interface DocumentUploadContextType {
   removeSelectedFile: (id: string) => void;
   updateSelectedFile: (id: string, displayName: string, documentType: string) => void;
   clearSelectedFiles: () => void;
-  startUpload: (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => Promise<void>;
+  startUpload: (
+    userId: string,
+    fromScreen?: string,
+    onSuccess?: (jobIds: string[], filesInfo: any[]) => void,
+    filesOverride?: SelectedDocument[],
+  ) => Promise<void>;
   retryDocument: (fileKey: string, batchId?: string) => Promise<void>;
   cancelUpload: () => void;
   isBottomSheetVisible: boolean;
@@ -198,6 +203,21 @@ const extractEventProgress = (event: any) => {
     return event.data.progress <= 1
       ? Math.round(event.data.progress * 100)
       : Math.round(event.data.progress);
+  }
+  if (typeof event?.extra?.percentage === "number") return Math.round(event.extra.percentage);
+  if (typeof event?.extra?.progress === "number") {
+    return event.extra.progress <= 1
+      ? Math.round(event.extra.progress * 100)
+      : Math.round(event.extra.progress);
+  }
+  if (typeof event?.data?.extra?.percentage === "number") return Math.round(event.data.extra.percentage);
+  if (typeof event?.data?.extra?.progress === "number") {
+    return event.data.extra.progress <= 1
+      ? Math.round(event.data.extra.progress * 100)
+      : Math.round(event.data.extra.progress);
+  }
+  if (event?.extra?.totalPages && event?.extra?.page) {
+    return Math.round((event.extra.page / event.extra.totalPages) * 100);
   }
   return undefined;
 };
@@ -345,6 +365,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   }, []);
 
   const isPollingRef = useRef(false);
+  const isUploadingRef = useRef(false);
   const activeSseUnsubRef = useRef<(() => void) | null>(null);
   const hasHandledBatchFinishedRef = useRef(false);
   const activeBatchIdRef = useRef<string | null>(null);
@@ -434,16 +455,68 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
   const addSelectedFiles = useCallback((files: SelectedDocument[]) => {
     setSelectedFiles((prev) => {
-      const combined = [...prev, ...files];
-      if (combined.length > 5) {
+      if (prev.length >= 5) {
         Toast.show({
           type: "error",
+          position: "top",
           text1: "Limit Exceeded",
-          text2: "You can upload a maximum of 5 files at a time.",
+          text2: "You can select up to 5 documents at a time.",
         });
         return prev;
       }
-      return combined;
+
+      const duplicates: SelectedDocument[] = [];
+      const uniqueFiles: SelectedDocument[] = [];
+
+      for (const file of files) {
+        const isDuplicateInPrev = prev.some((p) => {
+          if (p.uri && file.uri && p.uri === file.uri) return true;
+          const pName = (p.originalName || p.displayName || "").trim().toLowerCase();
+          const fName = (file.originalName || file.displayName || "").trim().toLowerCase();
+          return Boolean(pName && fName && pName === fName);
+        });
+
+        const isDuplicateInCurrent = uniqueFiles.some((u) => {
+          if (u.uri && file.uri && u.uri === file.uri) return true;
+          const uName = (u.originalName || u.displayName || "").trim().toLowerCase();
+          const fName = (file.originalName || file.displayName || "").trim().toLowerCase();
+          return Boolean(uName && fName && uName === fName);
+        });
+
+        if (isDuplicateInPrev || isDuplicateInCurrent) {
+          duplicates.push(file);
+        } else {
+          uniqueFiles.push(file);
+        }
+      }
+
+      if (duplicates.length > 0) {
+        Toast.show({
+          type: "error",
+          position: "top",
+          text1: "Document Already Selected",
+          text2:
+            duplicates.length === 1
+              ? `"${duplicates[0].displayName || duplicates[0].originalName}" has already been selected.`
+              : "Some selected documents have already been added.",
+        });
+      }
+
+      if (uniqueFiles.length === 0) {
+        return prev;
+      }
+
+      const availableSlots = Math.max(0, 5 - prev.length);
+      if (uniqueFiles.length > availableSlots) {
+        Toast.show({
+          type: "error",
+          position: "top",
+          text1: "Limit Exceeded",
+          text2: "You can select up to 5 documents at a time.",
+        });
+        return [...prev, ...uniqueFiles.slice(0, availableSlots)];
+      }
+      return [...prev, ...uniqueFiles];
     });
   }, []);
 
@@ -645,14 +718,48 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   );
 
   const startUpload = useCallback(
-    async (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
-      if (selectedFiles.length === 0) return;
+    async (
+      userId: string,
+      fromScreen?: string,
+      onSuccess?: (jobIds: string[], filesInfo: any[]) => void,
+      filesOverride?: SelectedDocument[],
+    ) => {
+      const targetFiles = filesOverride && filesOverride.length > 0 ? filesOverride : selectedFiles;
+      if (targetFiles.length === 0) return;
+
+      if (
+        isUploadingRef.current ||
+        (uploadingDocs &&
+          uploadingDocs.some(
+            (d) =>
+              d.status === "UPLOADING" ||
+              d.status === "QUEUED" ||
+              d.status === "PROCESSING" ||
+              (d.progress !== undefined &&
+                d.progress > 0 &&
+                d.progress < 100 &&
+                d.status !== "FAILED" &&
+                d.status !== "REJECTED" &&
+                d.status !== "COMPLETED")
+          ))
+      ) {
+        console.warn("Upload already in progress, ignoring duplicate startUpload request");
+        Toast.show({
+          type: "info",
+          position: "top",
+          text1: "Processing in Progress",
+          text2: "A document is currently being processed. Please wait for it to complete.",
+        });
+        return;
+      }
+
+      isUploadingRef.current = true;
       setIsUploading(true);
       setProcessingError(null);
 
       const uploadSource = fromScreen || activeUploadFromScreenRef.current;
 
-      const initialUploading: UploadingDoc[] = selectedFiles.map((file) => ({
+      const initialUploading: UploadingDoc[] = targetFiles.map((file) => ({
         id: file.id,
         name: file.displayName || file.originalName,
         progress: 0,
@@ -675,7 +782,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       lastBatchEventIdRef.current = null;
 
       try {
-        const filesPayload = selectedFiles.map((file) => {
+        const filesPayload = targetFiles.map((file) => {
           const name = getFileNameWithExtension(file.displayName, file.originalName);
           return {
             uri: file.uri,
@@ -790,6 +897,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           }
 
           await updateCompletedBatchFromDocs(currentDocs, event);
+          setIsUploading(false);
+          isUploadingRef.current = false;
 
           if (!hasHandledBatchFinishedRef.current) {
             hasHandledBatchFinishedRef.current = true;
@@ -1042,6 +1151,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         });
       } catch (err: any) {
         console.error("[Multiple Upload Error]", err);
+        isUploadingRef.current = false;
         setIsUploading(false);
         Toast.show({
           type: "error",
@@ -1050,7 +1160,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         });
       }
     },
-    [selectedFiles, clearSelectedFiles],
+    [selectedFiles, clearSelectedFiles, uploadingDocs],
   );
 
   const cancelUpload = useCallback(() => {
@@ -1065,6 +1175,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       activeSseUnsubRef.current();
       activeSseUnsubRef.current = null;
     }
+    isUploadingRef.current = false;
     setIsUploading(false);
     activeBatchIdRef.current = null;
     lastBatchEventIdRef.current = null;

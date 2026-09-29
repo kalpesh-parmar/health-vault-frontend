@@ -1153,7 +1153,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           value={formQty}
           onChangeText={setFormQty}
           keyboardType="numeric"
-          placeholder={preferredLang === "gujarati" ? "દા.ત. 30" : "e.g. 30"}
+          placeholder={preferredLang === "gujarati" ? "દા.ત. 10" : "e.g. 10"}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           cursorColor={theme.colors.primary}
           selectionColor={theme.colors.primary}

@@ -236,13 +236,16 @@ interface DocumentUploadBottomSheetProps {
   fromScreen?: string;
   onSuccess?: (jobIds: string[], filesInfo: any[]) => void;
   onUploadStart?: () => void;
+  singleDocument?: boolean;
 }
 
-export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSuccess, onUploadStart }: DocumentUploadBottomSheetProps, ref: any) => {
+export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSuccess, onUploadStart, singleDocument }: DocumentUploadBottomSheetProps, ref: any) => {
   const { theme, isDark } = useAppTheme();
   const { userId } = useAuth();
   const navigation = useNavigation<any>();
   const cameraRef = useRef<any>(null);
+
+  const isSingleDoc = Boolean(singleDocument || fromScreen === "Onboarding");
 
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   // In v5, dynamic sizing is handled natively by enableDynamicSizing={true} prop
@@ -275,10 +278,28 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
     addSelectedFiles,
     removeSelectedFile,
     updateSelectedFile,
+    clearSelectedFiles,
     startUpload,
     isUploading,
+    uploadingDocs,
     setIsBottomSheetVisible,
   } = useDocumentUpload();
+
+  const hasActiveProcessing =
+    isUploading ||
+    (uploadingDocs &&
+      uploadingDocs.some(
+        (d) =>
+          d.status === "UPLOADING" ||
+          d.status === "QUEUED" ||
+          d.status === "PROCESSING" ||
+          (d.progress !== undefined &&
+            d.progress > 0 &&
+            d.progress < 100 &&
+            d.status !== "FAILED" &&
+            d.status !== "REJECTED" &&
+            d.status !== "COMPLETED"),
+      ));
 
   const [isCameraVisible, setIsCameraVisible] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -321,10 +342,30 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
   );
 
   const handleDocumentPickMultiple = async () => {
+    if (hasActiveProcessing) {
+      Toast.show({
+        type: "info",
+        position: "top",
+        text1: "Processing in Progress",
+        text2: "A document is currently being processed. Please wait for it to complete.",
+      });
+      return;
+    }
+
+    if (!isSingleDoc && selectedFiles.length >= 5) {
+      Toast.show({
+        type: "error",
+        position: "top",
+        text1: "Limit Exceeded",
+        text2: "You can select up to 5 documents at a time.",
+      });
+      return;
+    }
+
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ["application/pdf", "image/*"],
-        multiple: true,
+        multiple: !isSingleDoc,
         copyToCacheDirectory: true,
       });
 
@@ -344,34 +385,77 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
           originalName: decName,
           displayName: decName.replace(/\.[^/.]+$/, ""),
           documentType: "Other Medical Document",
-          mimeType: asset.mimeType || "application/octet-stream",
+          mimeType: asset.mimeType || (decName.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream"),
           size: asset.size || 0,
         };
       });
 
-      addSelectedFiles(files);
+      if (isSingleDoc) {
+        const singleFile = files[0];
+        if (!singleFile) return;
+        clearSelectedFiles();
+        addSelectedFiles([singleFile]);
+        ref.current?.dismiss();
+        if (onUploadStart) {
+          onUploadStart();
+        }
+        if (userId) {
+          startUpload(
+            userId,
+            fromScreen,
+            (jobIds, filesInfo) => {
+              if (onSuccess) {
+                onSuccess(jobIds, filesInfo);
+              }
+            },
+            [singleFile],
+          );
+        }
+      } else {
+        addSelectedFiles(files);
+      }
     } catch (err) {
       console.error("Error picking documents: ", err);
       Toast.show({
         type: "error",
+        position: "top",
         text1: "Error",
         text2: "Failed to pick documents.",
       });
     }
   };
 
-    const handleGalleryPickMultiple = async () => {
+  const handleGalleryPickMultiple = async () => {
+    if (hasActiveProcessing) {
+      Toast.show({
+        type: "info",
+        position: "top",
+        text1: "Processing in Progress",
+        text2: "A document is currently being processed. Please wait for it to complete.",
+      });
+      return;
+    }
+
+    if (!isSingleDoc && selectedFiles.length >= 5) {
+      Toast.show({
+        type: "error",
+        position: "top",
+        text1: "Limit Exceeded",
+        text2: "You can select up to 5 documents at a time.",
+      });
+      return;
+    }
+
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "image/*",
-        multiple: true,
+        multiple: !isSingleDoc,
         copyToCacheDirectory: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
         return;
       }
-      console.log("RESULT :- ", result);
 
       const files = result.assets.map((asset) => {
         let decName = asset.name;
@@ -390,11 +474,35 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
         };
       });
 
-      addSelectedFiles(files);
+      if (isSingleDoc) {
+        const singleFile = files[0];
+        if (!singleFile) return;
+        clearSelectedFiles();
+        addSelectedFiles([singleFile]);
+        ref.current?.dismiss();
+        if (onUploadStart) {
+          onUploadStart();
+        }
+        if (userId) {
+          startUpload(
+            userId,
+            fromScreen,
+            (jobIds, filesInfo) => {
+              if (onSuccess) {
+                onSuccess(jobIds, filesInfo);
+              }
+            },
+            [singleFile],
+          );
+        }
+      } else {
+        addSelectedFiles(files);
+      }
     } catch (err) {
       console.error("Error picking images: ", err);
       Toast.show({
         type: "error",
+        position: "top",
         text1: "Error",
         text2: "Failed to pick images.",
       });
@@ -402,6 +510,26 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
   };
 
   const handleOpenCamera = async () => {
+    if (hasActiveProcessing) {
+      Toast.show({
+        type: "info",
+        position: "top",
+        text1: "Processing in Progress",
+        text2: "Documents are currently being processed. Please wait for it to complete.",
+      });
+      return;
+    }
+
+    if (!isSingleDoc && selectedFiles.length >= 5) {
+      Toast.show({
+        type: "error",
+        position: "top",
+        text1: "Limit Exceeded",
+        text2: "You can select up to 5 documents at a time.",
+      });
+      return;
+    }
+
     const currentPermission = await ImagePicker.getCameraPermissionsAsync();
     let permission = currentPermission;
 
@@ -414,6 +542,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
     } else {
       Toast.show({
         type: "error",
+        position: "top",
         text1: "Permission Denied",
         text2: permission.canAskAgain
           ? "Camera permission is required."
@@ -430,17 +559,38 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       if (photoUri) {
         setIsCameraVisible(false);
         const fileName = `camera_capture_${Date.now()}.jpg`;
-        addSelectedFiles([
-          {
-            id: Math.random().toString(36).substring(7),
-            uri: photoUri,
-            originalName: fileName,
-            displayName: fileName.replace(/\.[^/.]+$/, ""),
-            documentType: "Other Medical Document",
-            mimeType: "image/jpeg",
-            size: 0,
-          },
-        ]);
+        const singleFile = {
+          id: Math.random().toString(36).substring(7),
+          uri: photoUri,
+          originalName: fileName,
+          displayName: fileName.replace(/\.[^/.]+$/, ""),
+          documentType: "Other Medical Document",
+          mimeType: "image/jpeg",
+          size: 0,
+        };
+
+        if (isSingleDoc) {
+          clearSelectedFiles();
+          addSelectedFiles([singleFile]);
+          ref.current?.dismiss();
+          if (onUploadStart) {
+            onUploadStart();
+          }
+          if (userId) {
+            startUpload(
+              userId,
+              fromScreen,
+              (jobIds, filesInfo) => {
+                if (onSuccess) {
+                  onSuccess(jobIds, filesInfo);
+                }
+              },
+              [singleFile],
+            );
+          }
+        } else {
+          addSelectedFiles([singleFile]);
+        }
       }
     } catch (err) {
       console.error("Camera capture error:", err);
@@ -463,6 +613,15 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
 
   const handleUpload = async () => {
     if (!userId) return;
+    if (hasActiveProcessing) {
+      Toast.show({
+        type: "info",
+        position: "top",
+        text1: "Processing in Progress",
+        text2: "A document is currently being processed. Please wait for it to complete.",
+      });
+      return;
+    }
     ref.current?.dismiss();
     if (onUploadStart) {
       onUploadStart();
@@ -495,6 +654,15 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
     }
   };
 
+  const handleDismiss = useCallback(() => {
+    setSheetIndex(-1);
+    setIsBottomSheetVisible(false);
+    setEditingId(null);
+    if (!isUploading) {
+      clearSelectedFiles();
+    }
+  }, [isUploading, clearSelectedFiles, setIsBottomSheetVisible]);
+
   return (
     <>
       <BottomSheetModal
@@ -505,8 +673,12 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
           setIsBottomSheetVisible(index >= 0);
           if (index === -1) {
             setEditingId(null);
+            if (!isUploading) {
+              clearSelectedFiles();
+            }
           }
         }}
+        onDismiss={handleDismiss}
         backdropComponent={renderBackdrop}
         enableDynamicSizing={true}
         keyboardBehavior="extend"

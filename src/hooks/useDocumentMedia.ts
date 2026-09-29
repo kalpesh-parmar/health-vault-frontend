@@ -67,6 +67,16 @@ export const useDocumentMedia = () => {
   const handleMultiDocumentPick = useCallback(
     async (existingCount = 0): Promise<PickedFile[]> => {
       try {
+        if (existingCount >= 5) {
+          Toast.show({
+            type: "error",
+            position: "top",
+            text1: "Limit Exceeded",
+            text2: "You can select up to 5 documents at a time.",
+          });
+          return [];
+        }
+
         const result = await DocumentPicker.getDocumentAsync({
           type: ALLOWED_MIMES,
           multiple: true,
@@ -77,18 +87,15 @@ export const useDocumentMedia = () => {
           return [];
         }
 
-        if (existingCount + result.assets.length > 5) {
-          Toast.show({
-            type: "error",
-            text1: "Limit Exceeded",
-            text2: "You can upload a maximum of 5 files at a time.",
-          });
+        const assetsToProcess = result.assets;
+
+        if (assetsToProcess.length === 0) {
           return [];
         }
 
         const validFiles: PickedFile[] = [];
 
-        for (const file of result.assets) {
+        for (const file of assetsToProcess) {
           const errorMsg = validateFile({
             name: file.name,
             mimeType: file.mimeType,

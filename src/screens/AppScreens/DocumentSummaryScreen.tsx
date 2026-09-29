@@ -648,7 +648,10 @@ const SummaryScreen = ({ route, navigation }: any) => {
             />
             <SendButton
               activeOpacity={0.8}
+              disabled={!askText.trim()}
+              style={{ opacity: !askText.trim() ? 0.4 : 1 }}
               onPress={() => {
+                if (!askText.trim()) return;
                 handleAskQuestion(askText);
                 setAskText("");
               }}

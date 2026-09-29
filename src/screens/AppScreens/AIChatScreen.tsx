@@ -22,6 +22,8 @@ import { useAppTheme } from "../../context/ThemeContext";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { usePreferredLanguage } from "../../hooks/usePreferredLanguage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
 import { listDocument } from "../../services/documentService";
 
@@ -52,6 +54,7 @@ const AIChatScreen = ({ route }: any) => {
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const bottomPadding = useBottomBarPadding();
+  const insets = useSafeAreaInsets();
 
   // State
   const storedPreferredLanguage = usePreferredLanguage();
@@ -91,6 +94,16 @@ const AIChatScreen = ({ route }: any) => {
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 10,
   });
+
+  useEffect(() => {
+    AsyncStorage.getItem("preferredLanguage")
+      .then((lang) => {
+        if (lang) {
+          setPreferredLang(lang);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -159,6 +172,7 @@ const AIChatScreen = ({ route }: any) => {
     setPendingStep,
     filesInfo: chatWizardState.filesInfo,
     lastKnownStateRef,
+    setPreferredLang,
   });
 
   // Wizard & Conflict Manager Hook
@@ -378,6 +392,28 @@ const AIChatScreen = ({ route }: any) => {
     return null;
   }, [isLoadingMore, theme.colors.primary]);
 
+  const latestAssistantMessage = useMemo(() => {
+    return [...mergedMessages].find(
+      (m) => m.role === "ai" && m.action !== "ONBOARDING_COMPLETED_NOTICE"
+    );
+  }, [mergedMessages]);
+
+  const activeAction = latestAssistantMessage?.action || pendingStep;
+  const isChatInputHidden = Boolean(
+    activeAction === "ASK_BLOOD_GROUP" ||
+    activeAction === "ASK_ALLERGIES" ||
+    activeAction === "ASK_LANGUAGE" ||
+    activeAction === "ASK_GENDER" ||
+    activeAction === "ASK_DOB" ||
+    activeAction === "RESOLVE_PROFILE_SOURCE" ||
+    activeAction === "ASK_UPLOAD_OR_SKIP" ||
+    activeAction === "REVIEW_MEDICINES_LIST" ||
+    activeAction === "ADD_MEDICINE" ||
+    activeAction === "EDIT_MEDICINE" ||
+    activeAction === "CONFIRM_MEDICINE" ||
+    activeAction === "MEDICINE_OPTIONS"
+  );
+
   if (isLoadingDocs || isLoadingHistory) {
     return <LoadingScreen />;
   }
@@ -477,26 +513,37 @@ const AIChatScreen = ({ route }: any) => {
         </View>
 
         {/* Input & Suggested Chips */}
-        <Animated.View style={animatedKeyboardStyle}>
-          <SuggestedQuestionChip
-            questions={suggestedQuestions}
-            onPressQuestion={handleSend}
-            isDark={isDark}
-          />
+        {!isChatInputHidden && (
+          <Animated.View style={animatedKeyboardStyle}>
+            <SuggestedQuestionChip
+              questions={suggestedQuestions}
+              onPressQuestion={handleSend}
+              isDark={isDark}
+            />
 
-          <ChatInput
-            value={input}
-            onChangeText={setInput}
-            onSend={() => handleSend()}
-            isSending={isSending}
-            isDark={isDark}
-            preferredLanguage={preferredLang}
-            onAttachPress={() => {
-              uploadSheetRef.current?.present();
-              Keyboard.dismiss();
-            }}
-          />
-        </Animated.View>
+            <ChatInput
+              value={input}
+              onChangeText={setInput}
+              onSend={() => handleSend()}
+              isSending={isSending}
+              isDark={isDark}
+              preferredLanguage={preferredLang}
+              onAttachPress={() => {
+                if (hasActiveUploads) {
+                  Toast.show({
+                    type: "info",
+                    position: "top",
+                    text1: "Processing in Progress",
+                    text2: "A document is currently being processed. Please wait for it to complete.",
+                  });
+                  return;
+                }
+                uploadSheetRef.current?.present();
+                Keyboard.dismiss();
+              }}
+            />
+          </Animated.View>
+        )}
       </View>
 
       {/* Modals & Sheets */}
