@@ -25,6 +25,7 @@ export interface AskAllergiesCardProps {
   chosenVal?: string | null;
   chosenLabel?: string | null;
   loading?: boolean;
+  onExpand?: () => void;
 }
 
 export const COMMON_ALLERGIES = [
@@ -50,6 +51,7 @@ export function AskAllergiesCard({
   chosenVal,
   chosenLabel,
   loading = false,
+  onExpand,
 }: AskAllergiesCardProps) {
   const uiT = (key: string) => {
     const lang = preferredLang || "english";
@@ -136,6 +138,9 @@ export function AskAllergiesCard({
       sendMessage("NO", updatedState, uiT("allergyNo"));
     } else if (opt === "YES") {
       setSelectedOption("YES");
+      if (onExpand) {
+        setTimeout(() => onExpand(), 100);
+      }
     }
   };
 

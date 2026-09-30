@@ -67,7 +67,7 @@ const AIChatScreen = ({ route }: any) => {
           setPreferredLang(lang);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Refs
@@ -248,6 +248,12 @@ const AIChatScreen = ({ route }: any) => {
     setIsViewerOpen(true);
   }, [documentsList]);
 
+  const handleAllergyCardExpand = useCallback(() => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    }, 150);
+  }, []);
+
   const isOnboardingSession = Boolean(onboardingSessionId && !isOnboardingCompleted);
 
   const latestAssistantMessage = useMemo(() => {
@@ -331,22 +337,6 @@ const AIChatScreen = ({ route }: any) => {
           </View>
         )}
 
-        {/* Read Only Archive Banner */}
-        {isOnboardingSession && (
-          <View
-            style={[
-              styles.readOnlyBanner,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <Ionicons name="archive-outline" size={18} color="#0f766e" />
-            <Text style={styles.readOnlyText}>{t("onboardingSessionReadOnly")}</Text>
-          </View>
-        )}
-
         {/* Messages List */}
         <View style={styles.contentWrapper}>
           <FlatList
@@ -381,6 +371,7 @@ const AIChatScreen = ({ route }: any) => {
                 setChatWizardState={setChatWizardState}
                 onViewFullReport={handleViewFullReport}
                 isOnboardingCompleted={isOnboardingCompleted}
+                onAllergyCardExpand={handleAllergyCardExpand}
               />
             )}
             contentContainerStyle={[

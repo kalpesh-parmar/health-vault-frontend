@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { widgetStyles as styles } from "../chat/widgets/WidgetStyles";
-import { I18N_ONBOARDING_UI } from "../chat/widgets/OnboardingI18n";
+import { I18N_ONBOARDING_UI, resolveDoseUnitDisplay } from "../chat/widgets/OnboardingI18n";
 import { MedicineIcon, DoseVisual } from "../chat/widgets/MedicineHelpers";
 
 // Custom Hook to manage state for all medication forms
@@ -38,7 +38,7 @@ export const useMedicationFormState = (initialMed: any, preferredLang: string = 
     const freq = med.frequency || "ONCE";
     if (freq === "Once Daily" || freq === "ONCE_DAILY" || freq === "ONCE") return "ONCE";
     if (freq === "Twice Daily" || freq === "TWICE_DAILY" || freq === "TWICE") return "TWICE";
-    if (freq === "3x Daily" || freq === "THREE_TIMES_DAILY" || freq === "THRICE") return "THRICE";
+    if (freq === "3x Daily" || freq === "Three Times Daily" || freq === "THREE_TIMES_DAILY" || freq === "THRICE" || freq === "3X_DAILY" || freq === "3X DAILY") return "THRICE";
     return "ONCE";
   });
 
@@ -406,7 +406,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            tablet(s)
+            {resolveDoseUnitDisplay("TABLET", preferredLang)}
           </Text>
         </View>
       );
@@ -448,7 +448,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            capsule(s)
+            {resolveDoseUnitDisplay("CAPSULE", preferredLang)}
           </Text>
         </View>
       );
@@ -490,7 +490,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            puff(s)
+            {resolveDoseUnitDisplay("PUFF", preferredLang)}
           </Text>
         </View>
       );
@@ -532,7 +532,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            puff(s)
+            {resolveDoseUnitDisplay("PUFF", preferredLang)}
           </Text>
         </View>
       );
@@ -588,7 +588,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
                   },
                 ]}
               >
-                {u}
+                {resolveDoseUnitDisplay(u, preferredLang)}
               </Text>
             </TouchableOpacity>
           ))}

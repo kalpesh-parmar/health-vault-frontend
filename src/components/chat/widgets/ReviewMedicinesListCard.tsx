@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, LayoutAnimation, Platform, UIManager } fr
 import { Ionicons } from "@expo/vector-icons";
 import { widgetStyles as styles } from "./WidgetStyles";
 import Toast from "react-native-toast-message";
-import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
+import { I18N_ONBOARDING_UI, resolveDoseUnitDisplay } from "./OnboardingI18n";
 import { parseChosenJson } from "./MedicineHelpers";
 import { DocumentProgressSummaryContainer } from "./DocumentProgressSummaryContainer";
 import { deduplicateDrafts } from "./AddMedicineCard";
@@ -14,8 +14,8 @@ const formatFoodContext = (val: any): string => {
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
-const formatStartDate = (val: any): string => {
-  if (!val) return "None";
+const formatStartDate = (val: any, noneText = "None"): string => {
+  if (!val || val === "None") return noneText;
   try {
     const d = new Date(val);
     if (isNaN(d.getTime())) return String(val);
@@ -81,6 +81,75 @@ export function ReviewMedicinesListCard({
   onRetryDocument,
   showDocumentSummary = true,
 }: ReviewMedicinesListCardProps) {
+  // Language normalization helper
+  const normalizeLang = (l?: string) => {
+    if (!l) return "english";
+    const lower = l.toLowerCase();
+    if (lower.startsWith("gu")) return "gujarati";
+    if (lower.startsWith("hi")) return "hindi";
+    if (lower.startsWith("mr")) return "marathi";
+    if (lower.startsWith("ta")) return "tamil";
+    return "english";
+  };
+
+  // Translation helper
+  const t = (key: string) => {
+    const lang = normalizeLang(preferredLang);
+    const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
+    return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
+  };
+
+  const resolveMedicineTypeDisplay = (typeVal: any): string => {
+    if (!typeVal) return t("medicineType.TABLET") || "Tablet";
+    const upper = String(typeVal).toUpperCase();
+    return t(`medicineType.${upper}`) || upper;
+  };
+
+  const resolveFrequencyDisplay = (freqVal: any): string => {
+    if (!freqVal || freqVal === "None") return t("none") || "None";
+    const str = String(freqVal).trim();
+    const upper = str.toUpperCase().replace(/\s+/g, "_");
+    if (upper === "ONCE" || upper === "ONCE_DAILY" || upper === "1X_DAILY" || upper === "1_TIME_A_DAY") {
+      return t("frequency.ONCE") || "Once";
+    }
+    if (upper === "TWICE" || upper === "TWICE_DAILY" || upper === "2X_DAILY" || upper === "2_TIMES_A_DAY") {
+      return t("frequency.TWICE") || "Twice";
+    }
+    if (upper === "THRICE" || upper === "THREE_TIMES_DAILY" || upper === "3X_DAILY" || upper === "3_TIMES_A_DAY") {
+      return t("frequency.THRICE") || "Thrice";
+    }
+    return str;
+  };
+
+  const resolveCanonicalFrequency = (freqVal: any): string => {
+    if (!freqVal || freqVal === "None") return "Once Daily";
+    const str = String(freqVal).trim();
+    const upper = str.toUpperCase().replace(/\s+/g, "_");
+    if (upper === "ONCE" || upper === "ONCE_DAILY" || upper === "1X_DAILY" || upper === "1_TIME_A_DAY") {
+      return "Once Daily";
+    }
+    if (upper === "TWICE" || upper === "TWICE_DAILY" || upper === "2X_DAILY" || upper === "2_TIMES_A_DAY") {
+      return "Twice Daily";
+    }
+    if (upper === "THRICE" || upper === "THREE_TIMES_DAILY" || upper === "3X_DAILY" || upper === "3_TIMES_A_DAY") {
+      return "Three Times Daily";
+    }
+    if (upper === "AS_NEEDED") {
+      return "As Needed";
+    }
+    if (str === "Once Daily" || str === "Twice Daily" || str === "Three Times Daily" || str === "As Needed") {
+      return str;
+    }
+    return "Once Daily";
+  };
+
+  const resolveNoneDisplay = (val: any): string => {
+    if (val === null || val === undefined || val === "" || val === "None") {
+      return t("none") || "None";
+    }
+    return String(val);
+  };
+
   const todayDateString = React.useMemo(() => new Date().toISOString().split("T")[0], []);
   const safeLocalMedicines = React.useMemo(() => {
     return deduplicateDrafts(localMedicines || []).map((m) => ({
@@ -94,8 +163,8 @@ export function ReviewMedicinesListCard({
     safeLocalMedicines.filter((m) => m.selected).map((m) => m.client_med_id || m.id),
   );
 
-  // expandedMedId: holds the ID of the single expanded medicine card (accordion design)
-  const [expandedMedId, setExpandedMedId] = useState<string | null>(null);
+  // expandedMedIds: map of medicine IDs to expansion booleans (supports independent multi-medicine expansion)
+  const [expandedMedIds, setExpandedMedIds] = useState<Record<string, boolean>>({});
 
   // isExpanded: Controls whether the list shows first 3 medicines or all medicines
   const [isExpanded, setIsExpanded] = useState(false);
@@ -188,6 +257,7 @@ export function ReviewMedicinesListCard({
 
   // Toggle medicine checkbox state
   const toggleCheck = (id: string) => {
+    if (readOnly) return;
     if (checkedMeds.includes(id)) {
       setCheckedMeds((prev) => prev.filter((m) => m !== id));
       setLocalMedicines((prev) =>
@@ -206,33 +276,48 @@ export function ReviewMedicinesListCard({
     }
   };
 
-  // Toggle single medicine expansion (accordion transition)
+  // Toggle independent medicine expansion (accordion transition)
   const toggleExpandPill = (id: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    if (expandedMedId === id) {
-      setExpandedMedId(null);
-    } else {
-      setExpandedMedId(id);
+    try {
+      if (Platform.OS !== "web" && LayoutAnimation && LayoutAnimation.Presets) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+    } catch {
+      // Ignore animation setup errors in environments without layout animations
     }
+    setExpandedMedIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
-  // Helper to format dosage info safely
+  // Helper to format dosage info safely with localized dose units
   const getDosageString = (med: any) => {
     const rawDosage = med.dosage || med.dose || med.dosePerIntake || "";
     let dosage = "";
     if (rawDosage && typeof rawDosage === "object") {
       if (rawDosage.count !== undefined) {
-        const typeStr = (med.type || "tablet").toLowerCase();
-        dosage = `${rawDosage.count} ${typeStr}(s)`;
+        const typeStr = med.type || "TABLET";
+        const unitDisplay = resolveDoseUnitDisplay(typeStr, preferredLang);
+        dosage = `${rawDosage.count} ${unitDisplay}`.trim();
       } else if (rawDosage.value !== undefined) {
-        dosage = `${rawDosage.value} ${rawDosage.unit || ""}`.trim();
+        const unitDisplay = resolveDoseUnitDisplay(rawDosage.unit || "", preferredLang);
+        dosage = `${rawDosage.value} ${unitDisplay}`.trim();
       } else {
         dosage = JSON.stringify(rawDosage);
       }
     } else if (rawDosage) {
-      dosage = String(rawDosage);
+      const tabletMatch = String(rawDosage).match(/^(\d+(?:\.\d+)?)\s*(?:tablet|capsule|puff)\(s\)?$/i);
+      if (tabletMatch) {
+        const num = tabletMatch[1];
+        const unitDisplay = resolveDoseUnitDisplay(med.type || "TABLET", preferredLang);
+        dosage = `${num} ${unitDisplay}`.trim();
+      } else {
+        dosage = String(rawDosage);
+      }
     } else {
-      dosage = "1 tablet(s)";
+      const defaultUnit = resolveDoseUnitDisplay(med.type || "TABLET", preferredLang);
+      dosage = `1 ${defaultUnit}`.trim();
     }
     return dosage;
   };
@@ -240,34 +325,35 @@ export function ReviewMedicinesListCard({
   // Helper to format scheduling info safely
   const getTimeString = (med: any) => {
     const time = med.schedule || med.medicationSchedule || med.times || "";
-    if (!time) return "None";
-    
+    if (!time || time === "None") return resolveNoneDisplay("None");
+
     // If it's a string, return directly
     if (typeof time === "string") return time;
-    
+
     // If it's an array, join it
     if (Array.isArray(time)) {
       return time.join(", ");
     }
-    
+
     // If it's an object, check for times or reminderTimes inside it
     if (typeof time === "object" && time !== null) {
       const timesList = time.times || time.reminderTimes || [];
       if (Array.isArray(timesList) && timesList.length > 0) {
         return timesList.join(", ");
       }
-      
+
       // Otherwise, format entries as key: value
       return Object.entries(time)
         .filter(([_, v]) => typeof v === "string" || typeof v === "number")
         .map(([k, v]) => `${k}: ${v}`)
-        .join(", ") || "None";
+        .join(", ") || resolveNoneDisplay("None");
     }
-    
-    return "None";
+
+    return resolveNoneDisplay("None");
   };
 
   const handleConfirm = () => {
+    if (readOnly) return;
     const formattedMedicines = deduplicateDrafts(localMedicines || [])
       .filter((m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id))
       .map((m) => {
@@ -314,12 +400,12 @@ export function ReviewMedicinesListCard({
           id: m.id || m.client_med_id,
           name: m.name || m.medicationName || "Unknown",
           type: medTypeUpper,
-          frequency: String(m.frequency || "ONCE").toUpperCase(),
+          frequency: resolveCanonicalFrequency(m.frequency),
           dose: doseObj,
           dosePerIntake:
             medTypeUpper === "TABLET" || medTypeUpper === "CAPSULE"
-              ? String(doseObj.count)
-              : `${doseObj.value} ${doseObj.unit}`.trim(),
+              ? Number(doseObj.count)
+              : Number(doseObj.value),
           foodFrequency: String(m.foodFrequency || m.foodContext || "AFTER_FOOD").toUpperCase(),
           resolution: resValue,
           startDate: m.startDate || new Date().toISOString().split("T")[0],
@@ -329,23 +415,18 @@ export function ReviewMedicinesListCard({
           refillAlert: m.refill_alert !== undefined ? m.refill_alert : (m.refillAlert || false),
           medicationSchedule: m.medicationSchedule || m.schedule || m.times || [],
         };
-
-        if (resValue === "REPLACE" && matchedMed?.id) {
+        if ((resValue === "REPLACE" || resValue === "EDIT") && matchedMed?.id) {
           result.replaceMedicationId = matchedMed.id;
         }
 
         return result;
       });
 
+
     onConfirm(checkedMeds, formattedMedicines);
   };
 
-  // Translation helper
-  const t = (key: string) => {
-    const lang = preferredLang || "english";
-    const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
-    return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
-  };
+
 
   const getStartDateWarningText = () => {
     if (isAnyCheckedMedMissingStartDate) {
@@ -371,10 +452,26 @@ export function ReviewMedicinesListCard({
 
 
   const parsed = parseChosenJson(chosenVal);
+  const localizedConfirmLabels = [
+    I18N_ONBOARDING_UI.english?.confirmSelection,
+    I18N_ONBOARDING_UI.gujarati?.confirmSelection,
+    I18N_ONBOARDING_UI.hindi?.confirmSelection,
+    I18N_ONBOARDING_UI.marathi?.confirmSelection,
+    I18N_ONBOARDING_UI.tamil?.confirmSelection,
+    t("confirmSelection"),
+    "આગળ વધો",
+    "आगे बढ़ें",
+    "पुढे जा",
+    "தொடரவும்",
+    "Confirm Selection",
+  ].filter(Boolean);
+
   const isConfirmChosen =
     readOnly &&
     (parsed?.selected !== undefined ||
-      (chosenLabel && String(chosenLabel).toLowerCase().includes("confirm")));
+      (chosenLabel &&
+        (String(chosenLabel).toLowerCase().includes("confirm") ||
+          localizedConfirmLabels.includes(chosenLabel))));
   const isAddNewChosen =
     readOnly &&
     (parsed?.addNew === true ||
@@ -384,7 +481,7 @@ export function ReviewMedicinesListCard({
     (parsed?.skipAll === true ||
       (chosenLabel && String(chosenLabel).toLowerCase().includes("skip")));
 
-  const confirmOpacity = readOnly ? (isConfirmChosen ? 1 : 0.55) : 1;
+  const confirmOpacity = readOnly ? (isConfirmChosen ? 1 : 0.55) : (isConfirmDisabled ? 0.55 : 1);
   const addNewOpacity = readOnly ? (isAddNewChosen ? 1 : 0.55) : 1;
   const skipAllOpacity = readOnly ? (isSkipAllChosen ? 1 : 0.55) : 1;
 
@@ -419,284 +516,274 @@ export function ReviewMedicinesListCard({
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#f8fafc" : "#1e293b" }}>
               Resolve Conflicts
-          </Text>
-          <TouchableOpacity onPress={() => setViewMode("list")}>
-            <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 13 }}>
-              Show List
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Header Info */}
-        <View style={{ marginBottom: 12 }}>
-          <Text style={{ fontSize: 13, fontWeight: "bold", color: "#b91c1c" }}>
-            Conflict {currentConflictIdx + 1} of {conflictingMeds.length}
-          </Text>
-          <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginTop: 4 }}>
-            {med.name}
-          </Text>
-        </View>
-
-        {/* Comparison Grid */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
-          {/* Left: Existing */}
-          {exist ? (
-            <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
-              <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
-                Existing in your profile
-              </Text>
-              <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
-                {exist.medicationName}
-              </Text>
-              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
-                {getExistingDosage(exist)}
-              </Text>
-              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
-                {exist.frequency || "Once Daily"}
-              </Text>
-              <Text style={{ fontSize: 12, color: "#64748b" }}>
-                {exist.duration || (exist.totalQuantity ? `${exist.totalQuantity} Days` : "Ongoing")}
-              </Text>
-            </View>
-          ) : (
-            <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12, justifyContent: "center", alignItems: "center" }}>
-              <Text style={{ fontSize: 12, color: "#64748b" }}>No details found</Text>
-            </View>
-          )}
-
-          {/* Right: New Extracted */}
-          <View style={{ flex: 1, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
-            <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
-              Newly extracted
-            </Text>
-            <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
-              {med.name}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
-              {getExtractedDosage(med)}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
-              {(() => {
-                const freq = med.frequency || "ONCE";
-                if (freq === "ONCE") return "Once Daily";
-                if (freq === "TWICE") return "Twice Daily";
-                if (freq === "THRICE") return "3x Daily";
-                return freq;
-              })()}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#64748b" }}>
-              {med.duration || "30 Days"}
-            </Text>
-          </View>
-        </View>
-
-        {/* Reason */}
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontSize: 12, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginBottom: 4 }}>
-            Reason
-          </Text>
-          <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#475569", fontStyle: "italic" }}>
-            {med.duplicateInfo?.conflictType === "EXACT_DUPLICATE"
-              ? "Exact duplicate with same medicine in your profile"
-              : med.duplicateInfo?.conflictType === "SIMILAR_NAME"
-                ? "Similar medicine already exists in your profile"
-                : "Duplicate medicine detected in your profile"}
-          </Text>
-        </View>
-
-        {/* Resolution Buttons Grid */}
-        <View style={{ marginBottom: 16 }}>
-          {/* Row 1: Primary actions */}
-          <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-            <TouchableOpacity
-              disabled={readOnly}
-              onPress={() => {
-                setResolutions((prev) => ({ ...prev, [med.id]: "REMOVE_NEW" }));
-                const nextMeds = safeLocalMedicines.map((m) =>
-                  m.id === med.id ? { ...m, selected: false, resolution: "REMOVE_NEW" } : m
-                );
-                setLocalMedicines(nextMeds);
-                setCheckedMeds((prev) => prev.filter((id) => id !== med.id));
-                
-                Toast.show({
-                  type: "info",
-                  text1: `${med.name || med.medicationName || "Medicine"} already exists in your profile.`,
-                  text2: "Incoming duplicate removed.",
-                });
-
-                // Compute next remaining conflicts
-                const nextResolutions: Record<string, string> = { ...resolutions, [med.id]: "REMOVE_NEW" };
-                const nextConflicting = nextMeds.filter((m) => hasConflict(m) && nextResolutions[m.id] === undefined);
-                if (nextConflicting.length === 0) {
-                  setViewMode("list");
-                } else if (currentConflictIdx >= nextConflicting.length) {
-                  setCurrentConflictIdx(nextConflicting.length - 1);
-                }
-              }}
-              style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
-            >
-              <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
-                Keep Existing
+            <TouchableOpacity onPress={() => setViewMode("list")}>
+              <Text style={{ color: "#2563eb", fontWeight: "bold", fontSize: 13 }}>
+                Show List
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              disabled={readOnly}
-              onPress={() => {
-                setResolutions((prev) => ({ ...prev, [med.id]: "REPLACE" }));
-                
-                const matchedMed = med.duplicateInfo?.matchedMedication || med.duplicateInfo?.matchedMedications?.[0];
-                setLocalMedicines((prev) =>
-                  prev.map((m) =>
-                    m.id === med.id
-                      ? {
+          </View>
+
+          {/* Header Info */}
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: "bold", color: "#b91c1c" }}>
+              Conflict {currentConflictIdx + 1} of {conflictingMeds.length}
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginTop: 4 }}>
+              {med.name}
+            </Text>
+          </View>
+
+          {/* Comparison Grid */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
+            {/* Left: Existing */}
+            {exist ? (
+              <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+                <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+                  Existing in your profile
+                </Text>
+                <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+                  {exist.medicationName}
+                </Text>
+                <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                  {getExistingDosage(exist)}
+                </Text>
+                <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                  {resolveFrequencyDisplay(exist.frequency)}
+                </Text>
+                <Text style={{ fontSize: 12, color: "#64748b" }}>
+                  {exist.duration || (exist.totalQuantity ? `${exist.totalQuantity} Days` : "Ongoing")}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ flex: 1, marginRight: 8, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12, justifyContent: "center", alignItems: "center" }}>
+                <Text style={{ fontSize: 12, color: "#64748b" }}>No details found</Text>
+              </View>
+            )}
+
+            {/* Right: New Extracted */}
+            <View style={{ flex: 1, padding: 12, backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderRadius: 12 }}>
+              <Text style={{ fontSize: 11, color: "#64748b", marginBottom: 6, fontWeight: "600" }}>
+                Newly extracted
+              </Text>
+              <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#e2e8f0" : "#334155", marginBottom: 4 }}>
+                {med.name}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {getExtractedDosage(med)}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                {resolveFrequencyDisplay(med.frequency)}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>
+                {med.duration || "30 Days"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Reason */}
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 12, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#1e293b", marginBottom: 4 }}>
+              Reason
+            </Text>
+            <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#475569", fontStyle: "italic" }}>
+              {med.duplicateInfo?.conflictType === "EXACT_DUPLICATE"
+                ? "Exact duplicate with same medicine in your profile"
+                : med.duplicateInfo?.conflictType === "SIMILAR_NAME"
+                  ? "Similar medicine already exists in your profile"
+                  : "Duplicate medicine detected in your profile"}
+            </Text>
+          </View>
+
+          {/* Resolution Buttons Grid */}
+          <View style={{ marginBottom: 16 }}>
+            {/* Row 1: Primary actions */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+              <TouchableOpacity
+                disabled={readOnly}
+                onPress={() => {
+                  setResolutions((prev) => ({ ...prev, [med.id]: "REMOVE_NEW" }));
+                  const nextMeds = safeLocalMedicines.map((m) =>
+                    m.id === med.id ? { ...m, selected: false, resolution: "REMOVE_NEW" } : m
+                  );
+                  setLocalMedicines(nextMeds);
+                  setCheckedMeds((prev) => prev.filter((id) => id !== med.id));
+
+                  Toast.show({
+                    type: "info",
+                    text1: `${med.name || med.medicationName || "Medicine"} already exists in your profile.`,
+                    text2: "Incoming duplicate removed.",
+                  });
+
+                  // Compute next remaining conflicts
+                  const nextResolutions: Record<string, string> = { ...resolutions, [med.id]: "REMOVE_NEW" };
+                  const nextConflicting = nextMeds.filter((m) => hasConflict(m) && nextResolutions[m.id] === undefined);
+                  if (nextConflicting.length === 0) {
+                    setViewMode("list");
+                  } else if (currentConflictIdx >= nextConflicting.length) {
+                    setCurrentConflictIdx(nextConflicting.length - 1);
+                  }
+                }}
+                style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+              >
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                  Keep Existing
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={readOnly}
+                onPress={() => {
+                  setResolutions((prev) => ({ ...prev, [med.id]: "REPLACE" }));
+
+                  const matchedMed = med.duplicateInfo?.matchedMedication || med.duplicateInfo?.matchedMedications?.[0];
+                  setLocalMedicines((prev) =>
+                    prev.map((m) =>
+                      m.id === med.id
+                        ? {
                           ...m,
                           resolution: "REPLACE",
                           replaceMedicationId: matchedMed?.id,
                         }
-                      : m
-                  )
-                );
-                
-                autoAdvance();
-              }}
-              style={{ flex: 1, backgroundColor: "#0f766e", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
-            >
-              <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
-                Replace
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {/* Row 2: Secondary actions (Edit / Keep Both) */}
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <TouchableOpacity
-              disabled={readOnly}
-              onPress={() => {
-                onEdit(med);
-              }}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: isDark ? "#475569" : "#cbd5e1",
-                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                paddingVertical: 10,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: readOnly ? 0.55 : 1,
-              }}
-            >
-              <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
-                Edit
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              disabled={readOnly}
-              onPress={() => {
-                setResolutions((prev) => ({ ...prev, [med.id]: "KEEP_NEW" }));
-                setLocalMedicines((prev) =>
-                  prev.map((m) =>
-                    m.id === med.id
-                      ? { ...m, resolution: "KEEP_NEW", selected: true }
-                      : m
-                  )
-                );
-                autoAdvance();
-              }}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: isDark ? "#475569" : "#cbd5e1",
-                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                paddingVertical: 10,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: readOnly ? 0.55 : 1,
-              }}
-            >
-              <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
-                Keep Both
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                        : m
+                    )
+                  );
 
-        {/* Footer Pager */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 }}>
-          <TouchableOpacity
-            disabled={currentConflictIdx === 0}
-            onPress={() => setCurrentConflictIdx((prev) => Math.max(0, prev - 1))}
-            style={{ opacity: currentConflictIdx === 0 ? 0.3 : 1, padding: 8 }}
-          >
-            <Ionicons name="chevron-back" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
-          </TouchableOpacity>
-
-          <Text style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#475569" }}>
-            {currentConflictIdx + 1} of {conflictingMeds.length}
-          </Text>
-
-          <TouchableOpacity
-            disabled={currentConflictIdx === conflictingMeds.length - 1}
-            onPress={() => setCurrentConflictIdx((prev) => Math.min(conflictingMeds.length - 1, prev + 1))}
-            style={{ opacity: currentConflictIdx === conflictingMeds.length - 1 ? 0.3 : 1, padding: 8 }}
-          >
-            <Ionicons name="chevron-forward" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Action buttons under conflict */}
-        {!readOnly && (
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: isDark ? "#334155" : "#e2e8f0" }}>
-            <TouchableOpacity
-              onPress={onSkipAll}
-              style={[
-                styles.bigActionButtonSide,
-                {
-                  backgroundColor: isDark ? "#334155" : "#f1f5f9",
-                  borderColor: isDark ? "#475569" : "#cbd5e1",
+                  autoAdvance();
+                }}
+                style={{ flex: 1, backgroundColor: "#0f766e", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", opacity: readOnly ? 0.55 : 1 }}
+              >
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 13 }}>
+                  Replace
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {/* Row 2: Secondary actions (Edit / Keep Both) */}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity
+                disabled={readOnly}
+                onPress={() => {
+                  onEdit(med);
+                }}
+                style={{
+                  flex: 1,
                   borderWidth: 1,
-                  flex: 1,
-                  marginRight: 6,
+                  borderColor: isDark ? "#475569" : "#cbd5e1",
+                  backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
                   paddingVertical: 10,
+                  borderRadius: 10,
                   alignItems: "center",
                   justifyContent: "center",
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontWeight: "600" }}>
-                {t("skipAll")}
-              </Text>
-            </TouchableOpacity>
+                  opacity: readOnly ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
+                  Edit
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={readOnly}
+                onPress={() => {
+                  setResolutions((prev) => ({ ...prev, [med.id]: "KEEP_NEW" }));
+                  setLocalMedicines((prev) =>
+                    prev.map((m) =>
+                      m.id === med.id
+                        ? { ...m, resolution: "KEEP_NEW", selected: true }
+                        : m
+                    )
+                  );
+                  autoAdvance();
+                }}
+                style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: isDark ? "#475569" : "#cbd5e1",
+                  backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: readOnly ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: "600", fontSize: 12 }}>
+                  Keep Both
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Footer Pager */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 }}>
             <TouchableOpacity
-              onPress={onAddNew}
-              style={[
-                styles.bigActionButtonSide,
-                {
-                  backgroundColor: isDark ? "#334155" : "#e2e8f0",
-                  flex: 1,
-                  marginLeft: 6,
-                  paddingVertical: 10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                },
-              ]}
+              disabled={currentConflictIdx === 0}
+              onPress={() => setCurrentConflictIdx((prev) => Math.max(0, prev - 1))}
+              style={{ opacity: currentConflictIdx === 0 ? 0.3 : 1, padding: 8 }}
             >
-              <Text style={{ fontSize: 13, color: theme.colors.textPrimary, fontWeight: "600" }}>
-                {t("addNew")}
-              </Text>
+              <Ionicons name="chevron-back" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
+            </TouchableOpacity>
+
+            <Text style={{ fontSize: 13, fontWeight: "bold", color: isDark ? "#cbd5e1" : "#475569" }}>
+              {currentConflictIdx + 1} of {conflictingMeds.length}
+            </Text>
+
+            <TouchableOpacity
+              disabled={currentConflictIdx === conflictingMeds.length - 1}
+              onPress={() => setCurrentConflictIdx((prev) => Math.min(conflictingMeds.length - 1, prev + 1))}
+              style={{ opacity: currentConflictIdx === conflictingMeds.length - 1 ? 0.3 : 1, padding: 8 }}
+            >
+              <Ionicons name="chevron-forward" size={20} color={isDark ? "#cbd5e1" : "#475569"} />
             </TouchableOpacity>
           </View>
-        )}
-      </View>
+
+          {/* Action buttons under conflict */}
+          {!readOnly && (
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: isDark ? "#334155" : "#e2e8f0" }}>
+              <TouchableOpacity
+                onPress={onSkipAll}
+                style={[
+                  styles.bigActionButtonSide,
+                  {
+                    backgroundColor: isDark ? "#334155" : "#f1f5f9",
+                    borderColor: isDark ? "#475569" : "#cbd5e1",
+                    borderWidth: 1,
+                    flex: 1,
+                    marginRight: 6,
+                    paddingVertical: 10,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontWeight: "600" }}>
+                  {t("skipAll")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onAddNew}
+                style={[
+                  styles.bigActionButtonSide,
+                  {
+                    backgroundColor: isDark ? "#334155" : "#e2e8f0",
+                    flex: 1,
+                    marginLeft: 6,
+                    paddingVertical: 10,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 13, color: theme.colors.textPrimary, fontWeight: "600" }}>
+                  {t("addNew")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
     );
   }
 
-  const displayedMedicines = deduplicateDrafts(
-    readOnly
-      ? safeLocalMedicines.filter((m) => checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id))
-      : safeLocalMedicines,
-  );
+  const displayedMedicines = deduplicateDrafts(safeLocalMedicines);
 
   return (
     <View style={{ width: "100%" }}>
@@ -721,521 +808,405 @@ export function ReviewMedicinesListCard({
           },
         ]}
       >
-      {conflictingMeds.length > 0 && (
-        <TouchableOpacity
-          onPress={() => setViewMode("conflicts")}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: "#ffedd5",
-            borderColor: "#f97316",
-            borderWidth: 1,
-            borderRadius: 12,
-            padding: 10,
-            marginBottom: 14,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
-            <Ionicons name="warning" size={18} color="#ea580c" style={{ marginRight: 8 }} />
-            <Text style={{ fontSize: 12, color: "#c2410c", fontWeight: "600", flex: 1 }}>
-              {conflictingMeds.length} duplicate conflicts detected. Tap to resolve them one by one.
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#ea580c" />
-        </TouchableOpacity>
-      )}
-
-      <Text style={[styles.medCardTitle, { color: theme.colors.textPrimary }]}>
-        {t("extractedMedicationsList")}
-      </Text>
-      <Text
-        style={[
-          styles.medCardSubtitleText,
-          { color: theme.colors.textSecondary },
-        ]}
-      >
-        {t("pleaseCheckWhichMedicines")}
-      </Text>
-
-      <View style={{ marginVertical: 12 }}>
-        {(isExpanded ? displayedMedicines : displayedMedicines.slice(0, 3)).map((rawMed) => {
-          const medKey = rawMed.client_med_id || rawMed.id;
-          const med = {
-            ...rawMed,
-            client_med_id: medKey,
-            id: rawMed.id || medKey,
-            name: rawMed.name || rawMed.medicationName || "Unknown",
-            type: rawMed.type || rawMed.medicationType || "Tablet",
-            frequency: rawMed.frequency || rawMed.medicationFrequency || rawMed.doseFrequency || rawMed.timeOfIntake || "None",
-            notes: rawMed.notes || rawMed.instructions || "None",
-          };
-          const isChecked = checkedMeds.includes(medKey) || checkedMeds.includes(med.id);
-          const isPillExpanded = expandedMedId === medKey || expandedMedId === med.id;
-          const dosageStr = getDosageString(med);
-          const timeStr = getTimeString(med);
-
-          return (
-            <View
-              key={medKey}
-              style={{
-                backgroundColor: "#f8fafc",
-                borderColor: "#e2e8f0",
-                borderWidth: 1,
-                borderRadius: 16,
-                padding: 12,
-                marginBottom: 10,
-                elevation: 1,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 2,
-              }}
-            >
-              {/* Primary Header Row inside medicine pill */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => toggleExpandPill(medKey)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                {/* Left side: Checkbox + Middle Information */}
-                <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
-                  {/* Checkbox Selector */}
-                  <TouchableOpacity
-                    disabled={readOnly}
-                    onPress={() => toggleCheck(medKey)}
-                    style={{ padding: 4, marginRight: 8 }}
-                  >
-                    <Ionicons
-                      name={isChecked ? "checkbox" : "square-outline"}
-                      size={22}
-                      color={isChecked ? theme.colors.primary : "#64748b"}
-                    />
-                  </TouchableOpacity>
-
-                  {/* Middle Area: Name/Type and Collapsed Info */}
-                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-                    {/* Primary Info: Name & Type */}
-                    <View style={{ flex: 1.2, paddingRight: 8 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <Text
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                          style={{
-                            fontSize: 14,
-                            fontWeight: "bold",
-                            color: "#1e293b",
-                            textDecorationLine: isChecked ? "none" : "line-through",
-                            flexShrink: 1,
-                          }}
-                        >
-                          {med.name}
-                        </Text>
-                        {med.duplicateInfo?.hasDuplicate && (
-                          (() => {
-                            const isSolved = readOnly || resolutions[med.id] !== undefined || med.resolution !== undefined;
-                            return (
-                              <View
-                                style={{
-                                  marginLeft: 6,
-                                  backgroundColor: isSolved ? "#d1fae5" : "#ffedd5",
-                                  paddingHorizontal: 6,
-                                  paddingVertical: 1.5,
-                                  borderRadius: 6,
-                                  borderWidth: 0.5,
-                                  borderColor: isSolved ? "#10b981" : "#f97316",
-                                }}
-                              >
-                                <Text style={{ fontSize: 9, color: isSolved ? "#047857" : "#ea580c", fontWeight: "bold" }}>
-                                  {isSolved ? "Solved" : "Conflict"}
-                                </Text>
-                              </View>
-                            );
-                          })()
-                        )}
-                      </View>
-                      <Text style={{ fontSize: 11, color: "#64748b", marginTop: 2, fontWeight: "500" }}>
-                        {med.type || "Tablet"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Right side: Action Buttons */}
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  {!readOnly && (
-                    <TouchableOpacity
-                      onPress={() => onEdit(med)}
-                      style={{ padding: 8, marginRight: 2 }}
-                    >
-                      <Ionicons name="pencil" size={16} color={theme.colors.primary} />
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    onPress={() => toggleExpandPill(med.id)}
-                    style={{ padding: 8 }}
-                  >
-                    <Ionicons
-                      name={isPillExpanded ? "chevron-up" : "chevron-down"}
-                      size={18}
-                      color="#64748b"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-
-              {/* Detailed Grid Panel (Shown only when expanded) */}
-              {isPillExpanded && (
-                <View
-                  style={{
-                    marginTop: 12,
-                    paddingTop: 12,
-                    borderTopWidth: 1,
-                    borderTopColor: "#e2e8f0",
-                  }}
-                >
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 12 }}>
-                    {/* Medicine Name */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="medical-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Medicine Name</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }} numberOfLines={2}>{med.name || "None"}</Text>
-                      </View>
-                    </View>
-
-                    {/* Type */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="layers-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Type</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.type || "Tablet"}</Text>
-                      </View>
-                    </View>
-
-                    {/* Dose */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="disc-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Dose</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{dosageStr}</Text>
-                      </View>
-                    </View>
-
-                    {/* Frequency */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="alarm-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Frequency</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.frequency || "None"}</Text>
-                      </View>
-                    </View>
-
-                    {/* Time / Schedule */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="time-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Schedule</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{timeStr}</Text>
-                      </View>
-                    </View>
-
-                    {/* Total Quantity */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="calculator-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Total Quantity</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{med.total_quantity !== undefined ? med.total_quantity : (med.totalQuantity || "None")}</Text>
-                      </View>
-                    </View>
-
-                    {/* Refill Alert */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="notifications-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Refill Alert</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
-                          {(med.refill_alert || med.refillAlert) ? "Enabled" : "Disabled"}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Food Context */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="restaurant-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("foodFrequency")}</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
-                          {(() => {
-                            const raw = med.foodContext || med.medicationSchedule?.foodContext || med.foodFrequency;
-                            if (!raw) return t("none");
-                            const normalized = String(raw).toUpperCase().replace(/\s+/g, "_");
-                            if (normalized === "BEFORE_FOOD" || normalized === "BEFORE") return t("beforeFood");
-                            if (normalized === "AFTER_FOOD" || normalized === "AFTER") return t("afterFood");
-                            return t(raw);
-                          })()}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Start Date */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="calendar-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Start Date</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
-                          {formatStartDate(med.startDate)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Prescribed By */}
-                    <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="person-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Prescribed By</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }} numberOfLines={1}>{med.prescribedBy || med.prescribed_by || "None"}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Notes / Special Instructions */}
-                  <View
-                    style={{
-                      marginTop: 12,
-                      padding: 10,
-                      backgroundColor: "#f1f5f9",
-                      borderRadius: 8,
-                      borderLeftWidth: 3,
-                      borderLeftColor: "#10b981",
-                    }}
-                  >
-                    <Text style={{ fontSize: 11, color: "#334155", lineHeight: 15 }}>
-                      <Text style={{ fontWeight: "bold", color: "#1e293b" }}>Notes: </Text>
-                      {med.notes || "None"}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          );
-        })}
-
-        {/* Show All / Hide All Button for medication items > 3 */}
-        {displayedMedicines.length > 3 && (
+        {conflictingMeds.length > 0 && (
           <TouchableOpacity
-            onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setIsExpanded(!isExpanded);
-            }}
+            onPress={() => setViewMode("conflicts")}
             style={{
               flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              marginTop: 10,
-              backgroundColor: isDark ? "#334155" : "#f1f5f9",
-              borderRadius: 20,
-              alignSelf: "center",
+              justifyContent: "space-between",
+              backgroundColor: "#ffedd5",
+              borderColor: "#f97316",
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 10,
+              marginBottom: 14,
             }}
           >
-            <Text
-              style={{
-                color: theme.colors.primary,
-                fontWeight: "bold",
-                marginRight: 6,
-                fontSize: 13,
-              }}
-            >
-              {isExpanded ? t("hideAll") || "Hide All" : t("showAll") || "Show All"}
-            </Text>
-            <Ionicons
-              name={isExpanded ? "chevron-up" : "chevron-down"}
-              size={16}
-              color={theme.colors.primary}
-            />
+            <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+              <Ionicons name="warning" size={18} color="#ea580c" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 12, color: "#c2410c", fontWeight: "600", flex: 1 }}>
+                {conflictingMeds.length} duplicate conflicts detected. Tap to resolve them one by one.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#ea580c" />
           </TouchableOpacity>
         )}
-      </View>
 
-      {(isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate) && (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: isDark ? "rgba(220, 38, 38, 0.2)" : "#fef2f2",
-            borderColor: isDark ? "rgba(220, 38, 38, 0.4)" : "#fca5a5",
-            borderWidth: 1,
-            borderRadius: 12,
-            padding: 12,
-            marginBottom: 14,
-            marginTop: 4,
-          }}
+        <Text style={[styles.medCardTitle, { color: theme.colors.textPrimary }]}>
+          {t("extractedMedicationsList")}
+        </Text>
+        <Text
+          style={[
+            styles.medCardSubtitleText,
+            { color: theme.colors.textSecondary },
+          ]}
         >
-          <Ionicons
-            name="calendar-outline"
-            size={18}
-            color={isDark ? "#fca5a5" : "#ef4444"}
-            style={{ marginRight: 8 }}
-          />
-          <Text
-            style={{
-              fontSize: 12.5,
-              color: isDark ? "#fca5a5" : "#b91c1c",
-              fontWeight: "600",
-              flex: 1,
-              lineHeight: 17,
-            }}
-          >
-            {getStartDateWarningText()}
-          </Text>
-        </View>
-      )}
+          {t("pleaseCheckWhichMedicines")}
+        </Text>
 
-      {!readOnly && conflictingMeds.length > 0 && (
-        <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
-          <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "600", textAlign: "center" }}>
-            ⚠️ Please solve all duplicate conflicts to enable these actions.
-          </Text>
-        </View>
-      )}
+        <View style={{ marginVertical: 12 }}>
+          {(isExpanded ? displayedMedicines : displayedMedicines.slice(0, 3)).map((rawMed) => {
+            const medKey = rawMed.client_med_id || rawMed.id;
+            const med = {
+              ...rawMed,
+              client_med_id: medKey,
+              id: rawMed.id || medKey,
+              name: rawMed.name || rawMed.medicationName || "Unknown",
+              type: rawMed.type || rawMed.medicationType || "Tablet",
+              frequency: rawMed.frequency || rawMed.medicationFrequency || rawMed.doseFrequency || rawMed.timeOfIntake || "None",
+              notes: rawMed.notes || rawMed.instructions || "None",
+            };
+            const isChecked = checkedMeds.includes(medKey) || checkedMeds.includes(med.id);
+            const isPillExpanded = Boolean(expandedMedIds[medKey] || expandedMedIds[med.id]);
+            const dosageStr = getDosageString(med);
+            const timeStr = getTimeString(med);
 
-      {/* Bottom Action Buttons */}
-      {checkedMeds.length === 0 ? (
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            marginTop: 8,
-          }}
-          pointerEvents={readOnly ? "none" : "auto"}
-        >
-          <TouchableOpacity
-            disabled={areActionsDisabled}
-            style={[
-              styles.bigActionButtonSide,
-              {
-                backgroundColor: isDark ? "#334155" : "#e2e8f0",
-                flex: 1,
-                marginRight: 6,
-                paddingVertical: 12,
-                opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
-                borderWidth: isSkipAllChosen ? 2 : 0,
-                borderColor: isSkipAllChosen
-                  ? isDark
-                    ? "#ffffff"
-                    : "#475569"
-                  : "transparent",
-              },
-            ]}
-            onPress={onSkipAll}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {isSkipAllChosen && (
-                <Ionicons
-                  name="checkmark"
-                  size={16}
-                  color={theme.colors.textPrimary}
-                  style={{ marginRight: 4 }}
-                />
-              )}
-              <Text
-                style={[
-                  styles.bigActionButtonTextSide,
-                  { color: theme.colors.textPrimary },
-                ]}
-              >
-                {t("skipAll")}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            disabled={areActionsDisabled}
-            style={[
-              styles.bigActionButtonSide,
-              {
-                backgroundColor: theme.colors.primary,
-                flex: 1,
-                marginLeft: 6,
-                paddingVertical: 12,
-                opacity: areActionsDisabled ? 0.55 : addNewOpacity,
-                borderWidth: isAddNewChosen ? 2 : 0,
-                borderColor: isAddNewChosen ? "#ffffff" : "transparent",
-              },
-            ]}
-            onPress={onAddNew}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {isAddNewChosen && (
-                <Ionicons
-                  name="checkmark"
-                  size={16}
-                  color="#ffffff"
-                  style={{ marginRight: 4 }}
-                />
-              )}
-              <Text
-                style={[
-                  styles.bigActionButtonTextSide,
-                  { color: "#ffffff" },
-                ]}
-              >
-                {t("addNew")}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {onCancel && (
-            <TouchableOpacity
-              disabled={areActionsDisabled}
-              style={[
-                styles.bigActionButtonSide,
-                {
-                  backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                  borderColor: isDark ? "#475569" : "#cbd5e1",
+            return (
+              <View
+                key={medKey}
+                style={{
+                  backgroundColor: "#f8fafc",
+                  borderColor: "#e2e8f0",
                   borderWidth: 1,
-                  paddingVertical: 10,
-                  borderRadius: 12,
-                  marginTop: 8,
-                  width: "100%",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: areActionsDisabled ? 0.55 : 1,
-                },
-              ]}
-              onPress={onCancel}
+                  borderRadius: 16,
+                  padding: 12,
+                  marginBottom: 10,
+                  elevation: 1,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                }}
+              >
+                {/* Primary Header Row inside medicine pill */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  {/* Left side: Checkbox + Middle Information */}
+                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+                    {/* Checkbox Selector */}
+                    <TouchableOpacity
+                      disabled={readOnly}
+                      onPress={() => toggleCheck(medKey)}
+                      style={{ padding: 4, marginRight: 8 }}
+                    >
+                      <Ionicons
+                        name={isChecked ? "checkbox" : "square-outline"}
+                        size={22}
+                        color={isChecked ? theme.colors.primary : "#64748b"}
+                      />
+                    </TouchableOpacity>
+
+                    {/* Middle Area: Name/Type and Collapsed Info */}
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => toggleExpandPill(medKey)}
+                      style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
+                    >
+                      {/* Primary Info: Name & Type */}
+                      <View style={{ flex: 1.2, paddingRight: 8 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <Text
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "bold",
+                              color: "#1e293b",
+                              textDecorationLine: isChecked ? "none" : "line-through",
+                              flexShrink: 1,
+                            }}
+                          >
+                            {med.name}
+                          </Text>
+                          {med.duplicateInfo?.hasDuplicate && (
+                            (() => {
+                              const isSolved = readOnly || resolutions[med.id] !== undefined || med.resolution !== undefined;
+                              return (
+                                <View
+                                  style={{
+                                    marginLeft: 6,
+                                    backgroundColor: isSolved ? "#d1fae5" : "#ffedd5",
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 1.5,
+                                    borderRadius: 6,
+                                    borderWidth: 0.5,
+                                    borderColor: isSolved ? "#10b981" : "#f97316",
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 9, color: isSolved ? "#047857" : "#ea580c", fontWeight: "bold" }}>
+                                    {isSolved ? "Solved" : "Conflict"}
+                                  </Text>
+                                </View>
+                              );
+                            })()
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 11, color: "#64748b", marginTop: 2, fontWeight: "500" }}>
+                          {resolveMedicineTypeDisplay(med.type)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Right side: Action Buttons */}
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {!readOnly && (
+                      <TouchableOpacity
+                        testID={`edit-med-${medKey}`}
+                        accessibilityLabel="edit-medicine"
+                        onPress={() => onEdit(med)}
+                        style={{ padding: 8, marginRight: 2 }}
+                      >
+                        <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      testID={`expand-med-${medKey}`}
+                      accessibilityLabel="expand-medicine"
+                      onPress={() => toggleExpandPill(medKey)}
+                      style={{ padding: 8 }}
+                    >
+                      <Ionicons
+                        name={isPillExpanded ? "chevron-up" : "chevron-down"}
+                        size={18}
+                        color="#64748b"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Detailed Grid Panel (Shown only when expanded) */}
+                {isPillExpanded && (
+                  <View
+                    style={{
+                      marginTop: 12,
+                      paddingTop: 12,
+                      borderTopWidth: 1,
+                      borderTopColor: "#e2e8f0",
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 12 }}>
+                      {/* Medicine Name */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="medical-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("medicineName") || "Medicine Name"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }} numberOfLines={2}>{med.name || resolveNoneDisplay("None")}</Text>
+                        </View>
+                      </View>
+
+                      {/* Type */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="layers-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("medicineType") || t("type") || "Type"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{resolveMedicineTypeDisplay(med.type)}</Text>
+                        </View>
+                      </View>
+
+                      {/* Dose */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="disc-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("dose") || "Dose"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{dosageStr}</Text>
+                        </View>
+                      </View>
+
+                      {/* Frequency */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="alarm-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("frequency") || "Frequency"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{resolveFrequencyDisplay(med.frequency)}</Text>
+                        </View>
+                      </View>
+
+                      {/* Time / Schedule */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="time-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("times") || t("schedule") || "Schedule"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{timeStr}</Text>
+                        </View>
+                      </View>
+
+                      {/* Total Quantity */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="calculator-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("totalQuantity") || "Total Quantity"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>{resolveNoneDisplay(med.total_quantity !== undefined ? med.total_quantity : med.totalQuantity)}</Text>
+                        </View>
+                      </View>
+
+                      {/* Refill Alert */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="notifications-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("refillAlert") || "Refill Alert"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
+                            {(med.refill_alert || med.refillAlert) ? (t("enabled") || "Enabled") : (t("disabled") || "Disabled")}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Food Context */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="restaurant-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("foodFrequency")}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
+                            {(() => {
+                              const raw = med.foodContext || med.medicationSchedule?.foodContext || med.foodFrequency;
+                              if (!raw || raw === "None") return resolveNoneDisplay("None");
+                              const normalized = String(raw).toUpperCase().replace(/\s+/g, "_");
+                              if (normalized === "BEFORE_FOOD" || normalized === "BEFORE") return t("beforeFood") || "Before Food";
+                              if (normalized === "AFTER_FOOD" || normalized === "AFTER") return t("afterFood") || "After Food";
+                              return t(raw) || String(raw);
+                            })()}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Start Date */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="calendar-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("startDate") || "Start Date"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }}>
+                            {formatStartDate(med.startDate, t("none"))}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Prescribed By */}
+                      <View style={{ width: "50%", flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="person-outline" size={14} color="#8a94a6" style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>{t("prescribedBy") || "Prescribed By"}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 1 }} numberOfLines={1}>{resolveNoneDisplay(med.prescribedBy || med.prescribed_by)}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Notes / Special Instructions */}
+                    <View
+                      style={{
+                        marginTop: 12,
+                        padding: 10,
+                        backgroundColor: "#f1f5f9",
+                        borderRadius: 8,
+                        borderLeftWidth: 3,
+                        borderLeftColor: "#10b981",
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: "#334155", lineHeight: 15 }}>
+                        <Text style={{ fontWeight: "bold", color: "#1e293b" }}>{t("notes") || "Notes"}: </Text>
+                        {resolveNoneDisplay(med.notes)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+
+          {/* Show All / Hide All Button for medication items > 3 */}
+          {displayedMedicines.length > 3 && (
+            <TouchableOpacity
+              testID="show-all-medicines-btn"
+              onPress={() => {
+                try {
+                  if (Platform.OS !== "web" && LayoutAnimation && LayoutAnimation.Presets) {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  }
+                } catch {
+                  // Ignore animation setup errors in environments without layout animations
+                }
+                setIsExpanded((prev) => !prev);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                marginTop: 10,
+                backgroundColor: isDark ? "#334155" : "#f1f5f9",
+                borderRadius: 20,
+                alignSelf: "center",
+              }}
             >
               <Text
-                style={[
-                  styles.bigActionButtonTextSide,
-                  { color: theme.colors.textSecondary, fontSize: 13 },
-                ]}
+                style={{
+                  color: theme.colors.primary,
+                  fontWeight: "bold",
+                  marginRight: 6,
+                  fontSize: 13,
+                }}
               >
-                {t("cancel")}
+                {isExpanded ? t("hideAll") || "Hide All" : t("showAll") || "Show All"}
               </Text>
+              <Ionicons
+                name={isExpanded ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={theme.colors.primary}
+              />
             </TouchableOpacity>
           )}
         </View>
-      ) : (
-        <>
+
+        {(isAnyCheckedMedMissingStartDate || isAnyCheckedMedPastStartDate) && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: isDark ? "rgba(220, 38, 38, 0.2)" : "#fef2f2",
+              borderColor: isDark ? "rgba(220, 38, 38, 0.4)" : "#fca5a5",
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 14,
+              marginTop: 4,
+            }}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={18}
+              color={isDark ? "#fca5a5" : "#ef4444"}
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{
+                fontSize: 12.5,
+                color: isDark ? "#fca5a5" : "#b91c1c",
+                fontWeight: "600",
+                flex: 1,
+                lineHeight: 17,
+              }}
+            >
+              {getStartDateWarningText()}
+            </Text>
+          </View>
+        )}
+
+        {!readOnly && conflictingMeds.length > 0 && (
+          <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
+            <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "600", textAlign: "center" }}>
+              ⚠️ Please solve all duplicate conflicts to enable these actions.
+            </Text>
+          </View>
+        )}
+
+        {/* Bottom Action Buttons */}
+        {checkedMeds.length === 0 ? (
           <View
             style={{
               flexDirection: "row",
@@ -1245,25 +1216,24 @@ export function ReviewMedicinesListCard({
             pointerEvents={readOnly ? "none" : "auto"}
           >
             <TouchableOpacity
-              disabled={isConfirmDisabled}
+              disabled={areActionsDisabled}
               style={[
                 styles.bigActionButtonSide,
                 {
-                  backgroundColor: readOnly
-                    ? isConfirmChosen
-                      ? theme.colors.primary
-                      : isDark
-                        ? "#334155"
-                        : "#e2e8f0"
-                    : (isConfirmDisabled ? "#cbd5e1" : theme.colors.primary),
+                  backgroundColor: isDark ? "#334155" : "#e2e8f0",
                   flex: 1,
                   marginRight: 6,
-                  opacity: isConfirmDisabled ? 0.55 : confirmOpacity,
-                  borderWidth: isConfirmChosen ? 2 : 0,
-                  borderColor: isConfirmChosen ? "#ffffff" : "transparent",
+                  paddingVertical: 12,
+                  opacity: readOnly ? (isSkipAllChosen ? 1 : 0.55) : 1,
+                  borderWidth: isSkipAllChosen ? 2 : 0,
+                  borderColor: isSkipAllChosen
+                    ? isDark
+                      ? "#ffffff"
+                      : "#475569"
+                    : "transparent",
                 },
               ]}
-              onPress={handleConfirm}
+              onPress={onSkipAll}
             >
               <View
                 style={{
@@ -1272,43 +1242,37 @@ export function ReviewMedicinesListCard({
                   justifyContent: "center",
                 }}
               >
-                {isConfirmChosen && (
+                {isSkipAllChosen && (
                   <Ionicons
                     name="checkmark"
                     size={16}
-                    color="#fff"
+                    color={theme.colors.textPrimary}
                     style={{ marginRight: 4 }}
                   />
                 )}
                 <Text
                   style={[
                     styles.bigActionButtonTextSide,
-                    {
-                      color:
-                        readOnly && !isConfirmChosen
-                          ? theme.colors.textPrimary
-                          : "#ffffff",
-                    },
+                    { color: theme.colors.textPrimary },
                   ]}
                 >
-                  {t("confirmSelection")}
+                  {t("skipAll")}
                 </Text>
               </View>
             </TouchableOpacity>
+
             <TouchableOpacity
               disabled={areActionsDisabled}
               style={[
                 styles.bigActionButtonSide,
                 {
-                  backgroundColor: isDark ? "#334155" : "#e2e8f0",
-                  flex: 0.5,
-                  opacity: areActionsDisabled ? 0.55 : addNewOpacity,
+                  backgroundColor: theme.colors.primary,
+                  flex: 1,
+                  marginLeft: 6,
+                  paddingVertical: 12,
+                  opacity: readOnly ? (isAddNewChosen ? 1 : 0.55) : 1,
                   borderWidth: isAddNewChosen ? 2 : 0,
-                  borderColor: isAddNewChosen
-                    ? isDark
-                      ? "#ffffff"
-                      : "#475569"
-                    : "transparent",
+                  borderColor: isAddNewChosen ? "#ffffff" : "transparent",
                 },
               ]}
               onPress={onAddNew}
@@ -1324,71 +1288,17 @@ export function ReviewMedicinesListCard({
                   <Ionicons
                     name="checkmark"
                     size={16}
-                    color={theme.colors.textPrimary}
+                    color="#ffffff"
                     style={{ marginRight: 4 }}
                   />
                 )}
                 <Text
                   style={[
                     styles.bigActionButtonTextSide,
-                    { color: theme.colors.textPrimary },
+                    { color: "#ffffff" },
                   ]}
                 >
                   {t("addNew")}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          <View
-            style={{
-              flexDirection: onCancel ? "row" : "column",
-              justifyContent: "space-between",
-              marginTop: 10,
-            }}
-          >
-            <TouchableOpacity
-              disabled={areActionsDisabled}
-              style={[
-                styles.bigActionButtonSide,
-                {
-                  backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                  borderColor: isDark ? "#475569" : "#cbd5e1",
-                  borderWidth: 1,
-                  paddingVertical: 10,
-                  borderRadius: 12,
-                  flex: onCancel ? 1 : undefined,
-                  width: onCancel ? undefined : "100%",
-                  marginRight: onCancel ? 6 : 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: areActionsDisabled ? 0.55 : skipAllOpacity,
-                },
-              ]}
-              onPress={onSkipAll}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {isSkipAllChosen && (
-                  <Ionicons
-                    name="checkmark"
-                    size={14}
-                    color={theme.colors.textSecondary}
-                    style={{ marginRight: 4 }}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.bigActionButtonTextSide,
-                    { color: theme.colors.textSecondary, fontSize: 13 },
-                  ]}
-                >
-                  {t("skipAll")}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1404,11 +1314,11 @@ export function ReviewMedicinesListCard({
                     borderWidth: 1,
                     paddingVertical: 10,
                     borderRadius: 12,
-                    flex: 1,
-                    marginLeft: 6,
+                    marginTop: 8,
+                    width: "100%",
                     alignItems: "center",
                     justifyContent: "center",
-                    opacity: areActionsDisabled ? 0.55 : 1,
+                    opacity: readOnly ? 0.55 : 1,
                   },
                 ]}
                 onPress={onCancel}
@@ -1424,9 +1334,199 @@ export function ReviewMedicinesListCard({
               </TouchableOpacity>
             )}
           </View>
-        </>
-      )}
-    </View>
+        ) : (
+          <>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginTop: 8,
+              }}
+              pointerEvents={readOnly ? "none" : "auto"}
+            >
+              <TouchableOpacity
+                disabled={isConfirmDisabled}
+                style={[
+                  styles.bigActionButtonSide,
+                  {
+                    backgroundColor: readOnly
+                      ? isConfirmChosen
+                        ? theme.colors.primary
+                        : isDark
+                          ? "#334155"
+                          : "#e2e8f0"
+                      : (isConfirmDisabled ? "#cbd5e1" : theme.colors.primary),
+                    flex: 1,
+                    marginRight: 6,
+                    opacity: readOnly ? (isConfirmChosen ? 1 : 0.55) : (isConfirmDisabled ? 0.55 : 1),
+                    borderWidth: isConfirmChosen ? 2 : 0,
+                    borderColor: isConfirmChosen ? "#ffffff" : "transparent",
+                  },
+                ]}
+                onPress={handleConfirm}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {isConfirmChosen && (
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color="#fff"
+                      style={{ marginRight: 4 }}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.bigActionButtonTextSide,
+                      {
+                        color:
+                          readOnly && !isConfirmChosen
+                            ? theme.colors.textPrimary
+                            : "#ffffff",
+                      },
+                    ]}
+                  >
+                    {t("confirmSelection")}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={areActionsDisabled}
+                style={[
+                  styles.bigActionButtonSide,
+                  {
+                    backgroundColor: isDark ? "#334155" : "#e2e8f0",
+                    flex: 0.5,
+                    opacity: readOnly ? (isAddNewChosen ? 1 : 0.55) : 1,
+                    borderWidth: isAddNewChosen ? 2 : 0,
+                    borderColor: isAddNewChosen
+                      ? isDark
+                        ? "#ffffff"
+                        : "#475569"
+                      : "transparent",
+                  },
+                ]}
+                onPress={onAddNew}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {isAddNewChosen && (
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color={theme.colors.textPrimary}
+                      style={{ marginRight: 4 }}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.bigActionButtonTextSide,
+                      { color: theme.colors.textPrimary },
+                    ]}
+                  >
+                    {t("addNew")}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={{
+                flexDirection: onCancel ? "row" : "column",
+                justifyContent: "space-between",
+                marginTop: 10,
+              }}
+            >
+              <TouchableOpacity
+                disabled={areActionsDisabled}
+                style={[
+                  styles.bigActionButtonSide,
+                  {
+                    backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                    borderColor: isDark ? "#475569" : "#cbd5e1",
+                    borderWidth: 1,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    flex: onCancel ? 1 : undefined,
+                    width: onCancel ? undefined : "100%",
+                    marginRight: onCancel ? 6 : 0,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: readOnly ? (isSkipAllChosen ? 1 : 0.55) : 1,
+                  },
+                ]}
+                onPress={onSkipAll}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {isSkipAllChosen && (
+                    <Ionicons
+                      name="checkmark"
+                      size={14}
+                      color={theme.colors.textSecondary}
+                      style={{ marginRight: 4 }}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.bigActionButtonTextSide,
+                      { color: theme.colors.textSecondary, fontSize: 13 },
+                    ]}
+                  >
+                    {t("skipAll")}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {onCancel && (
+                <TouchableOpacity
+                  disabled={areActionsDisabled}
+                  style={[
+                    styles.bigActionButtonSide,
+                    {
+                      backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                      borderColor: isDark ? "#475569" : "#cbd5e1",
+                      borderWidth: 1,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      flex: 1,
+                      marginLeft: 6,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity: readOnly ? 0.55 : 1,
+                    },
+                  ]}
+                  onPress={onCancel}
+                >
+                  <Text
+                    style={[
+                      styles.bigActionButtonTextSide,
+                      { color: theme.colors.textSecondary, fontSize: 13 },
+                    ]}
+                  >
+                    {t("cancel")}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
+        )}
+      </View>
     </View>
   );
 }

@@ -342,8 +342,10 @@ export function DoseVisual({
  * Safely parses the chosen JSON raw value and returns the parsed object (or null on failure).
  * Exposes helper properties to quickly resolve selections in widgets.
  */
-export function parseChosenJson(rawValue: string | null | undefined): any {
+export function parseChosenJson(rawValue: string | null | undefined | any): any {
   if (!rawValue) return null;
+  if (typeof rawValue === "object") return rawValue;
+  if (typeof rawValue !== "string") return null;
   const trimmed = rawValue.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
     return null;
@@ -366,7 +368,7 @@ export function sanitizeMedicineForPayload(med: any): any {
 
   const rawType = String(med.type || med.medicineType || med.medicationType || "TABLET").toUpperCase().trim();
   let newType = rawType;
-  
+
   if (rawType === "SHOT" || rawType === "SHOTS") {
     newType = "INJECTION";
   } else if (rawType === "DROP") {
@@ -374,11 +376,11 @@ export function sanitizeMedicineForPayload(med: any): any {
   }
 
   const isPill = newType === "TABLET" || newType === "CAPSULE";
-  
+
   let newDose = med.dose ? { ...med.dose } : {};
   if (isPill) {
-    const countVal = newDose.count !== undefined 
-      ? newDose.count 
+    const countVal = newDose.count !== undefined
+      ? newDose.count
       : (newDose.value !== undefined ? newDose.value : 1);
     newDose = { count: Number(countVal) || 1 };
   } else {

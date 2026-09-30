@@ -96,6 +96,7 @@ type Message = {
   subtitle?: string;
   explainer?: string;
   loginProvider?: string;
+  sourceComparison?: string;
   medicine?: any;
   medicines?: any[];
   totalBuffered?: number;
@@ -652,6 +653,7 @@ export default function OnboardingScreen() {
       subtitle: aiRes.subtitle,
       explainer: aiRes.explainer,
       loginProvider: aiRes.loginProvider,
+      sourceComparison: aiRes.sourceComparison,
       medicine: aiRes.medicine,
       medicines: aiRes.medicines,
       totalBuffered: aiRes.totalBuffered,
@@ -725,6 +727,7 @@ export default function OnboardingScreen() {
             subtitle: newMsg.subtitle,
             explainer: newMsg.explainer,
             loginProvider: newMsg.loginProvider,
+            sourceComparison: newMsg.sourceComparison || aiRes.sourceComparison,
             createdAt: newMsg.createdAt,
           };
           return updated;
@@ -842,7 +845,9 @@ export default function OnboardingScreen() {
             ? aiRes.medicinesConfirmed
             : finalState.medicinesConfirmed,
         medicinesToAdd:
-          aiRes.medicinesToAdd || aiRes.medicines || finalState.medicinesToAdd,
+          (aiRes.medicinesConfirmed || finalState.medicinesConfirmed)
+            ? []
+            : (aiRes.medicinesToAdd || aiRes.medicines || finalState.medicinesToAdd || []),
         currentMedicineIndex:
           aiRes.currentMedicineIndex !== undefined
             ? aiRes.currentMedicineIndex
@@ -869,8 +874,13 @@ export default function OnboardingScreen() {
       setLocalMedicines([]);
       setCurrentClientMedId(null);
       setActiveMedicineToEdit(null);
+    } else if (aiRes.medicinesConfirmed || finalState.medicinesConfirmed) {
+      setLocalMedicines([]);
+      finalState.medicinesToAdd = [];
+      setCurrentClientMedId(null);
+      setActiveMedicineToEdit(null);
     } else if (Array.isArray(finalState.medicinesToAdd) && finalState.medicinesToAdd.length > 0) {
-      setLocalMedicines(deduplicateDrafts(finalState.medicinesToAdd));
+      setLocalMedicines(deduplicateDrafts(finalState.medicinesToAdd).filter((m: any) => !m.isSaved && !m.dbId));
     }
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
     setCanSkip((prev) => prev || resolvedCanSkip);
@@ -2017,7 +2027,9 @@ export default function OnboardingScreen() {
         setState(nextState);
         sendMessage(value, nextState, optionLabel);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
-        const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
+        const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => !m.isSaved && !m.dbId,
+        );
         setLocalMedicines(existingMeds);
         setCurrentClientMedId(null);
         setActiveMedicineToEdit(null);
@@ -2373,8 +2385,7 @@ export default function OnboardingScreen() {
 
     if (
       activeMsg.action === "ADD_MEDICINE" || // "EXTRACTED_MEDICINES"
-      activeMsg.action === "EDIT_MEDICINE" ||
-      (activeMedicineToEdit && !isHistorical)
+      activeMsg.action === "EDIT_MEDICINE"
     ) {
       const med =
         (isHistorical
@@ -2444,6 +2455,12 @@ export default function OnboardingScreen() {
                   : preferredLang === "tamil" || preferredLang === "ta"
                     ? `சேமி / மதிப்பாய்வு: ${updatedMed.name}`
                     : `Save / Review: ${updatedMed.name}`;
+          const unconfirmedDrafts = (state?.medicinesToAdd || [])
+            .filter((m: any) => !m.isSaved && !m.dbId);
+          const nextState = {
+            ...state,
+            medicinesToAdd: unconfirmedDrafts.length > 0 ? unconfirmedDrafts : [updatedMed],
+          };
           sendMessage(
             {
               action: "SAVE_AND_REVIEW",
@@ -2451,7 +2468,7 @@ export default function OnboardingScreen() {
               medicine: updatedMed,
               clientMedId: currentClientMedId,
             },
-            state,
+            nextState,
             displayLabel,
             "SAVE_AND_REVIEW",
           );
@@ -2464,7 +2481,7 @@ export default function OnboardingScreen() {
             await pendingDraftSyncRef.current;
           } catch { }
         }
-        const uniqueDrafts = deduplicateDrafts(allDrafts);
+        const uniqueDrafts = deduplicateDrafts(allDrafts).filter((m: any) => !m.isSaved && !m.dbId);
         setLocalMedicines(uniqueDrafts);
         const nextState = {
           ...state,
@@ -2544,7 +2561,16 @@ export default function OnboardingScreen() {
           onExitToOptions={
             !isHistorical && !isEditingLocal ? handleExitToOptions : undefined
           }
-          onCancel={!isHistorical ? handleExitToOptions : undefined}
+          onCancel={
+            !isHistorical
+              ? isEditingLocal
+                ? () => {
+                    setActiveMedicineToEdit(null);
+                    setMedicineCardMode("review");
+                  }
+                : handleExitToOptions
+              : undefined
+          }
           readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -2570,10 +2596,7 @@ export default function OnboardingScreen() {
           ...state,
           medicinesConfirmed: true,
           medicinesFlowStarted: true,
-          medicinesToAdd:
-            uniqueSelected.length > 0
-              ? uniqueSelected
-              : deduplicateDrafts(localMedicines || state.medicinesToAdd),
+          medicinesToAdd: [],
         };
         setState(newState);
         setLocalMedicines([]);
@@ -2607,7 +2630,9 @@ export default function OnboardingScreen() {
       };
 
       const handleAddNew = () => {
-        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
+        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => !m.isSaved && !m.dbId,
+        );
         setLocalMedicines(currentMeds);
         setActiveMedicineToEdit(null);
         setMedicineCardMode("wizard");
@@ -2862,6 +2887,7 @@ export default function OnboardingScreen() {
           loading={loading}
           chosenVal={effectiveChosenVal}
           chosenLabel={effectiveChosenLabel}
+          preferredLang={preferredLang}
         />
       );
     }

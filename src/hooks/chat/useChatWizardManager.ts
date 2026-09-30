@@ -661,10 +661,68 @@ export const useChatWizardManager = ({
       optionLabel = normalizedKey;
     }
 
+    if (
+      option?.actionType === "CONFIRM_MEDICINES" ||
+      normalizedKey === "CONFIRM_MEDICINES" ||
+      optKey === "CONFIRM_MEDICINES"
+    ) {
+      if (!optionLabel || optionLabel === "CONFIRM_MEDICINES" || optionLabel.trim().startsWith("{")) {
+        optionLabel = tOnboarding("confirmSelection") || "Confirm Selection";
+      }
+    }
+
+    if (
+      option?.actionType === "SKIP_MEDICINES" ||
+      normalizedKey === "SKIP_MEDICINES" ||
+      optKey === "SKIP_MEDICINES"
+    ) {
+      if (!optionLabel || optionLabel === "SKIP_MEDICINES" || optionLabel.trim().startsWith("{")) {
+        optionLabel = tOnboarding("skipAll") || "Skip All";
+      }
+    }
+
+    // Sanitize optionLabel: Prevent raw JSON payload strings from rendering as user bubble text
+    if (
+      typeof optionLabel === "string" &&
+      (optionLabel.trim().startsWith("{") || optionLabel.includes('"action":') || optionLabel.includes('"selected":'))
+    ) {
+      try {
+        const parsed = JSON.parse(optionLabel);
+        if (Array.isArray(parsed.allergies) && parsed.allergies.length > 0) {
+          optionLabel = parsed.allergies.join(", ");
+        } else if (parsed.label) {
+          optionLabel = parsed.label;
+        } else if (parsed.displayLabel) {
+          optionLabel = parsed.displayLabel;
+        } else if (parsed.allergies && parsed.allergies.length === 0) {
+          optionLabel = "No Allergies";
+        } else if (
+          parsed.selected !== undefined ||
+          parsed.medicines !== undefined ||
+          parsed.actionType === "CONFIRM_MEDICINES" ||
+          parsed.action === "CONFIRM_MEDICINES"
+        ) {
+          optionLabel = tOnboarding("confirmSelection") || "Confirm Selection";
+        } else if (
+          parsed.skipAll ||
+          parsed.actionType === "SKIP_MEDICINES" ||
+          parsed.action === "SKIP_MEDICINES"
+        ) {
+          optionLabel = tOnboarding("skipAll") || "Skip All";
+        }
+      } catch {
+        // Not valid JSON or parsing failed; leave optionLabel as is
+      }
+    }
+
     const userMsg: ChatMessage = {
       id: `user-opt-${Date.now()}`,
       role: "user",
       text: optionLabel,
+      rawValue:
+        typeof option?.value === "string"
+          ? option.value
+          : JSON.stringify(option?.value || option),
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
@@ -692,6 +750,7 @@ export const useChatWizardManager = ({
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
         fromScreen: "Dashboard",
+        displayLabel: optionLabel,
         history: messages.map((m) => ({
           role: m.role === "ai" ? "assistant" : "user",
           content: m.text,
@@ -742,6 +801,10 @@ export const useChatWizardManager = ({
         }
         payload.actionData = parsedSave;
         payload.message = parsedSave;
+      } else if (option?.actionType === "ASK_ALLERGIES" || normalizedKey === "ASK_ALLERGIES") {
+        payload.actionType = "ASK_ALLERGIES";
+        payload.message = option?.value || normalizedKey;
+        payload.displayLabel = optionLabel;
       } else if (option?.actionType === "SKIP_MEDICINES" || normalizedKey === "SKIP_MEDICINES") {
         payload.actionType = "SKIP_MEDICINES";
         payload.actionData = { skipAll: true };
@@ -775,6 +838,8 @@ export const useChatWizardManager = ({
           document: resData.document || null,
           documentSummary: resData.documentSummary || null,
           documents: resData.documents || [],
+          onboardingState: resData.onboardingState || resData.state || null,
+          state: resData.onboardingState || resData.state || null,
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => {

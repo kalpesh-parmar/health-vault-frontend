@@ -18,6 +18,37 @@ jest.mock("../../../context/DocumentUploadContext", () => ({
   }),
 }));
 
+// Mock react-native-toast-message
+jest.mock("react-native-toast-message", () => ({
+  __esModule: true,
+  default: {
+    show: jest.fn(),
+    hide: jest.fn(),
+  },
+}));
+
+// Mock @tanstack/react-query
+jest.mock("@tanstack/react-query", () => ({
+  QueryClient: jest.fn().mockImplementation(() => ({
+    invalidateQueries: jest.fn(),
+  })),
+  useQueryClient: () => ({
+    invalidateQueries: jest.fn(),
+  }),
+}));
+
+// Mock apiClient
+jest.mock("../../../services/apiClient", () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn(),
+    get: jest.fn(),
+  },
+}));
+
+import apiClient from "../../../services/apiClient";
+import { useChatWizardManager } from "../../../hooks/chat/useChatWizardManager";
+
 describe("Post-Onboarding Chat Continuity: Blood Group & Allergy Parity Tests", () => {
   const mockTheme = {
     colors: {
@@ -524,6 +555,504 @@ describe("Post-Onboarding Chat Continuity: Blood Group & Allergy Parity Tests", 
           : optionPayload.value;
       expect(parsedValue.selected).toContain("med-1");
       expect(parsedValue.medicines[0].name).toBe("Paracetamol");
+    });
+  });
+
+  describe("10. Live Chained Transition: Blood Group -> ASK_ALLERGIES onboardingState Preservation", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it("preserves resData.onboardingState on aiMsg when transitioning from Blood Group to ASK_ALLERGIES", async () => {
+      const mockOnboardingState = {
+        currentStep: "ASK_ALLERGIES",
+        existingUserData: {
+          bloodGroup: "O+",
+          allergies: ["Dust"],
+        },
+        allergiesSkipped: false,
+        isOnboardingCompleted: true,
+      };
+
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({
+        data: {
+          status: "success",
+          data: {
+            reply: "Do you have any allergies?",
+            action: "ASK_ALLERGIES",
+            actionType: "ASK_ALLERGIES",
+            options: [],
+            onboardingState: mockOnboardingState,
+          },
+        },
+      });
+
+      let capturedState: any = null;
+
+      function LiveHarness() {
+        const [messages, setMessages] = React.useState<any[]>([
+          {
+            id: "msg-bg-1",
+            role: "ai",
+            action: "ASK_BLOOD_GROUP",
+            text: "What is your blood group?",
+            options: [{ label: "O+", value: "O+" }],
+          },
+        ]);
+        const [chatWizardState, setChatWizardState] = React.useState<any>({
+          step: "IDLE",
+          jobIds: [],
+          filesInfo: [],
+          extractedMedicines: [],
+          conflicts: [],
+        });
+        const [isOnboardingCompleted, setIsOnboardingCompleted] = React.useState(false);
+        const [pendingStep, setPendingStep] = React.useState<string | null>("ASK_BLOOD_GROUP");
+        const lastKnownStateRef = React.useRef<any>(null);
+        const editSheetRef = React.useRef<any>(null);
+        const extractionSheetRef = React.useRef<any>(null);
+        const uploadSheetRef = React.useRef<any>(null);
+
+        const manager = useChatWizardManager({
+          chatWizardState,
+          setChatWizardState,
+          preferredLang: "english",
+          isAllTerminal: true,
+          uploadingDocs: [],
+          setMessages,
+          editSheetRef,
+          extractionSheetRef,
+          uploadSheetRef,
+          activeSessionId: "session-123",
+          onboardingSessionId: "session-123",
+          navigation: { navigate: jest.fn() },
+          messages,
+          setIsSending: jest.fn(),
+          lastKnownStateRef,
+          setIsOnboardingCompleted,
+          setPendingStep,
+        });
+
+        capturedState = {
+          messages,
+          manager,
+          lastKnownStateRef,
+          pendingStep,
+          isOnboardingCompleted,
+        };
+
+        return (
+          <ChatMessageItem
+            {...baseItemProps}
+            item={messages[messages.length - 1]}
+            mergedMessages={[...messages].reverse()}
+            isOnboardingCompleted={isOnboardingCompleted}
+            handleGenericOptionPress={manager.handleGenericOptionPress}
+          />
+        );
+      }
+
+      const { getByText, getByTestId } = await render(<LiveHarness />);
+
+      // Verify initial render has Blood Group chip "O+"
+      expect(getByText("O+")).toBeTruthy();
+
+      // Trigger selection of "O+" option
+      await act(async () => {
+        await capturedState.manager.handleGenericOptionPress(
+          { label: "O+", value: "O+" },
+          "O+"
+        );
+      });
+
+      // Verify apiClient was called with Blood Group answer
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/v1/onboarding/chat",
+        expect.objectContaining({
+          message: "O+",
+        })
+      );
+
+      // Verify the generated aiMsg preserved onboardingState
+      const aiMsgs = capturedState.messages.filter((m: any) => m.role === "ai");
+      const latestAiMsg = aiMsgs[aiMsgs.length - 1];
+      expect(latestAiMsg.action).toBe("ASK_ALLERGIES");
+      expect(latestAiMsg.onboardingState).toEqual(mockOnboardingState);
+      expect(latestAiMsg.state).toEqual(mockOnboardingState);
+      expect(capturedState.lastKnownStateRef.current).toEqual(mockOnboardingState);
+
+      // Verify AskAllergiesCard rendered and received the preserved state
+      const noBtn = getByTestId("allergy-option-no");
+      expect(noBtn).toBeTruthy();
+
+      // When "No Allergies" is clicked, AskAllergiesCard uses the preserved state
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({
+        data: {
+          status: "success",
+          data: {
+            reply: "Thank you, your profile is complete!",
+            action: "COMPLETE",
+            onboardingState: {
+              ...mockOnboardingState,
+              allergiesSkipped: true,
+              currentStep: "COMPLETE",
+            },
+          },
+        },
+      });
+
+      await act(async () => {
+        fireEvent.press(noBtn);
+      });
+
+      expect(apiClient.post).toHaveBeenLastCalledWith(
+        "/v1/onboarding/chat",
+        expect.objectContaining({
+          message: "NO",
+        })
+      );
+    });
+
+    it("preserves state when Blood Group is skipped and chained to ASK_ALLERGIES", async () => {
+      const skippedOnboardingState = {
+        currentStep: "ASK_ALLERGIES",
+        bloodGroupSkipped: true,
+        existingUserData: {
+          allergies: [],
+        },
+        allergiesSkipped: false,
+      };
+
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({
+        data: {
+          status: "success",
+          data: {
+            reply: "Do you have any allergies?",
+            action: "ASK_ALLERGIES",
+            onboardingState: skippedOnboardingState,
+          },
+        },
+      });
+
+      let capturedState: any = null;
+
+      function LiveSkipHarness() {
+        const [messages, setMessages] = React.useState<any[]>([
+          {
+            id: "msg-bg-skip",
+            role: "ai",
+            action: "ASK_BLOOD_GROUP",
+            text: "What is your blood group?",
+            options: [{ label: "Skip", value: "SKIP" }],
+          },
+        ]);
+        const [chatWizardState, setChatWizardState] = React.useState<any>({
+          step: "IDLE",
+          jobIds: [],
+          filesInfo: [],
+          extractedMedicines: [],
+          conflicts: [],
+        });
+        const [isOnboardingCompleted, setIsOnboardingCompleted] = React.useState(false);
+        const [pendingStep, setPendingStep] = React.useState<string | null>("ASK_BLOOD_GROUP");
+        const lastKnownStateRef = React.useRef<any>(null);
+        const editSheetRef = React.useRef<any>(null);
+        const extractionSheetRef = React.useRef<any>(null);
+        const uploadSheetRef = React.useRef<any>(null);
+
+        const manager = useChatWizardManager({
+          chatWizardState,
+          setChatWizardState,
+          preferredLang: "english",
+          isAllTerminal: true,
+          uploadingDocs: [],
+          setMessages,
+          editSheetRef,
+          extractionSheetRef,
+          uploadSheetRef,
+          activeSessionId: "session-123",
+          onboardingSessionId: "session-123",
+          navigation: { navigate: jest.fn() },
+          messages,
+          setIsSending: jest.fn(),
+          lastKnownStateRef,
+          setIsOnboardingCompleted,
+          setPendingStep,
+        });
+
+        capturedState = {
+          messages,
+          manager,
+          lastKnownStateRef,
+        };
+
+        return (
+          <ChatMessageItem
+            {...baseItemProps}
+            item={messages[messages.length - 1]}
+            mergedMessages={[...messages].reverse()}
+            isOnboardingCompleted={isOnboardingCompleted}
+            handleGenericOptionPress={manager.handleGenericOptionPress}
+          />
+        );
+      }
+
+      const { getByText, getByTestId } = await render(<LiveSkipHarness />);
+
+      expect(getByText("Skip")).toBeTruthy();
+
+      await act(async () => {
+        await capturedState.manager.handleGenericOptionPress(
+          { label: "Skip", value: "SKIP" },
+          "Skip"
+        );
+      });
+
+      const aiMsgs = capturedState.messages.filter((m: any) => m.role === "ai");
+      const latestAiMsg = aiMsgs[aiMsgs.length - 1];
+      expect(latestAiMsg.action).toBe("ASK_ALLERGIES");
+      expect(latestAiMsg.onboardingState).toEqual(skippedOnboardingState);
+      expect(latestAiMsg.onboardingState.bloodGroupSkipped).toBe(true);
+      expect(getByTestId("allergy-option-no")).toBeTruthy();
+    });
+  });
+
+  describe("11. Phase 19: Unified Continuity, Allergy Viewport & Raw JSON Elimination", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("triggers onAllergyCardExpand when Yes is selected in AskAllergiesCard", async () => {
+      const onExpandMock = jest.fn();
+      const allergyMsg: any = {
+        id: "ai-allergy-msg-p19",
+        role: "ai",
+        action: "ASK_ALLERGIES",
+        text: "Do you have any known allergies?",
+        options: [],
+        createdAt: "2026-09-28T10:00:00.000Z",
+      };
+
+      const { getByTestId } = await render(
+        <ChatMessageItem
+          {...baseItemProps}
+          item={allergyMsg}
+          mergedMessages={[allergyMsg]}
+          isOnboardingCompleted={true}
+          onAllergyCardExpand={onExpandMock}
+        />
+      );
+
+      const yesBtn = getByTestId("allergy-option-yes");
+      expect(yesBtn).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(yesBtn);
+        jest.advanceTimersByTime(150);
+      });
+
+      expect(onExpandMock).toHaveBeenCalled();
+    });
+
+    it("ensures handleGenericOptionPress sanitizes raw JSON so userMsg.text is clean human-readable text", async () => {
+      let setMessagesMock: any;
+      let addedMessages: any[] = [];
+
+      function TestHarness() {
+        const [messages, setMessages] = React.useState<any[]>([]);
+        setMessagesMock = setMessages;
+        addedMessages = messages;
+
+        const chatWizardState = {
+          step: "IDLE",
+          jobIds: [],
+          filesInfo: [],
+          extractedMedicines: [],
+          conflicts: [],
+        };
+        const lastKnownStateRef = React.useRef<any>(null);
+        const editSheetRef = React.useRef<any>(null);
+        const extractionSheetRef = React.useRef<any>(null);
+        const uploadSheetRef = React.useRef<any>(null);
+
+        const manager = useChatWizardManager({
+          chatWizardState,
+          setChatWizardState: jest.fn(),
+          preferredLang: "english",
+          isAllTerminal: true,
+          uploadingDocs: [],
+          setMessages,
+          editSheetRef,
+          extractionSheetRef,
+          uploadSheetRef,
+          activeSessionId: "session-p19",
+          onboardingSessionId: "session-p19",
+          navigation: { navigate: jest.fn() },
+          messages,
+          setIsSending: jest.fn(),
+          lastKnownStateRef,
+          setIsOnboardingCompleted: jest.fn(),
+          setPendingStep: jest.fn(),
+        });
+
+        const allergyMsgItem: any = {
+          id: "msg-allergies",
+          role: "ai",
+          action: "ASK_ALLERGIES",
+          text: "Do you have any known allergies?",
+          createdAt: "2026-09-28T10:00:00.000Z",
+        };
+
+        return (
+          <ChatMessageItem
+            {...baseItemProps}
+            item={allergyMsgItem}
+            mergedMessages={[allergyMsgItem]}
+            handleGenericOptionPress={manager.handleGenericOptionPress}
+          />
+        );
+      }
+
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({
+        data: {
+          data: {
+            action: "MEDICINE_OPTIONS",
+            actionType: "MEDICINE_OPTIONS",
+            reply: "Do you take any regular medicines?",
+            options: [
+              { key: "ADD_MEDICINE", label: "Add Medicine" },
+              { key: "SKIP", label: "Skip for now" },
+            ],
+            onboardingState: {
+              currentStep: "MEDICINE_OPTIONS",
+              isOnboardingCompleted: true,
+              existingUserData: { allergies: ["Penicillin", "Dust"] },
+            },
+          },
+        },
+      });
+
+      const { getByTestId } = await render(<TestHarness />);
+
+      // Select YES
+      await act(async () => {
+        fireEvent.press(getByTestId("allergy-option-yes"));
+      });
+
+      // Select Dust chip
+      await act(async () => {
+        fireEvent.press(getByTestId("common-allergy-chip-dust"));
+      });
+
+      // Click Confirm/Continue
+      await act(async () => {
+        fireEvent.press(getByTestId("allergy-continue-btn"));
+      });
+
+      // Verify that user message text is "Dust" and NOT raw JSON
+      const userBubble = addedMessages.find((m) => m.role === "user");
+      expect(userBubble).toBeDefined();
+      expect(userBubble.text).toBe("Dust");
+      expect(userBubble.text).not.toContain("ASK_ALLERGIES");
+      expect(userBubble.text).not.toContain("{");
+
+      // Verify that apiClient was called with ASK_ALLERGIES payload
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/v1/onboarding/chat",
+        expect.objectContaining({
+          actionType: "ASK_ALLERGIES",
+        })
+      );
+    });
+
+    it("transitions pendingStep to MEDICINE_OPTIONS upon receiving MEDICINE_OPTIONS response", async () => {
+      let pendingStepVal: string | null = null;
+      const setPendingStepMock = jest.fn((val) => {
+        pendingStepVal = val;
+      });
+
+      function TestPendingStepHarness() {
+        const [messages, setMessages] = React.useState<any[]>([]);
+        const chatWizardState = {
+          step: "IDLE",
+          jobIds: [],
+          filesInfo: [],
+          extractedMedicines: [],
+          conflicts: [],
+        };
+        const lastKnownStateRef = React.useRef<any>(null);
+        const editSheetRef = React.useRef<any>(null);
+        const extractionSheetRef = React.useRef<any>(null);
+        const uploadSheetRef = React.useRef<any>(null);
+
+        const manager = useChatWizardManager({
+          chatWizardState,
+          setChatWizardState: jest.fn(),
+          preferredLang: "english",
+          isAllTerminal: true,
+          uploadingDocs: [],
+          setMessages,
+          editSheetRef,
+          extractionSheetRef,
+          uploadSheetRef,
+          activeSessionId: "session-p19",
+          onboardingSessionId: "session-p19",
+          navigation: { navigate: jest.fn() },
+          messages,
+          setIsSending: jest.fn(),
+          lastKnownStateRef,
+          setIsOnboardingCompleted: jest.fn(),
+          setPendingStep: setPendingStepMock,
+        });
+
+        const allergyNoMsgItem: any = {
+          id: "msg-allergies-no",
+          role: "ai",
+          action: "ASK_ALLERGIES",
+          text: "Do you have any known allergies?",
+          createdAt: "2026-09-28T10:00:00.000Z",
+        };
+
+        return (
+          <ChatMessageItem
+            {...baseItemProps}
+            item={allergyNoMsgItem}
+            mergedMessages={[allergyNoMsgItem]}
+            handleGenericOptionPress={manager.handleGenericOptionPress}
+          />
+        );
+      }
+
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({
+        data: {
+          data: {
+            action: "MEDICINE_OPTIONS",
+            actionType: "MEDICINE_OPTIONS",
+            reply: "Do you take any regular medicines?",
+            options: [
+              { key: "ADD_MEDICINE", label: "Add Medicine" },
+              { key: "SKIP", label: "Skip for now" },
+            ],
+            onboardingState: {
+              currentStep: "MEDICINE_OPTIONS",
+              isOnboardingCompleted: true,
+            },
+          },
+        },
+      });
+
+      const { getByTestId } = await render(<TestPendingStepHarness />);
+
+      // Select NO
+      await act(async () => {
+        fireEvent.press(getByTestId("allergy-option-no"));
+      });
+
+      expect(setPendingStepMock).toHaveBeenCalledWith("MEDICINE_OPTIONS");
     });
   });
 });

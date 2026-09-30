@@ -39,12 +39,12 @@ export function ResolveProfileSourceCard({
     ["google", "facebook", "microsoft", "apple", "social"].includes(loginProvider.toLowerCase())
   );
 
-  // Determine actual mode: if the user hasn't done social login, force CONFIRM mode.
+  // Determine actual mode: strictly respect authoritative mode from activeMsg
   const rawMode = activeMsg?.mode || "CONFIRM";
-  const mode =
-    (rawMode === "CONFLICT" || activeMsg?.action === "RESOLVE_PROFILE_SOURCE") && isSocialLogin
-      ? "CONFLICT"
-      : "CONFIRM";
+  const mode = rawMode === "CONFLICT" ? "CONFLICT" : "CONFIRM";
+
+  const isManualSource =
+    activeMsg?.sourceComparison === "MANUAL_VS_LOGIN" || onboardingState?.flowMode === "MANUAL";
 
   const loginSummary = activeMsg?.loginSummary || "";
   const documentSummary = activeMsg?.documentSummary || "";
@@ -205,7 +205,10 @@ export function ResolveProfileSourceCard({
         </View>
         <View style={styles.editFormContainer}>
           {fields.map((field: any) => {
-            if (field.verified) return null;
+            // Auth-verified email/phone can be locked or rendered as read-only; demographic fields are always rendered
+            if (field.verified && field.key !== "firstName" && field.key !== "lastName" && field.key !== "dateOfBirth" && field.key !== "gender") {
+              return null;
+            }
 
             if (field.key === "dateOfBirth") {
               return (
@@ -656,14 +659,15 @@ export function ResolveProfileSourceCard({
                         />
                       ) : null}
                     </View>
-                    {!field.verified && !isHistorical && (
+                    {(!field.verified || ["firstName", "lastName", "dateOfBirth", "gender"].includes(field.key)) && !isHistorical && (
                       <TouchableOpacity
+                        testID={`edit-pencil-${field.key}`}
                         onPress={() => {
                           const initData: any = {};
                           fields.forEach((f: any) => {
                             const rawVal = (localEditedData && localEditedData[f.key] !== undefined)
                               ? localEditedData[f.key]
-                              : f.value || "";
+                              : (f.value || f.documentValue || f.loginValue || "");
                             initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
                           });
                           setEditedProfileData(initData);
@@ -719,20 +723,20 @@ export function ResolveProfileSourceCard({
               ]}
             >
               <Ionicons
-                name={localEditedData ? "create-outline" : getProviderIcon(activeMsg?.loginProvider)}
+                name={localEditedData ? "create-outline" : getProviderIcon(loginProvider)}
                 size={16}
-                color={getProviderIconColor(activeMsg?.loginProvider)}
+                color={getProviderIconColor(loginProvider)}
                 style={{ marginRight: 6 }}
               />
               <Text
                 style={[
                   styles.columnHeaderTitle,
-                  { color: getProviderIconColor(activeMsg?.loginProvider) },
+                  { color: getProviderIconColor(loginProvider) },
                 ]}
               >
                 {localEditedData
                   ? (uiT("editedInformation") || "Edited Information")
-                  : getProviderLabel(activeMsg?.loginProvider)}
+                  : getProviderLabel(loginProvider)}
               </Text>
             </View>
             <View style={styles.columnBody}>
@@ -854,9 +858,14 @@ export function ResolveProfileSourceCard({
           {/* Document Column */}
           <View style={[styles.vsColumn, { borderColor: "rgba(16, 185, 129, 0.2)" }]}>
             <View style={[styles.columnHeader, { backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5" }]}>
-              <Ionicons name="document-text" size={16} color="#10b981" style={{ marginRight: 6 }} />
+              <Ionicons
+                name={isManualSource ? "create-outline" : "document-text"}
+                size={16}
+                color="#10b981"
+                style={{ marginRight: 6 }}
+              />
               <Text style={[styles.columnHeaderTitle, { color: "#10b981" }]}>
-                {uiT("fromDocument")}
+                {isManualSource ? (uiT("enteredDetails") || "Entered Details") : uiT("fromDocument")}
               </Text>
             </View>
             <View style={styles.columnBody}>
@@ -1036,6 +1045,7 @@ export function ResolveProfileSourceCard({
 
               <TouchableOpacity
                 disabled={isHistorical}
+                testID="edit-details-btn"
                 style={[
                   styles.bigActionButtonSide,
                   {
@@ -1056,7 +1066,7 @@ export function ResolveProfileSourceCard({
                   fields.forEach((f: any) => {
                     const rawVal = (localEditedData && localEditedData[f.key] !== undefined)
                       ? localEditedData[f.key]
-                      : f.value || "";
+                      : (f.value || f.documentValue || f.loginValue || "");
                     initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
                   });
                   setEditedProfileData(initData);
@@ -1086,9 +1096,12 @@ export function ResolveProfileSourceCard({
           );
           const isDocChosen = isHistorical && (
             parsed?.source === "DOCUMENT" ||
+            (parsed?.source === "MANUAL" && !parsed?.edited) ||
             (chosenLabel && (
               String(chosenLabel).toLowerCase().includes("document") ||
-              String(chosenLabel).toLowerCase() === "use document"
+              String(chosenLabel).toLowerCase() === "use document" ||
+              String(chosenLabel).toLowerCase().includes("entered") ||
+              String(chosenLabel).toLowerCase() === (uiT("useEnteredDetails") || "").toLowerCase()
             ))
           );
 
@@ -1180,9 +1193,9 @@ export function ResolveProfileSourceCard({
                     documentConfirmed: true,
                   };
                   sendMessage(
-                    JSON.stringify({ source: "DOCUMENT" }),
+                    JSON.stringify({ source: isManualSource ? "MANUAL" : "DOCUMENT" }),
                     updatedState,
-                    uiT("useDocument"),
+                    isManualSource ? (uiT("useEnteredDetails") || "Use Entered Details") : uiT("useDocument"),
                   );
                 }}
               >
@@ -1194,7 +1207,7 @@ export function ResolveProfileSourceCard({
                         { color: (isHistorical && !isDocChosen) ? theme.colors.textPrimary : "#ffffff", textAlign: "center" },
                       ]}
                     >
-                      {uiT("useDocument")}
+                      {isManualSource ? (uiT("useEnteredDetails") || "Use Entered Details") : uiT("useDocument")}
                     </Text>
                   </View>
                   {documentSummary ? (
@@ -1218,6 +1231,7 @@ export function ResolveProfileSourceCard({
       {/* Center Manual Edit Link */}
       {mode === "CONFLICT" && !isHistorical && (
         <TouchableOpacity
+          testID="manual-edit-link"
           style={styles.manualEditLink}
           onPress={() => {
             const initData: any = {};

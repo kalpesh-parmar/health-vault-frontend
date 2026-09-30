@@ -12,6 +12,7 @@ import {
   parseToLocalDate,
 } from "../../utils/chatUtils";
 import { I18N_CHAT_UI, SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
+import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
 
 interface UseChatSessionProps {
   initialSessionId?: string;
@@ -67,6 +68,25 @@ export const useChatSession = ({
       const lang = preferredLang || "english";
       const dict = I18N_CHAT_UI[lang] || I18N_CHAT_UI.english;
       return dict?.[key] || I18N_CHAT_UI.english[key] || key;
+    },
+    [preferredLang]
+  );
+
+  const normalizeLangKey = (l?: string) => {
+    if (!l) return "english";
+    const lower = l.toLowerCase();
+    if (lower.startsWith("gu")) return "gujarati";
+    if (lower.startsWith("hi")) return "hindi";
+    if (lower.startsWith("mr")) return "marathi";
+    if (lower.startsWith("ta")) return "tamil";
+    return "english";
+  };
+
+  const tOnboarding = useCallback(
+    (key: string) => {
+      const lang = normalizeLangKey(preferredLang);
+      const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
+      return dict?.[key] || I18N_ONBOARDING_UI.english[key] || key;
     },
     [preferredLang]
   );
@@ -337,6 +357,12 @@ export const useChatSession = ({
               meta.documentIds,
               meta.documents
             ),
+            medicines: meta.medicines || [],
+            rawValue:
+              meta.rawValue ||
+              (dbMsg.role === "user" && typeof dbMsg.content === "string" && dbMsg.content.trim().startsWith("{")
+                ? dbMsg.content
+                : undefined),
             isOnboardingMessage: true,
           });
         }
@@ -394,11 +420,64 @@ export const useChatSession = ({
           } else {
             meta = meta || {};
           }
+
+          let text = dbMsg.content || "";
+          if (
+            dbMsg.role === "user" &&
+            typeof text === "string" &&
+            (text.trim().startsWith("{") || text.trim().startsWith("["))
+          ) {
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed?.displayLabel) {
+                text = parsed.displayLabel;
+              } else if (parsed?.label) {
+                text = parsed.label;
+              } else if (
+                meta.actionType === "SAVE_AND_REVIEW" ||
+                meta.action === "SAVE_AND_REVIEW" ||
+                parsed?.action === "SAVE_AND_REVIEW" ||
+                parsed?.saveAndReview === true
+              ) {
+                text = tOnboarding("saveMedicines") || "Save Medicines";
+              } else if (
+                meta.actionType === "ADD_MEDICINE" ||
+                meta.action === "ADD_MEDICINE" ||
+                parsed?.action === "ADD_MEDICINE" ||
+                parsed?.addNew === true
+              ) {
+                text = tOnboarding("addMedicines") || "Add Medicines";
+              } else if (
+                parsed?.selected !== undefined ||
+                parsed?.medicines !== undefined ||
+                meta.actionType === "CONFIRM_MEDICINES" ||
+                meta.action === "CONFIRM_MEDICINES"
+              ) {
+                text = tOnboarding("confirmSelection") || "Confirm Selection";
+              } else if (
+                parsed?.skipAll ||
+                meta.actionType === "SKIP_MEDICINES" ||
+                meta.action === "SKIP_MEDICINES"
+              ) {
+                text = tOnboarding("skipAll") || "Skip All";
+              }
+            } catch {
+              // keep as is
+            }
+          }
+
           return {
             ...meta,
             id: dbMsg.id,
             role: dbMsg.role === "assistant" ? "ai" : "user",
-            text: dbMsg.content,
+            text,
+            action: meta.action || meta.actionType || (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined),
+            medicines: meta.medicines || [],
+            rawValue:
+              meta.rawValue ||
+              (dbMsg.role === "user" && typeof dbMsg.content === "string" && dbMsg.content.trim().startsWith("{")
+                ? dbMsg.content
+                : undefined),
             mode: meta.mode as ChatMode,
             createdAt: dbMsg.createdAt,
           };
@@ -410,7 +489,7 @@ export const useChatSession = ({
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [documentsList]);
+  }, [documentsList, tOnboarding]);
 
   const loadMoreMessages = useCallback(async () => {
     if (!activeSessionId || !nextCursor || isLoadingMore) return;
@@ -438,11 +517,64 @@ export const useChatSession = ({
         } else {
           meta = meta || {};
         }
+
+        let text = dbMsg.content || "";
+        if (
+          dbMsg.role === "user" &&
+          typeof text === "string" &&
+          (text.trim().startsWith("{") || text.trim().startsWith("["))
+        ) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.displayLabel) {
+              text = parsed.displayLabel;
+            } else if (parsed?.label) {
+              text = parsed.label;
+            } else if (
+              meta.actionType === "SAVE_AND_REVIEW" ||
+              meta.action === "SAVE_AND_REVIEW" ||
+              parsed?.action === "SAVE_AND_REVIEW" ||
+              parsed?.saveAndReview === true
+            ) {
+              text = tOnboarding("saveMedicines") || "Save Medicines";
+            } else if (
+              meta.actionType === "ADD_MEDICINE" ||
+              meta.action === "ADD_MEDICINE" ||
+              parsed?.action === "ADD_MEDICINE" ||
+              parsed?.addNew === true
+            ) {
+              text = tOnboarding("addMedicines") || "Add Medicines";
+            } else if (
+              parsed?.selected !== undefined ||
+              parsed?.medicines !== undefined ||
+              meta.actionType === "CONFIRM_MEDICINES" ||
+              meta.action === "CONFIRM_MEDICINES"
+            ) {
+              text = tOnboarding("confirmSelection") || "Confirm Selection";
+            } else if (
+              parsed?.skipAll ||
+              meta.actionType === "SKIP_MEDICINES" ||
+              meta.action === "SKIP_MEDICINES"
+            ) {
+              text = tOnboarding("skipAll") || "Skip All";
+            }
+          } catch {
+            // keep as is
+          }
+        }
+
         return {
           ...meta,
           id: dbMsg.id,
           role: dbMsg.role === "assistant" ? "ai" : "user",
-          text: dbMsg.content,
+          text,
+          action: meta.action || meta.actionType || (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined),
+          medicines: meta.medicines || [],
+          rawValue:
+            meta.rawValue ||
+            (dbMsg.role === "user" && typeof dbMsg.content === "string" && dbMsg.content.trim().startsWith("{")
+              ? dbMsg.content
+              : undefined),
           createdAt: dbMsg.createdAt,
         };
       });
@@ -452,7 +584,7 @@ export const useChatSession = ({
     } finally {
       setIsLoadingMore(false);
     }
-  }, [activeSessionId, nextCursor, isLoadingMore]);
+  }, [activeSessionId, nextCursor, isLoadingMore, tOnboarding]);
 
   const handleSend = async (customText?: string) => {
     const textToSubmit = (customText || input).trim();
@@ -630,10 +762,10 @@ export const useChatSession = ({
   }, [messages]);
 
   const suggestedQuestions = useMemo(() => {
-    // Dashboard chatbot suggested question chips must unconditionally remain in English
-    const dict = SUGGESTED_QUESTIONS_I18N.english;
+    const langKey = preferredLang || "english";
+    const dict = SUGGESTED_QUESTIONS_I18N[langKey] || SUGGESTED_QUESTIONS_I18N.english;
     return selectedDocument ? dict.document : dict.general;
-  }, [selectedDocument]);
+  }, [preferredLang, selectedDocument]);
 
   const mergedMessages = useMemo(() => {
     const liveNewestFirst = [...messages].reverse();
