@@ -30,7 +30,9 @@ const DrawerHeader = React.memo(
 
     const email = userDetails?.email || "";
     const headerColors = (
-      isDark ? ["#2e1065", "#0b0f19"] : ["#5B4BFF", "#7C6CFF"]
+      isDark
+        ? ["#1e1b4b", "#312e81", "#020617"]
+        : ["#4f46e5", "#3730a3", "#1e1b4b"]
     ) as [string, string, ...string[]];
     const showInitials =
       imageError ||

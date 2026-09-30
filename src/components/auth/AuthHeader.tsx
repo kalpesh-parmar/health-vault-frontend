@@ -32,6 +32,7 @@ interface AuthHeaderProps {
 // ─── Sticky Bar Component (Rendered outside ScrollView) ───────────────────────
 export const AuthStickyBar: React.FC<AuthHeaderProps> = ({ scrollY, heading }) => {
   const navigation = useNavigation();
+  const { isDark } = useAppTheme();
 
   const stickyBarAnimStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
@@ -74,7 +75,11 @@ export const AuthStickyBar: React.FC<AuthHeaderProps> = ({ scrollY, heading }) =
   return (
     <StickyBar style={stickyBarAnimStyle}>
       <StickyBarGradient
-        colors={["#5B21B6", "#8B5CF6", "#EC4899"]}
+        colors={
+          isDark
+            ? ["#1e1b4b", "#312e81", "#020617"]
+            : ["#4f46e5", "#3730a3", "#1e1b4b"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
@@ -94,7 +99,7 @@ export const AuthStickyBar: React.FC<AuthHeaderProps> = ({ scrollY, heading }) =
 
 // ─── Collapsible Header Component (Rendered inside ScrollView) ─────────────────
 export const AuthCollapsibleHeader: React.FC<AuthHeaderProps> = ({ scrollY, heading, subHeading }) => {
-  const { theme } = useAppTheme();
+  const { isDark, theme } = useAppTheme();
   
   const headerAnimatedStyle = useAnimatedStyle(() => ({
     height: interpolate(
@@ -135,7 +140,11 @@ export const AuthCollapsibleHeader: React.FC<AuthHeaderProps> = ({ scrollY, head
   return (
     <AnimatedHeader style={headerAnimatedStyle}>
       <GradientBg
-        colors={["#5B21B6", "#8B5CF6", "#EC4899"]}
+        colors={
+          isDark
+            ? ["#1e1b4b", "#312e81", "#020617"]
+            : ["#4f46e5", "#3730a3", "#1e1b4b"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >

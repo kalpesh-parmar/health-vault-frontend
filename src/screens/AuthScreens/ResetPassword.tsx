@@ -206,8 +206,8 @@ const ResetPassword = () => {
         <TopGradient
           colors={
             isDark
-              ? ["#312e81", "#7c3aed", "#ec4899"]
-              : ["#7c3aed", "#ec4899", "#6366f1"]
+              ? ["#1e1b4b", "#312e81", "#020617"]
+              : ["#4f46e5", "#3730a3", "#1e1b4b"]
           }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}

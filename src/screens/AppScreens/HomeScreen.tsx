@@ -241,7 +241,10 @@ const HomeScreen = () => {
 
   // Vibrant gradient style matching your reference design theme
   const headerColors = useMemo(
-    () => (isDark ? ["#3b0764", "#1e1b4b"] : ["#a855f7", "#6366f1"]),
+    () =>
+      isDark
+        ? ["#1e1b4b", "#312e81", "#020617"]
+        : ["#4f46e5", "#3730a3", "#1e1b4b"],
     [isDark],
   );
 

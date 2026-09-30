@@ -26,7 +26,11 @@ const ScreenHeader = ({ title, showBack, leftAction, rightAction }: Props) => {
 
   return (
     <HeaderGradient
-      colors={isDark ? ["#312E81", "#4F46E5"] : ["#6366f1", "#a855f7"]}
+      colors={
+        isDark
+          ? ["#1e1b4b", "#312e81", "#020617"]
+          : ["#4f46e5", "#3730a3", "#1e1b4b"]
+      }
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >

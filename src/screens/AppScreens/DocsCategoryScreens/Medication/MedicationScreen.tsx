@@ -424,8 +424,8 @@ const MedicationScreen = () => {
       <HeaderGradient
         colors={
           isDark
-            ? ["#064e3b", "#0369a1", "#312e81"]
-            : ["#0f766e", "#0ea5e9", "#4f46e5"]
+            ? ["#1e1b4b", "#312e81", "#020617"]
+            : ["#4f46e5", "#3730a3", "#1e1b4b"]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
