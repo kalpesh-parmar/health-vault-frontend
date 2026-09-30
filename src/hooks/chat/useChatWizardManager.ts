@@ -9,6 +9,7 @@ import {
   addMedication,
   updateMedication,
 } from "../../services/medicationservice";
+import { createMedicationReminder } from "../../services/reminderService";
 import { ExtractedMedicine } from "../../types/medicationReview";
 import { AddOrEditMedication } from "../../types";
 import { ChatMessage, ChatWizardState, ConflictResolution } from "../../types/chat";
@@ -558,10 +559,19 @@ export const useChatWizardManager = ({
   const handleConfirmAndAddMeds = async (retryOnly = false) => {
     setIsConfirmingMeds(true);
     try {
-      // 1. Add resolved new medications
+      // 1. Add resolved new medications and create their reminders
       for (const med of chatWizardState.resolvedMedicines) {
         const payload = buildMedicationPayload(med);
-        await addMedication(payload);
+        const res = await addMedication(payload);
+        if (res?.data?.id) {
+          try {
+            await createMedicationReminder({
+              medicationId: res.data.id,
+            });
+          } catch (remErr) {
+            console.log("[AI_CHAT] Failed to create reminder for extracted medicine:", remErr);
+          }
+        }
       }
 
       // 2. Replace conflict medications
@@ -581,13 +591,18 @@ export const useChatWizardManager = ({
         });
       }
 
-      // Invalidate queries so dashboard & medications list update immediately
+      // Invalidate queries so dashboard, medications list, and reminders update immediately
       queryClient.invalidateQueries({ queryKey: ["medications"] });
       queryClient.invalidateQueries({ queryKey: ["allMedications"] });
       queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
       queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
       queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
 
       Toast.show({
         type: "success",
@@ -715,15 +730,30 @@ export const useChatWizardManager = ({
           notes: medData.notes || "",
         };
 
-        await addMedication(payload);
+        const res = await addMedication(payload);
+        const createdMedId = res?.data?.id;
+        if (createdMedId) {
+          try {
+            await createMedicationReminder({
+              medicationId: createdMedId,
+            });
+          } catch (remErr) {
+            console.log("[AI_CHAT] Failed to create reminder for manual medicine:", remErr);
+          }
+        }
 
-        // Invalidate react-query cache so it appears immediately on Dashboard and Medication list
+        // Invalidate react-query cache so it appears immediately on Dashboard, Medication list, and Reminders
         queryClient.invalidateQueries({ queryKey: ["medications"] });
         queryClient.invalidateQueries({ queryKey: ["allMedications"] });
         queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
-        queryClient.invalidateQueries({ queryKey: ["reminders"] });
+        queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+        queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+        queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
         queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+        queryClient.invalidateQueries({ queryKey: ["reminders"] });
         queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+        queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+        queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
 
         Toast.show({
           type: "success",
@@ -934,6 +964,24 @@ export const useChatWizardManager = ({
         );
         setIsOnboardingCompleted(isNowCompleted);
         setPendingStep(isTerminalStep ? null : nextPendingStep);
+
+        if (normalizedKey === "DASHBOARD" || isTerminalStep || isNowCompleted) {
+          queryClient.invalidateQueries({ queryKey: ["profile"] });
+          queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+          queryClient.invalidateQueries({ queryKey: ["medications"] });
+          queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+          queryClient.invalidateQueries({ queryKey: ["reminders"] });
+          queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+          if (normalizedKey === "DASHBOARD") {
+            try {
+              if (navigation && typeof navigation.navigate === "function") {
+                navigation.navigate("Home");
+              }
+            } catch (navErr) {
+              // navigation fallback
+            }
+          }
+        }
       }
     } catch (err) {
       console.warn("[AI_CHAT] Error handling generic option:", err);

@@ -3,6 +3,7 @@ import { mapApiDocumentToProcessedDocument } from "../utils/medicationMappers";
 import { ProcessedDocument, ExtractedMedicine } from "../types/medicationReview";
 
 import { addMedication } from "./medicationservice";
+import { createMedicationReminder } from "./reminderService";
 import { queryClient } from "../config/queryClient";
 import { format } from "date-fns";
 import { AddOrEditMedication } from "../types";
@@ -113,7 +114,16 @@ export const MedicationExtractionService = {
           replaceMedicationId: replaceMedId,
         };
 
-        await addMedication(payload);
+        const res = await addMedication(payload);
+        if (res?.data?.id) {
+          try {
+            await createMedicationReminder({
+              medicationId: res.data.id,
+            });
+          } catch (remErr) {
+            console.log("[MedicationExtractionService] Failed to create reminder:", remErr);
+          }
+        }
       } catch (medErr: any) {
         const isDup =
           medErr?.isDuplicate ||
@@ -136,9 +146,14 @@ export const MedicationExtractionService = {
     queryClient.invalidateQueries({ queryKey: ["medications"] });
     queryClient.invalidateQueries({ queryKey: ["allMedications"] });
     queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
-    queryClient.invalidateQueries({ queryKey: ["reminders"] });
+    queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+    queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+    queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
     queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+    queryClient.invalidateQueries({ queryKey: ["reminders"] });
     queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
+    queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+    queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
 
     return duplicateIds;
   },

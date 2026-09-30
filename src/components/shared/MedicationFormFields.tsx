@@ -944,7 +944,12 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             })}
           </View>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: "row", marginVertical: 4 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled={true}
+            style={{ flexDirection: "row", marginVertical: 4 }}
+          >
             {["TABLET", "CAPSULE", "SYRUP", "INJECTION", "DROPS", "SPRAY", "INHALER"].map((tItem) => {
               const isSelected = formType === tItem;
               const label = t(`medicineType.${tItem}`);

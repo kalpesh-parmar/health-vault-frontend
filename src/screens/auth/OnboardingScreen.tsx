@@ -378,15 +378,26 @@ export default function OnboardingScreen() {
   const flatListRef = useRef<FlatList>(null);
   const uploadSheetRef = useRef<any>(null);
   const pendingDraftSyncRef = useRef<Promise<any> | null>(null);
+  const shouldAutoScrollRef = useRef(true);
 
-  // Scroll to end when messages length changes
+  const scrollToBottom = (animated = true) => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    }, 100);
+  };
+
+  // Scroll to end when messages or loading state changes
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+    if (messages.length > 0 && shouldAutoScrollRef.current) {
+      scrollToBottom(true);
     }
   }, [messages.length]);
+
+  useEffect(() => {
+    if (loading && shouldAutoScrollRef.current) {
+      scrollToBottom(true);
+    }
+  }, [loading]);
 
   // Network detection check
   useEffect(() => {
@@ -677,9 +688,15 @@ export default function OnboardingScreen() {
       aiRes.actionType ||
       aiRes.action;
     const resolvedOnboardingCompleted = Boolean(
-      aiRes.onboardingState?.isOnboardingCompleted ??
-      aiRes.state?.isOnboardingCompleted ??
-      aiRes.isOnboardingCompleted,
+      aiRes.onboardingState?.isOnboardingCompleted ||
+      aiRes.state?.isOnboardingCompleted ||
+      aiRes.isOnboardingCompleted ||
+      action === "COMPLETE" ||
+      action === "POST_ONBOARDING" ||
+      action === "GO_TO_DASHBOARD" ||
+      action === "DASHBOARD" ||
+      currentState?.isOnboardingCompleted ||
+      currentState?.currentStep === "COMPLETE"
     );
     const resolvedCanSkip = Boolean(
       aiRes.canSkip ??
@@ -938,6 +955,20 @@ export default function OnboardingScreen() {
       queryClient.setQueryData(["profile"], (old: any) => ({
         ...(old || {}),
         onboardingCompleted: true,
+        firstName:
+          old?.firstName === "User" || !old?.firstName
+            ? finalState?.existingUserData?.firstName || old?.firstName || "User"
+            : old?.firstName,
+        lastName:
+          old?.lastName?.startsWith("+") || !old?.lastName
+            ? finalState?.existingUserData?.lastName || old?.lastName || ""
+            : old?.lastName,
+        dateOfBirth:
+          old?.dateOfBirth ||
+          finalState?.existingUserData?.dateOfBirth ||
+          "2000-01-01",
+        gender:
+          old?.gender || finalState?.existingUserData?.gender || "Other",
       }));
       queryClient.setQueryData(["userProfile"], (old: any) => ({
         ...(old || {}),
@@ -945,6 +976,10 @@ export default function OnboardingScreen() {
       }));
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      queryClient.invalidateQueries({ queryKey: ["medications"] });
+      queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
     }
 
     if (finalState.documentExtracted) {
@@ -1035,7 +1070,7 @@ export default function OnboardingScreen() {
                   ? sanitizeMedicineForPayload(parsed.medicine)
                   : parsed.medicine,
               };
-              messageString = displayLabel || "Save Medicines";
+              messageString = JSON.stringify(actionData);
             } else if (parsed.selected !== undefined || parsed.medicines !== undefined) {
               resolvedActionType = resolvedActionType || "CONFIRM_MEDICINES";
               actionData = {
@@ -1044,7 +1079,7 @@ export default function OnboardingScreen() {
                   ? parsed.medicines.map(sanitizeMedicineForPayload)
                   : parsed.medicines,
               };
-              messageString = displayLabel || "Confirm Selection";
+              messageString = JSON.stringify(actionData);
             } else if (parsed.skipAll) {
               resolvedActionType = resolvedActionType || "SKIP_MEDICINES";
               actionData = { skipAll: true };
@@ -1065,8 +1100,7 @@ export default function OnboardingScreen() {
             actionData = { action: "ADD_MEDICINE" };
             messageString = displayLabel || "Add Medicines";
           } else if (userText === "GO_TO_DASHBOARD" || userText === "DASHBOARD") {
-            resolvedActionType = resolvedActionType || "GO_TO_DASHBOARD";
-            messageString = displayLabel || "Go to Dashboard";
+            messageString = "DASHBOARD";
           } else if (userText === "CANCEL") {
             resolvedActionType = resolvedActionType || "CANCEL";
             messageString = displayLabel || "Cancel";
@@ -1086,7 +1120,7 @@ export default function OnboardingScreen() {
               ? sanitizeMedicineForPayload(userText.medicine)
               : userText.medicine,
           };
-          messageString = displayLabel || "Save Medicines";
+          messageString = JSON.stringify(actionData);
         } else if (userText.selected !== undefined || userText.medicines !== undefined) {
           resolvedActionType = resolvedActionType || "CONFIRM_MEDICINES";
           actionData = {
@@ -1095,7 +1129,7 @@ export default function OnboardingScreen() {
               ? userText.medicines.map(sanitizeMedicineForPayload)
               : userText.medicines,
           };
-          messageString = displayLabel || "Confirm Selection";
+          messageString = JSON.stringify(actionData);
         } else if (userText.skipAll) {
           resolvedActionType = resolvedActionType || "SKIP_MEDICINES";
           actionData = { skipAll: true };
@@ -1126,7 +1160,9 @@ export default function OnboardingScreen() {
               : userText.medicines,
           };
         }
-        messageString = messageString || displayLabel || "Confirm Selection";
+        if (actionData) {
+          messageString = JSON.stringify(actionData);
+        }
       } else if (actionType === "SAVE_AND_REVIEW") {
         resolvedActionType = "SAVE_AND_REVIEW";
         if (!actionData && userText && typeof userText === "object") {
@@ -1140,7 +1176,9 @@ export default function OnboardingScreen() {
               : userText.medicine,
           };
         }
-        messageString = messageString || displayLabel || "Save Medicines";
+        if (actionData) {
+          messageString = JSON.stringify(actionData);
+        }
       } else if (actionType === "ADD_MEDICINE") {
         resolvedActionType = "ADD_MEDICINE";
         actionData = actionData || { action: "ADD_MEDICINE" };
@@ -1149,9 +1187,6 @@ export default function OnboardingScreen() {
         resolvedActionType = "SKIP_MEDICINES";
         actionData = actionData || { skipAll: true };
         messageString = messageString || displayLabel || "Skip";
-      } else if (actionType === "GO_TO_DASHBOARD") {
-        resolvedActionType = "GO_TO_DASHBOARD";
-        messageString = messageString || displayLabel || "Go to Dashboard";
       } else if (actionType === "CANCEL") {
         resolvedActionType = "CANCEL";
         messageString = messageString || displayLabel || "Cancel";
@@ -1233,22 +1268,55 @@ export default function OnboardingScreen() {
         processAssistantResponse(resData, updatedState);
         const action = resData.actionType || resData.action;
         const responseOnboardingCompleted = Boolean(
-          resData.onboardingState?.isOnboardingCompleted ??
-          resData.state?.isOnboardingCompleted ??
-          resData.isOnboardingCompleted,
+          resData.onboardingState?.isOnboardingCompleted ||
+          resData.state?.isOnboardingCompleted ||
+          resData.isOnboardingCompleted ||
+          action === "COMPLETE" ||
+          action === "POST_ONBOARDING" ||
+          action === "GO_TO_DASHBOARD" ||
+          action === "DASHBOARD" ||
+          messageString === "DASHBOARD"
         );
 
         if (
-          action !== "ASK_REPORT" &&
-          action !== "NORMAL_CHAT" &&
-          (action === "COMPLETE" ||
-            action === "POST_ONBOARDING" ||
-            (responseOnboardingCompleted &&
-              action !== "ASK_REPORT" &&
-              action !== "NORMAL_CHAT"))
+          action === "COMPLETE" ||
+          action === "POST_ONBOARDING" ||
+          action === "GO_TO_DASHBOARD" ||
+          action === "DASHBOARD" ||
+          messageString === "DASHBOARD" ||
+          (responseOnboardingCompleted &&
+            action !== "ASK_REPORT" &&
+            action !== "NORMAL_CHAT")
         ) {
+          setIsOnboardingCompleted(true);
+          queryClient.setQueryData(["profile"], (old: any) => ({
+            ...(old || {}),
+            onboardingCompleted: true,
+            firstName:
+              old?.firstName === "User" || !old?.firstName
+                ? updatedState?.existingUserData?.firstName || old?.firstName || "User"
+                : old?.firstName,
+            lastName:
+              old?.lastName?.startsWith("+") || !old?.lastName
+                ? updatedState?.existingUserData?.lastName || old?.lastName || ""
+                : old?.lastName,
+            dateOfBirth:
+              old?.dateOfBirth ||
+              updatedState?.existingUserData?.dateOfBirth ||
+              "2000-01-01",
+            gender:
+              old?.gender || updatedState?.existingUserData?.gender || "Other",
+          }));
+          queryClient.setQueryData(["userProfile"], (old: any) => ({
+            ...(old || {}),
+            onboardingCompleted: true,
+          }));
           queryClient.invalidateQueries({ queryKey: ["profile"] });
           queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+          queryClient.invalidateQueries({ queryKey: ["medications"] });
+          queryClient.invalidateQueries({ queryKey: ["allMedications"] });
+          queryClient.invalidateQueries({ queryKey: ["reminders"] });
+          queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
         }
       }
     } catch (error: any) {
@@ -2281,22 +2349,28 @@ export default function OnboardingScreen() {
     };
 
     const handleOptionPress = (value: string, label: string) => {
-      if (loading || isSendingRef.current) return;
-      if (value === "GO_TO_DASHBOARD" || value === "DASHBOARD") {
+      const valUpper = String(value || "").toUpperCase().trim();
+      const lblLower = String(label || "").toLowerCase().trim();
+      const isGoToDashboard =
+        valUpper === "GO_TO_DASHBOARD" ||
+        valUpper === "DASHBOARD" ||
+        valUpper === "GO_TO_HOME" ||
+        valUpper === "COMPLETE" ||
+        lblLower === "go to dashboard" ||
+        lblLower.includes("dashboard");
+
+      if (isGoToDashboard) {
         const optionLabel =
           label ||
           (preferredLang && ONBOARDING_I18N[preferredLang.toLowerCase()]?.dashboard) ||
           "Go to Dashboard";
-        const nextState = {
-          ...state,
-          medicationFlowDone: true,
-          medicinesConfirmed: true,
-          currentStep: "COMPLETE",
-          isOnboardingCompleted: true,
-        };
-        setState(nextState);
-        sendMessage(value, nextState, optionLabel, "GO_TO_DASHBOARD");
-      } else if (value === "ADD_MORE_MEDICINES" || value === "ADD" || value === "ADD_MEDICINE") {
+        sendMessage("DASHBOARD", state, optionLabel);
+        return;
+      }
+
+      if (loading || isSendingRef.current) return;
+
+      if (value === "ADD_MORE_MEDICINES" || value === "ADD" || value === "ADD_MEDICINE") {
         const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
         setLocalMedicines(existingMeds);
         setCurrentClientMedId(null);
@@ -3553,6 +3627,7 @@ export default function OnboardingScreen() {
               keyExtractor={(item) => item.id}
               onViewableItemsChanged={onViewableItemsChanged.current}
               viewabilityConfig={viewabilityConfig.current}
+              automaticallyAdjustKeyboardInsets={false}
               contentContainerStyle={[
                 styles.listContent,
                 {
@@ -3563,6 +3638,22 @@ export default function OnboardingScreen() {
               ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => {
+                if (shouldAutoScrollRef.current) {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }
+              }}
+              onScrollBeginDrag={() => {
+                shouldAutoScrollRef.current = false;
+              }}
+              onMomentumScrollEnd={(event) => {
+                const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+                const isCloseToBottom =
+                  layoutMeasurement.height + contentOffset.y >= contentSize.height - 80;
+                if (isCloseToBottom) {
+                  shouldAutoScrollRef.current = true;
+                }
+              }}
               renderItem={({ item }) => {
                 if (item.isDateHeader) {
                   return (
