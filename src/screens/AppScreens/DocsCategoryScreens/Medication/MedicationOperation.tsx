@@ -96,16 +96,19 @@ const MedicationOperation = ({
       mutationFn: updateMedication,
     });
 
-  const invalidateMedicationQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ["medications"] });
-    queryClient.invalidateQueries({ queryKey: ["allMedications"] });
-    queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
-    queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
-    queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
-    queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
-    queryClient.invalidateQueries({ queryKey: ["allReminders"] });
-    queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
-    queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+  const invalidateMedicationQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["medications"] }),
+      queryClient.invalidateQueries({ queryKey: ["allMedications"] }),
+      queryClient.invalidateQueries({ queryKey: ["filteredMedications"] }),
+      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] }),
+      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] }),
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] }),
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] }),
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] }),
+      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] }),
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] })
+    ]);
   };
 
   const handleSubmit = async (formData: AddOrEditMedication) => {
@@ -139,7 +142,7 @@ const MedicationOperation = ({
         });
       }
 
-      invalidateMedicationQueries();
+      await invalidateMedicationQueries();
       navigation.goBack();
     } catch (error: any) {
       if (error?.isDuplicate && error?.responseData?.details?.duplicateInfo) {
@@ -192,7 +195,7 @@ const MedicationOperation = ({
 
       setDuplicateConflict(null);
       setPendingFormData(null);
-      invalidateMedicationQueries();
+      await invalidateMedicationQueries();
       navigation.goBack();
     } catch (error: any) {
       Toast.show({

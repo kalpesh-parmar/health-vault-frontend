@@ -13,7 +13,7 @@ import {
   BackHandler,
 } from "react-native";
 import styled from "styled-components/native";
-import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { MaterialCommunityIcons, Feather, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -697,7 +697,11 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
           borderRadius: 20,
         }}
       >
-        <BottomSheetView style={{ paddingHorizontal: 20, paddingBottom: bottomPadding }}>
+        <BottomSheetScrollView 
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: totalBottomPadding }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Header Section & Upload Options - FIXED */}
           <HeaderSection style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
             <View style={{ flex: 1, paddingRight: 10 }}>
@@ -738,24 +742,18 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
           {selectedFiles.length > 0 && (
             <SelectedSection>
               <SectionTitle isDark={isDark}>Selected Documents ({selectedFiles.length})</SectionTitle>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: totalBottomPadding }}
-              >
-                {selectedFiles.map((file) => {
-                  return (
-                    <DocumentRowItem
-                      key={file.id}
-                      file={file}
-                      isUploading={isUploading}
-                      isDark={isDark}
-                      onStartEdit={() => startEditing(file)}
-                      onRemove={() => removeSelectedFile(file.id)}
-                    />
-                  );
-                })}
-              </ScrollView>
+              {selectedFiles.map((file) => {
+                return (
+                  <DocumentRowItem
+                    key={file.id}
+                    file={file}
+                    isUploading={isUploading}
+                    isDark={isDark}
+                    onStartEdit={() => startEditing(file)}
+                    onRemove={() => removeSelectedFile(file.id)}
+                  />
+                );
+              })}
             </SelectedSection>
           )}
 
@@ -777,7 +775,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
               )}
             </UploadButton>
           )}
-        </BottomSheetView>
+        </BottomSheetScrollView>
       </BottomSheetModal>
 
       <CameraModal

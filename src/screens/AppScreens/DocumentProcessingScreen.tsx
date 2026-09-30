@@ -147,6 +147,7 @@ export const DocumentProcessingScreen = () => {
       queryClient.invalidateQueries({ queryKey: ["allDocuments", userId] });
       queryClient.invalidateQueries({ queryKey: ["documents", userId] });
       queryClient.invalidateQueries({ queryKey: ["filteredDocuments", userId] });
+      queryClient.invalidateQueries({ queryKey: ["documentsSummary"] });
     }
   }, [isAllTerminal, userId]);
 

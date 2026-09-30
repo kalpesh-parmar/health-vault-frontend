@@ -143,17 +143,16 @@ export const MedicationExtractionService = {
     }
 
     // Invalidate react-query cache to refresh medications and reminders list
-    queryClient.invalidateQueries({ queryKey: ["medications"] });
-    queryClient.invalidateQueries({ queryKey: ["allMedications"] });
-    queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
-    queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
-    queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
-    queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
-    queryClient.invalidateQueries({ queryKey: ["allReminders"] });
-    queryClient.invalidateQueries({ queryKey: ["reminders"] });
-    queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
-    queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
-    queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["medications"] }),
+      queryClient.invalidateQueries({ queryKey: ["allMedications"] }),
+      queryClient.invalidateQueries({ queryKey: ["filteredMedications"] }),
+      queryClient.invalidateQueries({ queryKey: ["reminders"] }),
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] }),
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] }),
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] }),
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] })
+    ]);
 
     return duplicateIds;
   },
