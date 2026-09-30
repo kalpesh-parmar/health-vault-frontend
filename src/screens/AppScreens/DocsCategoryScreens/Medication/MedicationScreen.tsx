@@ -95,16 +95,19 @@ const MedicationScreen = () => {
 
   const { mutateAsync: refillMedication } = useMutation({
     mutationFn: refillMedicationService,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["medications"] });
-      queryClient.invalidateQueries({ queryKey: ["allMedications"] });
-      queryClient.invalidateQueries({ queryKey: ["filteredMedications"] });
-      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
-      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
-      queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
-      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
-      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
-      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["medications"] }),
+        queryClient.invalidateQueries({ queryKey: ["allMedications"] }),
+        queryClient.invalidateQueries({ queryKey: ["filteredMedications"] }),
+        queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] }),
+        queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["todayReminders"] }),
+        queryClient.invalidateQueries({ queryKey: ["allReminders"] }),
+        queryClient.invalidateQueries({ queryKey: ["notificationCount"] }),
+        queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] }),
+        queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] })
+      ]);
       Toast.show({
         type: "success",
         text1: "Refilled",

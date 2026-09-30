@@ -179,22 +179,30 @@ const HomeScreen = () => {
     [];
   const reminders = Array.isArray(rawReminders) ? rawReminders : [];
 
-  const { data: medicationsData } = useQuery({
+  const { data: medicationsData, refetch: refetchMedications } = useQuery({
     queryKey: ["allMedications"],
     queryFn: listMedications,
   });
 
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  const { data: todayOccurrencesCountData } = useQuery({
+  const { data: todayOccurrencesCountData, refetch: refetchOccurrences } = useQuery({
     queryKey: ["todayOccurrencesCount", todayStr],
     queryFn: () => listTodayOccurrencesCount({ startDate: todayStr, endDate: todayStr }),
   });
 
-  const { data: documentsSummaryData } = useQuery({
+  const { data: documentsSummaryData, refetch: refetchDocuments } = useQuery({
     queryKey: ["documentsSummary"],
     queryFn: getDocumentsSummary,
   });
+
+  React.useEffect(() => {
+    if (isFocused) {
+      refetchMedications();
+      refetchOccurrences();
+      refetchDocuments();
+    }
+  }, [isFocused]);
 
   const medicationsCount = Array.isArray(medicationsData?.data) 
     ? medicationsData.data.length 

@@ -107,10 +107,13 @@ const EditScreen = ({ route }: any) => {
 
   const updateDocumentMutation = useMutation({
     mutationFn: updateDocument,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] });
-      queryClient.invalidateQueries({ queryKey: ["allDocuments"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["filteredDocuments"] }),
+        queryClient.invalidateQueries({ queryKey: ["allDocuments"] }),
+        queryClient.invalidateQueries({ queryKey: ["documentsSummary"] })
+      ]);
       Toast.show({
         type: "success",
         text1: "Document Updated Successfully.",

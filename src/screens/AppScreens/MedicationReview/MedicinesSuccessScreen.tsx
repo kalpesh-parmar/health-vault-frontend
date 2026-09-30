@@ -38,6 +38,7 @@ export const MedicinesSuccessScreen: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
     queryClient.invalidateQueries({ queryKey: ["allReminders"] });
     queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+    queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] });
   }, []);
 
   useEffect(() => {
