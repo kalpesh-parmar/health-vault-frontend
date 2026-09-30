@@ -3603,7 +3603,7 @@ export default function OnboardingScreen() {
         edges={["top", "left", "right"]}
       >
         <StatusBar
-          barStyle="dark-content"
+          barStyle="light-content"
           backgroundColor="transparent"
           translucent
         />

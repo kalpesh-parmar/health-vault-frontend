@@ -15,7 +15,7 @@ const AboutScreen = () => {
 
   return (
     <Container>
-      <StatusBar barStyle={"dark-content"} translucent backgroundColor="rgba(0,0,0,0.2)" />
+      <StatusBar barStyle={"light-content"} translucent backgroundColor="rgba(0,0,0,0.2)" />
       <ScreenHeader title="About Us" showBack={true} />
 
       <StyledScrollView showsVerticalScrollIndicator={false}>

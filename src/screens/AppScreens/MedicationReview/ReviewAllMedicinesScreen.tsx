@@ -51,7 +51,7 @@ export const ReviewAllMedicinesScreen: React.FC = () => {
 
   return (
     <SafeContainer edges={["top"]} isDark={isDark}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style="light" />
       <ReviewProgressHeader
         title="Review Medicines"
         rightText={`${selectedCount} of ${totalCount} selected`}

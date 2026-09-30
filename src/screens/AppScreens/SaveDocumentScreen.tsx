@@ -171,7 +171,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
         />
       )}
       <Screen>
-        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
         <ScreenHeader title="Add Document" showBack={true} />
 
         <Header>

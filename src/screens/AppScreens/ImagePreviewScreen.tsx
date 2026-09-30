@@ -43,8 +43,9 @@ const ImagePreviewScreen = ({ route }: Props) => {
   return (
     <>
       <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={theme.colors.background}
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
       />
       <Container>
         <ScreenHeader title="Image Preview" showBack={true} />

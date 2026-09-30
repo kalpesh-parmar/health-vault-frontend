@@ -121,7 +121,7 @@ export const ConfirmMedicinesScreen: React.FC = () => {
 
   return (
     <SafeContainer edges={["top"]} isDark={isDark}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style="light" />
       <ReviewProgressHeader title="Review & Confirm" onBackPress={handleBack} />
 
       <ScrollWrapper contentContainerStyle={{ padding: 20, paddingBottom: bottomPadding + 130 }}>

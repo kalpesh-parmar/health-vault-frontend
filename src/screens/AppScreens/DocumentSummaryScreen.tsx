@@ -341,7 +341,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
   return (
     <Container>
-      <StatusBar backgroundColor={""} />
+      <StatusBar style="light" translucent backgroundColor="rgba(0,0,0,0.2)" />
       <ConfirmationModal
         showModal={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
