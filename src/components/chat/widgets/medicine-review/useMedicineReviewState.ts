@@ -108,8 +108,17 @@ export function useMedicineReviewState({
     safeLocalMedicines.filter((m) => m.selected !== false).map((m) => m.client_med_id || m.id),
   );
 
-  const [expandedMedId, setExpandedMedId] = useState<string | null>(null);
+  const [expandedMedIds, setExpandedMedIds] = useState<string[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const expandedMedId = expandedMedIds.length > 0 ? expandedMedIds[0] : null;
+  const setExpandedMedId = (id: string | null) => {
+    if (!id) {
+      setExpandedMedIds([]);
+    } else {
+      setExpandedMedIds([id]);
+    }
+  };
 
   useEffect(() => {
     const deduped = deduplicateDrafts(localMedicines || []);
@@ -241,11 +250,19 @@ export function useMedicineReviewState({
   };
 
   const toggleExpandPill = (id: string) => {
-    if (expandedMedId === id) {
-      setExpandedMedId(null);
-    } else {
-      setExpandedMedId(id);
-    }
+    const targetMed = safeLocalMedicines.find(
+      (m) => m.client_med_id === id || m.id === id
+    );
+    const matchKeys = [id, targetMed?.id, targetMed?.client_med_id].filter(Boolean) as string[];
+
+    setExpandedMedIds((prev) => {
+      const isCurrentlyExpanded = matchKeys.some((k) => prev.includes(k));
+      if (isCurrentlyExpanded) {
+        return prev.filter((k) => !matchKeys.includes(k));
+      } else {
+        return [...prev, id];
+      }
+    });
   };
 
   const handleResolveConflict = (medId: string, action: string) => {
@@ -273,6 +290,8 @@ export function useMedicineReviewState({
     safeLocalMedicines,
     checkedMeds,
     setCheckedMeds,
+    expandedMedIds,
+    setExpandedMedIds,
     expandedMedId,
     setExpandedMedId,
     isExpanded,

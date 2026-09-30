@@ -13,7 +13,12 @@ export interface ResolveProfileSourceCardProps {
   preferredLang: string;
   isDark: boolean;
   theme: any;
-  sendMessage: (userText: string, updatedState?: any, displayLabel?: string) => Promise<void> | void;
+  sendMessage: (
+    userText: string,
+    updatedState?: any,
+    displayLabel?: string,
+    actionType?: string,
+  ) => Promise<void> | void;
   state: any;
   isHistorical?: boolean;
   chosenVal?: string | null;
@@ -109,7 +114,8 @@ export function ResolveProfileSourceCard({
     sendMessage(
       JSON.stringify(payload),
       updatedState,
-      uiT("confirmAndContinue"),
+      uiT("confirmAndContinue") || "Confirm & Continue",
+      "RESOLVE_PROFILE_SOURCE",
     );
   };
 
@@ -122,7 +128,8 @@ export function ResolveProfileSourceCard({
     sendMessage(
       JSON.stringify(payload),
       updatedState,
-      isManual ? (uiT("useEditedInformation") || "Use Edited Information") : uiT("useSocialLogin"),
+      isManual ? (uiT("useEditedInformation") || "Use Edited Information") : (uiT("useSocialLogin") || "Use Social Login"),
+      "RESOLVE_PROFILE_SOURCE",
     );
   };
 
@@ -137,6 +144,7 @@ export function ResolveProfileSourceCard({
       hasDocumentUploaded
         ? (uiT("useDocument") || "Use Document")
         : (uiT("manualDetails") || "Manual Details"),
+      "RESOLVE_PROFILE_SOURCE",
     );
   };
 

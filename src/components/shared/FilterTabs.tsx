@@ -4,10 +4,19 @@ import styled from "styled-components/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { safeArray } from "../../utils/arrayUtils";
 
+export interface FilterTabItem {
+  key: string;
+  label?: string;
+  count?: number;
+}
+
+export type FilterTabOption = string | FilterTabItem;
+
 interface FilterTabsProps {
-  data: readonly string[] | string[];
+  data: readonly FilterTabOption[] | FilterTabOption[];
   activeTab: string;
   onSelectTab: (tab: string) => void;
+  counts?: Record<string, number>;
   isDark?: boolean;
 }
 
@@ -15,6 +24,7 @@ const FilterTabs = ({
   data,
   activeTab,
   onSelectTab,
+  counts,
   isDark,
 }: FilterTabsProps) => {
   return (
@@ -23,16 +33,28 @@ const FilterTabs = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 15 }}
-       keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         {safeArray(data).map((item) => {
-          const isActive = activeTab === item;
+          const itemKey = typeof item === "string" ? item : item.key;
+          const baseLabel = typeof item === "string" ? item : (item.label || item.key);
+          const count =
+            typeof item === "object" && item.count !== undefined
+              ? item.count
+              : counts && counts[itemKey] !== undefined
+                ? counts[itemKey]
+                : undefined;
+
+          const displayLabel = count !== undefined ? `${baseLabel} (${count})` : baseLabel;
+          const isActive = activeTab === itemKey;
+
           return (
             <TabItem
-              key={item}
+              key={itemKey}
               active={isActive}
               onPress={() => {
-                console.log('item', item)
-                onSelectTab(item)
+                onSelectTab(itemKey);
               }}
               activeOpacity={0.8}
               isDark={isDark}
@@ -42,14 +64,14 @@ const FilterTabs = ({
                   colors={["#4f46e5", "#3b82f6", "#2563eb"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={{ paddingHorizontal: 25, paddingVertical: 10 }}
+                  style={{ paddingHorizontal: 20, paddingVertical: 10 }}
                 >
-                  <TabText active={true}>{item}</TabText>
+                  <TabText active={true}>{displayLabel}</TabText>
                 </LinearGradient>
               ) : (
-                <View style={{ paddingHorizontal: 25, paddingVertical: 10 }}>
+                <View style={{ paddingHorizontal: 20, paddingVertical: 10 }}>
                   <TabText active={false} isDark={isDark}>
-                    {item}
+                    {displayLabel}
                   </TabText>
                 </View>
               )}

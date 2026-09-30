@@ -16,6 +16,7 @@ import {
   findHistoricalUserReply,
   HistoricalChips,
 } from "./widgets/HistoricalChips";
+import { parseChosenJson } from "./widgets/MedicineHelpers";
 import {
   ExtractedMedicinesCard,
   ConflictCarouselCard,
@@ -85,6 +86,7 @@ interface ChatMessageItemProps {
   onViewFullReport?: (doc: any) => void;
   onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
   isOnboardingCompleted?: boolean;
+  onAllergyCardExpand?: () => void;
 }
 
 const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
@@ -115,9 +117,12 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   onViewFullReport,
   onRetryDocument,
   isOnboardingCompleted,
+  onAllergyCardExpand,
 }) => {
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
   const [localDrafts, setLocalDrafts] = React.useState<any[]>([]);
+  const [activeMedicineToEdit, setActiveMedicineToEdit] = React.useState<any | null>(null);
+  const [medicineCardMode, setMedicineCardMode] = React.useState<"review" | "edit">("review");
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
@@ -131,24 +136,26 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   };
 
   const isLatestActiveMessage = (msgId: string) => {
-    const latestNonNotice = mergedMessages.find(
-      (m) => m.action !== "ONBOARDING_COMPLETED_NOTICE"
+    const aiMessages = mergedMessages.filter(
+      (m) =>
+        (m.role === "ai") &&
+        m.action !== "ONBOARDING_COMPLETED_NOTICE"
     );
+    const latestNonNotice = aiMessages[aiMessages.length - 1];
     return latestNonNotice?.id === msgId;
   };
 
-
-  const nextItem = mergedMessages[index + 1];
+  const prevItem = mergedMessages[index - 1];
   let showDateHeader = false;
-  if (!nextItem) {
+  if (!prevItem) {
     showDateHeader = true;
-  } else if (item.createdAt && nextItem.createdAt) {
+  } else if (item.createdAt && prevItem.createdAt) {
     const currentDate = formatUTCDateTime(item.createdAt, "dd-MMM-yyyy", true);
-    const prevDate = formatUTCDateTime(nextItem.createdAt, "dd-MMM-yyyy", true);
+    const prevDate = formatUTCDateTime(prevItem.createdAt, "dd-MMM-yyyy", true);
     if (currentDate !== prevDate) {
       showDateHeader = true;
     }
-  } else if (item.createdAt && !nextItem.createdAt) {
+  } else if (item.createdAt && !prevItem.createdAt) {
     showDateHeader = true;
   }
 
@@ -160,15 +167,20 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       />
     ) : null;
 
-  const { chosenVal, chosenLabel } = findHistoricalUserReply(mergedMessages, item.id, true);
+  const { chosenVal, chosenLabel } = findHistoricalUserReply(mergedMessages, item.id, false);
   const isAnswered = chosenVal !== null || chosenLabel !== null;
   const isLatest = isLatestActiveMessage(item.id);
   const isHistorical = isAnswered || !isLatest;
-  const isReadOnly = isHistorical || Boolean((item as any).isConfirmed);
+  const isConfirmAction =
+    item.action === "CONFIRM_MEDICINES" ||
+    (item as any).actionType === "CONFIRM_MEDICINES" ||
+    Boolean((item as any).isConfirmed);
+  const isReadOnly = isHistorical || isConfirmAction;
 
   const isComplexStep =
     item.action === "RESOLVE_PROFILE_SOURCE" ||
     item.action === "ASK_UPLOAD_OR_SKIP" ||
+    item.action === "ASK_ALLERGIES" ||
     item.action === "MEDICINE_OPTIONS" ||
     item.action === "ADD_MEDICINE" ||
     item.action === "EDIT_MEDICINE" ||
@@ -177,6 +189,8 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
     item.action === "ACTION" ||
     (item as any).mode === "ACTION" ||
     item.action === "CONFIRM_MEDICINE" ||
+    item.action === "CONFIRM_MEDICINES" ||
+    (item as any).actionType === "CONFIRM_MEDICINES" ||
     item.action === "EXTRACTED_MEDICINES" ||
     item.action === "EXTRACTED_MEDICINES_CONFLICTS" ||
     item.action === "EXTRACTED_MEDICINES_CONFIRM" ||
@@ -228,6 +242,22 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       </View>
     );
   };
+
+  // User-role messages are strictly user speech bubbles (with attachments if present)
+  // and must never mount assistant cards, wizards, or action prompts.
+  if (item.role === "user") {
+    return (
+      <View style={{ width: "100%" }}>
+        {dateHeader}
+        <MessageBubble
+          message={item as any}
+          isDark={isDark}
+          onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+          isSpeaking={speakingMessageId === item.id}
+        />
+      </View>
+    );
+  }
 
   if (isComplexStep) {
     if (item.action === "ASK_REPORT") {
@@ -326,8 +356,32 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
-          sendMessage={() => { }}
-          state={{}}
+          sendMessage={(userText, updatedState, displayLabel, actionType) => {
+            if (handleGenericOptionPress) {
+              let parsedActionData: any = undefined;
+              if (typeof userText === "string") {
+                try {
+                  parsedActionData = JSON.parse(userText);
+                } catch {
+                  parsedActionData = { confirmed: true };
+                }
+              } else if (typeof userText === "object") {
+                parsedActionData = userText;
+              }
+              handleGenericOptionPress(
+                {
+                  key: typeof userText === "string" ? userText : JSON.stringify(userText),
+                  value: typeof userText === "string" ? userText : JSON.stringify(userText),
+                  label: displayLabel || "Confirm & Continue",
+                  actionType: actionType || "RESOLVE_PROFILE_SOURCE",
+                  actionData: parsedActionData,
+                  state: updatedState,
+                },
+                displayLabel || "Confirm & Continue",
+              );
+            }
+          }}
+          state={chatWizardState || {}}
           isHistorical={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -359,15 +413,30 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
+          onExpand={onAllergyCardExpand}
           sendMessage={(userText, updatedState, displayLabel) => {
+            let cleanLabel = displayLabel;
+            if (!cleanLabel || cleanLabel.startsWith("{")) {
+              if (userText === "NO") {
+                cleanLabel = "No Allergies";
+              } else {
+                try {
+                  const p = JSON.parse(userText);
+                  cleanLabel = Array.isArray(p.allergies) ? p.allergies.join(", ") : userText;
+                } catch {
+                  cleanLabel = userText;
+                }
+              }
+            }
             handleGenericOptionPress(
               {
                 key: userText,
                 value: userText,
-                label: displayLabel || (userText === "NO" ? "No Allergies" : userText),
+                label: cleanLabel,
                 state: updatedState,
+                actionType: "ASK_ALLERGIES",
               },
-              displayLabel || (userText === "NO" ? "No Allergies" : userText)
+              cleanLabel
             );
           }}
           state={(item as any).onboardingState || (item as any).state || {}}
@@ -382,7 +451,58 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       item.action === "ADD_MEDICINE" ||
       item.action === "EDIT_MEDICINE"
     ) {
-      const med = item.medicine || {};
+      let candidateMed =
+        item.medicine ||
+        (Array.isArray(item.medicines) && item.medicines.length > 0 ? item.medicines[0] : null);
+      let candidateDrafts =
+        Array.isArray(item.medicines) && item.medicines.length > 0 ? item.medicines : null;
+
+      if (isHistorical && (!candidateMed || Object.keys(candidateMed).length === 0)) {
+        const parsed = parseChosenJson(chosenVal);
+        if (parsed) {
+          const parsedMeds = Array.isArray(parsed?.medicines)
+            ? parsed.medicines
+            : (parsed?.medicine ? [parsed.medicine] : null);
+          if (parsedMeds && parsedMeds.length > 0) {
+            candidateMed = parsedMeds[0];
+            candidateDrafts = parsedMeds;
+          }
+        }
+
+        if (!candidateMed || Object.keys(candidateMed).length === 0) {
+          // Look for adjacent review or confirm messages in mergedMessages (chronological)
+          const currentIdx = mergedMessages.findIndex((m) => m.id === item.id);
+          if (currentIdx !== -1) {
+            for (let i = currentIdx + 1; i < mergedMessages.length; i++) {
+              const m = mergedMessages[i];
+              const meds = Array.isArray(m.medicines) && m.medicines.length > 0
+                ? m.medicines
+                : (m.medicine ? [m.medicine] : null);
+              if (meds && meds.length > 0) {
+                candidateMed = meds[0];
+                candidateDrafts = meds;
+                break;
+              }
+              const mRaw = parseChosenJson(m.rawValue);
+              const rawMeds = Array.isArray(mRaw?.medicines) && mRaw.medicines.length > 0
+                ? mRaw.medicines
+                : (mRaw?.medicine ? [mRaw.medicine] : null);
+              if (rawMeds && rawMeds.length > 0) {
+                candidateMed = rawMeds[0];
+                candidateDrafts = rawMeds;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      const med = candidateMed || {};
+      const activeDrafts =
+        isHistorical && candidateDrafts && candidateDrafts.length > 0
+          ? candidateDrafts
+          : localDrafts;
+
       const handleSaveMedicines = (allDrafts: any[]) => {
         const rawArray = Array.isArray(allDrafts) ? allDrafts : (allDrafts ? [allDrafts] : []);
         const combined = [...localDrafts, ...rawArray];
@@ -437,43 +557,38 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         <AddMedicineCard
           key={item.id}
           med={med}
-          isEditingLocal={item.action === "EDIT_MEDICINE"}
+          initialMedicines={activeDrafts}
+          totalBuffered={activeDrafts.length}
+          isEditingLocal={false}
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
           currentClientMedId={clientMedId}
           setCurrentClientMedId={setClientMedId}
-          onSave={(updatedMed) => {
-            handleGenericOptionPress({
-              label: `Add medicine: ${updatedMed.name}`,
-              value: { medicine: updatedMed },
-              actionType: "ADD_MEDICINE",
-            });
-          }}
-          onCancel={() => {
-            if (item.action === "EDIT_MEDICINE") {
-              if (setMessages) {
-                setMessages((prev: any) => prev.filter((m: any) => m.id !== item.id));
-              }
-            } else {
-              handleGenericOptionPress({
-                label: "Cancel",
-                value: "cancel",
-                actionType: "CANCEL",
-              });
-            }
-          }}
+          onSaveMedicines={!isHistorical ? handleSaveMedicines : undefined}
+          onSave={!isHistorical ? (updatedMed) => handleSaveMedicines([updatedMed]) : () => { }}
+          onAddAndContinue={!isHistorical ? handleAddAndContinue : undefined}
+          onDraftSync={!isHistorical ? handleDraftSync : undefined}
+          onExitToOptions={!isHistorical ? handleExitToOptions : undefined}
+          onCancel={!isHistorical ? handleExitToOptions : undefined}
           readOnly={isHistorical}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
       );
     }
+    const isConfirmReceipt =
+      item.action === "CONFIRM_MEDICINES" ||
+      item.action === "CONFIRM_MEDICINE" ||
+      (item as any).actionType === "CONFIRM_MEDICINES";
+    if (isConfirmReceipt) {
+      return renderAssistantPrompt(null);
+    }
+
     if (
       item.action === "ACTION" ||
       (item as any).mode === "ACTION" ||
       item.action === "REVIEW_MEDICINES_LIST" ||
-      item.action === "CONFIRM_MEDICINE" ||
       item.action === "ADD_DOCUMENT"
     ) {
       const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
@@ -492,10 +607,48 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       }));
 
       const handleConfirm = (checkedMeds: string[], formattedMeds?: any[]) => {
-        handleConfirmSelection(checkedMeds, formattedMeds, item.id);
+        if (isReadOnly) return;
+        if (chatWizardState.extractedMedicines.length > 0 && !item.medicines?.length) {
+          item.medicines = deduplicateDrafts(chatWizardState.extractedMedicines);
+          (item as any).isConfirmed = true;
+          handleConfirmSelection();
+          return;
+        }
+
+        const selectedMedicineObjects =
+          formattedMeds && formattedMeds.length > 0
+            ? formattedMeds
+            : displayMeds.filter(
+              (m: any) =>
+                checkedMeds.includes(m.client_med_id || m.id) ||
+                checkedMeds.includes(m.id)
+            );
+        const uniqueSelected = deduplicateDrafts(selectedMedicineObjects);
+        item.medicines = uniqueSelected.length > 0 ? uniqueSelected : displayMeds;
+        (item as any).isConfirmed = true;
+        const displayLabel = tOnboarding("confirmSelection") || "Continue";
+        const confirmPayload = {
+          selected: checkedMeds,
+          medicines: uniqueSelected,
+        };
+        handleGenericOptionPress(
+          {
+            key: "CONFIRM_MEDICINES",
+            value: confirmPayload,
+            actionType: "CONFIRM_MEDICINES",
+            label: displayLabel,
+            state: {
+              medicinesConfirmed: true,
+              medicinesFlowStarted: true,
+              medicinesToAdd: uniqueSelected.length > 0 ? uniqueSelected : displayMeds,
+            },
+          },
+          displayLabel,
+        );
       };
 
       const handleAddNew = () => {
+        if (isReadOnly) return;
         const displayLabel = tOnboarding("addAnotherMedicine") || "Add New";
         handleGenericOptionPress(
           {
@@ -513,6 +666,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       };
 
       const handleSkipAll = () => {
+        if (isReadOnly) return;
         const displayLabel = tOnboarding("skipAll") || "Skip All";
         handleGenericOptionPress(
           {
@@ -530,6 +684,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       };
 
       const handleCancelReview = () => {
+        if (isReadOnly) return;
         const displayLabel = tOnboarding("cancel") || "Cancel";
         handleGenericOptionPress(
           {
@@ -546,10 +701,9 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       };
 
       const handleEdit = (med: any) => {
-        setMedicineToEdit(med);
-        setTimeout(() => {
-          editSheetRef.current?.present();
-        }, 100);
+        if (isReadOnly) return;
+        setActiveMedicineToEdit(med);
+        setMedicineCardMode("edit");
       };
 
       const setLocalMedicinesWrapper = (updater: any) => {
@@ -583,6 +737,48 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           }));
         }
       };
+
+      if (medicineCardMode === "edit" && activeMedicineToEdit) {
+        return renderAssistantPrompt(
+          <AddMedicineCard
+            key={`edit-${activeMedicineToEdit.client_med_id || activeMedicineToEdit.id || item.id}`}
+            med={activeMedicineToEdit}
+            initialMedicines={displayMeds}
+            totalBuffered={displayMeds.length}
+            isEditingLocal={true}
+            preferredLang={preferredLang}
+            isDark={isDark}
+            theme={theme}
+            currentClientMedId={activeMedicineToEdit.client_med_id || activeMedicineToEdit.id}
+            setCurrentClientMedId={() => { }}
+            onSaveMedicines={(allDrafts) => {
+              const uniqueDrafts = deduplicateDrafts(allDrafts);
+              setLocalMedicinesWrapper(uniqueDrafts);
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            onSave={(updatedMed) => {
+              const updatedList = displayMeds.map((m: any) =>
+                (m.client_med_id === updatedMed.client_med_id || m.id === updatedMed.id) ? updatedMed : m
+              );
+              setLocalMedicinesWrapper(deduplicateDrafts(updatedList));
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            onExitToOptions={() => {
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            onCancel={() => {
+              setActiveMedicineToEdit(null);
+              setMedicineCardMode("review");
+            }}
+            readOnly={false}
+            chosenVal={null}
+            chosenLabel={null}
+          />,
+        );
+      }
 
       if (displayMeds.length > 0) {
         return renderAssistantPrompt(
@@ -630,6 +826,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                   readOnly={isReadOnly}
                   chosenVal={chosenVal}
                   chosenLabel={chosenLabel}
+                  preferredLang={preferredLang}
                 />
               </View>
             )}
@@ -655,16 +852,18 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       );
     }
     if (item.action === "MEDICINE_OPTIONS") {
+      const disableOptions = isHistorical || isReadOnly || Boolean(isOnboardingCompleted);
       return renderAssistantPrompt(
         <MedicineOptionsPanel
           optionsList={item.options || []}
           isDark={isDark}
           theme={theme}
           onOptionPress={(optKey, label) => handleGenericOptionPress(optKey, label)}
-          readOnly={isHistorical}
+          readOnly={disableOptions}
           loading={isLoadingResults || isConfirmingMeds}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
+          preferredLang={preferredLang}
         />,
       );
     }
@@ -1057,13 +1256,13 @@ export const ChatMessageItem = React.memo(ChatMessageItemComponent, (prevProps, 
   const nextSpeaking = nextProps.speakingMessageId === nextProps.item.id;
   if (prevSpeaking !== nextSpeaking) return false;
 
-  const prevIsLatest = prevProps.mergedMessages[0]?.id === prevProps.item.id;
-  const nextIsLatest = nextProps.mergedMessages[0]?.id === nextProps.item.id;
+  const prevIsLatest = prevProps.mergedMessages[prevProps.mergedMessages.length - 1]?.id === prevProps.item.id;
+  const nextIsLatest = nextProps.mergedMessages[nextProps.mergedMessages.length - 1]?.id === nextProps.item.id;
   if (prevIsLatest !== nextIsLatest) return false;
 
-  const prevNextItem = prevProps.mergedMessages[prevProps.index + 1];
-  const nextNextItem = nextProps.mergedMessages[nextProps.index + 1];
-  if (prevNextItem?.createdAt !== nextNextItem?.createdAt) return false;
+  const prevPrevItem = prevProps.mergedMessages[prevProps.index - 1];
+  const nextPrevItem = nextProps.mergedMessages[nextProps.index - 1];
+  if (prevPrevItem?.createdAt !== nextPrevItem?.createdAt) return false;
 
   return true;
 });

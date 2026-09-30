@@ -25,6 +25,7 @@ export interface AskAllergiesCardProps {
   chosenVal?: string | null;
   chosenLabel?: string | null;
   loading?: boolean;
+  onExpand?: () => void;
 }
 
 export const COMMON_ALLERGIES = [
@@ -50,6 +51,7 @@ export function AskAllergiesCard({
   chosenVal,
   chosenLabel,
   loading = false,
+  onExpand,
 }: AskAllergiesCardProps) {
   const uiT = (key: string) => {
     const lang = preferredLang || "english";
@@ -58,10 +60,26 @@ export function AskAllergiesCard({
   };
 
   // Determine initial/historical state
-  const rawStateAllergies =
+  let rawStateAllergies =
     state?.existingUserData?.allergies ||
     activeMsg?.onboardingState?.existingUserData?.allergies ||
+    activeMsg?.allergies ||
     [];
+
+  if ((!rawStateAllergies || rawStateAllergies.length === 0) && chosenVal) {
+    try {
+      const parsed = JSON.parse(chosenVal);
+      if (Array.isArray(parsed?.allergies)) {
+        rawStateAllergies = parsed.allergies;
+      }
+    } catch { }
+  }
+  if ((!rawStateAllergies || rawStateAllergies.length === 0) && chosenLabel && !["no", "yes", "ના", "नहीं", "नाही", "இல்லை", "હા", "हाँ", "होय", "ஆம்"].includes(chosenLabel.trim().toLowerCase())) {
+    const split = chosenLabel.split(",").map((s) => s.trim()).filter(Boolean);
+    if (split.length > 0 && !split[0].toLowerCase().includes("no allergies")) {
+      rawStateAllergies = split;
+    }
+  }
   const existingAllergies: string[] = Array.isArray(rawStateAllergies)
     ? rawStateAllergies
     : [];
@@ -136,6 +154,9 @@ export function AskAllergiesCard({
       sendMessage("NO", updatedState, uiT("allergyNo"));
     } else if (opt === "YES") {
       setSelectedOption("YES");
+      if (onExpand) {
+        setTimeout(() => onExpand(), 100);
+      }
     }
   };
 

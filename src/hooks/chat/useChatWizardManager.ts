@@ -667,38 +667,68 @@ export const useChatWizardManager = ({
       optionLabel = normalizedKey;
     }
 
-    const normKeyUpper = normalizedKey.toUpperCase();
-    const optActionUpper = String(option?.actionType || option?.action || "").toUpperCase();
-    const optValueUpper = String(option?.value || "").toUpperCase();
-    const optLabelLower = optionLabel.toLowerCase();
+    if (
+      option?.actionType === "CONFIRM_MEDICINES" ||
+      normalizedKey === "CONFIRM_MEDICINES" ||
+      optKey === "CONFIRM_MEDICINES"
+    ) {
+      if (!optionLabel || optionLabel === "CONFIRM_MEDICINES" || optionLabel.trim().startsWith("{")) {
+        optionLabel = tOnboarding("confirmSelection") || "Confirm Selection";
+      }
+    }
 
-    const isUploadAction =
-      optActionUpper === "ADD_DOCUMENT" ||
-      optActionUpper === "UPLOAD_DOCUMENT" ||
-      optActionUpper === "UPLOAD" ||
-      normKeyUpper === "ADD_DOCUMENT" ||
-      normKeyUpper === "UPLOAD_DOCUMENT" ||
-      normKeyUpper === "UPLOAD" ||
-      optValueUpper === "ADD_DOCUMENT" ||
-      optValueUpper === "UPLOAD_DOCUMENT" ||
-      optValueUpper === "UPLOAD" ||
-      optLabelLower === "upload document" ||
-      optLabelLower === "add document" ||
-      optLabelLower === "use document" ||
-      optLabelLower.includes("upload document") ||
-      optLabelLower.includes("add document");
+    if (
+      option?.actionType === "SKIP_MEDICINES" ||
+      normalizedKey === "SKIP_MEDICINES" ||
+      optKey === "SKIP_MEDICINES"
+    ) {
+      if (!optionLabel || optionLabel === "SKIP_MEDICINES" || optionLabel.trim().startsWith("{")) {
+        optionLabel = tOnboarding("skipAll") || "Skip All";
+      }
+    }
 
-    if (isUploadAction) {
-      uploadSheetRef.current?.present();
-      isSendingRef.current = false;
-      setIsSending(false);
-      return;
+    // Sanitize optionLabel: Prevent raw JSON payload strings from rendering as user bubble text
+    if (
+      typeof optionLabel === "string" &&
+      (optionLabel.trim().startsWith("{") || optionLabel.includes('"action":') || optionLabel.includes('"selected":'))
+    ) {
+      try {
+        const parsed = JSON.parse(optionLabel);
+        if (Array.isArray(parsed.allergies) && parsed.allergies.length > 0) {
+          optionLabel = parsed.allergies.join(", ");
+        } else if (parsed.label) {
+          optionLabel = parsed.label;
+        } else if (parsed.displayLabel) {
+          optionLabel = parsed.displayLabel;
+        } else if (parsed.allergies && parsed.allergies.length === 0) {
+          optionLabel = "No Allergies";
+        } else if (
+          parsed.selected !== undefined ||
+          parsed.medicines !== undefined ||
+          parsed.actionType === "CONFIRM_MEDICINES" ||
+          parsed.action === "CONFIRM_MEDICINES"
+        ) {
+          optionLabel = tOnboarding("confirmSelection") || "Confirm Selection";
+        } else if (
+          parsed.skipAll ||
+          parsed.actionType === "SKIP_MEDICINES" ||
+          parsed.action === "SKIP_MEDICINES"
+        ) {
+          optionLabel = tOnboarding("skipAll") || "Skip All";
+        }
+      } catch {
+        // Not valid JSON or parsing failed; leave optionLabel as is
+      }
     }
 
     const userMsg: ChatMessage = {
       id: `user-opt-${Date.now()}`,
       role: "user",
       text: optionLabel,
+      rawValue:
+        typeof option?.value === "string"
+          ? option.value
+          : JSON.stringify(option?.value || option),
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
@@ -833,6 +863,7 @@ export const useChatWizardManager = ({
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
         fromScreen: "Dashboard",
+        displayLabel: optionLabel,
         history: messages.map((m) => ({
           role: m.role === "ai" ? "assistant" : "user",
           content: m.text,
@@ -882,7 +913,11 @@ export const useChatWizardManager = ({
           };
         }
         payload.actionData = parsedSave;
-        payload.message = "Save Medicines";
+        payload.message = parsedSave;
+      } else if (option?.actionType === "ASK_ALLERGIES" || normalizedKey === "ASK_ALLERGIES") {
+        payload.actionType = "ASK_ALLERGIES";
+        payload.message = option?.value || normalizedKey;
+        payload.displayLabel = optionLabel;
       } else if (option?.actionType === "SKIP_MEDICINES" || normalizedKey === "SKIP_MEDICINES") {
         payload.actionType = "SKIP_MEDICINES";
         payload.actionData = { skipAll: true };
@@ -905,6 +940,19 @@ export const useChatWizardManager = ({
         payload.actionType = "CANCEL";
         payload.actionData = { action: "CANCEL" };
         payload.message = "CANCEL";
+      } else if (
+        option?.actionType === "RESOLVE_PROFILE_SOURCE" ||
+        normalizedKey === "RESOLVE_PROFILE_SOURCE"
+      ) {
+        payload.actionType = "RESOLVE_PROFILE_SOURCE";
+        let rawVal = option.actionData || option.value || normalizedKey;
+        if (typeof rawVal === "string") {
+          try {
+            rawVal = JSON.parse(rawVal);
+          } catch {}
+        }
+        payload.actionData = typeof rawVal === "object" ? rawVal : { confirmed: true };
+        payload.message = JSON.stringify(payload.actionData);
       } else {
         payload.message = normalizedKey;
         if (normalizedKey === "ASK_REPORT") {
@@ -927,6 +975,8 @@ export const useChatWizardManager = ({
           document: resData.document || null,
           documentSummary: resData.documentSummary || null,
           documents: resData.documents || [],
+          onboardingState: resData.onboardingState || resData.state || null,
+          state: resData.onboardingState || resData.state || null,
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => {

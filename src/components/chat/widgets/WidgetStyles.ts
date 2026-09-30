@@ -303,6 +303,10 @@ export const widgetStyles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 8,
   },
+  medicationList: {
+    width: "100%",
+    marginTop: 8,
+  },
   medListItemRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -33,6 +33,7 @@ export interface ChatMessage {
   loginSummary?: string;
   documentSummary?: string | DocumentSummaryStats;
   loginProvider?: string;
+  sourceComparison?: string;
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
   documentIds?: string[];
   conflicts?: any[];
@@ -45,6 +46,8 @@ export interface ChatMessage {
   pagination?: any;
   items?: any[];
   reports?: any[];
+  onboardingState?: any;
+  state?: any;
 }
 
 export type { ChatWizardState, DuplicateConflict };

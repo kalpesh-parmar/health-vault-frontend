@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { widgetStyles as styles } from "./WidgetStyles";
 import { parseChosenJson } from "./MedicineHelpers";
+import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
 
 export interface MedicineOptionsPanelProps {
   optionsList: any[];
@@ -13,6 +14,7 @@ export interface MedicineOptionsPanelProps {
   loading?: boolean;
   chosenVal?: string | null;
   chosenLabel?: string | null;
+  preferredLang?: string;
 }
 
 export function MedicineOptionsPanel({
@@ -24,6 +26,7 @@ export function MedicineOptionsPanel({
   loading,
   chosenVal,
   chosenLabel,
+  preferredLang,
 }: MedicineOptionsPanelProps) {
   const getOptionIcon = (key: string) => {
     if (key === "ADD") return "add-circle";
@@ -54,6 +57,18 @@ export function MedicineOptionsPanel({
         const isUnchosen = readOnly && !isChosen;
         const isPrimary = !readOnly && opt.primary;
 
+        const resolveLabel = () => {
+          if (!opt.label || optKey === "ADD" || optKey === "ADD_MEDICINES") {
+            const lang = (preferredLang || "english").toLowerCase();
+            const localized = I18N_ONBOARDING_UI[lang]?.addMedicines || I18N_ONBOARDING_UI.english?.addMedicines;
+            if (localized && (opt.label === "Add Medicines" || !opt.label || lang !== "english")) {
+              return localized;
+            }
+          }
+          return opt.label;
+        };
+        const displayLabel = resolveLabel();
+
         return (
           <TouchableOpacity
             key={optKey}
@@ -79,7 +94,7 @@ export function MedicineOptionsPanel({
                 opacity: isUnchosen || loading ? 0.5 : 1,
               },
             ]}
-            onPress={() => onOptionPress(optKey, opt.label)}
+            onPress={() => onOptionPress(optKey, displayLabel)}
           >
             <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
               <Ionicons
@@ -94,7 +109,7 @@ export function MedicineOptionsPanel({
                   { color: isPrimary ? "#ffffff" : theme.colors.textPrimary, flex: 1 },
                 ]}
               >
-                {opt.label}
+                {displayLabel}
               </Text>
             </View>
           </TouchableOpacity>

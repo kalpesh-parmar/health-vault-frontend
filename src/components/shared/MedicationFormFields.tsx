@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { widgetStyles as styles } from "../chat/widgets/WidgetStyles";
-import { I18N_ONBOARDING_UI } from "../chat/widgets/OnboardingI18n";
+import { I18N_ONBOARDING_UI, resolveDoseUnitDisplay } from "../chat/widgets/OnboardingI18n";
 import { MedicineIcon, DoseVisual } from "../chat/widgets/MedicineHelpers";
 
 // Custom Hook to manage state for all medication forms
@@ -38,7 +38,7 @@ export const useMedicationFormState = (initialMed: any, preferredLang: string = 
     const freq = med.frequency || "ONCE";
     if (freq === "Once Daily" || freq === "ONCE_DAILY" || freq === "ONCE") return "ONCE";
     if (freq === "Twice Daily" || freq === "TWICE_DAILY" || freq === "TWICE") return "TWICE";
-    if (freq === "3x Daily" || freq === "THREE_TIMES_DAILY" || freq === "THRICE") return "THRICE";
+    if (freq === "3x Daily" || freq === "Three Times Daily" || freq === "THREE_TIMES_DAILY" || freq === "THRICE" || freq === "3X_DAILY" || freq === "3X DAILY") return "THRICE";
     return "ONCE";
   });
 
@@ -372,6 +372,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
       return (
         <View style={styles.stepperContainer}>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -395,6 +397,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             {formatTabletDose(parseFloat(String(formCount)) || 0)}
           </Text>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -406,7 +410,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            tablet(s)
+            {resolveDoseUnitDisplay("TABLET", preferredLang)}
           </Text>
         </View>
       );
@@ -416,6 +420,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
       return (
         <View style={styles.stepperContainer}>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -439,6 +445,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             {formatTabletDose(parseFloat(String(formCount)) || 0)}
           </Text>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -448,7 +456,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            capsule(s)
+            {resolveDoseUnitDisplay("CAPSULE", preferredLang)}
           </Text>
         </View>
       );
@@ -458,6 +466,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
       return (
         <View style={styles.stepperContainer}>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -481,6 +491,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             {formatTabletDose(parseFloat(String(formVal)) || 0)}
           </Text>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -490,7 +502,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            puff(s)
+            {resolveDoseUnitDisplay("PUFF", preferredLang)}
           </Text>
         </View>
       );
@@ -500,6 +512,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
       return (
         <View style={styles.stepperContainer}>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -523,6 +537,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             {formatTabletDose(parseFloat(String(formVal)) || 0)}
           </Text>
           <TouchableOpacity
+            disabled={readOnly}
+            activeOpacity={0.7}
             style={[
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
@@ -532,7 +548,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            puff(s)
+            {resolveDoseUnitDisplay("PUFF", preferredLang)}
           </Text>
         </View>
       );
@@ -559,6 +575,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           cursorColor={theme.colors.primary}
           selectionColor={theme.colors.primary}
+          scrollEnabled={false}
+          rejectResponderTermination={true}
         />
         <View
           style={[
@@ -569,6 +587,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           {currentAllowedUnits.map((u) => (
             <TouchableOpacity
               key={u}
+              disabled={readOnly}
+              activeOpacity={0.7}
               style={[
                 styles.unitChip,
                 {
@@ -590,7 +610,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
                   },
                 ]}
               >
-                {u}
+                {resolveDoseUnitDisplay(u, preferredLang)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -624,7 +644,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
 
         <View style={styles.chipRow}>
           <TouchableOpacity
-            disabled={!isCustomMode && isMaxReached && !isMorningActive}
+            disabled={readOnly || (!isCustomMode && isMaxReached && !isMorningActive)}
+            activeOpacity={0.7}
             style={[
               styles.unitChip,
               {
@@ -664,7 +685,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            disabled={!isCustomMode && isMaxReached && !isNoonActive}
+            disabled={readOnly || (!isCustomMode && isMaxReached && !isNoonActive)}
+            activeOpacity={0.7}
             style={[
               styles.unitChip,
               {
@@ -704,7 +726,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            disabled={!isCustomMode && isMaxReached && !isNightActive}
+            disabled={readOnly || (!isCustomMode && isMaxReached && !isNightActive)}
+            activeOpacity={0.7}
             style={[
               styles.unitChip,
               {
@@ -747,6 +770,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             customChips.map((time) => (
               <TouchableOpacity
                 key={`custom-${time}`}
+                disabled={readOnly}
+                activeOpacity={0.7}
                 style={[
                   styles.unitChip,
                   {
@@ -776,6 +801,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
                   {format12h(time)}
                 </Text>
                 <TouchableOpacity
+                  disabled={readOnly}
+                  activeOpacity={0.7}
                   onPress={() => {
                     setSelectedSlots((prev) => prev.filter((t) => t !== time));
                     setSlotError("");
@@ -787,7 +814,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             ))}
 
           <TouchableOpacity
-            disabled={isCustomMode && isMaxReached}
+            disabled={readOnly || (isCustomMode && isMaxReached)}
+            activeOpacity={0.7}
             style={[
               styles.unitChip,
               {
@@ -882,6 +910,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           cursorColor={theme.colors.primary}
           selectionColor={theme.colors.primary}
+          scrollEnabled={false}
+          rejectResponderTermination={true}
         />
         {errors.name ? (
           <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
@@ -906,6 +936,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               return (
                 <TouchableOpacity
                   key={tItem}
+                  disabled={readOnly}
+                  activeOpacity={0.7}
                   style={[
                     styles.typeChip,
                     {
@@ -948,6 +980,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             horizontal
             showsHorizontalScrollIndicator={false}
             nestedScrollEnabled={true}
+            directionalLockEnabled={true}
+            keyboardShouldPersistTaps="handled"
             style={{ flexDirection: "row", marginVertical: 4 }}
           >
             {["TABLET", "CAPSULE", "SYRUP", "INJECTION", "DROPS", "SPRAY", "INHALER"].map((tItem) => {
@@ -956,6 +990,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               return (
                 <TouchableOpacity
                   key={tItem}
+                  disabled={readOnly}
+                  activeOpacity={0.7}
                   style={[
                     styles.typeChip,
                     {
@@ -1039,6 +1075,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           {["ONCE", "TWICE", "THRICE"].map((f) => (
             <TouchableOpacity
               key={f}
+              disabled={readOnly}
+              activeOpacity={0.7}
               style={[
                 styles.freqChip,
                 {
@@ -1083,6 +1121,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
             return (
               <TouchableOpacity
                 key={f}
+                disabled={readOnly}
+                activeOpacity={0.7}
                 style={[
                   styles.freqChip,
                   {
@@ -1123,6 +1163,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
         </View>
         <TouchableOpacity
           disabled={readOnly}
+          activeOpacity={0.8}
           style={[
             styles.toggleButton,
             {
@@ -1162,6 +1203,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           cursorColor={theme.colors.primary}
           selectionColor={theme.colors.primary}
+          scrollEnabled={false}
+          rejectResponderTermination={true}
         />
         {errors.qty ? (
           <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
@@ -1180,6 +1223,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
         </View>
         <TouchableOpacity
           disabled={readOnly}
+          activeOpacity={0.7}
           style={[
             styles.textInput,
             {
@@ -1229,6 +1273,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           cursorColor={theme.colors.primary}
           selectionColor={theme.colors.primary}
+          scrollEnabled={false}
+          rejectResponderTermination={true}
         />
       </View>
 
@@ -1258,6 +1304,8 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           cursorColor={theme.colors.primary}
           selectionColor={theme.colors.primary}
           multiline
+          scrollEnabled={false}
+          rejectResponderTermination={true}
         />
       </View>
 

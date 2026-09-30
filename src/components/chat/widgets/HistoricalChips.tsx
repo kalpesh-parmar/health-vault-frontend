@@ -34,6 +34,9 @@ export function findHistoricalUserReply(
   if (isInverted) {
     // Scan backward (lower indices in newest-first array)
     for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === "ai" || messages[i].role === "assistant") {
+        break;
+      }
       if (messages[i].role === "user") {
         nextMsg = messages[i];
         break;
@@ -42,6 +45,9 @@ export function findHistoricalUserReply(
   } else {
     // Scan forward (higher indices in oldest-first array)
     for (let i = idx + 1; i < messages.length; i++) {
+      if (messages[i].role === "ai" || messages[i].role === "assistant") {
+        break;
+      }
       if (messages[i].role === "user") {
         nextMsg = messages[i];
         break;

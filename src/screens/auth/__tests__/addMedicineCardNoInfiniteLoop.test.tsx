@@ -77,11 +77,11 @@ describe("AddMedicineCard - Infinite Render Loop Regression Test", () => {
           initialMedicines={[]}
           currentClientMedId={null}
           setCurrentClientMedId={setCurrentClientMedId}
-          onSave={() => {}}
-          onAddAndContinue={() => {}}
-          onDraftSync={() => {}}
-          onSaveMedicines={() => {}}
-          onExitToOptions={() => {}}
+          onSave={() => { }}
+          onAddAndContinue={() => { }}
+          onDraftSync={() => { }}
+          onSaveMedicines={() => { }}
+          onExitToOptions={() => { }}
           isDark={false}
           theme={{ ...dummyTheme }}
         />
@@ -136,11 +136,11 @@ describe("AddMedicineCard - Infinite Render Loop Regression Test", () => {
           initialMedicines={[...initialDrafts]}
           currentClientMedId={null}
           setCurrentClientMedId={setCurrentClientMedId}
-          onSave={() => {}}
-          onAddAndContinue={() => {}}
-          onDraftSync={() => {}}
-          onSaveMedicines={() => {}}
-          onExitToOptions={() => {}}
+          onSave={() => { }}
+          onAddAndContinue={() => { }}
+          onDraftSync={() => { }}
+          onSaveMedicines={() => { }}
+          onExitToOptions={() => { }}
           isDark={false}
           theme={dummyTheme}
         />

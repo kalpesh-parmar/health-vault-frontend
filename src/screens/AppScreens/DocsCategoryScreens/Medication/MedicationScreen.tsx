@@ -165,11 +165,10 @@ const MedicationScreen = () => {
       enabled: isFilterApplied || searchQuery.trim().length > 0,
     });
 
-  // Fetch all medications when "All" is active (standard useQuery)
+  // Fetch all medications for category counts and when "All" is active (standard useQuery)
   const { data: allMedsData, isLoading: isLoadingAll } = useQuery({
     queryKey: ["allMedications", "medications"],
     queryFn: listMedications,
-    enabled: activeTab === "All" && !isFilterApplied,
   });
 
   // Fetch paginated medications when a specific tab is active (useInfiniteQuery)
@@ -207,6 +206,43 @@ const MedicationScreen = () => {
       ? isLoadingAll
       : isLoadingInfinite;
 
+  const categoryCounts = useMemo(() => {
+    let allList: AddOrEditMedication[] = [];
+    if (allMedsData) {
+      if (Array.isArray((allMedsData as any).data)) {
+        allList = (allMedsData as any).data;
+      } else if ((allMedsData as any).data && Array.isArray((allMedsData as any).data.data)) {
+        allList = (allMedsData as any).data.data;
+      } else if ((allMedsData as any).data && Array.isArray((allMedsData as any).data.items)) {
+        allList = (allMedsData as any).data.items;
+      } else if ((allMedsData as any).data && Array.isArray((allMedsData as any).data.rows)) {
+        allList = (allMedsData as any).data.rows;
+      } else if (Array.isArray(allMedsData)) {
+        allList = allMedsData;
+      }
+    }
+
+    const counts: Record<string, number> = {
+      All: allList.length,
+    };
+
+    MED_CATEGORIES.forEach((cat) => {
+      if (cat === "All") return;
+      const catUpper = cat.toUpperCase();
+      const count = allList.filter((m) => {
+        const type = String(m.medicationType || "").toUpperCase().trim();
+        return (
+          type === catUpper ||
+          type.startsWith(catUpper) ||
+          (catUpper.endsWith("S") && type === catUpper.slice(0, -1)) ||
+          (type.endsWith("S") && type.slice(0, -1) === catUpper)
+        );
+      }).length;
+      counts[cat] = count;
+    });
+
+    return counts;
+  }, [allMedsData]);
 
   const medicationData = useMemo(() => {
     // Helper function to handle different response structures safely
@@ -427,6 +463,7 @@ const MedicationScreen = () => {
       <FilterTabs
         data={MED_CATEGORIES}
         activeTab={activeTab}
+        counts={categoryCounts}
         onSelectTab={(tab) => {
           setActiveTab(tab);
           setIsFilterApplied(false);

@@ -223,14 +223,14 @@ function MedicineFormFieldsWrapper({
       dose,
       dosePerIntake:
         formType === "TABLET" || formType === "CAPSULE"
-          ? String(formCount)
-          : `${formVal} ${formUnit}`,
+          ? parseFloat(String(formCount)) || 1
+          : parseFloat(String(formVal)) || 1,
       frequency:
         formFreq === "ONCE"
           ? "Once Daily"
           : formFreq === "TWICE"
             ? "Twice Daily"
-            : "3x Daily",
+            : "Three Times Daily",
       notes: formNotes.trim(),
       prescribed_by: formPrescribed.trim() || null,
       prescribedBy: formPrescribed.trim() || null,
@@ -279,14 +279,14 @@ function MedicineFormFieldsWrapper({
       dose,
       dosePerIntake:
         formType === "TABLET" || formType === "CAPSULE"
-          ? String(formCount)
-          : `${formVal} ${formUnit}`,
+          ? parseFloat(String(formCount)) || 1
+          : parseFloat(String(formVal)) || 1,
       frequency:
         formFreq === "ONCE"
           ? "Once Daily"
           : formFreq === "TWICE"
             ? "Twice Daily"
-            : "3x Daily",
+            : "Three Times Daily",
       notes: formNotes.trim(),
       prescribed_by: formPrescribed.trim() || null,
       prescribedBy: formPrescribed.trim() || null,
@@ -378,6 +378,7 @@ function MedicineFormFieldsWrapper({
         >
           <TouchableOpacity
             disabled={!canGoLeft || readOnly}
+            activeOpacity={0.7}
             onPress={handlePrevPress}
             style={{
               paddingVertical: 6,
@@ -433,6 +434,7 @@ function MedicineFormFieldsWrapper({
 
           <TouchableOpacity
             disabled={!canGoRight || readOnly}
+            activeOpacity={0.7}
             onPress={handleNextPress}
             style={{
               paddingVertical: 6,
@@ -512,7 +514,8 @@ function MedicineFormFieldsWrapper({
         const isSaved =
           readOnly &&
           (parsed?.medicine !== undefined ||
-            parsed?.action === "SAVE_AND_REVIEW");
+            parsed?.action === "SAVE_AND_REVIEW" ||
+            Boolean(med && (med.name || med.medicationName)));
         const isAddContinued =
           readOnly &&
           (parsed?.action === "ADD_AND_CONTINUE" ||
@@ -543,6 +546,7 @@ function MedicineFormFieldsWrapper({
               >
                 <TouchableOpacity
                   disabled={readOnly}
+                  activeOpacity={0.7}
                   style={[
                     styles.bigActionButtonSide,
                     {
@@ -599,6 +603,7 @@ function MedicineFormFieldsWrapper({
 
                 <TouchableOpacity
                   disabled={readOnly}
+                  activeOpacity={0.7}
                   style={[
                     styles.bigActionButtonSide,
                     {
@@ -650,6 +655,7 @@ function MedicineFormFieldsWrapper({
 
               <TouchableOpacity
                 disabled={readOnly}
+                activeOpacity={0.7}
                 style={[
                   styles.bigActionButtonSide,
                   {
@@ -701,6 +707,7 @@ function MedicineFormFieldsWrapper({
           >
             <TouchableOpacity
               disabled={readOnly}
+              activeOpacity={0.7}
               style={[
                 styles.bigActionButtonSide,
                 {
@@ -751,6 +758,7 @@ function MedicineFormFieldsWrapper({
             </TouchableOpacity>
             <TouchableOpacity
               disabled={readOnly}
+              activeOpacity={0.7}
               style={[
                 styles.bigActionButtonSide,
                 {
@@ -835,12 +843,17 @@ export function AddMedicineCard({
     return str;
   };
 
+  // Helper to extract unconfirmed drafts only
+  const getUnconfirmed = (list: any[]) =>
+    Array.isArray(list) ? list.filter((m: any) => !m?.isSaved && !m?.dbId) : [];
+
   // Internal draft list initialized from initialMedicines or med
   const [drafts, setDrafts] = useState<any[]>(() => {
-    if (Array.isArray(initialMedicines) && initialMedicines.length > 0) {
-      return deduplicateDrafts(initialMedicines);
+    const unconfirmed = getUnconfirmed(initialMedicines);
+    if (unconfirmed.length > 0) {
+      return deduplicateDrafts(unconfirmed);
     }
-    if (med && (med.name || med.medicationName)) {
+    if (med && (med.name || med.medicationName) && !med.isSaved && !med.dbId) {
       return [med];
     }
     return [];
@@ -848,30 +861,39 @@ export function AddMedicineCard({
 
   // Current active index in the carousel
   const [currentIndex, setCurrentIndex] = useState<number>(() => {
-    if (med && Array.isArray(initialMedicines) && initialMedicines.length > 0) {
-      const foundIdx = initialMedicines.findIndex(
-        (m: any) =>
-          (med.client_med_id && (m.client_med_id === med.client_med_id || m.id === med.client_med_id)) ||
-          (med.id && (m.id === med.id || m.client_med_id === med.id)) ||
-          (med.name && m.name && m.name.toLowerCase() === med.name.toLowerCase()) ||
-          (med.medicationName && m.medicationName && m.medicationName.toLowerCase() === med.medicationName.toLowerCase()),
+    const unconfirmed = getUnconfirmed(initialMedicines);
+    if (isEditingLocal) {
+      if (med && unconfirmed.length > 0) {
+        const targetId = med.client_med_id || med.id;
+        const foundIdx = unconfirmed.findIndex(
+          (m) => (m.client_med_id || m.id) === targetId,
+        );
+        if (foundIdx >= 0) return foundIdx;
+      }
+      return 0;
+    }
+    if ((med?.client_med_id || med?.id) && unconfirmed.length > 0) {
+      const targetId = med.client_med_id || med.id;
+      const foundIdx = unconfirmed.findIndex(
+        (m) => (m.client_med_id || m.id) === targetId,
       );
       if (foundIdx >= 0) return foundIdx;
     }
     if (isEditingLocal) return 0;
     // By default, start at blank form for new medicine if drafts exist, or 0
-    return Array.isArray(initialMedicines) ? initialMedicines.length : 0;
+    return unconfirmed.length;
   });
 
   // Stable unique ID for newly active blank draft
   const [newDraftId, setNewDraftId] = useState<string>(() => {
+    const unconfirmed = getUnconfirmed(initialMedicines);
     const existingIds = new Set(
-      (initialMedicines || []).map((m: any) => m.client_med_id || m.id).filter(Boolean),
+      unconfirmed.map((m: any) => m.client_med_id || m.id).filter(Boolean),
     );
     if (currentClientMedId && !existingIds.has(currentClientMedId)) {
       return currentClientMedId;
     }
-    return generateClientMedId(initialMedicines);
+    return generateClientMedId(unconfirmed);
   });
 
   // Temporary buffer for uncommitted new draft at currentIndex = drafts.length
@@ -879,27 +901,28 @@ export function AddMedicineCard({
 
   // Track incoming initialMedicines IDs key during render to adjust state if props change externally
   const [prevInitialIdsKey, setPrevInitialIdsKey] = useState<string>(() =>
-    (initialMedicines || [])
+    getUnconfirmed(initialMedicines)
       .map((m: any) => m?.client_med_id || m?.id)
       .filter(Boolean)
       .join("|"),
   );
 
-  const currentInitialIdsKey = (initialMedicines || [])
+  const currentInitialIdsKey = getUnconfirmed(initialMedicines)
     .map((m: any) => m?.client_med_id || m?.id)
     .filter(Boolean)
     .join("|");
 
   if (currentInitialIdsKey !== prevInitialIdsKey) {
     setPrevInitialIdsKey(currentInitialIdsKey);
-    if (initialMedicines.length === 0) {
+    const unconfirmedInitial = getUnconfirmed(initialMedicines);
+    if (unconfirmedInitial.length === 0) {
       // Cancel -> reset
       setDrafts([]);
       setCurrentIndex(0);
       setWipNewDraft(null);
       setNewDraftId(generateClientMedId([]));
     } else {
-      const incomingDeduped = deduplicateDrafts(initialMedicines);
+      const incomingDeduped = deduplicateDrafts(unconfirmedInitial);
       const currentDraftIds = new Set(
         drafts.map((m: any) => m?.client_med_id || m?.id).filter(Boolean),
       );
@@ -983,9 +1006,15 @@ export function AddMedicineCard({
 
   // Determine active medicine data for the current index
   const activeMed =
-    currentIndex < drafts.length
-      ? drafts[currentIndex]
-      : (wipNewDraft || {
+    isEditingLocal && med && (med.client_med_id || med.id)
+      ? (currentIndex < drafts.length &&
+         (drafts[currentIndex]?.client_med_id === (med.client_med_id || med.id) ||
+          drafts[currentIndex]?.id === (med.client_med_id || med.id))
+            ? drafts[currentIndex]
+            : med)
+      : currentIndex < drafts.length
+        ? drafts[currentIndex]
+        : (wipNewDraft || {
           client_med_id: newDraftId,
           id: newDraftId,
         });

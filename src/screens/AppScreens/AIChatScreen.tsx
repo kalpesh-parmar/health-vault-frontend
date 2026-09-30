@@ -48,6 +48,7 @@ import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
 import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveStates";
 import { ReportReferenceHeader } from "../../components/chat/widgets/ReportReferenceHeader";
 import { getRelativeDateLabel } from "../../utils/dateFormatter";
+import Toast from "react-native-toast-message";
 
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
@@ -77,7 +78,7 @@ const AIChatScreen = ({ route }: any) => {
     if (viewableItems && viewableItems.length > 0) {
       let topItem = viewableItems[0];
       for (const item of viewableItems) {
-        if (item.index > topItem.index) {
+        if (item.index < topItem.index) {
           topItem = item;
         }
       }
@@ -102,7 +103,7 @@ const AIChatScreen = ({ route }: any) => {
           setPreferredLang(lang);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Refs
@@ -305,12 +306,30 @@ const AIChatScreen = ({ route }: any) => {
 
   const keyExtractor = useCallback((item: any, index: number) => item.id || `msg-${index}`, []);
 
+  const shouldAutoScrollRef = useRef(true);
+
+  const displayMessages = useMemo(() => {
+    return [...mergedMessages].reverse();
+  }, [mergedMessages]);
+
+  const scrollToBottom = useCallback((animated = true) => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    }, 100);
+  }, []);
+
+  useEffect(() => {
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom();
+    }
+  }, [displayMessages.length, isSending, isActivelyStreaming, scrollToBottom]);
+
   const renderChatItem = useCallback(
     ({ item, index }: { item: any; index: number }) => (
       <ChatMessageItem
         item={item}
         index={index}
-        mergedMessages={mergedMessages}
+        mergedMessages={displayMessages}
         isDark={isDark}
         theme={theme}
         preferredLang={preferredLang}
@@ -334,10 +353,13 @@ const AIChatScreen = ({ route }: any) => {
         setChatWizardState={setChatWizardState}
         setMessages={setMessages}
         onViewFullReport={handleViewFullReport}
+        onAllergyCardExpand={handleAllergyCardExpand}
+        isOnboardingCompleted={isOnboardingCompleted}
       />
     ),
     [
-      mergedMessages,
+      displayMessages,
+      isOnboardingCompleted,
       isDark,
       theme,
       preferredLang,
@@ -365,6 +387,17 @@ const AIChatScreen = ({ route }: any) => {
   );
 
   const renderListHeader = useCallback(() => {
+    if (isLoadingMore) {
+      return (
+        <View style={{ paddingVertical: 10 }}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
+      );
+    }
+    return null;
+  }, [isLoadingMore, theme.colors.primary]);
+
+  const renderListFooter = useCallback(() => {
     if (isSending && !isActivelyStreaming) {
       return (
         <View style={styles.typingWrapper}>
@@ -381,38 +414,16 @@ const AIChatScreen = ({ route }: any) => {
     return null;
   }, [isSending, isActivelyStreaming, isDark]);
 
-  const renderListFooter = useCallback(() => {
-    if (isLoadingMore) {
-      return (
-        <View style={{ paddingVertical: 10 }}>
-          <ActivityIndicator size="small" color={theme.colors.primary} />
-        </View>
-      );
-    }
-    return null;
-  }, [isLoadingMore, theme.colors.primary]);
+  const handleAllergyCardExpand = useCallback(() => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+  }, []);
 
-  const latestAssistantMessage = useMemo(() => {
-    return [...mergedMessages].find(
-      (m) => m.role === "ai" && m.action !== "ONBOARDING_COMPLETED_NOTICE"
-    );
-  }, [mergedMessages]);
-
-  const activeAction = latestAssistantMessage?.action || pendingStep;
-  const isChatInputHidden = Boolean(
-    activeAction === "ASK_BLOOD_GROUP" ||
-    activeAction === "ASK_ALLERGIES" ||
-    activeAction === "ASK_LANGUAGE" ||
-    activeAction === "ASK_GENDER" ||
-    activeAction === "ASK_DOB" ||
-    activeAction === "RESOLVE_PROFILE_SOURCE" ||
-    activeAction === "ASK_UPLOAD_OR_SKIP" ||
-    activeAction === "REVIEW_MEDICINES_LIST" ||
-    activeAction === "ADD_MEDICINE" ||
-    activeAction === "EDIT_MEDICINE" ||
-    activeAction === "CONFIRM_MEDICINE" ||
-    activeAction === "MEDICINE_OPTIONS"
-  );
+  const isOnboardingSession = Boolean(onboardingSessionId && !isOnboardingCompleted);
 
   if (isLoadingDocs || isLoadingHistory) {
     return <LoadingScreen />;
@@ -461,7 +472,7 @@ const AIChatScreen = ({ route }: any) => {
         />
       ) : null}
 
-      <View style={styles.keyboardContainer}>
+      <Animated.View style={[styles.keyboardContainer, animatedKeyboardStyle]}>
         {/* Emergency Alert */}
         {hasEmergency && (
           <View style={styles.emergencyCard}>
@@ -472,7 +483,6 @@ const AIChatScreen = ({ route }: any) => {
             <Text style={styles.emergencyText}>{t("emergencyWarning")}</Text>
           </View>
         )}
-
 
         {/* Messages List */}
         <View style={styles.contentWrapper}>
@@ -487,9 +497,8 @@ const AIChatScreen = ({ route }: any) => {
 
           <FlatList
             ref={flatListRef}
-            data={mergedMessages}
+            data={displayMessages}
             keyExtractor={keyExtractor}
-            inverted
             onViewableItemsChanged={onViewableItemsChanged.current}
             viewabilityConfig={viewabilityConfig.current}
             renderItem={renderChatItem}
@@ -498,53 +507,67 @@ const AIChatScreen = ({ route }: any) => {
             windowSize={7}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews={false}
-            maintainVisibleContentPosition={{
-              minIndexForVisible: 0,
-            }}
             automaticallyAdjustKeyboardInsets={false}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              {
+                paddingBottom: 16,
+              },
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            onEndReached={loadMoreMessages}
-            onEndReachedThreshold={0.1}
-            ListFooterComponent={renderListFooter}
+            onContentSizeChange={() => {
+              if (shouldAutoScrollRef.current) {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }
+            }}
+            onScrollBeginDrag={() => {
+              shouldAutoScrollRef.current = false;
+            }}
+            onMomentumScrollEnd={(event) => {
+              const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+              const isCloseToBottom =
+                layoutMeasurement.height + contentOffset.y >= contentSize.height - 80;
+              if (isCloseToBottom) {
+                shouldAutoScrollRef.current = true;
+              }
+            }}
             ListHeaderComponent={renderListHeader}
+            ListFooterComponent={renderListFooter}
           />
         </View>
 
         {/* Input & Suggested Chips */}
-        {!isChatInputHidden && (
-          <Animated.View style={animatedKeyboardStyle}>
-            <SuggestedQuestionChip
-              questions={suggestedQuestions}
-              onPressQuestion={handleSend}
-              isDark={isDark}
-            />
+        <View>
+          <SuggestedQuestionChip
+            questions={suggestedQuestions}
+            onPressQuestion={handleSend}
+            isDark={isDark}
+          />
 
-            <ChatInput
-              value={input}
-              onChangeText={setInput}
-              onSend={() => handleSend()}
-              isSending={isSending}
-              isDark={isDark}
-              preferredLanguage={preferredLang}
-              onAttachPress={() => {
-                if (hasActiveUploads) {
-                  Toast.show({
-                    type: "info",
-                    position: "top",
-                    text1: "Processing in Progress",
-                    text2: "A document is currently being processed. Please wait for it to complete.",
-                  });
-                  return;
-                }
-                uploadSheetRef.current?.present();
-                Keyboard.dismiss();
-              }}
-            />
-          </Animated.View>
-        )}
-      </View>
+          <ChatInput
+            value={input}
+            onChangeText={setInput}
+            onSend={() => handleSend()}
+            isSending={isSending}
+            isDark={isDark}
+            preferredLanguage={preferredLang}
+            onAttachPress={() => {
+              if (hasActiveUploads) {
+                Toast.show({
+                  type: "info",
+                  position: "top",
+                  text1: "Processing in Progress",
+                  text2: "A document is currently being processed. Please wait for it to complete.",
+                });
+                return;
+              }
+              uploadSheetRef.current?.present();
+              Keyboard.dismiss();
+            }}
+          />
+        </View>
+      </Animated.View>
 
       {/* Modals & Sheets */}
       <DocumentUploadBottomSheet

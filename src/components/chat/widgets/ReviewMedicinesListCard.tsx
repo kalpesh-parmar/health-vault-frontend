@@ -1,3 +1,4 @@
+import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { widgetStyles as styles } from "./WidgetStyles";
@@ -57,6 +58,7 @@ export function ReviewMedicinesListCard({
   const {
     safeLocalMedicines,
     checkedMeds,
+    expandedMedIds,
     expandedMedId,
     isExpanded,
     setIsExpanded,
@@ -71,13 +73,48 @@ export function ReviewMedicinesListCard({
     handleResolveConflict,
   } = useMedicineReviewState({ localMedicines, setLocalMedicines, readOnly });
 
+  // Language normalization helper
+  const normalizeLang = (l?: string) => {
+    if (!l) return "english";
+    const lower = l.toLowerCase();
+    if (lower.startsWith("gu")) return "gujarati";
+    if (lower.startsWith("hi")) return "hindi";
+    if (lower.startsWith("mr")) return "marathi";
+    if (lower.startsWith("ta")) return "tamil";
+    return "english";
+  };
+
+  // Translation helper
   const t = (key: string) => {
-    const lang = preferredLang || "english";
+    const lang = normalizeLang(preferredLang);
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
     return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
   };
 
-  const handleConfirmFormatted = () => {
+  const resolveCanonicalFrequency = (freqVal: any): string => {
+    if (!freqVal || freqVal === "None") return "Once Daily";
+    const str = String(freqVal).trim();
+    const upper = str.toUpperCase().replace(/\s+/g, "_");
+    if (upper === "ONCE" || upper === "ONCE_DAILY" || upper === "1X_DAILY" || upper === "1_TIME_A_DAY") {
+      return "Once Daily";
+    }
+    if (upper === "TWICE" || upper === "TWICE_DAILY" || upper === "2X_DAILY" || upper === "2_TIMES_A_DAY") {
+      return "Twice Daily";
+    }
+    if (upper === "THRICE" || upper === "THREE_TIMES_DAILY" || upper === "3X_DAILY" || upper === "3_TIMES_A_DAY") {
+      return "Three Times Daily";
+    }
+    if (upper === "AS_NEEDED") {
+      return "As Needed";
+    }
+    if (str === "Once Daily" || str === "Twice Daily" || str === "Three Times Daily" || str === "As Needed") {
+      return str;
+    }
+    return "Once Daily";
+  };
+
+  const handleConfirm = () => {
+    if (readOnly) return;
     const formattedMedicines = deduplicateDrafts(localMedicines || [])
       .filter((m) => Boolean((m.client_med_id && checkedMeds.includes(m.client_med_id)) || (m.id && checkedMeds.includes(m.id))))
       .map((m) => {
@@ -124,12 +161,12 @@ export function ReviewMedicinesListCard({
           id: m.id || m.client_med_id,
           name: m.name || m.medicationName || "Unknown",
           type: medTypeUpper,
-          frequency: String(m.frequency || "ONCE").toUpperCase(),
+          frequency: resolveCanonicalFrequency(m.frequency),
           dose: doseObj,
           dosePerIntake:
             medTypeUpper === "TABLET" || medTypeUpper === "CAPSULE"
-              ? String(doseObj.count)
-              : `${doseObj.value} ${doseObj.unit}`.trim(),
+              ? Number(doseObj.count)
+              : Number(doseObj.value),
           foodFrequency: String(m.foodFrequency || m.foodContext || "AFTER_FOOD").toUpperCase(),
           resolution: resValue,
           startDate: m.startDate || new Date().toISOString().split("T")[0],
@@ -142,8 +179,7 @@ export function ReviewMedicinesListCard({
           medicationSchedule: m.medicationSchedule || m.schedule || m.times || [],
           duplicateInfo: m.duplicateInfo,
         };
-
-        if (resValue === "REPLACE" && matchedMed?.id) {
+        if ((resValue === "REPLACE" || resValue === "EDIT") && matchedMed?.id) {
           result.replaceMedicationId = matchedMed.id;
         }
 
@@ -179,15 +215,37 @@ export function ReviewMedicinesListCard({
     isAnyCheckedMedPastStartDate;
 
   const parsed = parseChosenJson(chosenVal);
+  const localizedConfirmLabels = [
+    I18N_ONBOARDING_UI.english?.confirmSelection,
+    I18N_ONBOARDING_UI.gujarati?.confirmSelection,
+    I18N_ONBOARDING_UI.hindi?.confirmSelection,
+    I18N_ONBOARDING_UI.marathi?.confirmSelection,
+    I18N_ONBOARDING_UI.tamil?.confirmSelection,
+    t("confirmSelection"),
+    "આગળ વધો",
+    "आगे बढ़ें",
+    "पुढे जा",
+    "தொடரவும்",
+    "Confirm Selection",
+  ].filter(Boolean);
+
   const isConfirmChosen =
     readOnly &&
-    (parsed?.selected !== undefined || (chosenLabel && String(chosenLabel).toLowerCase().includes("confirm")));
+    (parsed?.selected !== undefined ||
+      (chosenLabel &&
+        (String(chosenLabel).toLowerCase().includes("confirm") ||
+          localizedConfirmLabels.includes(chosenLabel))));
   const isAddNewChosen =
     readOnly &&
     (parsed?.addNew === true || (chosenLabel && String(chosenLabel).toLowerCase().includes("add")));
   const isSkipAllChosen =
     readOnly &&
-    (parsed?.skipAll === true || (chosenLabel && String(chosenLabel).toLowerCase().includes("skip")));
+    (parsed?.skipAll === true ||
+      (chosenLabel && String(chosenLabel).toLowerCase().includes("skip")));
+
+  const confirmOpacity = readOnly ? (isConfirmChosen ? 1 : 0.55) : (isConfirmDisabled ? 0.55 : 1);
+  const addNewOpacity = readOnly ? (isAddNewChosen ? 1 : 0.55) : 1;
+  const skipAllOpacity = readOnly ? (isSkipAllChosen ? 1 : 0.55) : 1;
 
   if (viewMode === "conflicts" && conflictingMeds.length > 0) {
     return (
@@ -247,39 +305,19 @@ export function ReviewMedicinesListCard({
           },
         ]}
       >
-        {conflictingMeds.length > 0 && (
-          <TouchableOpacity
-            onPress={() => setViewMode("conflicts")}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              backgroundColor: "#ffedd5",
-              borderColor: "#f97316",
-              borderWidth: 1,
-              borderRadius: 12,
-              padding: 10,
-              marginBottom: 14,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
-              <Ionicons name="warning" size={18} color="#ea580c" style={{ marginRight: 8 }} />
-              <Text style={{ fontSize: 12, color: "#c2410c", fontWeight: "600", flex: 1 }}>
-                {conflictingMeds.length} duplicate conflicts detected. Tap to resolve them one by one.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#ea580c" />
-          </TouchableOpacity>
-        )}
-
         <Text style={[styles.medCardTitle, { color: theme.colors.textPrimary }]}>
           {t("extractedMedicationsList")}
         </Text>
-        <Text style={[styles.medCardSubtitleText, { color: theme.colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.medCardSubtitleText,
+            { color: theme.colors.textSecondary },
+          ]}
+        >
           {t("pleaseCheckWhichMedicines")}
         </Text>
 
-        <View style={{ marginVertical: 12 }}>
+        <View style={styles.medicationList}>
           {(isExpanded ? displayedMedicines : displayedMedicines.slice(0, 3)).map((rawMed) => (
             <MedicineReviewItem
               key={rawMed.client_med_id || rawMed.id}
@@ -289,13 +327,20 @@ export function ReviewMedicinesListCard({
                 (rawMed.id && checkedMeds.includes(rawMed.id))
               )}
               isExpanded={
-                expandedMedId === (rawMed.client_med_id || rawMed.id) ||
-                (rawMed.id && expandedMedId === rawMed.id) ||
-                (rawMed.client_med_id && expandedMedId === rawMed.client_med_id)
+                Boolean(
+                  (expandedMedIds && (
+                    (rawMed.client_med_id && expandedMedIds.includes(rawMed.client_med_id)) ||
+                    (rawMed.id && expandedMedIds.includes(rawMed.id))
+                  )) ||
+                  expandedMedId === (rawMed.client_med_id || rawMed.id) ||
+                  (rawMed.id && expandedMedId === rawMed.id) ||
+                  (rawMed.client_med_id && expandedMedId === rawMed.client_med_id)
+                )
               }
               readOnly={readOnly}
               isDark={isDark}
               theme={theme}
+              preferredLang={preferredLang}
               resolutions={resolutions}
               onToggleCheck={toggleCheck}
               onToggleExpand={toggleExpandPill}
@@ -305,24 +350,27 @@ export function ReviewMedicinesListCard({
 
           {displayedMedicines.length > 3 && (
             <TouchableOpacity
+              testID="show-all-medicines-btn"
               onPress={() => setIsExpanded(!isExpanded)}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                paddingVertical: 8,
-                marginTop: 4,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                marginTop: 10,
+                borderRadius: 20,
+                alignSelf: "center",
               }}
             >
               <Text
                 style={{
                   color: theme.colors.primary,
-                  fontWeight: "bold",
-                  marginRight: 6,
+                  fontWeight: "600",
                   fontSize: 13,
+                  marginRight: 4,
                 }}
               >
-                {isExpanded ? t("hideAll") || "Hide All" : t("showAll") || "Show All"}
+                {isExpanded ? t("hideAll") : `${t("showAll")} (${displayedMedicines.length})`}
               </Text>
               <Ionicons
                 name={isExpanded ? "chevron-up" : "chevron-down"}
@@ -339,7 +387,7 @@ export function ReviewMedicinesListCard({
           areActionsDisabled={readOnly}
           isDark={isDark}
           theme={theme}
-          onConfirm={handleConfirmFormatted}
+          onConfirm={handleConfirm}
           onAddNew={onAddNew}
           onSkipAll={onSkipAll}
           onCancel={onCancel}
@@ -347,6 +395,9 @@ export function ReviewMedicinesListCard({
           isConfirmChosen={Boolean(isConfirmChosen)}
           isAddNewChosen={Boolean(isAddNewChosen)}
           isSkipAllChosen={Boolean(isSkipAllChosen)}
+          confirmOpacity={confirmOpacity}
+          addNewOpacity={addNewOpacity}
+          skipAllOpacity={skipAllOpacity}
           warningText={getStartDateWarningText()}
           hasUnresolvedConflicts={conflictingMeds.length > 0}
           readOnly={readOnly}
@@ -355,5 +406,3 @@ export function ReviewMedicinesListCard({
     </View>
   );
 }
-
-export { formatFoodContext, formatStartDate, isPastDate };

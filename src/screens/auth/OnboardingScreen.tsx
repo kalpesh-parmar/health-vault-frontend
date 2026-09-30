@@ -100,6 +100,7 @@ type Message = {
   subtitle?: string;
   explainer?: string;
   loginProvider?: string;
+  sourceComparison?: string;
   medicine?: any;
   medicines?: any[];
   items?: any[];
@@ -726,6 +727,7 @@ export default function OnboardingScreen() {
       subtitle: aiRes.subtitle,
       explainer: aiRes.explainer,
       loginProvider: aiRes.loginProvider,
+      sourceComparison: aiRes.sourceComparison,
       medicine: aiRes.medicine,
       medicines: medListResult.isMedicationList ? medListResult.items : aiRes.medicines,
       items: medListResult.items,
@@ -801,6 +803,7 @@ export default function OnboardingScreen() {
             subtitle: newMsg.subtitle,
             explainer: newMsg.explainer,
             loginProvider: newMsg.loginProvider,
+            sourceComparison: newMsg.sourceComparison || aiRes.sourceComparison,
             createdAt: newMsg.createdAt,
           };
           return updated;
@@ -918,7 +921,9 @@ export default function OnboardingScreen() {
             ? aiRes.medicinesConfirmed
             : finalState.medicinesConfirmed,
         medicinesToAdd:
-          aiRes.medicinesToAdd || aiRes.medicines || finalState.medicinesToAdd,
+          (aiRes.medicinesConfirmed || finalState.medicinesConfirmed)
+            ? []
+            : (aiRes.medicinesToAdd || aiRes.medicines || finalState.medicinesToAdd || []),
         currentMedicineIndex:
           aiRes.currentMedicineIndex !== undefined
             ? aiRes.currentMedicineIndex
@@ -945,8 +950,13 @@ export default function OnboardingScreen() {
       setLocalMedicines([]);
       setCurrentClientMedId(null);
       setActiveMedicineToEdit(null);
+    } else if (aiRes.medicinesConfirmed || finalState.medicinesConfirmed) {
+      setLocalMedicines([]);
+      finalState.medicinesToAdd = [];
+      setCurrentClientMedId(null);
+      setActiveMedicineToEdit(null);
     } else if (Array.isArray(finalState.medicinesToAdd) && finalState.medicinesToAdd.length > 0) {
-      setLocalMedicines(deduplicateDrafts(finalState.medicinesToAdd));
+      setLocalMedicines(deduplicateDrafts(finalState.medicinesToAdd).filter((m: any) => !m.isSaved && !m.dbId));
     }
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
     setCanSkip((prev) => prev || resolvedCanSkip);
@@ -1088,6 +1098,14 @@ export default function OnboardingScreen() {
               resolvedActionType = resolvedActionType || "ASK_ALLERGIES";
               actionData = parsed;
               messageString = displayLabel || parsed.allergies.join(", ");
+            } else if (
+              parsed.confirmed !== undefined ||
+              parsed.source !== undefined ||
+              parsed.action === "RESOLVE_PROFILE_SOURCE"
+            ) {
+              resolvedActionType = resolvedActionType || "RESOLVE_PROFILE_SOURCE";
+              actionData = parsed;
+              messageString = JSON.stringify(actionData);
             } else {
               messageString = displayLabel || userText;
             }
@@ -1142,6 +1160,14 @@ export default function OnboardingScreen() {
           resolvedActionType = resolvedActionType || "ADD_MEDICINE";
           actionData = userText;
           messageString = displayLabel || "Add Medicines";
+        } else if (
+          userText.confirmed !== undefined ||
+          userText.source !== undefined ||
+          userText.action === "RESOLVE_PROFILE_SOURCE"
+        ) {
+          resolvedActionType = resolvedActionType || "RESOLVE_PROFILE_SOURCE";
+          actionData = userText;
+          messageString = JSON.stringify(actionData);
         } else {
           actionData = userText;
           messageString = displayLabel || userText.name || userText.action || "Continue";
@@ -1190,6 +1216,34 @@ export default function OnboardingScreen() {
       } else if (actionType === "CANCEL") {
         resolvedActionType = "CANCEL";
         messageString = messageString || displayLabel || "Cancel";
+      } else if (actionType === "RESOLVE_PROFILE_SOURCE") {
+        resolvedActionType = "RESOLVE_PROFILE_SOURCE";
+        if (!actionData && userText && typeof userText === "object") {
+          actionData = userText;
+        } else if (!actionData && typeof userText === "string") {
+          try {
+            actionData = JSON.parse(userText);
+          } catch {
+            actionData = { confirmed: true };
+          }
+        }
+        if (actionData) {
+          messageString = JSON.stringify(actionData);
+        }
+      }
+
+      if (
+        !resolvedActionType &&
+        latestAssistantMessage?.action === "RESOLVE_PROFILE_SOURCE" &&
+        (actionData?.confirmed !== undefined ||
+          actionData?.source !== undefined ||
+          userText === "CONFIRM" ||
+          userText === "Confirm & Continue" ||
+          displayLabel === "Confirm & Continue")
+      ) {
+        resolvedActionType = "RESOLVE_PROFILE_SOURCE";
+        actionData = actionData || { confirmed: true };
+        messageString = JSON.stringify(actionData);
       }
 
       // Sanitize allergies in updatedState so that raw JSON strings or corrupted array fragments are properly cleaned
@@ -2364,14 +2418,19 @@ export default function OnboardingScreen() {
           label ||
           (preferredLang && ONBOARDING_I18N[preferredLang.toLowerCase()]?.dashboard) ||
           "Go to Dashboard";
-        sendMessage("DASHBOARD", state, optionLabel);
-        return;
-      }
-
-      if (loading || isSendingRef.current) return;
-
-      if (value === "ADD_MORE_MEDICINES" || value === "ADD" || value === "ADD_MEDICINE") {
-        const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
+        const nextState = {
+          ...state,
+          medicationFlowDone: true,
+          medicinesConfirmed: true,
+          currentStep: "COMPLETE",
+          isOnboardingCompleted: true,
+        };
+        setState(nextState);
+        sendMessage(value, nextState, optionLabel);
+      } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
+        const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => !m.isSaved && !m.dbId,
+        );
         setLocalMedicines(existingMeds);
         setCurrentClientMedId(null);
         setActiveMedicineToEdit(null);
@@ -2510,6 +2569,15 @@ export default function OnboardingScreen() {
           preferredLang={preferredLang}
           isDark={isDark}
           theme={theme}
+          onExpand={() => {
+            shouldAutoScrollRef.current = true;
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 50);
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 200);
+          }}
           sendMessage={sendMessage}
           state={state}
           setState={setState}
@@ -2809,6 +2877,12 @@ export default function OnboardingScreen() {
                   : preferredLang === "tamil" || preferredLang === "ta"
                     ? `சேமி / மதிப்பாய்வு: ${updatedMed.name}`
                     : `Save / Review: ${updatedMed.name}`;
+          const unconfirmedDrafts = (state?.medicinesToAdd || [])
+            .filter((m: any) => !m.isSaved && !m.dbId);
+          const nextState = {
+            ...state,
+            medicinesToAdd: unconfirmedDrafts.length > 0 ? unconfirmedDrafts : [updatedMed],
+          };
           sendMessage(
             {
               action: "SAVE_AND_REVIEW",
@@ -2816,7 +2890,7 @@ export default function OnboardingScreen() {
               medicine: updatedMed,
               clientMedId: currentClientMedId,
             },
-            state,
+            nextState,
             displayLabel,
             "SAVE_AND_REVIEW",
           );
@@ -2829,7 +2903,7 @@ export default function OnboardingScreen() {
             await pendingDraftSyncRef.current;
           } catch { }
         }
-        const uniqueDrafts = deduplicateDrafts(allDrafts);
+        const uniqueDrafts = deduplicateDrafts(allDrafts).filter((m: any) => !m.isSaved && !m.dbId);
         setLocalMedicines(uniqueDrafts);
         const nextState = {
           ...state,
@@ -2951,10 +3025,7 @@ export default function OnboardingScreen() {
           ...state,
           medicinesConfirmed: true,
           medicinesFlowStarted: true,
-          medicinesToAdd:
-            uniqueSelected.length > 0
-              ? uniqueSelected
-              : deduplicateDrafts(localMedicines || state.medicinesToAdd),
+          medicinesToAdd: [],
         };
         setState(newState);
         setLocalMedicines([]);
@@ -2988,7 +3059,9 @@ export default function OnboardingScreen() {
       };
 
       const handleAddNew = () => {
-        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
+        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []).filter(
+          (m: any) => !m.isSaved && !m.dbId,
+        );
         setLocalMedicines(currentMeds);
         setActiveMedicineToEdit(null);
         setMedicineCardMode("wizard");
@@ -3264,6 +3337,7 @@ export default function OnboardingScreen() {
           loading={loading}
           chosenVal={effectiveChosenVal}
           chosenLabel={effectiveChosenLabel}
+          preferredLang={preferredLang}
         />
       );
     }

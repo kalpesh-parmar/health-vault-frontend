@@ -214,6 +214,46 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, isDark,
   }, [isUser, message.text, aiTextColor, isDark]);
 
   if (isUser) {
+    let displayText = message.text || "";
+    if (
+      typeof displayText === "string" &&
+      (displayText.trim().startsWith("{") || displayText.trim().startsWith("["))
+    ) {
+      try {
+        const parsed = JSON.parse(displayText);
+        if (parsed?.displayLabel) {
+          displayText = parsed.displayLabel;
+        } else if (parsed?.label) {
+          displayText = parsed.label;
+        } else if (
+          (message as any)?.actionType === "SAVE_AND_REVIEW" ||
+          (message as any)?.action === "SAVE_AND_REVIEW" ||
+          parsed?.action === "SAVE_AND_REVIEW" ||
+          parsed?.saveAndReview === true
+        ) {
+          displayText = "Save Medicines";
+        } else if (
+          (message as any)?.actionType === "ADD_MEDICINE" ||
+          (message as any)?.action === "ADD_MEDICINE" ||
+          parsed?.action === "ADD_MEDICINE" ||
+          parsed?.addNew === true
+        ) {
+          displayText = "Add Medicines";
+        } else if (
+          parsed?.selected !== undefined ||
+          parsed?.medicines !== undefined ||
+          (message as any)?.actionType === "CONFIRM_MEDICINES" ||
+          (message as any)?.action === "CONFIRM_MEDICINES"
+        ) {
+          displayText = "Confirm Selection";
+        } else if (parsed?.skipAll || (message as any)?.actionType === "SKIP_MEDICINES") {
+          displayText = "Skip All";
+        }
+      } catch {
+        // keep as is
+      }
+    }
+
     return (
       <Animated.View entering={FadeInUp.springify()} style={styles.userWrapper}>
         {message.documents && message.documents.length > 0 && (
@@ -226,14 +266,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, isDark,
             ))}
           </View>
         )}
-        {message.text ? (
+        {displayText ? (
           <LinearGradient
             colors={["#5B4BFF", "#7C6CFF"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[styles.userBubble, { alignItems: 'center', justifyContent: 'center' }]}
           >
-            {renderedUserMarkdown}
+            {renderMarkdown(displayText, "#ffffff", true)}
             {timeString ? <Text style={styles.userTime}>{timeString}</Text> : null}
           </LinearGradient>
         ) : null}

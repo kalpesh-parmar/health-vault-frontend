@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { MedicineTimingPills } from "./MedicineTimingPills";
+import { I18N_ONBOARDING_UI, resolveDoseUnitDisplay } from "../OnboardingI18n";
 import {
   getDosageString,
   getTimeString,
@@ -18,6 +19,7 @@ interface MedicineReviewItemProps {
   isDark: boolean;
   theme: any;
   resolutions: Record<string, string>;
+  preferredLang?: string;
   onToggleCheck: (id: string) => void;
   onToggleExpand: (id: string) => void;
   onEdit: (med: any) => void;
@@ -31,12 +33,67 @@ export const MedicineReviewItem = React.memo(function MedicineReviewItem({
   isDark,
   theme,
   resolutions,
+  preferredLang,
   onToggleCheck,
   onToggleExpand,
   onEdit,
 }: MedicineReviewItemProps) {
   const medKey = med.client_med_id || med.id;
-  const dosageStr = getDosageString(med);
+
+  const normalizeLang = (l?: string) => {
+    if (!l) return "english";
+    const lower = l.toLowerCase();
+    if (lower.startsWith("gu")) return "gujarati";
+    if (lower.startsWith("hi")) return "hindi";
+    if (lower.startsWith("mr")) return "marathi";
+    if (lower.startsWith("ta")) return "tamil";
+    return "english";
+  };
+
+  const t = (key: string) => {
+    const lang = normalizeLang(preferredLang);
+    const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
+    return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
+  };
+
+  const formatDisplayDose = () => {
+    if (typeof med.dosage === "string" && med.dosage.trim().length > 0) {
+      return med.dosage;
+    }
+    const rawDose = med.dose || med.dosage || med.dosePerIntake;
+    if (rawDose && typeof rawDose === "object") {
+      if (rawDose.count !== undefined) {
+        const unit = resolveDoseUnitDisplay(med.type || "TABLET", preferredLang);
+        return `${rawDose.count} ${unit}`.trim();
+      }
+      if (rawDose.value !== undefined) {
+        const unit = resolveDoseUnitDisplay(rawDose.unit || med.type || "", preferredLang);
+        return `${rawDose.value} ${unit}`.trim();
+      }
+    }
+    return getDosageString(med);
+  };
+
+  const formatFrequencyDisplay = () => {
+    const freqUpper = String(med.frequency || "").toUpperCase().replace(/\s+/g, "_");
+    if (freqUpper === "ONCE" || freqUpper === "ONCE_DAILY" || freqUpper === "1X_DAILY" || freqUpper === "1_TIME_A_DAY") {
+      return t("frequency.ONCE") || "Once Daily";
+    }
+    if (freqUpper === "TWICE" || freqUpper === "TWICE_DAILY" || freqUpper === "2X_DAILY" || freqUpper === "2_TIMES_A_DAY") {
+      return t("frequency.TWICE") || "Twice Daily";
+    }
+    if (freqUpper === "THRICE" || freqUpper === "THREE_TIMES_DAILY" || freqUpper === "3X_DAILY" || freqUpper === "3_TIMES_A_DAY") {
+      return t("frequency.THRICE") || "Three Times Daily";
+    }
+    if (freqUpper === "AS_NEEDED") {
+      return t("frequency.AS_NEEDED") || "As Needed";
+    }
+    return med.frequency || t("none");
+  };
+
+  const medTypeUpper = String(med.type || med.medicationType || "TABLET").toUpperCase();
+  const localizedMedType = t(`medicineType.${medTypeUpper}`) || med.type || "Tablet";
+  const dosageStr = formatDisplayDose();
   const timeStr = getTimeString(med);
   const foodStr = formatFoodContext(med.foodFrequency || med.foodContext);
   const startDateStr = formatStartDate(med.startDate);
@@ -113,7 +170,7 @@ export const MedicineReviewItem = React.memo(function MedicineReviewItem({
               )}
             </View>
             <Text style={[styles.medType, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-              {med.type || "Tablet"} • {dosageStr}
+              {localizedMedType} • {dosageStr}
             </Text>
           </View>
         </View>
@@ -122,6 +179,7 @@ export const MedicineReviewItem = React.memo(function MedicineReviewItem({
         <View style={styles.rightActions}>
           {!readOnly && (
             <TouchableOpacity
+              testID={`edit-med-${medKey}`}
               onPress={() => onEdit(med)}
               style={styles.actionIconTouch}
             >
@@ -129,6 +187,7 @@ export const MedicineReviewItem = React.memo(function MedicineReviewItem({
             </TouchableOpacity>
           )}
           <TouchableOpacity
+            testID={`expand-med-${medKey}`}
             onPress={() => onToggleExpand(medKey)}
             style={styles.actionIconTouch}
           >
@@ -157,47 +216,115 @@ export const MedicineReviewItem = React.memo(function MedicineReviewItem({
           ]}
         >
           <View style={styles.gridRow}>
-            {/* Frequency */}
+            {/* Medicine Name */}
             <View style={styles.gridCell}>
-              <Ionicons name="alarm-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <Ionicons name="medkit-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
               <View style={styles.cellContent}>
-                <Text style={styles.cellLabel}>Frequency</Text>
+                <Text style={styles.cellLabel}>{t("medicineName")}</Text>
                 <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
-                  {med.frequency || "None"}
+                  {med.name || med.medicationName || t("none")}
                 </Text>
               </View>
             </View>
 
-            {/* Schedule */}
+            {/* Medicine Type */}
+            <View style={styles.gridCell}>
+              <Ionicons name="pricetag-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <View style={styles.cellContent}>
+                <Text style={styles.cellLabel}>{t("medicineType")}</Text>
+                <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
+                  {localizedMedType}
+                </Text>
+              </View>
+            </View>
+
+            {/* Dose */}
+            <View style={styles.gridCell}>
+              <Ionicons name="fitness-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <View style={styles.cellContent}>
+                <Text style={styles.cellLabel}>{t("dose")}</Text>
+                <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
+                  {dosageStr}
+                </Text>
+              </View>
+            </View>
+
+            {/* Frequency */}
+            <View style={styles.gridCell}>
+              <Ionicons name="alarm-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <View style={styles.cellContent}>
+                <Text style={styles.cellLabel}>{t("frequency")}</Text>
+                <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
+                  {formatFrequencyDisplay()}
+                </Text>
+              </View>
+            </View>
+
+            {/* Schedule / Times */}
             <View style={styles.gridCell}>
               <Ionicons name="time-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
               <View style={styles.cellContent}>
-                <Text style={styles.cellLabel}>Schedule</Text>
+                <Text style={styles.cellLabel}>{t("times")}</Text>
                 <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
                   {timeStr}
                 </Text>
               </View>
             </View>
 
-            {/* Prescribed By */}
-            {Boolean(med.prescribedBy || med.prescribed_by) && (
-              <View style={styles.gridCell}>
-                <Ionicons name="person-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
-                <View style={styles.cellContent}>
-                  <Text style={styles.cellLabel}>Prescribed By</Text>
-                  <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
-                    {med.prescribedBy || med.prescribed_by}
-                  </Text>
-                </View>
+            {/* Total Quantity */}
+            <View style={styles.gridCell}>
+              <Ionicons name="cube-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <View style={styles.cellContent}>
+                <Text style={styles.cellLabel}>{t("totalQuantity")}</Text>
+                <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
+                  {med.total_quantity !== undefined
+                    ? String(med.total_quantity)
+                    : med.totalQuantity !== undefined
+                      ? String(med.totalQuantity)
+                      : t("none")}
+                </Text>
               </View>
-            )}
+            </View>
+
+            {/* Refill Alert */}
+            <View style={styles.gridCell}>
+              <Ionicons name="notifications-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <View style={styles.cellContent}>
+                <Text style={styles.cellLabel}>{t("refillAlert")}</Text>
+                <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
+                  {med.refill_alert || med.refillAlert ? t("enabled") : t("disabled")}
+                </Text>
+              </View>
+            </View>
+
+            {/* Start Date */}
+            <View style={styles.gridCell}>
+              <Ionicons name="calendar-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <View style={styles.cellContent}>
+                <Text style={styles.cellLabel}>{t("startDate")}</Text>
+                <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
+                  {med.startDate && med.startDate !== "None" ? med.startDate : t("none")}
+                </Text>
+              </View>
+            </View>
+
+            {/* Prescribed By */}
+            <View style={styles.gridCell}>
+              <Ionicons name="person-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
+              <View style={styles.cellContent}>
+                <Text style={styles.cellLabel}>{t("prescribedBy")}</Text>
+                <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
+                  {med.prescribedBy || med.prescribed_by || t("none")}
+                </Text>
+              </View>
+            </View>
 
             {/* Notes / Instructions */}
             {Boolean(med.notes && med.notes !== "None") && (
               <View style={[styles.gridCell, { width: "100%" }]}>
                 <Ionicons name="document-text-outline" size={14} color="#8a94a6" style={styles.cellIcon} />
                 <View style={styles.cellContent}>
-                  <Text style={styles.cellLabel}>Instructions</Text>
+                  <Text style={styles.cellLabel}>{t("notes")}</Text>
                   <Text style={[styles.cellValue, { color: isDark ? "#f1f5f9" : "#1e293b" }]}>
                     {med.notes}
                   </Text>

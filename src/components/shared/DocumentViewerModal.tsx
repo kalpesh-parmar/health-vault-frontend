@@ -8,8 +8,8 @@ import {
   Dimensions,
   StyleSheet,
   Platform,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
 import * as FileSystem from "expo-file-system/legacy";
@@ -44,6 +44,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   title,
 }) => {
   const { isDark, theme } = useAppTheme();
+  const insets = useSafeAreaInsets();
 
   const [fileSource, setFileSource] = useState<{
     uri: string;
@@ -55,6 +56,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [hasError, setHasError] = useState<boolean>(false);
   const [isPdf, setIsPdf] = useState<boolean>(false);
+  const [isPdfRendering, setIsPdfRendering] = useState<boolean>(false);
 
   // Gesture values for Image Zoom / Pan
   const scale = useSharedValue(1);
@@ -138,164 +140,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     return title || document?.fileName || document?.displayName || document?.name || "Document";
   }, [title, document]);
 
-  // Generate HTML for PDF viewer using PDF.js for crisp, responsive cross-platform rendering
-  const generatePdfHtml = useCallback((base64Data: string, isDarkMode: boolean) => {
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    html, body {
-      background-color: ${isDarkMode ? "#090d16" : "#0f172a"};
-      min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 16px 8px 60px 8px;
-    }
-    #loading {
-      color: #94a3b8;
-      font-size: 14px;
-      margin-top: 60px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    .spinner {
-      width: 32px;
-      height: 32px;
-      border: 3px solid rgba(91, 75, 255, 0.2);
-      border-top-color: #5B4BFF;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    #pdf-container {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-    }
-    .page-wrapper {
-      position: relative;
-      background: #ffffff;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-      border-radius: 6px;
-      overflow: hidden;
-      max-width: 100%;
-    }
-    .page-number-tag {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: rgba(15, 23, 42, 0.8);
-      color: #f8fafc;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 12px;
-      pointer-events: none;
-    }
-    canvas {
-      display: block;
-      width: 100% !important;
-      height: auto !important;
-    }
-    #floating-badge {
-      position: fixed;
-      bottom: 20px;
-      background: rgba(15, 23, 42, 0.9);
-      color: #f8fafc;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      z-index: 100;
-      display: none;
-    }
-  </style>
-</head>
-<body>
-  <div id="loading">
-    <div class="spinner"></div>
-    <span>Loading PDF document...</span>
-  </div>
-  <div id="pdf-container"></div>
-  <div id="floating-badge"></div>
-
-  <script>
-    try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      
-      const rawData = atob("${base64Data}");
-      const uint8Array = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; i++) {
-        uint8Array[i] = rawData.charCodeAt(i);
-      }
-
-      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
-      loadingTask.promise.then(async function(pdf) {
-        document.getElementById('loading').style.display = 'none';
-        const badge = document.getElementById('floating-badge');
-        badge.style.display = 'block';
-        badge.textContent = pdf.numPages + (pdf.numPages === 1 ? ' Page' : ' Pages');
-
-        const container = document.getElementById('pdf-container');
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 2.0 });
-          
-          const wrapper = document.createElement('div');
-          wrapper.className = 'page-wrapper';
-
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          canvas.height = viewport.height;
-          canvas.width = viewport.width;
-
-          const tag = document.createElement('div');
-          tag.className = 'page-number-tag';
-          tag.textContent = pageNum + ' / ' + pdf.numPages;
-
-          wrapper.appendChild(canvas);
-          if (pdf.numPages > 1) {
-            wrapper.appendChild(tag);
-          }
-          container.appendChild(wrapper);
-
-          await page.render({ canvasContext: context, viewport: viewport }).promise;
-        }
-      }).catch(function(err) {
-        console.error("PDF render error:", err);
-        document.getElementById('loading').innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px;">Failed to render PDF: ' + err.message + '</div>';
-      });
-    } catch (e) {
-      console.error("Initialization error:", e);
-      document.getElementById('loading').innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px;">Initialization error: ' + e.message + '</div>';
-    }
-  </script>
-</body>
-</html>`;
-  }, []);
-
-  // Load document source and detect PDF vs Image
   const loadDocumentSource = useCallback(async () => {
     if (!document) return;
     setIsLoading(true);
@@ -356,34 +200,22 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         setFileSource(source);
 
         if (isPdfDoc) {
-          // If already local file URI
-          if (source.uri.startsWith("file://")) {
-            setLocalFileUri(source.uri);
-            try {
-              const b64 = await FileSystem.readAsStringAsync(source.uri, {
-                encoding: "base64",
-              });
-              setPdfBase64(b64);
-            } catch (readErr) {
-              console.warn("[DocumentViewerModal] Failed reading local PDF base64:", readErr);
-            }
-          } else {
-            // Download PDF to local cache for reliable base64 rendering
-            const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_") || "preview.pdf";
-            const cacheUri = `${FileSystem.cacheDirectory}preview_${Date.now()}_${safeName}`;
-            try {
-              const dlRes = await FileSystem.downloadAsync(source.uri, cacheUri, {
-                headers: source.headers || {},
-              });
-              if (dlRes.status === 200) {
-                setLocalFileUri(dlRes.uri);
+          const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_") || "doc.pdf";
+          const cacheUri = `${FileSystem.cacheDirectory}preview_${Date.now()}_${safeName}`;
+          const dlRes = await FileSystem.downloadAsync(source.uri, cacheUri, {
+            headers: source.headers || {},
+          });
+          if (dlRes.status === 200) {
+            setLocalFileUri(dlRes.uri);
+            if (Platform.OS === "android") {
+              try {
                 const b64 = await FileSystem.readAsStringAsync(dlRes.uri, {
-                  encoding: "base64",
+                  encoding: FileSystem.EncodingType.Base64,
                 });
                 setPdfBase64(b64);
+              } catch (e) {
+                console.warn("[DocumentViewerModal] Error reading base64 PDF:", e);
               }
-            } catch (dlErr) {
-              console.warn("[DocumentViewerModal] PDF download/base64 cache failed:", dlErr);
             }
           }
         }
@@ -467,10 +299,16 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       transparent={false}
       onRequestClose={onClose}
     >
-      <SafeAreaView
+      <View
         style={[
           styles.container,
-          { backgroundColor: isDark ? "#090d16" : "#0f172a" },
+          { 
+            backgroundColor: isDark ? "#090d16" : "#0f172a",
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          },
         ]}
       >
         {/* Header Bar */}
@@ -546,20 +384,78 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 <View style={styles.pdfWrapper}>
                   <WebView
                     source={
-                      Platform.OS === "ios"
+                      Platform.OS === "android" && pdfBase64
                         ? {
-                            uri: localFileUri || fileSource.uri,
-                            headers: fileSource.headers,
+                            html: `
+                              <!DOCTYPE html>
+                              <html>
+                              <head>
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+                                <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+                                <style>
+                                  body { margin: 0; padding: 0; background-color: #f8fafc; display: flex; flex-direction: column; align-items: center; }
+                                  canvas { max-width: 100%; margin-bottom: 8px; }
+                                </style>
+                              </head>
+                              <body>
+                                <div id="pdf-container"></div>
+                                <script>
+                                  try {
+                                    var pdfData = atob('${pdfBase64}');
+                                    var pdfjsLib = window['pdfjs-dist/build/pdf'];
+                                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.worker.min.js';
+                                    
+                                    var loadingTask = pdfjsLib.getDocument({data: pdfData});
+                                    loadingTask.promise.then(function(pdf) {
+                                      var container = document.getElementById('pdf-container');
+                                      var rendered = 0;
+                                      for (var pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                                        pdf.getPage(pageNum).then(function(page) {
+                                          var scale = 2.0;
+                                          var viewport = page.getViewport({scale: scale});
+                                          var canvas = document.createElement('canvas');
+                                          var ctx = canvas.getContext('2d');
+                                          canvas.height = viewport.height;
+                                          canvas.width = viewport.width;
+                                          canvas.style.width = "100%";
+                                          container.appendChild(canvas);
+                                          
+                                          var renderContext = {
+                                            canvasContext: ctx,
+                                            viewport: viewport
+                                          };
+                                          page.render(renderContext).promise.then(function() {
+                                            rendered++;
+                                            if (rendered >= pdf.numPages) {
+                                              window.ReactNativeWebView.postMessage('PDF_RENDERED');
+                                            }
+                                          });
+                                        });
+                                      }
+                                    }).catch(function(reason) {
+                                      console.error(reason);
+                                      document.getElementById('pdf-container').innerHTML = '<p style="padding: 20px; color: #ef4444;">Error loading PDF: ' + reason.message + '</p>';
+                                      window.ReactNativeWebView.postMessage('PDF_RENDERED');
+                                    });
+                                  } catch (e) {
+                                    document.getElementById('pdf-container').innerHTML = '<p style="padding: 20px; color: #ef4444;">Failed to decode PDF data.</p>';
+                                    window.ReactNativeWebView.postMessage('PDF_RENDERED');
+                                  }
+                                </script>
+                              </body>
+                              </html>
+                            `
                           }
-                        : pdfBase64
-                          ? {
-                              html: generatePdfHtml(pdfBase64, isDark),
-                              baseUrl: "https://localhost",
-                            }
-                          : {
-                              uri: localFileUri || fileSource.uri,
-                              headers: fileSource.headers,
-                            }
+                        : {
+                            uri:
+                              Platform.OS === "android" && localFileUri
+                                ? localFileUri
+                                : fileSource.uri,
+                            headers: {
+                              ...fileSource.headers,
+                              "ngrok-skip-browser-warning": "true"
+                            },
+                          }
                     }
                     style={styles.webview}
                     originWhitelist={["*"]}
@@ -570,6 +466,20 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                     domStorageEnabled={true}
                     scalesPageToFit={true}
                     startInLoadingState={true}
+                    onLoadStart={() => {
+                      if (isPdf) setIsPdfRendering(true);
+                    }}
+                    onMessage={(event) => {
+                      if (event.nativeEvent.data === "PDF_RENDERED") {
+                        setIsPdfRendering(false);
+                      }
+                    }}
+                    onLoadEnd={() => {
+                      // For iOS or non-base64 PDFs, hide loader when WebView finishes loading
+                      if (!(Platform.OS === "android" && pdfBase64)) {
+                        setIsPdfRendering(false);
+                      }
+                    }}
                     renderLoading={() => (
                       <View style={styles.webviewLoading}>
                         <ActivityIndicator size="large" color="#5B4BFF" />
@@ -578,9 +488,16 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                     )}
                     onError={(err) => {
                       console.warn("[DocumentViewerModal] WebView PDF error:", err.nativeEvent);
+                      setIsPdfRendering(false);
                       setHasError(true);
                     }}
                   />
+                  {isPdfRendering && (
+                    <View style={styles.pdfRenderingOverlay}>
+                      <ActivityIndicator size="large" color="#5B4BFF" />
+                      <Text style={styles.stateText}>Rendering PDF...</Text>
+                    </View>
+                  )}
                 </View>
               ) : (
                 // Image Viewer with Zoom / Pan Gestures
@@ -600,7 +517,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </>
           )}
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 };
@@ -707,6 +624,13 @@ const styles = StyleSheet.create({
   fullImage: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT - 120,
+  },
+  pdfRenderingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
   },
 });
 
