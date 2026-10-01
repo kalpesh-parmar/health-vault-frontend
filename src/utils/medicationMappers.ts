@@ -120,13 +120,6 @@ export const mapApiMedicineToExtractedMedicine = (
     apiMed.replaceMedicationId ||
     matchedMed?.id ||
     matchedMed?._id;
-  const medicineId =
-    apiMed.client_med_id ||
-    apiMed.id ||
-    apiMed._id ||
-    `${documentId}-med-${index}-${cleanName.replace(/[^a-zA-Z0-9]/g, "")}`;
-  const resolution = apiMed.resolution ?? apiMed.duplicateInfo?.resolution;
-
   // Prefer an identifier supplied by the API so a refreshed/reordered list
   // does not give the same medicine a new client identity. Conflict
   // resolutions are keyed by this identity in the review UI.

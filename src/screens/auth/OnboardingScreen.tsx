@@ -763,15 +763,6 @@ export default function OnboardingScreen() {
         ? "NORMAL_CHAT"
         : action;
 
-    const isReportCardResponse =
-      action === "ASK_REPORT" &&
-      Boolean(aiRes.document) &&
-      !messageContent?.trim();
-    const messageAction =
-      action === "ASK_REPORT" && !isReportCardResponse
-        ? "NORMAL_CHAT"
-        : action;
-
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
