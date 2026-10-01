@@ -121,8 +121,18 @@ export const mapApiMedicineToExtractedMedicine = (
     matchedMed?.id ||
     matchedMed?._id;
 
+  // Prefer an identifier supplied by the API so a refreshed/reordered list
+  // does not give the same medicine a new client identity. Conflict
+  // resolutions are keyed by this identity in the review UI.
+  const medicineId =
+    apiMed.client_med_id ||
+    apiMed.id ||
+    apiMed._id ||
+    `${documentId}-med-${index}-${cleanName.replace(/[^a-zA-Z0-9]/g, "")}`;
+  const resolution = apiMed.resolution ?? apiMed.duplicateInfo?.resolution;
+
   return {
-    id: `${documentId}-med-${index}-${cleanName.replace(/[^a-zA-Z0-9]/g, "")}`,
+    id: medicineId,
     documentId,
     documentName,
     name: cleanName,
@@ -148,7 +158,7 @@ export const mapApiMedicineToExtractedMedicine = (
     duplicateInfo: apiMed.duplicateInfo || (isBackendDup ? { hasDuplicate: true, matchedMedication: matchedMed, conflictType: apiMed.conflictType || "SIMILAR_NAME" } : undefined),
     matchedMedication: matchedMed,
     replaceMedicationId: replaceMedId,
-    resolution: apiMed.resolution || (isBackendDup ? (replaceMedId ? "REPLACE" : "KEEP_NEW") : undefined),
+    resolution: resolution ?? (isBackendDup ? (replaceMedId ? "REPLACE" : "KEEP_NEW") : undefined),
   };
 };
 

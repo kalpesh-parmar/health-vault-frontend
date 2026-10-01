@@ -754,16 +754,24 @@ export default function OnboardingScreen() {
       aiRes.resumableState?.canSkip ??
       !!aiRes.completionMessage,
     );
+    const isReportCardResponse =
+      action === "ASK_REPORT" &&
+      Boolean(aiRes.document) &&
+      !messageContent?.trim();
+    const messageAction =
+      action === "ASK_REPORT" && !isReportCardResponse
+        ? "NORMAL_CHAT"
+        : action;
 
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
-      content: action === "ASK_REPORT"
+      content: isReportCardResponse
         ? ""
         : (medListResult.isMedicationList
             ? (medListResult.rawText || "")
             : (messageContent || "Please provide the information.")),
-      action,
+      action: messageAction,
       task: aiRes.task || (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined),
       options: aiRes.options,
       fields: aiRes.fields,
@@ -887,10 +895,12 @@ export default function OnboardingScreen() {
         const isInteractiveOptionMsg =
           newMsg.action === "MEDICINE_OPTIONS" ||
           (Array.isArray(newMsg.options) && newMsg.options.length > 0);
+        const isReportCardMessage =
+          newMsg.action === "ASK_REPORT" && Boolean(newMsg.document);
         const isRedundantCompletionMsg =
           newMsg.action === "COMPLETE" ||
           newMsg.action === "POST_ONBOARDING" ||
-          !newMsg.content?.trim() ||
+          (!newMsg.content?.trim() && !isReportCardMessage) ||
           normReply.includes("thankyouonboardingiscomplete") ||
           normReply.includes("thankyouyouronboardingiscomplete");
 
@@ -1844,7 +1854,10 @@ export default function OnboardingScreen() {
     if (!jobIds || jobIds.length === 0) return;
     const primaryJobId = jobIds[0];
     const primaryFile = filesInfo?.[0];
-    const primaryDocId = primaryFile?.id || primaryJobId;
+    const primaryDocId =
+      primaryFile?.fileKey || primaryFile?.id || primaryJobId;
+    const streamUrl =
+      primaryFile?.streamUrl || `/sse/files/${primaryDocId}/stream`;
     const primaryFileName =
       primaryFile?.originalName ||
       primaryFile?.displayName ||
@@ -1867,7 +1880,7 @@ export default function OnboardingScreen() {
 
     setUploadState("queued");
     setUploadPercent(0);
-    startJobPolling(primaryJobId, primaryDocId);
+    startJobPolling(primaryJobId, primaryDocId, streamUrl);
   };
 
   const uploadAbortControllerRef = useRef<AbortController | null>(null);

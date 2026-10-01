@@ -267,6 +267,16 @@ export function useMedicineReviewState({
 
   const handleResolveConflict = (medId: string, action: string) => {
     setResolutions((prev) => ({ ...prev, [medId]: action }));
+    // Keep the decision on the medicine itself as well as in the local
+    // resolver map. The review card can be replaced when the user adds
+    // another medicine; persisting it on the draft lets the new card
+    // initialize with the previous decision instead of defaulting again.
+    setLocalMedicines((prev) =>
+      prev.map((m) => {
+        const isMatch = m.id === medId || m.client_med_id === medId;
+        return isMatch ? { ...m, resolution: action } : m;
+      }),
+    );
     const remainingCount = safeLocalMedicines.filter((m) => {
       const isChecked = Boolean(
         (m.client_med_id && checkedMeds.includes(m.client_med_id)) ||
