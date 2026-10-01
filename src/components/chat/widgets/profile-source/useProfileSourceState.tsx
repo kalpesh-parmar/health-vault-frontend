@@ -47,11 +47,17 @@ export function useProfileSourceState({
     ["google", "facebook", "microsoft", "apple", "social"].includes(loginProvider)
   );
 
-  const rawMode = activeMsg?.mode || "CONFIRM";
+  const rawMode = typeof activeMsg?.mode === "string"
+    ? activeMsg.mode.toUpperCase()
+    : "";
   const mode: "CONFLICT" | "CONFIRM" =
-    (rawMode === "CONFLICT" || activeMsg?.action === "RESOLVE_PROFILE_SOURCE") && isSocialLogin
+    rawMode === "CONFLICT"
       ? "CONFLICT"
-      : "CONFIRM";
+      : rawMode === "CONFIRM"
+        ? "CONFIRM"
+        : activeMsg?.action === "RESOLVE_PROFILE_SOURCE" && isSocialLogin
+          ? "CONFLICT"
+          : "CONFIRM";
 
   const [isEditingProfileManually, setIsEditingProfileManually] = useState(false);
   const [editedProfileData, setEditedProfileData] = useState<any>({});
