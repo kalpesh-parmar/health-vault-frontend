@@ -456,6 +456,14 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         (Array.isArray(item.medicines) && item.medicines.length > 0 ? item.medicines[0] : null);
       let candidateDrafts =
         Array.isArray(item.medicines) && item.medicines.length > 0 ? item.medicines : null;
+      const itemState = (item as any).onboardingState || (item as any).state || {};
+      const stateDrafts = Array.isArray(itemState.medicinesToAdd)
+        ? itemState.medicinesToAdd
+        : null;
+      if (!candidateMed && stateDrafts?.length) {
+        candidateMed = stateDrafts[0];
+        candidateDrafts = stateDrafts;
+      }
 
       if (isHistorical && (!candidateMed || Object.keys(candidateMed).length === 0)) {
         const parsed = parseChosenJson(chosenVal);
@@ -505,8 +513,16 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
       const handleSaveMedicines = (allDrafts: any[]) => {
         const rawArray = Array.isArray(allDrafts) ? allDrafts : (allDrafts ? [allDrafts] : []);
-        const combined = [...localDrafts, ...rawArray];
-        const uniqueDrafts = deduplicateDrafts(combined);
+        const combined = [
+          ...(chatWizardState.extractedMedicines || []),
+          ...localDrafts,
+          ...rawArray,
+        ];
+        // Existing database medicines remain visible in the card, but must
+        // not be sent again as new medicines in SAVE_AND_REVIEW.
+        const uniqueDrafts = deduplicateDrafts(combined).filter(
+          (m: any) => !m?.isSaved && !m?.dbId,
+        );
         const displayLabel = tOnboarding("saveMedicines") || "Save Medicines";
         const savePayload = {
           action: "SAVE_AND_REVIEW",
@@ -531,14 +547,34 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       const handleAddAndContinue = (newMed: any, allDrafts?: any[]) => {
         const updated = deduplicateDrafts(allDrafts || [...localDrafts, newMed]);
         setLocalDrafts(updated);
+        setChatWizardState((prev: any) => ({
+          ...prev,
+          extractedMedicines: deduplicateDrafts([
+            ...(prev.extractedMedicines || []),
+            ...updated,
+          ]),
+        }));
       };
 
       const handleDraftSync = (updatedDrafts: any[]) => {
-        setLocalDrafts(deduplicateDrafts(updatedDrafts));
+        const syncedDrafts = deduplicateDrafts(updatedDrafts);
+        setLocalDrafts(syncedDrafts);
+        setChatWizardState((prev: any) => ({
+          ...prev,
+          extractedMedicines: deduplicateDrafts([
+            ...(prev.extractedMedicines || []),
+            ...syncedDrafts,
+          ]),
+        }));
       };
 
       const handleExitToOptions = () => {
         const displayLabel = tOnboarding("cancel") || "Cancel";
+        setLocalDrafts([]);
+        setChatWizardState((prev: any) => ({
+          ...prev,
+          extractedMedicines: [],
+        }));
         handleGenericOptionPress(
           {
             key: "CANCEL",
@@ -558,6 +594,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           key={item.id}
           med={med}
           initialMedicines={activeDrafts}
+          includeExistingMedicines
           totalBuffered={activeDrafts.length}
           isEditingLocal={false}
           preferredLang={preferredLang}
@@ -650,6 +687,17 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       const handleAddNew = () => {
         if (isReadOnly) return;
         const displayLabel = tOnboarding("addAnotherMedicine") || "Add New";
+        // Keep the accumulated chat drafts when the review card is replaced
+        // by a new Add Medicine card. The current message can contain only
+        // the latest medicine after a server round-trip.
+        const preservedDrafts = deduplicateDrafts([
+          ...(chatWizardState.extractedMedicines || []),
+          ...displayMeds,
+        ]);
+        setChatWizardState((prev: any) => ({
+          ...prev,
+          extractedMedicines: preservedDrafts,
+        }));
         handleGenericOptionPress(
           {
             key: "ADD",
@@ -659,6 +707,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             state: {
               currentStep: "ADD_MEDICINE",
               cancellationNotice: false,
+              medicinesToAdd: preservedDrafts,
             },
           },
           displayLabel,
@@ -686,6 +735,10 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       const handleCancelReview = () => {
         if (isReadOnly) return;
         const displayLabel = tOnboarding("cancel") || "Cancel";
+        setChatWizardState((prev: any) => ({
+          ...prev,
+          extractedMedicines: [],
+        }));
         handleGenericOptionPress(
           {
             key: "CANCEL",

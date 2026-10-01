@@ -77,6 +77,8 @@ export const getTimeString = (med: any): string => {
 
 export const hasConflict = (m: any): boolean =>
   Boolean(
+    m?.isBackendDuplicate ||
+    m?.hasDuplicate ||
     m?.duplicateInfo?.hasDuplicate ||
     m?.duplicateInfo?.conflictType ||
     (m?.duplicateInfo?.matchedMedications && m.duplicateInfo.matchedMedications.length > 0) ||
@@ -267,15 +269,14 @@ export function useMedicineReviewState({
 
   const handleResolveConflict = (medId: string, action: string) => {
     setResolutions((prev) => ({ ...prev, [medId]: action }));
-    // Keep the decision on the medicine itself as well as in the local
-    // resolver map. The review card can be replaced when the user adds
-    // another medicine; persisting it on the draft lets the new card
-    // initialize with the previous decision instead of defaulting again.
+    // Keep the decision on the draft so replacing this card with the Add
+    // Medicine card does not reset the resolution.
     setLocalMedicines((prev) =>
-      prev.map((m) => {
-        const isMatch = m.id === medId || m.client_med_id === medId;
-        return isMatch ? { ...m, resolution: action } : m;
-      }),
+      prev.map((m) =>
+        m.id === medId || m.client_med_id === medId
+          ? { ...m, resolution: action }
+          : m,
+      ),
     );
     const remainingCount = safeLocalMedicines.filter((m) => {
       const isChecked = Boolean(

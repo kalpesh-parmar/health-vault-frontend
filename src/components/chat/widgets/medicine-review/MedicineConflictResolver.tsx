@@ -31,11 +31,24 @@ export const MedicineConflictResolver = React.memo(function MedicineConflictReso
 
   const getExistingDosage = (existMed: any) => {
     if (!existMed) return "None";
-    return `${existMed.dosePerIntake || "1"} ${existMed.medicationType?.toLowerCase() || "tablet"}(s)`;
+    const value = existMed.dosePerIntake ?? existMed.dosage ?? 1;
+    const dosage = typeof value === "object"
+      ? value.count ?? value.value ?? 1
+      : value;
+    const unit = typeof value === "object"
+      ? value.unit || existMed.medicationType || "tablet"
+      : existMed.medicationType || "tablet";
+    return `${dosage} ${String(unit).toLowerCase()}(s)`;
   };
 
   const getExtractedDosage = (newMed: any) => {
-    return `${newMed.dosage || newMed.dose || "1"} ${newMed.dosageUnit || newMed.unit || "tablet"}`;
+    const value = newMed.dosage ?? newMed.dose ?? newMed.dosePerIntake ?? 1;
+    if (typeof value === "object") {
+      const dosage = value.count ?? value.value ?? 1;
+      const unit = value.unit || newMed.dosageUnit || newMed.unit || newMed.medicineType || "tablet";
+      return `${dosage} ${String(unit).toLowerCase()}(s)`;
+    }
+    return `${value} ${newMed.dosageUnit || newMed.unit || newMed.medicineType || "tablet"}`;
   };
 
   return (

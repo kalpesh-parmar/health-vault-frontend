@@ -119,6 +119,11 @@ const ConfirmationModal = ({
   const { mutateAsync: deleteMedicationMutation, isPending: isDeletingMed } = useMutation({
     mutationFn: deleteMedication,
     onSuccess: async () => {
+      // Drop the deleted medication from every local React Query cache before
+      // refetching, so it cannot reappear while chat/onboarding is open.
+      queryClient.removeQueries({ queryKey: ["medications"] });
+      queryClient.removeQueries({ queryKey: ["allMedications"] });
+      queryClient.removeQueries({ queryKey: ["filteredMedications"] });
       queryClient.invalidateQueries({
         queryKey: ["medications"],
       });

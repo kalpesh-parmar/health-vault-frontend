@@ -763,6 +763,15 @@ export default function OnboardingScreen() {
         ? "NORMAL_CHAT"
         : action;
 
+    const isReportCardResponse =
+      action === "ASK_REPORT" &&
+      Boolean(aiRes.document) &&
+      !messageContent?.trim();
+    const messageAction =
+      action === "ASK_REPORT" && !isReportCardResponse
+        ? "NORMAL_CHAT"
+        : action;
+
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
@@ -3124,10 +3133,13 @@ export default function OnboardingScreen() {
       };
 
       const handleAddNew = () => {
-        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []).filter(
-          (m: any) => !m.isSaved && !m.dbId,
-        );
+        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
         setLocalMedicines(currentMeds);
+        setState((prev) => ({
+          ...prev,
+          medicinesToAdd: currentMeds,
+          currentMedicineIndex: currentMeds.length,
+        }));
         setActiveMedicineToEdit(null);
         setMedicineCardMode("wizard");
       };
@@ -3179,6 +3191,7 @@ export default function OnboardingScreen() {
             key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
             med={activeMedicineToEdit || null}
             initialMedicines={memoizedInitialMedicines}
+            includeExistingMedicines={!activeMedicineToEdit}
             isEditingLocal={Boolean(activeMedicineToEdit)}
             preferredLang={preferredLang}
             isDark={isDark}

@@ -29,6 +29,7 @@ export { deduplicateDrafts };
 export interface AddMedicineCardProps {
   med?: any;
   initialMedicines?: any[];
+  includeExistingMedicines?: boolean;
   isEditingLocal?: boolean;
   preferredLang?: string;
   isDark: boolean;
@@ -813,6 +814,7 @@ const EMPTY_MED_OBJECT: any = {};
 export function AddMedicineCard({
   med = EMPTY_MED_OBJECT,
   initialMedicines = EMPTY_MEDICINES_ARRAY,
+  includeExistingMedicines = false,
   isEditingLocal = false,
   preferredLang = "english",
   isDark,
@@ -846,14 +848,16 @@ export function AddMedicineCard({
   // Helper to extract unconfirmed drafts only
   const getUnconfirmed = (list: any[]) =>
     Array.isArray(list) ? list.filter((m: any) => !m?.isSaved && !m?.dbId) : [];
+  const getAvailableMedicines = (list: any[]) =>
+    includeExistingMedicines ? (Array.isArray(list) ? list : []) : getUnconfirmed(list);
 
   // Internal draft list initialized from initialMedicines or med
   const [drafts, setDrafts] = useState<any[]>(() => {
-    const unconfirmed = getUnconfirmed(initialMedicines);
+    const unconfirmed = getAvailableMedicines(initialMedicines);
     if (unconfirmed.length > 0) {
       return deduplicateDrafts(unconfirmed);
     }
-    if (med && (med.name || med.medicationName) && !med.isSaved && !med.dbId) {
+    if (med && (med.name || med.medicationName) && (includeExistingMedicines || (!med.isSaved && !med.dbId))) {
       return [med];
     }
     return [];
@@ -861,7 +865,7 @@ export function AddMedicineCard({
 
   // Current active index in the carousel
   const [currentIndex, setCurrentIndex] = useState<number>(() => {
-    const unconfirmed = getUnconfirmed(initialMedicines);
+    const unconfirmed = getAvailableMedicines(initialMedicines);
     if (isEditingLocal) {
       if (med && unconfirmed.length > 0) {
         const targetId = med.client_med_id || med.id;
@@ -886,7 +890,7 @@ export function AddMedicineCard({
 
   // Stable unique ID for newly active blank draft
   const [newDraftId, setNewDraftId] = useState<string>(() => {
-    const unconfirmed = getUnconfirmed(initialMedicines);
+    const unconfirmed = getAvailableMedicines(initialMedicines);
     const existingIds = new Set(
       unconfirmed.map((m: any) => m.client_med_id || m.id).filter(Boolean),
     );
@@ -901,20 +905,20 @@ export function AddMedicineCard({
 
   // Track incoming initialMedicines IDs key during render to adjust state if props change externally
   const [prevInitialIdsKey, setPrevInitialIdsKey] = useState<string>(() =>
-    getUnconfirmed(initialMedicines)
+    getAvailableMedicines(initialMedicines)
       .map((m: any) => m?.client_med_id || m?.id)
       .filter(Boolean)
       .join("|"),
   );
 
-  const currentInitialIdsKey = getUnconfirmed(initialMedicines)
+  const currentInitialIdsKey = getAvailableMedicines(initialMedicines)
     .map((m: any) => m?.client_med_id || m?.id)
     .filter(Boolean)
     .join("|");
 
   if (currentInitialIdsKey !== prevInitialIdsKey) {
     setPrevInitialIdsKey(currentInitialIdsKey);
-    const unconfirmedInitial = getUnconfirmed(initialMedicines);
+    const unconfirmedInitial = getAvailableMedicines(initialMedicines);
     if (unconfirmedInitial.length === 0) {
       // Cancel -> reset
       setDrafts([]);
