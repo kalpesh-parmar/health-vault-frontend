@@ -4,13 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { widgetStyles as styles } from "./WidgetStyles";
 import { parseChosenJson } from "./MedicineHelpers";
 import { I18N_ONBOARDING_UI } from "./OnboardingI18n";
-
 export interface MedicineOptionsPanelProps {
   optionsList: any[];
   isDark: boolean;
   theme: any;
   onOptionPress: (key: string, label: string) => void;
   readOnly?: boolean;
+  disableDashboardOption?: boolean;
   loading?: boolean;
   chosenVal?: string | null;
   chosenLabel?: string | null;
@@ -23,16 +23,30 @@ export function MedicineOptionsPanel({
   theme,
   onOptionPress,
   readOnly,
+  disableDashboardOption,
   loading,
   chosenVal,
   chosenLabel,
   preferredLang,
 }: MedicineOptionsPanelProps) {
   const getOptionIcon = (key: string) => {
-    if (key === "ADD") return "add-circle";
-    if (key === "DASHBOARD") return "grid";
-    if (key === "ASK_REPORT") return "document-text";
+    if (key === "ADD" || key === "ADD_MEDICINES" || key === "ADD_MEDICINE") return "add-circle";
+    if (key === "DASHBOARD" || key === "GO_TO_DASHBOARD") return "grid";
+    if (key === "ASK_REPORT" || key === "ASK_ABOUT_REPORT") return "document-text";
     return "arrow-forward-circle";
+  };
+
+  const isDashboardOption = (opt: any) => {
+    const k = String(opt?.key || opt?.value || "").toUpperCase();
+    const lbl = String(opt?.label || "").toLowerCase();
+    return (
+      k === "DASHBOARD" ||
+      k === "GO_TO_DASHBOARD" ||
+      k === "GO_DASHBOARD" ||
+      lbl === "go to dashboard" ||
+      lbl === "go to the dashboard" ||
+      lbl.includes("dashboard")
+    );
   };
 
   const safeOptionsList = optionsList || [];
@@ -54,11 +68,13 @@ export function MedicineOptionsPanel({
           )) ||
           (chosenLabel && String(opt.label).toLowerCase() === String(chosenLabel).toLowerCase())
         );
-        const isUnchosen = readOnly && !isChosen;
-        const isPrimary = !readOnly && opt.primary;
+        const isDashboard = isDashboardOption(opt);
+        const isOptDisabled = readOnly || loading || (disableDashboardOption && isDashboard);
+        const isUnchosen = (readOnly && !isChosen) || (disableDashboardOption && isDashboard && !readOnly);
+        const isPrimary = !readOnly && !isOptDisabled && opt.primary;
 
         const resolveLabel = () => {
-          if (!opt.label || optKey === "ADD" || optKey === "ADD_MEDICINES") {
+          if (!opt.label || optKey === "ADD" || optKey === "ADD_MEDICINES" || optKey === "ADD_MEDICINE") {
             const lang = (preferredLang || "english").toLowerCase();
             const localized = I18N_ONBOARDING_UI[lang]?.addMedicines || I18N_ONBOARDING_UI.english?.addMedicines;
             if (localized && (opt.label === "Add Medicines" || !opt.label || lang !== "english")) {
@@ -72,7 +88,7 @@ export function MedicineOptionsPanel({
         return (
           <TouchableOpacity
             key={optKey}
-            disabled={readOnly || loading}
+            disabled={isOptDisabled}
             style={[
               styles.optionsPanelButton,
               {
@@ -91,14 +107,17 @@ export function MedicineOptionsPanel({
                       ? "#334155"
                       : "#e2e8f0",
                 borderWidth: isChosen ? 2 : 1,
-                opacity: isUnchosen || loading ? 0.5 : 1,
+                opacity: isUnchosen || loading || isOptDisabled ? 0.5 : 1,
               },
             ]}
-            onPress={() => onOptionPress(optKey, displayLabel)}
+            onPress={() => {
+              if (isOptDisabled) return;
+              onOptionPress(optKey, displayLabel);
+            }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
               <Ionicons
-                name={isChosen ? "checkmark-circle" : getOptionIcon(opt.key)}
+                name={isChosen ? "checkmark-circle" : getOptionIcon(opt.key || opt.value)}
                 size={20}
                 color={isChosen ? "#22c55e" : isPrimary ? "#ffffff" : theme.colors.primary}
                 style={{ marginRight: 10 }}
@@ -118,4 +137,3 @@ export function MedicineOptionsPanel({
     </View>
   );
 }
-

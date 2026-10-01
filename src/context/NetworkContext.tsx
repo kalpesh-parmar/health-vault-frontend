@@ -92,11 +92,12 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
         checkConnection,
       }}
     >
-      {isOffline ? (
-        <NetworkErrorScreen onRetry={checkConnection} isChecking={isChecking} />
-      ) : (
-        children
-      )}
+      {children}
+      <NetworkErrorScreen
+        isOffline={isOffline}
+        onRetry={checkConnection}
+        isChecking={isChecking}
+      />
     </NetworkContext.Provider>
   );
 };

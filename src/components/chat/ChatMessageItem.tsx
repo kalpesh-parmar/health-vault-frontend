@@ -824,6 +824,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                   theme={theme}
                   onOptionPress={(opt) => handleGenericOptionPress(opt)}
                   readOnly={isReadOnly}
+                  disableDashboardOption={isLatest && !isReadOnly}
                   chosenVal={chosenVal}
                   chosenLabel={chosenLabel}
                   preferredLang={preferredLang}
@@ -852,14 +853,15 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       );
     }
     if (item.action === "MEDICINE_OPTIONS") {
-      const disableOptions = isHistorical || isReadOnly || Boolean(isOnboardingCompleted);
+      const isHistoricalMsg = isHistorical || isReadOnly;
       return renderAssistantPrompt(
         <MedicineOptionsPanel
           optionsList={item.options || []}
           isDark={isDark}
           theme={theme}
           onOptionPress={(optKey, label) => handleGenericOptionPress(optKey, label)}
-          readOnly={disableOptions}
+          readOnly={isHistoricalMsg}
+          disableDashboardOption={isLatest && !isHistoricalMsg}
           loading={isLoadingResults || isConfirmingMeds}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
@@ -1206,24 +1208,31 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             {item.options?.map((opt: any, idx: number) => {
               const label = typeof opt === "string" ? opt : opt.label;
               const value = typeof opt === "string" ? opt : opt.value;
+              const key = typeof opt === "string" ? opt : (opt.key || opt.value);
+              const isDashboard =
+                String(key).toUpperCase() === "DASHBOARD" ||
+                String(value).toUpperCase() === "DASHBOARD" ||
+                String(label).toLowerCase().includes("dashboard");
+              const isOptDisabled = isHistorical || isLoadingResults || isConfirmingMeds || (isLatest && isDashboard);
+
               return (
                 <TouchableOpacity
                   key={value || idx}
-                  disabled={isHistorical || isLoadingResults || isConfirmingMeds}
+                  disabled={isOptDisabled}
                   onPress={() => {
-                    if (isHistorical || isLoadingResults || isConfirmingMeds) return;
+                    if (isOptDisabled) return;
                     handleGenericOptionPress(opt, typeof label === "string" ? label : undefined);
                   }}
                   style={[
                     widgetStyles.chip,
                     {
                       backgroundColor: theme.colors.primary,
-                      opacity: isHistorical || isLoadingResults || isConfirmingMeds ? 0.6 : 1,
+                      opacity: isOptDisabled ? 0.5 : 1,
                     },
                   ]}
                 >
                   <Text style={styles.chipText}>
-                    {opt.label}
+                    {opt.label || opt}
                   </Text>
                 </TouchableOpacity>
               );

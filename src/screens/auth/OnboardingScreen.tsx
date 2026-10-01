@@ -46,6 +46,7 @@ import { getUser } from "../../services/userService";
 import {
   uploadDocumentsBatch,
   retryDocumentProcessing,
+  cancelOcr,
 } from "../../services/documentService";
 import {
   connectSseStream,
@@ -139,6 +140,41 @@ const normalizeDocumentIds = (...sources: any[]): string[] | undefined => {
   return ids.length ? Array.from(new Set(ids)) : undefined;
 };
 
+const mapStatusToProgress = (item: any): number => {
+  let progress = item.progress;
+  if (progress !== undefined && progress !== null) {
+    return typeof progress === "number" && progress <= 1
+      ? Math.round(progress * 100)
+      : Math.round(progress);
+  }
+
+  const status = (item.status || item.stage || item.stageStatus || "").toLowerCase();
+  if (status.includes("done") || status.includes("completed") || status.includes("success")) {
+    return 100;
+  } else if (status.includes("failed") || status.includes("error")) {
+    return -1;
+  } else if (status.includes("summariz")) {
+    return 90;
+  } else if (status.includes("analyz")) {
+    return 70;
+  } else if (status.includes("extract")) {
+    return 50;
+  } else if (status.includes("validat")) {
+    return 30;
+  } else if (status.includes("queue")) {
+    return 15;
+  } else if (
+    status.includes("process") ||
+    status.includes("started")
+  ) {
+    if (item.totalPages && item.currentPage) {
+      return Math.round((item.currentPage / item.totalPages) * 100);
+    }
+    return 40;
+  }
+  return 10;
+};
+
 const extractEventProgress = (event: any): number | undefined => {
   if (typeof event?.percentage === "number") return Math.round(event.percentage);
   if (typeof event?.progress === "number") {
@@ -156,6 +192,12 @@ const extractEventProgress = (event: any): number | undefined => {
       ? Math.round(event.extra.progress * 100)
       : Math.round(event.extra.progress);
   }
+  if (typeof event?.data?.extra?.percentage === "number") return Math.round(event.data.extra.percentage);
+  if (typeof event?.data?.extra?.progress === "number") {
+    return event.data.extra.progress <= 1
+      ? Math.round(event.data.extra.progress * 100)
+      : Math.round(event.data.extra.progress);
+  }
   const docItem =
     event?.documents?.[0] ||
     event?.files?.[0] ||
@@ -167,6 +209,12 @@ const extractEventProgress = (event: any): number | undefined => {
       return docItem.progress <= 1
         ? Math.round(docItem.progress * 100)
         : Math.round(docItem.progress);
+    }
+    if (typeof docItem.data?.percentage === "number") return Math.round(docItem.data.percentage);
+    if (typeof docItem.data?.progress === "number") {
+      return docItem.data.progress <= 1
+        ? Math.round(docItem.data.progress * 100)
+        : Math.round(docItem.data.progress);
     }
   }
   if (event?.extra?.totalPages && event?.extra?.page) {
@@ -1945,10 +1993,9 @@ export default function OnboardingScreen() {
         }
 
         setUploadState("processing");
-        const streamPct = extractEventProgress(event);
-        if (typeof streamPct === "number") {
-          setUploadPercent(streamPct);
-        }
+        const extractedPct = extractEventProgress(event);
+        const nextPct = typeof extractedPct === "number" ? extractedPct : mapStatusToProgress(event);
+        setUploadPercent((prev) => Math.min(99, Math.max(prev, nextPct)));
         if (event.extra?.totalPages) {
           setPollTotalPages(event.extra.totalPages);
           if (event.extra.page) {
@@ -2176,10 +2223,15 @@ export default function OnboardingScreen() {
       uploadAbortControllerRef.current.abort();
       uploadAbortControllerRef.current = null;
     }
-    const pendingDocId = await AsyncStorage.getItem(
-      "onboarding_pending_document_id",
-    );
+    const pendingDocId =
+      currentDocIdRef.current ||
+      (await AsyncStorage.getItem("onboarding_pending_document_id"));
     if (pendingDocId) {
+      try {
+        await cancelOcr(pendingDocId);
+      } catch (err) {
+        console.warn("[ONBOARDING] Failed to call cancelOcr endpoint:", err);
+      }
       await handleCancelJob(pendingDocId);
     } else {
       setUploadState("cancelled");
