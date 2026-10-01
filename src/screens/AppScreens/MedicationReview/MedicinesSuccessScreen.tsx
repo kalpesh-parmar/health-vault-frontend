@@ -76,7 +76,7 @@ export const MedicinesSuccessScreen: React.FC = () => {
 
   return (
     <SafeContainer edges={["top", "bottom"]} isDark={isDark}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style="light" />
       <ContentArea>
         <SuccessIconCircle themeColor={theme.colors.success}>
           <Ionicons name="checkmark-sharp" size={48} color="#ffffff" />

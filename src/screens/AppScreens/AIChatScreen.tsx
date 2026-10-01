@@ -443,7 +443,7 @@ const AIChatScreen = ({ route }: any) => {
       colors={isDark ? ["#1e1b4b", "#0f172a"] : ["#f5f3ff", "#ffffff"]}
       style={styles.container}
     >
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      <StatusBar barStyle="light-content" />
 
       {/* Header */}
       <ChatHeader

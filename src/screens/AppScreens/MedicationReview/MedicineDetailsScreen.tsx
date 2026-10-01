@@ -49,7 +49,7 @@ export const MedicineDetailsScreen: React.FC = () => {
   if (!originalMedicine) {
     return (
       <SafeContainer edges={["top"]} isDark={isDark}>
-        <StatusBar style={isDark ? "light" : "dark"} />
+        <StatusBar style="light" />
         <ReviewProgressHeader title="Details Not Found" onBackPress={() => navigation.goBack()} />
         <ErrorText>Medicine details not found.</ErrorText>
       </SafeContainer>
@@ -177,7 +177,7 @@ export const MedicineDetailsScreen: React.FC = () => {
 
   return (
     <SafeContainer edges={["top"]} isDark={isDark}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style="light" />
       <ReviewProgressHeader
         title={originalMedicine.name || "Edit Medicine"}
         subtitle={originalMedicine.documentName}

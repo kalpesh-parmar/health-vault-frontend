@@ -156,7 +156,7 @@ export default function NotificationScreen() {
   return (
     <Container>
       <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
+        barStyle="light-content"
         translucent
         backgroundColor="rgba(0,0,0,0.2)"
       />

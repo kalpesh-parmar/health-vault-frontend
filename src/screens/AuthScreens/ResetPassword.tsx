@@ -200,7 +200,7 @@ const ResetPassword = () => {
 
   return (
     <>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style="light" />
 
       <Container>
         <TopGradient

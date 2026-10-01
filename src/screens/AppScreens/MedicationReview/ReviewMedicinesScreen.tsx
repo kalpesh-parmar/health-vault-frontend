@@ -161,7 +161,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
   if (isLoading) {
     return (
       <SafeContainer edges={["top", "bottom"]} isDark={isDark}>
-        <StatusBar style={isDark ? "light" : "dark"} />
+        <StatusBar style="light" />
         <ReviewProgressHeader title="Review Medicines" onBackPress={handleBack} />
         <ReviewLoadingState message="Loading extracted medicines & checking conflicts..." />
       </SafeContainer>
@@ -173,7 +173,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
   if (!hasAnyMeds && !isLoading) {
     return (
       <SafeContainer edges={["top", "bottom"]} isDark={isDark}>
-        <StatusBar style={isDark ? "light" : "dark"} />
+        <StatusBar style="light" />
         <ReviewProgressHeader title="Review Medicines" onBackPress={handleBack} />
         <EmptyMedicineState onBackPress={handleBack} />
       </SafeContainer>
@@ -188,7 +188,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
 
     return (
       <SafeContainer edges={["top"]} isDark={isDark}>
-        <StatusBar style={isDark ? "light" : "dark"} />
+        <StatusBar style="light" />
         <ReviewProgressHeader
           title="Resolve Conflicts"
           subtitle={`Conflict ${currentConflictIdx + 1} of ${totalCount}`}
@@ -480,7 +480,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
   // STANDARD LIST VIEW MODE
   return (
     <SafeContainer edges={["top"]} isDark={isDark}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style="light" />
       <ReviewProgressHeader
         title="Review Medicines"
         subtitle={`We found medicines in ${docsWithMeds} document${docsWithMeds === 1 ? "" : "s"}`}

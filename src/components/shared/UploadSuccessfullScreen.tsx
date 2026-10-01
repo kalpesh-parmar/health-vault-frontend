@@ -96,7 +96,7 @@ const UploadSuccessScreen = () => {
 
   return (
     <Container>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       <ContentBody
         contentContainerStyle={{
