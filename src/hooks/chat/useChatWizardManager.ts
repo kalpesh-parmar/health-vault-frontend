@@ -270,12 +270,20 @@ export const useChatWizardManager = ({
     setIsLoadingResults(true);
     setIsSending(true);
 
-    const selectedMeds =
+    const candidateMeds =
       formattedMeds && formattedMeds.length > 0
         ? formattedMeds
         : (chatWizardState.extractedMedicines || []).filter((m) =>
             (checkedMedIds || []).includes(m.id || (m as any).client_med_id)
           );
+    // Keep Existing marks the extracted duplicate as REMOVE_NEW. Apply this
+    // guard at the final chat payload boundary as well, because callers may
+    // pass a formatted list that still contains the deselected draft.
+    const selectedMeds = candidateMeds.filter(
+      (m: any) =>
+        m?.selected !== false &&
+        String(m?.resolution || "").toUpperCase() !== "REMOVE_NEW",
+    );
 
     if (messageId) {
       setMessages((prev) =>
@@ -316,9 +324,9 @@ export const useChatWizardManager = ({
         })),
         state: lastKnownStateRef.current || {},
         actionData: {
-          selected:
-            checkedMedIds ||
-            selectedMeds.map((m: any) => m.id || m.client_med_id),
+          selected: selectedMeds
+            .map((m: any) => m.id || m.client_med_id)
+            .filter(Boolean),
           medicines: selectedMeds.map(sanitizeMedicineForPayload),
         },
       };

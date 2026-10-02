@@ -43,6 +43,7 @@ import {
   pickDocumentAsset,
 } from "../../services/mediaServices";
 import { getUser } from "../../services/userService";
+import { listMedications } from "../../services/medicationservice";
 import {
   uploadDocumentsBatch,
   retryDocumentProcessing,
@@ -83,6 +84,11 @@ import { parseMedicationListMessage, normalizeMedicationItem } from "../../utils
 import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
+
+const getMedicineName = (medicine: any): string =>
+  String(medicine?.name || medicine?.medicationName || medicine?.medicineName || "")
+    .trim()
+    .toLowerCase();
 
 type Message = {
   id: string;
@@ -407,16 +413,114 @@ export default function OnboardingScreen() {
   );
   const [medicineCardMode, setMedicineCardMode] = useState<"default" | "wizard" | "review">("default");
 
+  const { data: medicationsData } = useQuery({
+    queryKey: ["medications"],
+    queryFn: listMedications,
+  });
+
+  const existingMedications = useMemo(() => {
+    const data: any = medicationsData as any;
+    return Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  }, [medicationsData]);
+
+  // The review card stores conflict decisions on the local draft. Keep those
+  // fields when onboarding receives a newer copy of the draft list from the
+  // backend (for example, after choosing "Add New").
+  const mergeMedicineReviewState = (incoming: any[], previous: any[] = localMedicines) => {
+    const previousById = new Map<string, any>();
+    (previous || []).forEach((medicine: any) => {
+      const id = medicine?.client_med_id || medicine?.id;
+      if (id) previousById.set(id, medicine);
+    });
+
+    const incomingDrafts = deduplicateDrafts(incoming || []);
+
+    return incomingDrafts.map((medicine: any, index: number) => {
+      const previousMedicine = previousById.get(medicine?.client_med_id || medicine?.id);
+      const medicineName = getMedicineName(medicine);
+      const sameExtractedMedicine = incomingDrafts
+        .slice(0, index)
+        .find((candidate: any) => getMedicineName(candidate) === medicineName && medicineName);
+      const existingMedicine = existingMedications.find(
+        (candidate: any) => {
+          const candidateName = getMedicineName(candidate);
+          return candidateName && medicineName && (
+            candidateName === medicineName ||
+            candidateName.includes(medicineName) ||
+            medicineName.includes(candidateName)
+          );
+        },
+      );
+      const hasDuplicate = Boolean(
+        medicine?.isBackendDuplicate ||
+        medicine?.hasDuplicate ||
+        medicine?.duplicateInfo?.hasDuplicate ||
+        medicine?.duplicateInfo?.conflictType ||
+        medicine?.matchedMedication ||
+        medicine?.duplicateInfo?.matchedMedication ||
+        (medicine?.duplicateInfo?.matchedMedications?.length > 0),
+      );
+      const hasLocalDuplicate = Boolean(existingMedicine || sameExtractedMedicine);
+      const hasUserResolution =
+        medicine?.resolutionSource === "user" || medicine?.userResolved === true;
+
+      const draft = hasLocalDuplicate
+        ? {
+            ...medicine,
+            isBackendDuplicate: true,
+            hasDuplicate: true,
+            duplicateInfo: {
+              ...(medicine?.duplicateInfo || {}),
+              hasDuplicate: true,
+              conflictType: medicine?.duplicateInfo?.conflictType ||
+                (sameExtractedMedicine ? "CROSS_DOC_DIFF" : "EXACT_DUPLICATE"),
+              matchedMedication:
+                medicine?.duplicateInfo?.matchedMedication ||
+                existingMedicine ||
+                sameExtractedMedicine,
+            },
+            matchedMedication:
+              medicine?.matchedMedication || existingMedicine || sameExtractedMedicine,
+          }
+        : { ...medicine };
+
+      // The extraction mapper may populate a default resolution for a
+      // duplicate. It is not a user decision, so onboarding must still show
+      // the conflict resolver for it.
+      if ((hasDuplicate || hasLocalDuplicate) && !hasUserResolution) {
+        delete draft.resolution;
+        delete draft.resolutionSource;
+      }
+
+      if (!previousMedicine) return draft;
+
+      return {
+        ...draft,
+        ...(previousMedicine.resolutionSource === "user" || previousMedicine.userResolved === true
+          ? {
+              resolution: previousMedicine.resolution,
+              resolutionSource: "user",
+            }
+          : {}),
+        ...(previousMedicine.selected !== undefined
+          ? { selected: previousMedicine.selected }
+          : {}),
+      };
+    });
+  };
+
   // Synchronize localMedicines with backend state when it changes (guarded by content key to avoid unnecessary re-renders)
   useEffect(() => {
     if (state?.medicinesToAdd) {
       setLocalMedicines((prev) => {
         const prevKey = (prev || []).map((m: any) => m?.client_med_id || m?.id).filter(Boolean).join("|");
         const nextKey = (state.medicinesToAdd || []).map((m: any) => m?.client_med_id || m?.id).filter(Boolean).join("|");
-        return prevKey === nextKey ? prev : state.medicinesToAdd;
+        return prevKey === nextKey
+          ? prev
+          : mergeMedicineReviewState(state.medicinesToAdd, prev);
       });
     }
-  }, [state?.medicinesToAdd]);
+  }, [state?.medicinesToAdd, existingMedications]);
 
   // Memoize initialMedicines so we don't pass a fresh array reference on every single render
   const memoizedInitialMedicines = useMemo(
@@ -1014,7 +1118,11 @@ export default function OnboardingScreen() {
       setCurrentClientMedId(null);
       setActiveMedicineToEdit(null);
     } else if (Array.isArray(finalState.medicinesToAdd) && finalState.medicinesToAdd.length > 0) {
-      setLocalMedicines(deduplicateDrafts(finalState.medicinesToAdd).filter((m: any) => !m.isSaved && !m.dbId));
+      setLocalMedicines(
+        mergeMedicineReviewState(finalState.medicinesToAdd, localMedicines).filter(
+          (m: any) => !m.isSaved && !m.dbId,
+        ),
+      );
     }
     setIsOnboardingCompleted(resolvedOnboardingCompleted);
     setCanSkip((prev) => prev || resolvedCanSkip);
@@ -2407,7 +2515,10 @@ export default function OnboardingScreen() {
   };
 
   const handleDraftSync = async (updatedDrafts: any[]) => {
-    const uniqueDrafts = deduplicateDrafts(updatedDrafts);
+    const uniqueDrafts = mergeMedicineReviewState(
+      deduplicateDrafts(updatedDrafts),
+      localMedicines,
+    );
     setLocalMedicines(uniqueDrafts);
     const nextState = {
       ...state,
@@ -2493,7 +2604,10 @@ export default function OnboardingScreen() {
         setState(nextState);
         sendMessage(value, nextState, optionLabel);
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
-        const existingMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []).filter(
+        const existingMeds = mergeMedicineReviewState(
+          deduplicateDrafts(localMedicines || state?.medicinesToAdd || []),
+          localMedicines,
+        ).filter(
           (m: any) => !m.isSaved && !m.dbId,
         );
         setLocalMedicines(existingMeds);
@@ -3124,7 +3238,10 @@ export default function OnboardingScreen() {
       };
 
       const handleAddNew = () => {
-        const currentMeds = deduplicateDrafts(localMedicines || state?.medicinesToAdd || []);
+        const currentMeds = mergeMedicineReviewState(
+          deduplicateDrafts(localMedicines || state?.medicinesToAdd || []),
+          localMedicines,
+        );
         setLocalMedicines(currentMeds);
         setState((prev) => ({
           ...prev,

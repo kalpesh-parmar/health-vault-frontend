@@ -664,8 +664,12 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                 checkedMeds.includes(m.client_med_id || m.id) ||
                 checkedMeds.includes(m.id)
             );
-        const uniqueSelected = deduplicateDrafts(selectedMedicineObjects);
-        item.medicines = uniqueSelected.length > 0 ? uniqueSelected : displayMeds;
+        const uniqueSelected = deduplicateDrafts(selectedMedicineObjects).filter(
+          (m: any) =>
+            m?.selected !== false &&
+            String(m?.resolution || "").toUpperCase() !== "REMOVE_NEW",
+        );
+        item.medicines = uniqueSelected;
         (item as any).isConfirmed = true;
         // These drafts are now confirmed. Do not carry them into a later
         // Add New flow, where they would be checked as fresh duplicates.
@@ -675,7 +679,9 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         }));
         const displayLabel = tOnboarding("confirmSelection") || "Continue";
         const confirmPayload = {
-          selected: checkedMeds,
+          selected: uniqueSelected
+            .map((m: any) => m.client_med_id || m.id)
+            .filter(Boolean),
           medicines: uniqueSelected,
         };
         handleGenericOptionPress(

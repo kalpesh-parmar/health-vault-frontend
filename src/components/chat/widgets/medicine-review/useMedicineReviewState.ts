@@ -268,13 +268,34 @@ export function useMedicineReviewState({
   };
 
   const handleResolveConflict = (medId: string, action: string) => {
-    setResolutions((prev) => ({ ...prev, [medId]: action }));
+    // The resolver buttons use the wire-format values (for example,
+    // REMOVE_NEW), while the older extraction flow uses lowercase action
+    // names. Keep the draft resolution in the wire format, but make sure a
+    // "Keep Existing" decision also removes the new draft from submission.
+    const normalizedAction = action.toUpperCase();
+    const removeNew = normalizedAction === "REMOVE_NEW" || normalizedAction === "KEEP_EXISTING";
+
+    setResolutions((prev) => ({ ...prev, [medId]: normalizedAction }));
+
+    if (removeNew) {
+      const targetMed = safeLocalMedicines.find(
+        (m) => m.id === medId || m.client_med_id === medId,
+      );
+      const matchKeys = [medId, targetMed?.id, targetMed?.client_med_id].filter(Boolean) as string[];
+      setCheckedMeds((prev) => prev.filter((key) => !matchKeys.includes(key)));
+    }
+
     // Keep the decision on the draft so replacing this card with the Add
     // Medicine card does not reset the resolution.
     setLocalMedicines((prev) =>
       prev.map((m) =>
         m.id === medId || m.client_med_id === medId
-          ? { ...m, resolution: action }
+          ? {
+              ...m,
+              selected: removeNew ? false : true,
+              resolution: normalizedAction,
+              resolutionSource: "user",
+            }
           : m,
       ),
     );
