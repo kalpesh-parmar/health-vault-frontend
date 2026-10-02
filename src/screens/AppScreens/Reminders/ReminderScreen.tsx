@@ -191,8 +191,11 @@ const ReminderScreen = () => {
     return filteredReminders
       .filter((rem) => {
         // Tab Filter: All, Overdue, Upcoming, Completed
-        if (activeTab !== "All") {
-          if ((rem.status || "").toLowerCase() !== activeTab.toLowerCase()) {
+        if (activeTab.toLowerCase() !== "all") {
+          const reminderStatus = (rem.status || "").toLowerCase();
+          if (activeTab.toLowerCase() === "overdue") {
+            if (reminderStatus !== "pending" || !rem.isOverdue) return false;
+          } else if (reminderStatus !== activeTab.toLowerCase()) {
             return false;
           }
         }
