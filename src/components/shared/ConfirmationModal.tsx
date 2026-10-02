@@ -13,15 +13,17 @@ import { queryClient } from "../../config/queryClient";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppStackParamList } from "../../navigation/types";
-import { deleteMedication } from "../../services/medicationservice";
+import { deleteMedication, deleteMedicationsBatch } from "../../services/medicationservice";
 import { usePreferredLanguage } from "../../hooks/usePreferredLanguage";
 import { getModalTranslation } from "../../utils/modalI18n";
 
 interface ConfirmationModalProps {
   showModal: boolean;
   onClose: () => void;
-  mode?: "Log Out" | "Delete Account" | "Delete Document" | "Delete Medication";
+  mode?: "Log Out" | "Delete Account" | "Delete Document" | "Delete Medication" | "Delete Medications Batch";
   documentId?: string | null;
+  documentIds?: string[] | null;
+  onSuccess?: () => void;
 }
 
 const ConfirmationModal = ({
@@ -29,6 +31,8 @@ const ConfirmationModal = ({
   onClose,
   mode = "Log Out",
   documentId,
+  documentIds,
+  onSuccess,
 }: ConfirmationModalProps) => {
   const { logout } = useAuth();
   const navigation =
@@ -139,6 +143,7 @@ const ConfirmationModal = ({
       queryClient.invalidateQueries({ queryKey: ["allReminders"] });
       queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
       queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+      onSuccess?.();
       onClose();
       Toast.show({
         type: "success",
@@ -154,7 +159,46 @@ const ConfirmationModal = ({
         text2: error.message || getModalTranslation(lang, "errorMsg"),
       });
     },
-  })
+  });
+
+  const { mutateAsync: deleteBatchMedicationMutation, isPending: isDeletingBatchMed } = useMutation({
+    mutationFn: (ids: string[]) => deleteMedicationsBatch(ids),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ["medications"] });
+      queryClient.removeQueries({ queryKey: ["allMedications"] });
+      queryClient.removeQueries({ queryKey: ["filteredMedications"] });
+      queryClient.invalidateQueries({
+        queryKey: ["medications"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["allMedications"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["filteredMedications"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
+      queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["allReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
+      queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+      onSuccess?.();
+      onClose();
+      Toast.show({
+        type: "success",
+        text1: getModalTranslation(lang, "successMsg"),
+        text2: getModalTranslation(lang, "medsDeletedMsg"),
+      });
+      navigation.navigate("MedicationStack" as never);
+    },
+    onError: (error: any) => {
+      Toast.show({
+        type: "error",
+        text1: getModalTranslation(lang, "oops"),
+        text2: error.message || getModalTranslation(lang, "errorMsg"),
+      });
+    },
+  });
 
   const handleAction = async () => {
     try {
@@ -164,6 +208,11 @@ const ConfirmationModal = ({
         await deleteUserMutation();
       } else if (mode === "Delete Medication") {
         await deleteMedicationMutation(documentId || "");
+      } else if (mode === "Delete Medications Batch") {
+        const idsToDelete = (documentIds && documentIds.length > 0)
+          ? documentIds
+          : (documentId ? [documentId] : []);
+        await deleteBatchMedicationMutation(idsToDelete);
       } else {
         await deleteDocumentMutation(documentId || "");
       }
@@ -204,6 +253,11 @@ const ConfirmationModal = ({
     modalDesc = getModalTranslation(lang, "deleteMedDesc");
     modalBtn = getModalTranslation(lang, "deleteMedBtn");
     modalLoadingBtn = getModalTranslation(lang, "deletingBtn");
+  } else if (mode === "Delete Medications Batch") {
+    modalTitle = getModalTranslation(lang, "deleteBatchMedTitle");
+    modalDesc = getModalTranslation(lang, "deleteBatchMedDesc");
+    modalBtn = getModalTranslation(lang, "deleteBatchMedBtn");
+    modalLoadingBtn = getModalTranslation(lang, "deletingBtn");
   }
 
   return (
@@ -239,7 +293,7 @@ const ConfirmationModal = ({
             mainBtnColor="red"
             onSecondaryPress={onClose}
             onMainPress={handleAction}
-            isLoading={isLoggingOut || isDeletingUser || isDeletingDoc || isDeletingMed}
+            isLoading={isLoggingOut || isDeletingUser || isDeletingDoc || isDeletingMed || isDeletingBatchMed}
             mainLoadingText={modalLoadingBtn}
           />
         </ModalCard>

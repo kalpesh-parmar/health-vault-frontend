@@ -19,7 +19,6 @@ import {
   filterMedications,
   refillMedicationService,
 } from "../../../../services/medicationservice";
-import { safeArray } from "../../../../utils/arrayUtils";
 import ConfirmationModal from "../../../../components/shared/ConfirmationModal";
 import { AddOrEditMedication } from "../../../../types";
 import Toast from "react-native-toast-message";
@@ -77,14 +76,20 @@ const MedicationScreen = () => {
   const filterSheetRef = useRef<BottomSheetModal>(null);
   const refillSheetRef = useRef<BottomSheetModal>(null);
   const [selectedMedicationForRefill, setSelectedMedicationForRefill] = useState<AddOrEditMedication | null>(null);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMedicationIds, setSelectedMedicationIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [isTipDismissed, setIsTipDismissed] = useState(false);
 
-  // Reset filteration states when navigating back to this screen
+  // Reset filteration and selection states when navigating back to this screen
   useFocusEffect(
     useCallback(() => {
       setActiveTab("All");
       setSortOption("date_desc");
       setSearchQuery("");
       setIsFilterApplied(false);
+      setIsSelectionMode(false);
+      setSelectedMedicationIds([]);
     }, []),
   );
 
@@ -293,125 +298,203 @@ const MedicationScreen = () => {
     searchQuery,
   ]);
 
-  const renderMedicationCard = ({ item }: { item: AddOrEditMedication }) => (
-    <Card>
-      <CardTopRow>
-        <MedIconBox>
-          <Ionicons
-            name={
-              item.medicationType?.toUpperCase() === "TABLET"
-                ? "medkit"
-                : item.medicationType?.toUpperCase() === "CAPSULE"
-                  ? "medical"
-                  : item.medicationType?.toUpperCase() === "SYRUP"
-                    ? "flask"
-                    : item.medicationType?.toUpperCase() === "DROP"
-                      ? "water"
-                      : item.medicationType?.toUpperCase() === "INJECTION"
-                        ? "bandage"
-                        : "medkit"
-            }
-            size={24}
-            color="#6366f1"
-          />
-        </MedIconBox>
-        <MedInfoMain>
-          <MedName>{item.medicationName}</MedName>
-          <MedTime>
-            {(() => {
-              const schedule = item.medicationSchedule || {};
-              let timesList: string[] = [];
-              if (Array.isArray(schedule)) {
-                timesList = schedule;
-              } else if (Array.isArray(schedule.times)) {
-                timesList = schedule.times;
-              } else if (Array.isArray(schedule.reminderTimes)) {
-                timesList = schedule.reminderTimes;
-              } else {
-                Object.values(schedule).forEach((val: any) => {
-                  if (Array.isArray(val)) {
-                    timesList.push(...val);
-                  } else if (typeof val === "string" && val.includes(":")) {
-                    timesList.push(val);
-                  }
-                });
-                if (timesList.length === 0) {
-                  timesList = Object.keys(schedule).filter(key => typeof key === "string" && key.includes(":"));
-                }
+  const allVisibleIds = useMemo(() => {
+    return medicationData
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
+  }, [medicationData]);
+
+  const isAllSelected =
+    allVisibleIds.length > 0 &&
+    allVisibleIds.every((id) => selectedMedicationIds.includes(id));
+
+  const handleSelectAllToggle = () => {
+    if (isAllSelected) {
+      setSelectedMedicationIds([]);
+      setIsSelectionMode(false);
+    } else {
+      setSelectedMedicationIds(allVisibleIds);
+    }
+  };
+
+  const handleCancelSelection = () => {
+    setIsSelectionMode(false);
+    setSelectedMedicationIds([]);
+  };
+
+  const toggleMedicationSelection = (id?: string) => {
+    if (!id) return;
+    setSelectedMedicationIds((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id];
+      if (next.length === 0) {
+        setIsSelectionMode(false);
+      } else if (!isSelectionMode) {
+        setIsSelectionMode(true);
+      }
+      return next;
+    });
+  };
+
+  const handleCardLongPress = (id?: string) => {
+    if (!id) return;
+    if (!isSelectionMode) {
+      setIsSelectionMode(true);
+      setSelectedMedicationIds([id]);
+    } else {
+      toggleMedicationSelection(id);
+    }
+  };
+
+  const handleCardPress = (item: AddOrEditMedication) => {
+    if (isSelectionMode && item.id) {
+      toggleMedicationSelection(item.id);
+    }
+  };
+
+  const renderMedicationCard = ({ item }: { item: AddOrEditMedication }) => {
+    const isSelected = !!item.id && selectedMedicationIds.includes(item.id);
+
+    return (
+      <CardPressable
+        activeOpacity={0.8}
+        onLongPress={() => handleCardLongPress(item.id)}
+        onPress={() => handleCardPress(item)}
+        isSelected={isSelected && isSelectionMode}
+      >
+        <CardTopRow>
+          {isSelectionMode && (
+            <CheckboxTouchable
+              onPress={() => toggleMedicationSelection(item.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name={isSelected ? "checkbox" : "square-outline"}
+                size={24}
+                color={isSelected ? "#4f46e5" : "#94a3b8"}
+              />
+            </CheckboxTouchable>
+          )}
+          <MedIconBox>
+            <Ionicons
+              name={
+                item.medicationType?.toUpperCase() === "TABLET"
+                  ? "medkit"
+                  : item.medicationType?.toUpperCase() === "CAPSULE"
+                    ? "medical"
+                    : item.medicationType?.toUpperCase() === "SYRUP"
+                      ? "flask"
+                      : item.medicationType?.toUpperCase() === "DROP"
+                        ? "water"
+                        : item.medicationType?.toUpperCase() === "INJECTION"
+                          ? "bandage"
+                          : "medkit"
               }
-              
-              const parseTime = (t: any) => {
-                if (typeof t !== "string" || !t.includes(":")) return { h: 8, m: 0 };
-                const [h, m] = t.split(":");
-                return { h: parseInt(h, 10) || 0, m: parseInt(m, 10) || 0 };
-              };
+              size={24}
+              color="#6366f1"
+            />
+          </MedIconBox>
+          <MedInfoMain>
+            <MedName>{item.medicationName}</MedName>
+            <MedTime>
+              {(() => {
+                const schedule = item.medicationSchedule || {};
+                let timesList: string[] = [];
+                if (Array.isArray(schedule)) {
+                  timesList = schedule;
+                } else if (Array.isArray(schedule.times)) {
+                  timesList = schedule.times;
+                } else if (Array.isArray(schedule.reminderTimes)) {
+                  timesList = schedule.reminderTimes;
+                } else {
+                  Object.values(schedule).forEach((val: any) => {
+                    if (Array.isArray(val)) {
+                      timesList.push(...val);
+                    } else if (typeof val === "string" && val.includes(":")) {
+                      timesList.push(val);
+                    }
+                  });
+                  if (timesList.length === 0) {
+                    timesList = Object.keys(schedule).filter(key => typeof key === "string" && key.includes(":"));
+                  }
+                }
+                
+                const parseTime = (t: any) => {
+                  if (typeof t !== "string" || !t.includes(":")) return { h: 8, m: 0 };
+                  const [h, m] = t.split(":");
+                  return { h: parseInt(h, 10) || 0, m: parseInt(m, 10) || 0 };
+                };
 
-              return (timesList || []).filter(Boolean).map((timeStr, index) => {
-                const { h, m } = parseTime(timeStr);
-                const ampm = h >= 12 ? "PM" : "AM";
-                const displayHour = h % 12 || 12;
-                const hourFormatted = displayHour < 10 ? `0${displayHour}` : displayHour;
-                const minuteFormatted = m < 10 ? `0${m}` : m;
-                return (
-                  <TimeText key={index}>
-                    {`${hourFormatted}:${minuteFormatted} ${ampm}`}{" "}
-                  </TimeText>
-                );
-              });
-            })()}
-            <MedTypeLabel>
-              {"\n"}
-              {"\n"}• {item.medicationType}
-            </MedTypeLabel>
-          </MedTime>
-        </MedInfoMain>
-        <Tag context={item.foodFrequency}>
-          <TagText context={item.foodFrequency}>{item.foodFrequency}</TagText>
-        </Tag>
-      </CardTopRow>
+                return (timesList || []).filter(Boolean).map((timeStr, index) => {
+                  const { h, m } = parseTime(timeStr);
+                  const ampm = h >= 12 ? "PM" : "AM";
+                  const displayHour = h % 12 || 12;
+                  const hourFormatted = displayHour < 10 ? `0${displayHour}` : displayHour;
+                  const minuteFormatted = m < 10 ? `0${m}` : m;
+                  return (
+                    <TimeText key={index}>
+                      {`${hourFormatted}:${minuteFormatted} ${ampm}`}{" "}
+                    </TimeText>
+                  );
+                });
+              })()}
+              <MedTypeLabel>
+                {"\n"}
+                {"\n"}• {item.medicationType}
+              </MedTypeLabel>
+            </MedTime>
+          </MedInfoMain>
+          <Tag context={item.foodFrequency}>
+            <TagText context={item.foodFrequency}>{item.foodFrequency}</TagText>
+          </Tag>
+        </CardTopRow>
 
-      <Divider />
+        <Divider />
 
-      <CardBottomRow>
-        <DateWrapper>
-          <Ionicons name="calendar-outline" size={14} color="#94a3b8" />
-          <DateText>{item.startDate?.split("T")[0]}</DateText>
-        </DateWrapper>
+        <CardBottomRow>
+          <DateWrapper>
+            <Ionicons name="calendar-outline" size={14} color="#94a3b8" />
+            <DateText>{item.startDate?.split("T")[0]}</DateText>
+          </DateWrapper>
 
-        <ActionButtons>
-          <IconButton
-            onPress={() =>
-              navigation.navigate("MedicationOperation", {
-                operation: "edit",
-                medication: item,
-              })
-            }
-          >
-            <ActionText>Edit</ActionText>
-          </IconButton>
-          <IconButton
-            style={{ marginLeft: 10 }}
-            onPress={() => {
-              setSelectedMedicationForRefill(item);
-              refillSheetRef.current?.present();
-            }}
-          >
-            <Ionicons name="refresh" size={20} color={"#10b981"} />
-            <ActionText style={{ color: "#10b981" }}>Refill</ActionText>
-          </IconButton>
-          <IconButton
-            style={{ marginLeft: 10 }}
-            onPress={() => {
-              setDocumentId(item.id || "");
-              setShowDeleteModal(true);
-            }}
-          >
-            <Ionicons name="trash-outline" size={18} color="#ef4444" />
-          </IconButton>
-        </ActionButtons>
-      </CardBottomRow>
-    </Card>
-  );
+          {!isSelectionMode && (
+            <ActionButtons>
+              <IconButton
+                onPress={() =>
+                  navigation.navigate("MedicationOperation", {
+                    operation: "edit",
+                    medication: item,
+                  })
+                }
+              >
+                <ActionText>Edit</ActionText>
+              </IconButton>
+              <IconButton
+                style={{ marginLeft: 10 }}
+                onPress={() => {
+                  setSelectedMedicationForRefill(item);
+                  refillSheetRef.current?.present();
+                }}
+              >
+                <Ionicons name="refresh" size={20} color={"#10b981"} />
+                <ActionText style={{ color: "#10b981" }}>Refill</ActionText>
+              </IconButton>
+              <IconButton
+                style={{ marginLeft: 10 }}
+                onPress={() => {
+                  setDocumentId(item.id || "");
+                  setShowDeleteModal(true);
+                }}
+              >
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+              </IconButton>
+            </ActionButtons>
+          )}
+        </CardBottomRow>
+      </CardPressable>
+    );
+  };
 
   return (
     <Container>
@@ -424,6 +507,17 @@ const MedicationScreen = () => {
         documentId={documentId}
       />
 
+      <ConfirmationModal
+        showModal={showBatchDeleteModal}
+        onClose={() => setShowBatchDeleteModal(false)}
+        mode="Delete Medications Batch"
+        documentIds={selectedMedicationIds}
+        onSuccess={() => {
+          setIsSelectionMode(false);
+          setSelectedMedicationIds([]);
+        }}
+      />
+
       <HeaderGradient
         colors={
           isDark
@@ -433,26 +527,72 @@ const MedicationScreen = () => {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        <TopRow>
-          <BackButton onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={28} color="#fff" />
-          </BackButton>
-          <HeaderTitle>Medications</HeaderTitle>
-          <RightActions>
-            <HeaderIconButton onPress={() => filterSheetRef.current?.present()}>
-              <MaterialCommunityIcons name="filter" size={20} color="#fff" />
-            </HeaderIconButton>
-            <AddButton
-              onPress={() =>
-                navigation.navigate("MedicationOperation", {
-                  operation: "add",
-                })
-              }
-            >
-              <Ionicons name="add" size={26} color="#fff" />
-            </AddButton>
-          </RightActions>
-        </TopRow>
+        {isSelectionMode ? (
+          <TopRow>
+            <BackButton onPress={handleCancelSelection}>
+              <Ionicons name="close" size={28} color="#fff" />
+            </BackButton>
+            <HeaderTitle>
+              {selectedMedicationIds.length > 0
+                ? `${selectedMedicationIds.length} Selected`
+                : "Select Medications"}
+            </HeaderTitle>
+            <RightActions>
+              <SelectAllButton onPress={handleSelectAllToggle} activeOpacity={0.7}>
+                <MaterialCommunityIcons
+                  name={
+                    isAllSelected
+                      ? "checkbox-marked-outline"
+                      : "checkbox-blank-outline"
+                  }
+                  size={18}
+                  color="#fff"
+                />
+                <SelectAllText>
+                  {isAllSelected ? "Deselect All" : "Select All"}
+                </SelectAllText>
+              </SelectAllButton>
+            </RightActions>
+          </TopRow>
+        ) : (
+          <TopRow>
+            <BackButton onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={28} color="#fff" />
+            </BackButton>
+            <HeaderTitle>Medications</HeaderTitle>
+            <RightActions>
+              {medicationData.length > 1 && (
+                <HeaderIconButton
+                  onPress={() => {
+                    if (medicationData.length > 0 && medicationData[0]?.id) {
+                      setIsSelectionMode(true);
+                      setSelectedMedicationIds([medicationData[0].id]);
+                    }
+                  }}
+                  accessibilityLabel="Select Multiple Medications"
+                >
+                  <MaterialCommunityIcons
+                    name="checkbox-multiple-marked-outline"
+                    size={20}
+                    color="#fff"
+                  />
+                </HeaderIconButton>
+              )}
+              <HeaderIconButton onPress={() => filterSheetRef.current?.present()}>
+                <MaterialCommunityIcons name="filter" size={20} color="#fff" />
+              </HeaderIconButton>
+              <AddButton
+                onPress={() =>
+                  navigation.navigate("MedicationOperation", {
+                    operation: "add",
+                  })
+                }
+              >
+                <Ionicons name="add" size={26} color="#fff" />
+              </AddButton>
+            </RightActions>
+          </TopRow>
+        )}
 
         <SearchBarWrapper>
           <SearchBar
@@ -474,6 +614,21 @@ const MedicationScreen = () => {
         isDark={isDark}
       />
 
+      {!isSelectionMode && medicationData.length > 1 && !isTipDismissed && (
+        <HintBanner>
+          <HintLeft>
+            <Ionicons name="information-circle" size={16} color="#6366f1" />
+            <HintText>Tip: Long press any medication to select multiple</HintText>
+          </HintLeft>
+          <HintCloseButton
+            onPress={() => setIsTipDismissed(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close" size={14} color="#94a3b8" />
+          </HintCloseButton>
+        </HintBanner>
+      )}
+
       <ContentList
         data={medicationData}
         keyExtractor={(item: AddOrEditMedication) =>
@@ -488,7 +643,10 @@ const MedicationScreen = () => {
             <EmptyMedications message={`No ${activeTab.toLowerCase() === 'all' ? 'medications' : activeTab.toLowerCase()} found.`} />
           )
         }
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingBottom:
+            isSelectionMode && selectedMedicationIds.length > 0 ? 100 : 40,
+        }}
         onEndReached={() => {
           if (
             !isFilterApplied &&
@@ -510,6 +668,32 @@ const MedicationScreen = () => {
           ) : null
         }
       />
+
+      {isSelectionMode && selectedMedicationIds.length > 0 && (
+        <SelectionBottomBar>
+          <SelectionInfoText>
+            {selectedMedicationIds.length}{" "}
+            {selectedMedicationIds.length === 1
+              ? "medication"
+              : "medications"}{" "}
+            selected
+          </SelectionInfoText>
+          <DeleteBatchButton
+            onPress={() => setShowBatchDeleteModal(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={18}
+              color="#fff"
+              style={{ marginRight: 6 }}
+            />
+            <DeleteBatchButtonText>
+              Delete ({selectedMedicationIds.length})
+            </DeleteBatchButtonText>
+          </DeleteBatchButton>
+        </SelectionBottomBar>
+      )}
 
       <FilterBottomSheet
         ref={filterSheetRef}
@@ -600,13 +784,23 @@ const ContentList = styled(FlatList as new () => FlatList<AddOrEditMedication>)`
   padding-horizontal: 16px;
 `;
 
-const Card = styled.View`
-  background-color: white;
+const CardPressable = styled.TouchableOpacity<{ isSelected?: boolean }>`
+  background-color: ${({ isSelected }: { isSelected?: boolean }) =>
+    isSelected ? "#f5f3ff" : "white"};
   border-radius: 20px;
   padding: 16px;
   margin-bottom: 16px;
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
   elevation: 4;
+  border-width: 2px;
+  border-color: ${({ isSelected }: { isSelected?: boolean }) =>
+    isSelected ? "#6366f1" : "transparent"};
+`;
+
+const CheckboxTouchable = styled.TouchableOpacity`
+  margin-right: 12px;
+  justify-content: center;
+  align-items: center;
 `;
 
 const CardTopRow = styled.View`
@@ -719,6 +913,92 @@ const ActionText = styled.Text`
   font-weight: 600;
   color: #64748b;
   margin-left: 6px;
+`;
+
+const SelectionBottomBar = styled.View`
+  position: absolute;
+  bottom: 24px;
+  left: 20px;
+  right: 20px;
+  background-color: #1e1b4b;
+  border-radius: 16px;
+  padding: 14px 20px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  elevation: 8;
+  shadow-color: #000;
+  shadow-offset: 0px 4px;
+  shadow-opacity: 0.3;
+  shadow-radius: 8px;
+`;
+
+const SelectionInfoText = styled.Text`
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+`;
+
+const DeleteBatchButton = styled.TouchableOpacity`
+  background-color: #ef4444;
+  padding: 10px 16px;
+  border-radius: 10px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+`;
+
+const DeleteBatchButtonText = styled.Text`
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+`;
+
+const SelectAllButton = styled.TouchableOpacity`
+  flex-direction: row;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 8px 12px;
+  border-radius: 20px;
+`;
+
+const SelectAllText = styled.Text`
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  margin-left: 6px;
+`;
+
+const HintBanner = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  margin-horizontal: 16px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+`;
+
+const HintLeft = styled.View`
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+`;
+
+const HintText = styled.Text`
+  font-size: 12px;
+  font-weight: 500;
+  color: #4338ca;
+  margin-left: 6px;
+  flex: 1;
+`;
+
+const HintCloseButton = styled.TouchableOpacity`
+  padding: 2px;
+  margin-left: 8px;
 `;
 
 
