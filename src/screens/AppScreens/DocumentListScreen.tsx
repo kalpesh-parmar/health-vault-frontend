@@ -253,9 +253,9 @@ const DocumentList = () => {
             ? lastPage.data.items
             : []
         : [];
-      return data.length === 10 ? allPages.length + 1 : undefined;
+      return data.length === 10 ? allPages.length : undefined;
     },
-    initialPageParam: 1,
+    initialPageParam: 0,
     enabled: activeTab === "All" && !isFilterApplied && !!userId,
   });
 
@@ -282,9 +282,9 @@ const DocumentList = () => {
             ? lastPage.data.items
             : []
         : [];
-      return data.length === 10 ? allPages.length + 1 : undefined;
+      return data.length === 10 ? allPages.length : undefined;
     },
-    initialPageParam: 1,
+    initialPageParam: 0,
     enabled: activeTab !== "All" && !isFilterApplied && !!userId,
   });
 

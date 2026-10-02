@@ -309,16 +309,27 @@ export const listDocument = async (): Promise<
   return response.data;
 };
 
+const PAGINATED_DOCUMENT_TYPES: Record<string, string> = {
+  Prescription: "PRESCRIPTION",
+  "Lab Report": "LAB_REPORT",
+  "Imaging Report": "IMAGING_REPORT",
+  "Discharge Summary": "DISCHARGE_SUMMARY",
+  "Consultation Report": "CONSULTATION_REPORT",
+  "Surgery Report": "SURGERY_PROCEDURE_REPORT",
+  "Vaccination Report": "VACCINATION_RECORD",
+  "Vaccination Record": "VACCINATION_RECORD",
+  "Medical Certificate": "MEDICAL_CERTIFICATE",
+  "Other Medical Document": "OTHER_MEDICAL_DOCUMENT",
+};
+
 export const documentListPaginated = async ({
   activeCategory,
   page,
   pageLimit,
 }: PaginatedDocumentRequest) => {
-  const mappedCategory = UI_TO_BE_TYPE_MAP[activeCategory] || activeCategory;
+  const documentType = PAGINATED_DOCUMENT_TYPES[activeCategory];
   const payload = {
-    filter: {
-      search: mappedCategory === "All" ? "" : mappedCategory,
-    },
+    filter: documentType ? { documentType } : {},
     page: {
       pageNumber: page,
       pageLimit: pageLimit,
