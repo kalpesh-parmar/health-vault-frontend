@@ -313,9 +313,19 @@ const AIChatScreen = ({ route }: any) => {
   }, [mergedMessages]);
 
   const scrollToBottom = useCallback((animated = true) => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated });
-    }, 100);
+    // Message cards can change height after the first layout (for example,
+    // while streamed text or report widgets finish rendering). Retry across
+    // a few layout passes so scrollToEnd uses the final content height.
+    const scroll = () => {
+      if (shouldAutoScrollRef.current) {
+        flatListRef.current?.scrollToEnd({ animated });
+      }
+    };
+
+    scroll();
+    setTimeout(scroll, 50);
+    setTimeout(scroll, 150);
+    setTimeout(scroll, 350);
   }, []);
 
   useEffect(() => {
@@ -529,7 +539,7 @@ const AIChatScreen = ({ route }: any) => {
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => {
               if (shouldAutoScrollRef.current) {
-                flatListRef.current?.scrollToEnd({ animated: true });
+                scrollToBottom();
               }
             }}
             onScrollBeginDrag={() => {
