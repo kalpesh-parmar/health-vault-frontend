@@ -1,4 +1,4 @@
-import { Modal } from "react-native";
+import { ActivityIndicator, Modal } from "react-native";
 import React from "react";
 import styled from "styled-components/native";
 import DualButtons from "./Buttons/DualButtons";
@@ -200,6 +200,9 @@ const ConfirmationModal = ({
     },
   });
 
+  const isActionPending =
+    isLoggingOut || isDeletingUser || isDeletingDoc || isDeletingMed || isDeletingBatchMed;
+
   const handleAction = async () => {
     try {
       if (mode === "Log Out") {
@@ -265,38 +268,58 @@ const ConfirmationModal = ({
       transparent
       visible={showModal}
       animationType="fade"
-      onRequestClose={onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
+      onRequestClose={isActionPending ? () => {} : onClose}
     >
       <Overlay>
-        <ModalCard>
-          <Indicator />
+        <ModalScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingVertical: 12,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <ModalCard>
+            <Indicator />
 
-          <IconWrapper>
-            <CircleBg color={isLogout ? "#fee2e2" : "#e0f2fe"}>
-              {isLogout ? (
-                <Ionicons name="log-out" size={24} color="black" />
-              ) : (
-                <Ionicons name="trash" size={24} color="black" />
-              )}
-            </CircleBg>
-          </IconWrapper>
+            <IconWrapper>
+              <CircleBg color={isLogout ? "#fee2e2" : "#e0f2fe"}>
+                {isLogout ? (
+                  <Ionicons name="log-out" size={24} color="black" />
+                ) : (
+                  <Ionicons name="trash" size={24} color="black" />
+                )}
+              </CircleBg>
+            </IconWrapper>
 
-          <ContentContainer>
-            <Title>{modalTitle}</Title>
-            <Description>{modalDesc}</Description>
-          </ContentContainer>
+            <ContentContainer>
+              <Title>{modalTitle}</Title>
+              <Description>{modalDesc}</Description>
+            </ContentContainer>
 
-          <DualButtons
-            secondaryBtnText={getModalTranslation(lang, "cancelBtn")}
-            secondaryBtnColor="grey"
-            mainBtnText={modalBtn}
-            mainBtnColor="red"
-            onSecondaryPress={onClose}
-            onMainPress={handleAction}
-            isLoading={isLoggingOut || isDeletingUser || isDeletingDoc || isDeletingMed || isDeletingBatchMed}
-            mainLoadingText={modalLoadingBtn}
-          />
-        </ModalCard>
+            <DualButtons
+              secondaryBtnText={getModalTranslation(lang, "cancelBtn")}
+              secondaryBtnColor="grey"
+              mainBtnText={modalBtn}
+              mainBtnColor="red"
+              onSecondaryPress={isActionPending ? () => {} : onClose}
+              onMainPress={handleAction}
+              isLoading={isActionPending && !isLogout}
+              mainLoadingText={modalLoadingBtn}
+            />
+          </ModalCard>
+        </ModalScrollView>
+        {isLoggingOut && (
+          <LogoutLoadingContainer>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <LogoutLoadingText>
+              {getModalTranslation(lang, "loggingOutBtn")}
+            </LogoutLoadingText>
+          </LogoutLoadingContainer>
+        )}
       </Overlay>
     </Modal>
   );
@@ -311,12 +334,38 @@ const Overlay = styled.View`
   background-color: rgba(0, 0, 0, 0.7);
   justify-content: center;
   align-items: center;
+  padding: 16px;
+`;
+
+const ModalScrollView = styled.ScrollView`
+  width: 100%;
+`;
+
+const LogoutLoadingContainer = styled.View`
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  elevation: 10;
+  background-color: rgba(0, 0, 0, 0.55);
+  align-items: center;
+  justify-content: center;
   padding: 24px;
+`;
+
+const LogoutLoadingText = styled.Text`
+  margin-top: 16px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
 `;
 
 const ModalCard = styled.View`
   width: 100%;
-  max-width: 350px;
+  max-width: 380px;
   background-color: ${({ theme }: any) => theme.colors.surface};
   border-radius: 32px; /* Extra rounded for modern feel */
   padding: 30px 24px 24px 24px;
