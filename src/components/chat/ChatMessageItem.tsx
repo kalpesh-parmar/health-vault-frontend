@@ -648,6 +648,10 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         if (chatWizardState.extractedMedicines.length > 0 && !item.medicines?.length) {
           item.medicines = deduplicateDrafts(chatWizardState.extractedMedicines);
           (item as any).isConfirmed = true;
+          setChatWizardState((prev: any) => ({
+            ...prev,
+            extractedMedicines: [],
+          }));
           handleConfirmSelection();
           return;
         }
@@ -663,6 +667,12 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         const uniqueSelected = deduplicateDrafts(selectedMedicineObjects);
         item.medicines = uniqueSelected.length > 0 ? uniqueSelected : displayMeds;
         (item as any).isConfirmed = true;
+        // These drafts are now confirmed. Do not carry them into a later
+        // Add New flow, where they would be checked as fresh duplicates.
+        setChatWizardState((prev: any) => ({
+          ...prev,
+          extractedMedicines: [],
+        }));
         const displayLabel = tOnboarding("confirmSelection") || "Continue";
         const confirmPayload = {
           selected: checkedMeds,
