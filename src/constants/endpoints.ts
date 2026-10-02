@@ -68,6 +68,7 @@ export const MEDICATION_ENDPOINTS = {
   GET_MEDICATION: "/medications/list", // Normal API.
   UPDATE_MEDICATION: "/medications/{id}",
   DELETE_MEDICATION: "/medications/{id}",
+  DELETE_BATCH_MEDICATIONS: "/medications/batch",
   LIST_ALL_MEDICATIONS: "/medications/list",
   FILTER_AND_SORT: "/medications/list", // Filter and sort API.
   REFILL_MEDICATION: "/medications/refill/{id}",

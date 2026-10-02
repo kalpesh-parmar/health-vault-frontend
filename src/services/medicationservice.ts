@@ -16,6 +16,13 @@ export const deleteMedication = async (id: string): Promise<ApiResponse<void>> =
   return response.data;
 };
 
+export const deleteMedicationsBatch = async (ids: string[]): Promise<ApiResponse<void>> => {
+  const response = await apiClient.delete(MEDICATION_ENDPOINTS.DELETE_BATCH_MEDICATIONS, {
+    data: { ids },
+  });
+  return response.data;
+};
+
 export const listMedications = async (): Promise<ApiResponse<AddOrEditMedication[]>> => {
   const response = await apiClient.get(MEDICATION_ENDPOINTS.GET_MEDICATION);
   return response.data;
