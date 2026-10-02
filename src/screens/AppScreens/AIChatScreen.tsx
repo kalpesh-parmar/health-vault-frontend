@@ -324,6 +324,17 @@ const AIChatScreen = ({ route }: any) => {
     }
   }, [displayMessages.length, isSending, isActivelyStreaming, scrollToBottom]);
 
+  // Re-anchor the chat when it is opened or brought back into focus so the
+  // latest message is visible after history has finished loading.
+  useEffect(() => {
+    if (!isFocused || isLoadingHistory || displayMessages.length === 0) {
+      return;
+    }
+
+    shouldAutoScrollRef.current = true;
+    scrollToBottom(false);
+  }, [isFocused, isLoadingHistory, displayMessages.length, scrollToBottom]);
+
   const renderChatItem = useCallback(
     ({ item, index }: { item: any; index: number }) => (
       <ChatMessageItem
