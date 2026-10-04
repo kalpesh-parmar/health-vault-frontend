@@ -99,11 +99,7 @@ export interface BatchUploadItem {
 export const documentUpload = async (
   formData: FormData,
 ): Promise<ApiResponse<UploadResponse>> => {
-  const response = await apiClient.post(FILE_ENDPOINTS.UPLOAD, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await apiClient.post(FILE_ENDPOINTS.UPLOAD, formData);
   return response.data;
 };
 
@@ -121,6 +117,30 @@ export interface UploadBatchResponse {
   }[];
 }
 
+export interface DocumentValidationResult {
+  fileName: string;
+  isValid: boolean;
+  code?: string;
+  title?: string;
+  message?: string;
+}
+
+export const validateDocumentsPreUpload = async (
+  files: Array<{ uri: string; name: string; type: string }>,
+): Promise<ApiResponse<{ results: DocumentValidationResult[] }>> => {
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append("files", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+  });
+
+  const response = await apiClient.post(DOCUMENT_ENDPOINTS.VALIDATE_DOCUMENT, formData);
+  return response.data;
+};
+
 export const uploadDocumentsBatch = async (
   files: Array<{ uri: string; name: string; type: string }>,
   onUploadProgress?: (progressEvent: any) => void,
@@ -135,9 +155,6 @@ export const uploadDocumentsBatch = async (
   });
 
   const response = await apiClient.post(DOCUMENT_ENDPOINTS.UPLOAD_DOCUMENT, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
     onUploadProgress,
   });
   return response.data;
@@ -174,11 +191,7 @@ export const retryDocumentProcessing = async (
       type: payload.file.type,
     } as any);
 
-    const response = await apiClient.post(endpoint, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    const response = await apiClient.post(endpoint, formData);
     return response.data;
   }
 
@@ -202,9 +215,6 @@ export const uploadPatientDocuments = async (
 
   const endpoint = DOCUMENT_ENDPOINTS.PATIENT_DOCUMENTS_UPLOAD(patientId);
   const response = await apiClient.post(endpoint, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
     onUploadProgress,
   });
   return response.data;

@@ -37,6 +37,8 @@ export interface ExtractedMedicine {
   notes?: string;
 
   confidence?: number; // e.g. 0.98
+  provenance?: string; // e.g. "primary_ocr", "vlm_fallback"
+  verificationRequired?: boolean; // true if derived from VLM fallback or low confidence
 
   selected: boolean;
 

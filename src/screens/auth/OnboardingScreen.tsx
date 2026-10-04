@@ -434,6 +434,9 @@ export default function OnboardingScreen() {
         const pendingJobId = await AsyncStorage.getItem(
           "onboarding_pending_job_id",
         );
+        const pendingFileKey = await AsyncStorage.getItem(
+          "onboarding_pending_file_key",
+        );
         const pendingDocId = await AsyncStorage.getItem(
           "onboarding_pending_document_id",
         );
@@ -451,6 +454,7 @@ export default function OnboardingScreen() {
               pendingJobId,
             );
             await AsyncStorage.removeItem("onboarding_pending_job_id");
+            await AsyncStorage.removeItem("onboarding_pending_file_key");
             await AsyncStorage.removeItem("onboarding_pending_document_id");
             return;
           }
@@ -459,7 +463,16 @@ export default function OnboardingScreen() {
             pendingJobId,
           );
           setUploadState("processing");
-          startJobPolling(pendingJobId, pendingDocId || pendingJobId);
+          const targetFileKey = pendingFileKey || pendingJobId;
+          const targetDocId = pendingDocId || targetFileKey;
+          currentFileKeyRef.current = targetFileKey;
+          currentDocIdRef.current = targetDocId;
+          startJobPolling(
+            pendingJobId,
+            targetFileKey,
+            targetDocId,
+            `/sse/files/${targetFileKey}/stream`,
+          );
         }
       } catch (err) {
         console.warn("[ONBOARDING] Failed to resume pending job:", err);
@@ -1824,10 +1837,14 @@ export default function OnboardingScreen() {
 
   const uploadAbortControllerRef = useRef<AbortController | null>(null);
   const sseUnsubRef = useRef<(() => void) | null>(null);
+  const currentFileKeyRef = useRef<string | null>(null);
   const currentDocIdRef = useRef<string | null>(null);
+  const sseReconnectAttemptsRef = useRef<number>(0);
+  const sseReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const startJobPolling = async (
     jobId: string,
+    fileKey: string,
     documentId: string,
     streamUrlOverride?: string,
   ) => {
@@ -1838,12 +1855,18 @@ export default function OnboardingScreen() {
     setPollCurrentPage(1);
     setPollTotalPages(1);
 
+    if (sseReconnectTimerRef.current) {
+      clearTimeout(sseReconnectTimerRef.current);
+      sseReconnectTimerRef.current = null;
+    }
+
     if (sseUnsubRef.current) {
       sseUnsubRef.current();
       sseUnsubRef.current = null;
     }
 
-    const streamUrl = streamUrlOverride || `/sse/files/${jobId}/stream`;
+    const streamKey = fileKey || jobId;
+    const streamUrl = streamUrlOverride || `/sse/files/${streamKey}/stream`;
 
     sseUnsubRef.current = connectSseStream({
       endpoint: streamUrl,
@@ -1880,6 +1903,7 @@ export default function OnboardingScreen() {
             sseUnsubRef.current = null;
           }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_file_key");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadPercent(100);
           setUploadState("success");
@@ -1900,6 +1924,7 @@ export default function OnboardingScreen() {
             sseUnsubRef.current = null;
           }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_file_key");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("rejected");
           Toast.show({
@@ -1917,6 +1942,7 @@ export default function OnboardingScreen() {
             sseUnsubRef.current = null;
           }
           await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_file_key");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
 
           if (uploadRetryCountRef.current >= 3) {
@@ -1995,6 +2021,7 @@ export default function OnboardingScreen() {
 
         if (isCompleted) {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_file_key");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadPercent(100);
           setUploadState("success");
@@ -2007,6 +2034,7 @@ export default function OnboardingScreen() {
           );
         } else if (isRejected) {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_file_key");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
           setUploadState("rejected");
           Toast.show({
@@ -2016,6 +2044,7 @@ export default function OnboardingScreen() {
           });
         } else {
           await AsyncStorage.removeItem("onboarding_pending_job_id");
+          await AsyncStorage.removeItem("onboarding_pending_file_key");
           await AsyncStorage.removeItem("onboarding_pending_document_id");
 
           if (uploadRetryCountRef.current >= 3) {
@@ -2044,6 +2073,22 @@ export default function OnboardingScreen() {
       },
       onError: (err) => {
         console.warn("[ONBOARDING SSE Error]:", err.message);
+        if (
+          pollActiveRef.current &&
+          !cancelRequestedRef.current &&
+          sseReconnectAttemptsRef.current < 3
+        ) {
+          sseReconnectAttemptsRef.current += 1;
+          const attempt = sseReconnectAttemptsRef.current;
+          console.log(
+            `[ONBOARDING] Retrying SSE connection (attempt ${attempt}/3)...`,
+          );
+          sseReconnectTimerRef.current = setTimeout(() => {
+            if (pollActiveRef.current && !cancelRequestedRef.current) {
+              startJobPolling(jobId, fileKey, documentId, streamUrlOverride);
+            }
+          }, 1500 * attempt);
+        }
       },
     });
   };
@@ -2060,6 +2105,7 @@ export default function OnboardingScreen() {
       uploadAbortControllerRef.current = null;
     }
     AsyncStorage.removeItem("onboarding_pending_job_id");
+    AsyncStorage.removeItem("onboarding_pending_file_key");
     AsyncStorage.removeItem("onboarding_pending_document_id");
 
     setUploadState("idle");
@@ -2090,8 +2136,8 @@ export default function OnboardingScreen() {
     uploadRetryCountRef.current = nextRetryCount;
     setUploadRetryCount(nextRetryCount);
 
-    const docId = currentDocIdRef.current;
-    if (!docId) {
+    const fileKeyToRetry = currentFileKeyRef.current || currentDocIdRef.current;
+    if (!fileKeyToRetry) {
       const file = selectedFileRef.current || selectedFile;
       if (file) {
         uploadSelectedFile(file);
@@ -2102,17 +2148,22 @@ export default function OnboardingScreen() {
     setUploadState("queued");
     setUploadPercent(0);
     try {
-      const response = await retryDocumentProcessing({ fileKey: docId });
+      const response = await retryDocumentProcessing({ fileKey: fileKeyToRetry });
       const respData = (response as any)?.data?.data || (response as any)?.data || response;
+      const fileKey = respData?.fileKey || fileKeyToRetry;
       const streamUrl =
         respData?.streamUrl ||
-        (respData?.fileKey ? `/sse/files/${respData.fileKey}/stream` : `/sse/files/${docId}/stream`);
-      const jobId = respData?.fileKey || respData?.jobId || docId;
+        `/sse/files/${fileKey}/stream`;
+      const jobId = respData?.jobId || respData?.fileKey || fileKey;
+      const canonicalDocId = respData?.documentId || currentDocIdRef.current || fileKey;
+      currentFileKeyRef.current = fileKey;
+      currentDocIdRef.current = canonicalDocId;
 
       await AsyncStorage.setItem("onboarding_pending_job_id", jobId);
-      await AsyncStorage.setItem("onboarding_pending_document_id", docId);
+      await AsyncStorage.setItem("onboarding_pending_file_key", fileKey);
+      await AsyncStorage.setItem("onboarding_pending_document_id", canonicalDocId);
 
-      startJobPolling(jobId, docId, streamUrl);
+      startJobPolling(jobId, fileKey, canonicalDocId, streamUrl);
     } catch (err: any) {
       if (uploadRetryCountRef.current >= 3) {
         forceContinueManualFlow();
@@ -2148,6 +2199,7 @@ export default function OnboardingScreen() {
   const handleCancelJob = async (documentId: string) => {
     try {
       await AsyncStorage.removeItem("onboarding_pending_job_id");
+      await AsyncStorage.removeItem("onboarding_pending_file_key");
       await AsyncStorage.removeItem("onboarding_pending_document_id");
     } catch (err) {
       console.warn("[ONBOARDING] Failed to clear storage on cancel:", err);
@@ -2167,6 +2219,11 @@ export default function OnboardingScreen() {
   const cancelProcessing = async () => {
     cancelRequestedRef.current = true;
     pollActiveRef.current = false;
+    sseReconnectAttemptsRef.current = 0;
+    if (sseReconnectTimerRef.current) {
+      clearTimeout(sseReconnectTimerRef.current);
+      sseReconnectTimerRef.current = null;
+    }
     setSelectedFile(null); // Clear selected file so it doesn't auto-upload on next send
     if (sseUnsubRef.current) {
       sseUnsubRef.current();
@@ -2265,21 +2322,26 @@ export default function OnboardingScreen() {
       }
 
       const jobId = createdItem.jobId || createdItem.fileKey;
-      const docId = createdItem.fileKey || createdItem.jobId;
-      const streamUrl = createdItem.streamUrl;
+      const fileKey = createdItem.fileKey || createdItem.jobId;
+      const docId = createdItem.documentId || fileKey || jobId;
+      const streamUrl = createdItem.streamUrl || `/sse/files/${fileKey}/stream`;
+      currentFileKeyRef.current = fileKey;
       currentDocIdRef.current = docId;
 
       console.log(
         "[ONBOARDING] File uploaded successfully. JobId:",
         jobId,
+        "FileKey:",
+        fileKey,
         "DocId:",
         docId,
       );
 
       await AsyncStorage.setItem("onboarding_pending_job_id", jobId);
+      await AsyncStorage.setItem("onboarding_pending_file_key", fileKey);
       await AsyncStorage.setItem("onboarding_pending_document_id", docId);
 
-      startJobPolling(jobId, docId, streamUrl);
+      startJobPolling(jobId, fileKey, docId, streamUrl);
     } catch (error: any) {
       console.error("[ONBOARDING] Document upload sequence failed:", error);
       if (uploadRetryCountRef.current >= 3) {

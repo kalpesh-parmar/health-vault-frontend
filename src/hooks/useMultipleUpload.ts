@@ -192,9 +192,6 @@ export const useMultipleUpload = (onSuccessGlobal?: () => void) => {
         DOCUMENT_ENDPOINTS.OCR_EXTRACT,
         formData,
         {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
           timeout: 240000,
         },
       );

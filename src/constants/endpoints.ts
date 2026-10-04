@@ -19,6 +19,7 @@ export const PATIENT_ENDPOINTS = {
 } as const;
 
 export const DOCUMENT_ENDPOINTS = {
+  VALIDATE_DOCUMENT: "/documents/validate",
   UPLOAD_DOCUMENT: "/documents/upload",
   PATIENT_DOCUMENTS_UPLOAD: (patientId: string) => `/patient/${patientId}/documents/upload`,
   RETRY_DOCUMENT: "/documents/retry",

@@ -29,7 +29,7 @@ type DocumentProcessingRouteProp = RouteProp<
   {
     DocumentProcessing: {
       jobIds: string[];
-      filesInfo?: { jobId: string; fileName: string; fileKey: string }[];
+      filesInfo?: { jobId: string; fileName: string; fileKey: string; fileSize?: number; mimeType?: string }[];
       fromScreen?: string;
     };
   },
@@ -152,7 +152,7 @@ export const DocumentProcessingScreen = () => {
   }, [isAllTerminal, userId]);
 
   const filesMap = useMemo(() => {
-    const map: Record<string, { fileName: string; fileKey: string; jobId: string }> = {};
+    const map: Record<string, { fileName: string; fileKey: string; jobId: string; fileSize?: number; mimeType?: string }> = {};
     normalizedFilesInfo.forEach((f) => {
       map[f.jobId] = f;
       if (f.fileKey) {
@@ -238,8 +238,27 @@ export const DocumentProcessingScreen = () => {
           </SectionSubtitle>
 
           {jobList.map((job) => {
-            const fileMeta = filesMap[job.jobId];
-            const fileName = fileMeta?.fileName || `Document ${job.jobId.slice(0, 8)}`;
+            const fileMeta = filesMap[job.jobId] || filesMap[job.fileKey || ""];
+            const docContextMeta = uploadingDocs.find(
+              (d) =>
+                (d.jobId || d.id || d.fileKey) === job.jobId ||
+                (job.fileKey && (d.jobId || d.id || d.fileKey) === job.fileKey)
+            );
+            const fileName =
+              fileMeta?.fileName ||
+              docContextMeta?.name ||
+              job.fileName ||
+              `Document ${job.jobId.slice(0, 8)}`;
+            const fileSize = fileMeta?.fileSize || docContextMeta?.fileSize;
+            const ext = (fileName.split(".").pop() || "FILE").toUpperCase();
+            const formatSize = (bytes?: number) => {
+              if (!bytes) return null;
+              if (bytes < 1024) return `${bytes} B`;
+              if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+              return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+            };
+            const sizeStr = formatSize(fileSize);
+            const metaText = sizeStr ? `${ext} • ${sizeStr}` : ext;
             const nonMedical = isNonMedicalError(job.error);
 
             return (
@@ -262,11 +281,12 @@ export const DocumentProcessingScreen = () => {
 
                   <HeaderInfo>
                     <JobFileName numberOfLines={1}>{fileName}</JobFileName>
+                    <JobMetaText>{metaText}</JobMetaText>
                     <JobStepText numberOfLines={1}>
                       {job.status === "COMPLETED"
                         ? "Extraction Ready — Tap to view"
                         : job.status === "FAILED"
-                          ? `Rejected: ${job.error || "Processing failed"}`
+                          ? "Processing failed"
                           : job.currentStep || "Processing..."}
                     </JobStepText>
                   </HeaderInfo>
@@ -305,33 +325,37 @@ export const DocumentProcessingScreen = () => {
                 {/* Error State & Retry Actions */}
                 {job.status === "FAILED" && (
                   <RejectionContainer>
-                    <RejectionReasonText style={{ color: "#ef4444" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                      <Ionicons name="close-circle" size={15} color="#ef4444" style={{ marginRight: 6 }} />
+                      <Text style={{ color: "#ef4444", fontSize: 13, fontWeight: "700" }}>✕ Processing failed</Text>
+                    </View>
+                    <RejectionReasonText style={{ color: "#b91c1c" }}>
                       {nonMedical
                         ? "This file was detected as a non-medical record and could not be processed."
-                        : job.error || "Document extraction failed."}
+                        : "We couldn't process this document. Your file is still available."}
                     </RejectionReasonText>
-                    {!nonMedical && (
-                      <TouchableOpacity
-                        style={{
-                          marginTop: 8,
-                          paddingVertical: 6,
-                          paddingHorizontal: 12,
-                          backgroundColor: "#0d9488",
-                          borderRadius: 6,
-                          alignSelf: "flex-start",
-                          flexDirection: "row",
-                          alignItems: "center",
-                        }}
-                        onPress={() => {
-                          const matchedFile = filesInfo.find((f) => f.jobId === job.jobId);
-                          const fileKey = matchedFile?.fileKey || job.jobId;
-                          retryDocument(fileKey);
-                        }}
-                      >
-                        <Ionicons name="refresh" size={14} color="#ffffff" style={{ marginRight: 4 }} />
-                        <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "600" }}>Retry Extraction</Text>
-                      </TouchableOpacity>
-                    )}
+                    <TouchableOpacity
+                      style={{
+                        marginTop: 8,
+                        paddingVertical: 7,
+                        paddingHorizontal: 14,
+                        backgroundColor: "#0d9488",
+                        borderRadius: 8,
+                        alignSelf: "flex-start",
+                        flexDirection: "row",
+                        alignItems: "center",
+                      }}
+                      onPress={() => {
+                        const matchedFile = filesInfo.find(
+                          (f) => f.jobId === job.jobId || f.fileKey === job.fileKey
+                        );
+                        const fileKey = matchedFile?.fileKey || job.fileKey || job.jobId;
+                        retryDocument(fileKey);
+                      }}
+                    >
+                      <Ionicons name="refresh" size={14} color="#ffffff" style={{ marginRight: 5 }} />
+                      <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "700" }}>Retry</Text>
+                    </TouchableOpacity>
                   </RejectionContainer>
                 )}
 
@@ -625,6 +649,13 @@ const JobFileName = styled.Text`
   font-size: 15px;
   font-weight: 700;
   color: #1e293b;
+  margin-bottom: 2px;
+`;
+
+const JobMetaText = styled.Text`
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
   margin-bottom: 2px;
 `;
 

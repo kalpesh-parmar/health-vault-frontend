@@ -20,11 +20,7 @@ export const uploadFileToS3 = async (
 
   formData.append("uploadType", uploadType);
 
-  const response = await apiClient.post(FILE_ENDPOINTS.UPLOAD, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await apiClient.post(FILE_ENDPOINTS.UPLOAD, formData);
   
   return response.data;
 };

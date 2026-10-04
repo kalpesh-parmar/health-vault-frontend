@@ -7,6 +7,7 @@ import {
   retryDocumentProcessing,
   cancelOcr,
   getOcrStatus,
+  validateDocumentsPreUpload,
 } from "../services/documentService";
 import { connectSseStream, SseEventPayload } from "../services/streamService";
 import { ExtractedMedicine } from "../types/medicationReview";
@@ -22,7 +23,7 @@ export interface ChatWizardState {
   step: "idle" | "processing" | "results" | "conflicts" | "summary" | "completed";
   fromScreen?: string;
   jobIds: string[];
-  filesInfo: { jobId: string; fileName: string; fileKey: string }[];
+  filesInfo: { jobId: string; fileName: string; fileKey: string; fileSize?: number; mimeType?: string }[];
   extractedMedicines: ExtractedMedicine[];
   conflicts: DuplicateConflict[];
   currentConflictIndex: number;
@@ -37,6 +38,8 @@ export interface UploadingDoc {
   fileKey?: string;
   jobId?: string;
   name: string;
+  fileSize?: number;
+  mimeType?: string;
   progress: number;
   percentage?: number;
   status: string;
@@ -59,6 +62,7 @@ interface DocumentUploadContextType {
   setIsProgressExpanded: (val: boolean) => void;
   addSelectedFiles: (files: SelectedDocument[]) => void;
   removeSelectedFile: (id: string) => void;
+  removeInvalidFiles: () => void;
   updateSelectedFile: (id: string, displayName: string, documentType: string) => void;
   clearSelectedFiles: () => void;
   startUpload: (
@@ -175,10 +179,10 @@ const normalizeStatus = (event: any) => {
       return "COMPLETED";
     }
   }
-  
+
   // Fallback for old status=SUCCESS without other specific stages
   if (!stage && !stageStatus && !type && status === "SUCCESS") {
-     return "COMPLETED";
+    return "COMPLETED";
   }
 
   for (const indicator of stateIndicators) {
@@ -288,16 +292,16 @@ const getBatchCounts = (event: any, docs: UploadingDoc[]) => {
     typeof event?.completed === "number"
       ? event.completed
       : docs.filter((d) => {
-          const s = (d.status || "").toUpperCase();
-          return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
-        }).length;
+        const s = (d.status || "").toUpperCase();
+        return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
+      }).length;
   const failed =
     typeof event?.failed === "number"
       ? event.failed
       : docs.filter((d) => {
-          const s = (d.status || "").toUpperCase();
-          return s === "FAILED" || s === "ERROR" || s === "REJECTED" || s === "CANCELLED";
-        }).length;
+        const s = (d.status || "").toUpperCase();
+        return s === "FAILED" || s === "ERROR" || s === "REJECTED" || s === "CANCELLED";
+      }).length;
 
   return { completed, failed };
 };
@@ -454,8 +458,48 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   }, []);
 
   const addSelectedFiles = useCallback((files: SelectedDocument[]) => {
+    const SUPPORTED_EXTENSIONS_SET = new Set([
+      "pdf",
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "tiff",
+      "tif",
+      "doc",
+      "docx",
+    ]);
+    const MAX_PRE_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+
+    // 1. Initial client-side validation
+    const preparedFiles: SelectedDocument[] = files.map((file) => {
+      const ext = (file.originalName.split(".").pop() || "").toLowerCase();
+      let validationStatus: SelectedDocument["validationStatus"] = "VALIDATING";
+      let validationErrorTitle: string | undefined;
+      let validationErrorMessage: string | undefined;
+
+      if (file.size && file.size > MAX_PRE_UPLOAD_BYTES) {
+        validationStatus = "INVALID";
+        validationErrorTitle = "File is too large";
+        validationErrorMessage = "Maximum allowed size is 25 MB.";
+      } else if (!SUPPORTED_EXTENSIONS_SET.has(ext)) {
+        validationStatus = "INVALID";
+        validationErrorTitle = "Unsupported file type";
+        validationErrorMessage =
+          "This file type isn't supported. Please select PDF, JPG, JPEG or another supported medical file type.";
+      }
+
+      return {
+        ...file,
+        validationStatus,
+        validationErrorTitle,
+        validationErrorMessage,
+      };
+    });
+
     setSelectedFiles((prev) => {
-      if (prev.length >= 5) {
+      const combined = [...prev, ...preparedFiles];
+      if (combined.length > 5) {
         Toast.show({
           type: "error",
           position: "top",
@@ -518,10 +562,89 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       }
       return [...prev, ...uniqueFiles];
     });
+
+    // 2. Async in-process Node validation (Option A) for technical valid candidates
+    const needsRemoteValidation = preparedFiles.filter(
+      (f) => f.validationStatus === "VALIDATING"
+    );
+
+    if (needsRemoteValidation.length > 0) {
+      (async () => {
+        try {
+          const payload = needsRemoteValidation.map((f) => ({
+            uri: f.uri,
+            name: getFileNameWithExtension(f.displayName, f.originalName),
+            type: f.mimeType,
+          }));
+
+          const res = await validateDocumentsPreUpload(payload);
+          const data = (res as any)?.data || res;
+          const results = data?.results || [];
+
+          setSelectedFiles((current) =>
+            current.map((item) => {
+              const itemTargetName = getFileNameWithExtension(
+                item.displayName,
+                item.originalName
+              );
+              const match = results.find(
+                (r: any) =>
+                  r.fileName === itemTargetName ||
+                  r.fileName === item.originalName ||
+                  r.fileName === item.displayName
+              );
+
+              if (!match) return item;
+
+              if (match.isValid) {
+                return {
+                  ...item,
+                  validationStatus: "READY",
+                  validationErrorTitle: undefined,
+                  validationErrorMessage: undefined,
+                };
+              } else {
+                return {
+                  ...item,
+                  validationStatus: "INVALID",
+                  validationErrorTitle: match.title || "Not a medical document",
+                  validationErrorMessage:
+                    match.message ||
+                    "This file doesn't appear to be a medical document. Please remove it before continuing.",
+                };
+              }
+            })
+          );
+        } catch (err) {
+          console.warn("[DocumentUploadContext] Remote pre-validation error, failing open:", err);
+          // Fail open on connection error so valid documents are not permanently blocked
+          setSelectedFiles((current) =>
+            current.map((item) => {
+              if (
+                needsRemoteValidation.some((f) => f.id === item.id) &&
+                item.validationStatus === "VALIDATING"
+              ) {
+                return {
+                  ...item,
+                  validationStatus: "READY",
+                  validationErrorTitle: undefined,
+                  validationErrorMessage: undefined,
+                };
+              }
+              return item;
+            })
+          );
+        }
+      })();
+    }
   }, []);
 
   const removeSelectedFile = useCallback((id: string) => {
     setSelectedFiles((prev) => prev.filter((file) => file.id !== id));
+  }, []);
+
+  const removeInvalidFiles = useCallback(() => {
+    setSelectedFiles((prev) => prev.filter((file) => file.validationStatus !== "INVALID"));
   }, []);
 
   const updateSelectedFile = useCallback((id: string, displayName: string, documentType: string) => {
@@ -601,13 +724,13 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   const reason =
                     status === "FAILED"
                       ? event.message ||
-                        event.error ||
-                        event.data?.message ||
-                        (errorCode === "NON_MEDICAL_DOCUMENT"
-                          ? "Non-medical document rejected"
-                          : "Processing failed")
+                      event.error ||
+                      event.data?.message ||
+                      (errorCode === "NON_MEDICAL_DOCUMENT"
+                        ? "Non-medical document rejected"
+                        : "Processing failed")
                       : null;
-                  
+
                   const isNonRetryable =
                     errorCode === "NON_MEDICAL_DOCUMENT" ||
                     errorCode === "NON_RETRYABLE" ||
@@ -693,14 +816,14 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           const nextDocs = prev.map((d) =>
             d.fileKey === fileKey || d.id === fileKey
               ? {
-                  ...d,
-                  status: "FAILED",
-                  stage: "FAILED",
-                  currentStep: errorMsg,
-                  reason: errorMsg,
-                  errorCode: errorData?.errorCode || (isNonRetryable ? "NON_RETRYABLE" : d.errorCode),
-                  retryable: !isNonRetryable,
-                }
+                ...d,
+                status: "FAILED",
+                stage: "FAILED",
+                currentStep: errorMsg,
+                reason: errorMsg,
+                errorCode: errorData?.errorCode || (isNonRetryable ? "NON_RETRYABLE" : d.errorCode),
+                retryable: !isNonRetryable,
+              }
               : d,
           );
           updateCompletedBatchFromDocs(nextDocs);
@@ -718,50 +841,26 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   );
 
   const startUpload = useCallback(
-    async (
-      userId: string,
-      fromScreen?: string,
-      onSuccess?: (jobIds: string[], filesInfo: any[]) => void,
-      filesOverride?: SelectedDocument[],
-    ) => {
-      const targetFiles = filesOverride && filesOverride.length > 0 ? filesOverride : selectedFiles;
-      if (targetFiles.length === 0) return;
-
-      if (
-        isUploadingRef.current ||
-        (uploadingDocs &&
-          uploadingDocs.some(
-            (d) =>
-              d.status === "UPLOADING" ||
-              d.status === "QUEUED" ||
-              d.status === "PROCESSING" ||
-              (d.progress !== undefined &&
-                d.progress > 0 &&
-                d.progress < 100 &&
-                d.status !== "FAILED" &&
-                d.status !== "REJECTED" &&
-                d.status !== "COMPLETED")
-          ))
-      ) {
-        console.warn("Upload already in progress, ignoring duplicate startUpload request");
+    async (userId: string, fromScreen?: string, onSuccess?: (jobIds: string[], filesInfo: any[]) => void) => {
+      const readyFiles = selectedFiles.filter((f) => f.validationStatus === "READY");
+      if (readyFiles.length === 0) {
         Toast.show({
           type: "info",
-          position: "top",
-          text1: "Processing in Progress",
-          text2: "A document is currently being processed. Please wait for it to complete.",
+          text1: "No Valid Documents",
+          text2: "Please ensure at least one document is ready to upload.",
         });
         return;
       }
 
-      isUploadingRef.current = true;
       setIsUploading(true);
       setProcessingError(null);
 
       const uploadSource = fromScreen || activeUploadFromScreenRef.current;
-
-      const initialUploading: UploadingDoc[] = targetFiles.map((file) => ({
+      const initialUploading: UploadingDoc[] = readyFiles.map((file) => ({
         id: file.id,
         name: file.displayName || file.originalName,
+        fileSize: file.size,
+        mimeType: file.mimeType,
         progress: 0,
         percentage: 0,
         status: "UPLOADING",
@@ -782,7 +881,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       lastBatchEventIdRef.current = null;
 
       try {
-        const filesPayload = targetFiles.map((file) => {
+        const filesPayload = readyFiles.map((file) => {
           const name = getFileNameWithExtension(file.displayName, file.originalName);
           return {
             uri: file.uri,
@@ -803,20 +902,30 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         activeBatchIdRef.current = batchId;
         lastBatchEventIdRef.current = null;
 
-        const mappedDocs: UploadingDoc[] = batchData.documents.map((doc: any) => ({
-          id: doc.jobId || doc.fileKey,
-          fileKey: doc.fileKey,
-          jobId: doc.jobId || doc.fileKey,
-          name: doc.fileName || "Document",
-          progress: 0,
-          percentage: 0,
-          status: doc.status || "QUEUED",
-          stage: doc.status || "QUEUED",
-          currentStep: "Queued for processing",
-          reason: null,
-          batchId,
-          fromScreen: uploadSource,
-        }));
+        const mappedDocs: UploadingDoc[] = batchData.documents.map((doc: any, index: number) => {
+          const matchingReady =
+            readyFiles[index] ||
+            readyFiles.find(
+              (rf) =>
+                getFileNameWithExtension(rf.displayName, rf.originalName) === doc.fileName ||
+                rf.originalName === doc.fileName
+            );
+          return {
+            id: doc.jobId || doc.fileKey,
+            fileKey: doc.fileKey,
+            jobId: doc.jobId || doc.fileKey,
+            name: doc.fileName || "Document",
+            fileSize: matchingReady?.size || 0,
+            mimeType: matchingReady?.mimeType || "application/pdf",
+            progress: 0,
+            percentage: 0,
+            status: doc.status || "QUEUED",
+            stage: doc.status || "QUEUED",
+            currentStep: "Queued for processing",
+            reason: null,
+            batchId,
+          };
+        });
 
         setUploadingDocs(mappedDocs);
         clearSelectedFiles();
@@ -828,6 +937,8 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           jobId: d.jobId || d.id,
           fileName: d.name,
           fileKey: d.fileKey || d.id,
+          fileSize: d.fileSize || 0,
+          mimeType: d.mimeType || "application/pdf",
         }));
 
         // ONLY trigger chat wizard if the upload was explicitly started from the AI Chat screen
@@ -937,15 +1048,15 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           }
         };
 
-        const endpointUrl = lastBatchEventIdRef.current 
+        const endpointUrl = lastBatchEventIdRef.current
           ? `${batchUrl}?lastEventId=${lastBatchEventIdRef.current}`
           : batchUrl;
 
         activeSseUnsubRef.current = connectSseStream({
           endpoint: endpointUrl,
           method: "GET",
-          headers: lastBatchEventIdRef.current 
-            ? { "Last-Event-ID": lastBatchEventIdRef.current } 
+          headers: lastBatchEventIdRef.current
+            ? { "Last-Event-ID": lastBatchEventIdRef.current }
             : undefined,
           onEvent: (event: SseEventPayload) => {
             const currentEventId = event.id || event.eventId;
@@ -992,11 +1103,11 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   const reason =
                     status === "FAILED"
                       ? matchedEvent.message ||
-                        matchedEvent.error ||
-                        matchedEvent.data?.message ||
-                        (errorCode === "NON_MEDICAL_DOCUMENT"
-                          ? "Non-medical document rejected"
-                          : "Processing failed")
+                      matchedEvent.error ||
+                      matchedEvent.data?.message ||
+                      (errorCode === "NON_MEDICAL_DOCUMENT"
+                        ? "Non-medical document rejected"
+                        : "Processing failed")
                       : null;
 
                   const isNonRetryable =
@@ -1036,10 +1147,10 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
                   const reason =
                     status === "FAILED"
                       ? event.message ||
-                        event.error ||
-                        (errorCode === "NON_MEDICAL_DOCUMENT"
-                          ? "Non-medical document rejected"
-                          : "Processing failed")
+                      event.error ||
+                      (errorCode === "NON_MEDICAL_DOCUMENT"
+                        ? "Non-medical document rejected"
+                        : "Processing failed")
                       : null;
 
                   const isNonRetryable =
@@ -1270,6 +1381,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         setIsProgressExpanded,
         addSelectedFiles,
         removeSelectedFile,
+        removeInvalidFiles,
         updateSelectedFile,
         clearSelectedFiles,
         startUpload,
