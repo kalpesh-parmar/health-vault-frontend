@@ -917,7 +917,11 @@ export default function OnboardingScreen() {
     }
   };
 
-  const processAssistantResponse = (aiRes: any, currentState: typeof state) => {
+  const processAssistantResponse = (
+    aiRes: any,
+    currentState: typeof state,
+    confirmedMedicines?: any[],
+  ) => {
     const messageContent =
       aiRes.reply || aiRes.message || aiRes.message_en || aiRes.message_gu;
 
@@ -952,6 +956,16 @@ export default function OnboardingScreen() {
       action === "ASK_REPORT" && !isReportCardResponse
         ? "NORMAL_CHAT"
         : action;
+    // The confirm endpoint can return a REVIEW_MEDICINES_LIST response with
+    // only one medicine even though the submitted confirmation contains all
+    // selected medicines. Keep the submitted list for the UI card so the
+    // confirmed history does not lose items from the list.
+    const responseMedicines =
+      Array.isArray(confirmedMedicines) &&
+      confirmedMedicines.length > 0 &&
+      (aiRes.onboardingState?.medicinesConfirmed || aiRes.state?.medicinesConfirmed)
+        ? confirmedMedicines
+        : aiRes.medicines;
 
     const reportSummaryData =
       aiRes.reportSummary ||
@@ -995,7 +1009,7 @@ export default function OnboardingScreen() {
         (state as any)?.provider,
       sourceComparison: aiRes.sourceComparison,
       medicine: aiRes.medicine,
-      medicines: medListResult.isMedicationList ? medListResult.items : aiRes.medicines,
+      medicines: medListResult.isMedicationList ? medListResult.items : responseMedicines,
       items: medListResult.items,
       pagination: medListResult.pagination || aiRes.pagination,
       totalBuffered: aiRes.totalBuffered,
@@ -1612,7 +1626,13 @@ export default function OnboardingScreen() {
       console.log("Onboarding sendMessage Response :- ", resData);
 
       if (resData) {
-        processAssistantResponse(resData, updatedState);
+        processAssistantResponse(
+          resData,
+          updatedState,
+          resolvedActionType === "CONFIRM_MEDICINES" && Array.isArray(actionData?.medicines)
+            ? actionData.medicines
+            : undefined,
+        );
         const action = resData.actionType || resData.action;
         const responseOnboardingCompleted = Boolean(
           resData.onboardingState?.isOnboardingCompleted ||
@@ -3360,12 +3380,13 @@ export default function OnboardingScreen() {
             msg.id === activeMsg.id
               ? {
                 ...msg,
-                medicines: deduplicateDrafts(msg.medicines || localMedicines || []).map(
-                  (m) => ({
-                    ...m,
-                    selected: checkedMeds.includes(m.client_med_id || m.id) || checkedMeds.includes(m.id),
-                  }),
-                ),
+                // Keep the exact set submitted by the user. The backend may
+                // return a partial/stale medicines array on the follow-up
+                // response, which must not replace the local selection.
+                medicines: uniqueSelected.map((m) => ({
+                  ...m,
+                  selected: true,
+                })),
               }
               : msg,
           ),

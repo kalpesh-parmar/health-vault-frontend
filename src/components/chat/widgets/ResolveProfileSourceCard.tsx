@@ -5,7 +5,10 @@ import { widgetStyles as styles } from "./WidgetStyles";
 import { parseChosenJson } from "./MedicineHelpers";
 import { useProfileSourceState } from "./profile-source/useProfileSourceState";
 import { ProfileFieldEditor } from "./profile-source/ProfileFieldEditor";
-import { ProfileConflictSelector } from "./profile-source/ProfileConflictSelector";
+import {
+  ProfileConflictSelector,
+  ProfileEditSource,
+} from "./profile-source/ProfileConflictSelector";
 import { ProfileConfirmView } from "./profile-source/ProfileConfirmView";
 
 export interface ResolveProfileSourceCardProps {
@@ -36,7 +39,8 @@ export function ResolveProfileSourceCard({
   chosenVal,
   chosenLabel,
 }: ResolveProfileSourceCardProps) {
-  const [localEditedData, setLocalEditedData] = useState<any>(null);
+  const [localEditedData, setLocalEditedData] = useState<Record<string, any>>({});
+  const [editedSource, setEditedSource] = useState<ProfileEditSource | "MANUAL" | null>(null);
 
   const {
     onboardingState,
@@ -82,34 +86,68 @@ export function ResolveProfileSourceCard({
     (onboardingState?.documentData && Object.keys(onboardingState.documentData).length > 0)
   );
 
-  const handleStartManualEdit = () => {
+  const handleStartManualEdit = (source: ProfileEditSource | "MANUAL" = "MANUAL") => {
     const initData: any = {};
     fields.forEach((f) => {
+      const sourceValue =
+        source === "DOCUMENT"
+          ? f.documentValue || (f.isMismatch ? "" : f.value)
+          : source === "LOGIN"
+            ? f.loginValue || (f.isMismatch ? "" : f.value)
+            : f.value;
       const rawVal =
-        localEditedData && localEditedData[f.key] !== undefined
-          ? localEditedData[f.key]
-          : (f.loginValue || f.documentValue || f.value || "");
+        localEditedData?.[source]?.[f.key] !== undefined
+          ? localEditedData[source][f.key]
+          : (sourceValue || "");
       initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
     });
+    setEditedSource(source);
     setEditedProfileData(initData);
     setIsEditingProfileManually(true);
   };
 
   const handleSaveManualEdit = (data: any) => {
     setIsEditingProfileManually(false);
-    setLocalEditedData(data);
+    setLocalEditedData((previous) => ({
+      ...previous,
+      [editedSource || "MANUAL"]: data,
+    }));
+  };
+
+  const getStateWithEditedSource = (source = editedSource) => {
+    const editedData = source ? localEditedData[source] : null;
+    if (!editedData || !source) return state;
+
+    // Keep the existing generic manual-edit behavior for the non-conflict flow.
+    if (editedSource === "MANUAL") {
+      return {
+        ...state,
+        existingUserData: {
+          ...(state?.existingUserData || {}),
+          ...editedData,
+        },
+      };
+    }
+
+    const sourceKey = editedSource === "DOCUMENT" ? "documentData" : "socialData";
+    return {
+      ...state,
+      profileSource: editedSource,
+      [sourceKey]: {
+        ...(state?.[sourceKey] || {}),
+        ...editedData,
+      },
+    };
   };
 
   const handleConfirmProfile = () => {
-    const payload = localEditedData
-      ? { confirmed: true, source: "MANUAL", edited: localEditedData, ...localEditedData }
+    const editedData = localEditedData.MANUAL;
+    const payload = editedData
+      ? { ...editedData, confirmed: true, source: "MANUAL", edited: editedData }
       : { confirmed: true };
     const updatedState = {
-      ...state,
+      ...getStateWithEditedSource("MANUAL"),
       documentConfirmed: true,
-      ...(localEditedData
-        ? { existingUserData: { ...(state?.existingUserData || {}), ...localEditedData } }
-        : {}),
     };
     sendMessage(
       JSON.stringify(payload),
@@ -120,28 +158,31 @@ export function ResolveProfileSourceCard({
   };
 
   const handleSelectProvider = () => {
-    const isManual = Boolean(localEditedData);
-    const payload = isManual
-      ? { source: "MANUAL", edited: localEditedData, ...localEditedData }
+    const editedData = localEditedData.LOGIN;
+    const payload = editedData
+      ? { ...editedData, source: "LOGIN", edited: editedData }
       : { source: "LOGIN" };
-    const updatedState = isManual
-      ? { ...state, existingUserData: { ...(state?.existingUserData || {}), ...localEditedData } }
-      : state;
+    const updatedState = editedData ? getStateWithEditedSource("LOGIN") : state;
     sendMessage(
       JSON.stringify(payload),
       updatedState,
-      isManual ? (uiT("useEditedInformation") || "Use Edited Information") : (uiT("useSocialLogin") || "Use Social Login"),
+      editedData ? (uiT("useEditedInformation") || "Use Edited Information") : (uiT("useSocialLogin") || "Use Social Login"),
       "RESOLVE_PROFILE_SOURCE",
     );
   };
 
   const handleSelectDocument = () => {
+    const editedData = localEditedData.DOCUMENT;
     const updatedState = {
-      ...state,
+      ...(editedData ? getStateWithEditedSource("DOCUMENT") : state),
       documentConfirmed: true,
     };
     sendMessage(
-      JSON.stringify({ source: hasDocumentUploaded ? "DOCUMENT" : "MANUAL" }),
+      JSON.stringify(
+        editedData
+          ? { ...editedData, source: "DOCUMENT", edited: editedData }
+          : { source: hasDocumentUploaded ? "DOCUMENT" : "MANUAL" },
+      ),
       updatedState,
       hasDocumentUploaded
         ? (uiT("useDocument") || "Use Document")
@@ -208,7 +249,7 @@ export function ResolveProfileSourceCard({
       {mode === "CONFIRM" ? (
         <ProfileConfirmView
           fields={fields}
-          localEditedData={localEditedData}
+          localEditedData={localEditedData.MANUAL}
           parsed={parsed}
           chosenLabel={chosenLabel}
           isHistorical={isHistorical}

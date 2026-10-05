@@ -7,6 +7,8 @@ import FacebookLogo from "../../../../assets/auth-logos/FacebookLogo";
 import MicrosoftLogo from "../../../../assets/auth-logos/MicrosoftLogo";
 import { ProfileField } from "./useProfileSourceState";
 
+export type ProfileEditSource = "LOGIN" | "DOCUMENT";
+
 interface ProfileConflictSelectorProps {
   fields: ProfileField[];
   loginProvider?: string;
@@ -19,7 +21,7 @@ interface ProfileConflictSelectorProps {
   getProviderLabel: (p: string | undefined) => string;
   onSelectProvider: () => void;
   onSelectDocument: () => void;
-  onEditManually: () => void;
+  onEditManually: (source: ProfileEditSource) => void;
   isHistorical?: boolean;
 }
 
@@ -94,11 +96,13 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
   onEditManually,
   isHistorical,
 }: ProfileConflictSelectorProps) {
-  const providerLabel = localEditedData
+  const editedLoginData = localEditedData?.LOGIN || null;
+  const editedDocumentData = localEditedData?.DOCUMENT || null;
+  const providerLabel = editedLoginData
     ? (uiT("editedInformation") || "Edited Information")
     : (getProviderLabel(loginProvider) || uiT("fromSocialLogin") || "From Social Login");
 
-  const leftButtonText = localEditedData
+  const leftButtonText = editedLoginData
     ? (uiT("useEditedInformation") || "Use Edited Information")
     : (uiT("useSocialLogin") || "Use Social Login");
 
@@ -127,7 +131,7 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
             ]}
           >
             <View style={styles.headerLogoContainer}>
-              {localEditedData ? (
+              {editedLoginData ? (
                 <Ionicons
                   name="create-outline"
                   size={18}
@@ -154,8 +158,8 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
           <View style={styles.columnBody}>
             {fields.map((field) => {
               const rawVal =
-                localEditedData && localEditedData[field.key] !== undefined
-                  ? localEditedData[field.key]
+                editedLoginData && editedLoginData[field.key] !== undefined
+                  ? editedLoginData[field.key]
                   : field.loginValue || (field.isMismatch ? null : field.value);
 
               const formattedVal = formatFieldValue(field.key, rawVal);
@@ -208,7 +212,7 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
                     borderColor: isDark ? "#3b82f650" : "#93c5fd",
                   },
                 ]}
-                onPress={onEditManually}
+                onPress={() => onEditManually("LOGIN")}
                 activeOpacity={0.7}
               >
                 <Ionicons
@@ -291,7 +295,9 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
           <View style={styles.columnBody}>
             {fields.map((field) => {
               const rawVal =
-                field.documentValue || (field.isMismatch ? null : field.value);
+                editedDocumentData && editedDocumentData[field.key] !== undefined
+                  ? editedDocumentData[field.key]
+                  : field.documentValue || (field.isMismatch ? null : field.value);
 
               const formattedVal = formatFieldValue(field.key, rawVal);
 
@@ -343,7 +349,7 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
                     borderColor: isDark ? "#10b98150" : "#86efac",
                   },
                 ]}
-                onPress={onEditManually}
+                onPress={() => onEditManually("DOCUMENT")}
                 activeOpacity={0.7}
               >
                 <Ionicons
