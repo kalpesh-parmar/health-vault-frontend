@@ -483,38 +483,70 @@ const EditProfile = () => {
         profileImageKey = fileData.s3Key || profileImageKey;
       }
 
-      const payload: any = {
-        profileImageKey: profileImageKey!,
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        gender: form.gender,
+      const payload: any = {};
+      const addIfChanged = (key: string, nextValue: unknown, currentValue: unknown) => {
+        if (nextValue !== currentValue) {
+          payload[key] = nextValue;
+        }
       };
 
-      if (form.mobile && form.mobile.trim()) {
-        const cleanedMobile = form.mobile.trim().replace(/\s+/g, "");
-        payload.mobile = cleanedMobile.startsWith("+")
-          ? cleanedMobile.slice(3)
-          : cleanedMobile;
-      }
-
-      if (form.email && form.email.trim()) {
-        payload.email = form.email.trim();
-      }
-
-      if (form.dateOfBirth) {
-        payload.dateOfBirth = format(form.dateOfBirth, "yyyy-MM-dd");
-      }
-
-      payload.bloodGroup = form.bloodGroup?.trim()
-        ? form.bloodGroup.trim().toUpperCase()
+      // Compare normalized values so formatting-only edits do not cause an update.
+      const currentMobile = currentUserData?.mobile
+        ? currentUserData.mobile.trim().replace(/\s+/g, "")
         : "";
+      const cleanedMobile = form.mobile.trim().replace(/\s+/g, "");
+      const nextMobile = cleanedMobile
+        ? cleanedMobile.startsWith("+")
+          ? cleanedMobile.slice(3)
+          : cleanedMobile
+        : "";
+      const normalizedCurrentMobile = currentMobile.startsWith("+")
+        ? currentMobile.slice(3)
+        : currentMobile;
+
+      addIfChanged(
+        "firstName",
+        form.firstName.trim(),
+        (currentUserData?.firstName || "").trim(),
+      );
+      addIfChanged(
+        "lastName",
+        form.lastName.trim(),
+        (currentUserData?.lastName || "").trim(),
+      );
+      addIfChanged("gender", form.gender, currentUserData?.gender || "");
+      addIfChanged("mobile", nextMobile, normalizedCurrentMobile);
+      addIfChanged(
+        "email",
+        form.email.trim(),
+        (currentUserData?.email || "").trim(),
+      );
+
+      const nextDateOfBirth = form.dateOfBirth
+        ? format(form.dateOfBirth, "yyyy-MM-dd")
+        : null;
+      const currentDateOfBirth = currentUserData?.dateOfBirth
+        ? String(currentUserData.dateOfBirth).slice(0, 10)
+        : null;
+      addIfChanged("dateOfBirth", nextDateOfBirth, currentDateOfBirth);
+
+      const nextBloodGroup = form.bloodGroup?.trim().toUpperCase() || "";
+      const currentBloodGroup = currentUserData?.bloodGroup?.trim().toUpperCase() || "";
+      addIfChanged("bloodGroup", nextBloodGroup, currentBloodGroup);
 
       const allergiesArray = form.allergies
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
-      if (allergiesArray.length > 0) {
+      const currentAllergies = Array.isArray(currentUserData?.allergies)
+        ? currentUserData.allergies.map((allergy: string) => allergy.trim())
+        : [];
+      if (JSON.stringify(allergiesArray) !== JSON.stringify(currentAllergies)) {
         payload.allergies = allergiesArray;
+      }
+
+      if (profileImageKey !== currentUserData?.profileImageKey) {
+        payload.profileImageKey = profileImageKey;
       }
 
       return await updateUser(userId, payload);
