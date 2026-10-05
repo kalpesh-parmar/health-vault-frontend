@@ -187,6 +187,11 @@ const MedicationOperation = ({
   const medicationId = currentMedication?.id;
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  // Reset scrollY to 0 whenever draft index or mode changes so the header stays fully expanded
+  React.useEffect(() => {
+    scrollY.setValue(0);
+  }, [currentDraftIndex, mode]);
+
   const headerTitle =
     currentOperation === "edit"
       ? "Edit Medication"
@@ -323,7 +328,7 @@ const MedicationOperation = ({
     }
   };
 
-  // Add & Continue handler: adds to drafts and moves to next form
+  // Add & Continue handler: adds to drafts and moves to next form with expanded header
   const handleAddAndContinue = (validMed: AddOrEditMedication) => {
     const updated = [...drafts];
     if (currentDraftIndex < updated.length) {
@@ -335,6 +340,7 @@ const MedicationOperation = ({
 
     const nextIdx = updated.length;
     setCurrentDraftIndex(nextIdx);
+    scrollY.setValue(0);
 
     Toast.show({
       type: "success",
@@ -357,6 +363,7 @@ const MedicationOperation = ({
     }
 
     if (updated.length > 0) {
+      scrollY.setValue(0);
       setMode("review");
     } else {
       Toast.show({
@@ -382,11 +389,13 @@ const MedicationOperation = ({
       setDrafts(updated);
     }
     setCurrentDraftIndex(targetIndex);
+    scrollY.setValue(0);
   };
 
   // Edit from review screen
   const handleEditDraftFromReview = (index: number) => {
     setCurrentDraftIndex(index);
+    scrollY.setValue(0);
     setMode("form");
   };
 
@@ -394,6 +403,7 @@ const MedicationOperation = ({
   const handleDeleteDraftFromReview = (index: number) => {
     const updated = drafts.filter((_, idx) => idx !== index);
     setDrafts(updated);
+    scrollY.setValue(0);
     if (updated.length === 0) {
       setCurrentDraftIndex(0);
       setMode("form");
@@ -405,6 +415,7 @@ const MedicationOperation = ({
   // Add new from review screen
   const handleAddNewFromReview = () => {
     setCurrentDraftIndex(drafts.length);
+    scrollY.setValue(0);
     setMode("form");
   };
 

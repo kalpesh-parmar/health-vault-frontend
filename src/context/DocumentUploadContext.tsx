@@ -34,6 +34,7 @@ export interface ChatWizardState {
 }
 export interface UploadingDoc {
   id: string;
+  documentId?: string;
   fileKey?: string;
   jobId?: string;
   name: string;
@@ -805,20 +806,31 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         activeBatchIdRef.current = batchId;
         lastBatchEventIdRef.current = null;
 
-        const mappedDocs: UploadingDoc[] = batchData.documents.map((doc: any) => ({
-          id: doc.jobId || doc.fileKey,
-          fileKey: doc.fileKey,
-          jobId: doc.jobId || doc.fileKey,
-          name: doc.fileName || "Document",
-          progress: 0,
-          percentage: 0,
-          status: doc.status || "QUEUED",
-          stage: doc.status || "QUEUED",
-          currentStep: "Queued for processing",
-          reason: null,
-          batchId,
-          fromScreen: uploadSource,
-        }));
+        const mappedDocs: UploadingDoc[] = batchData.documents.map((doc: any) => {
+          const docUuid =
+            doc.documentId ||
+            doc.id ||
+            doc.uuid ||
+            (doc.fileKey && !String(doc.fileKey).startsWith("doc_") ? doc.fileKey : null) ||
+            doc.fileKey ||
+            doc.jobId;
+
+          return {
+            id: docUuid,
+            documentId: doc.documentId || doc.id || doc.uuid || (doc.fileKey && !String(doc.fileKey).startsWith("doc_") ? doc.fileKey : undefined),
+            fileKey: doc.fileKey,
+            jobId: doc.jobId || doc.fileKey,
+            name: doc.fileName || "Document",
+            progress: 0,
+            percentage: 0,
+            status: doc.status || "QUEUED",
+            stage: doc.status || "QUEUED",
+            currentStep: "Queued for processing",
+            reason: null,
+            batchId,
+            fromScreen: uploadSource,
+          };
+        });
 
         setUploadingDocs(mappedDocs);
         clearSelectedFiles();
@@ -830,6 +842,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           jobId: d.jobId || d.id,
           fileName: d.name,
           fileKey: d.fileKey || d.id,
+          documentId: d.documentId || d.id,
         }));
 
         // ONLY trigger chat wizard if the upload was explicitly started from the AI Chat screen
@@ -1210,8 +1223,13 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         } catch (e) {
           finalBackgroundName = finalBackgroundName.replace(/%20/g, " ");
         }
+        const docUuid =
+          file?.documentId ||
+          (file?.fileKey && !String(file.fileKey).startsWith("doc_") ? file.fileKey : undefined);
+
         return {
-          id: jobId,
+          id: docUuid || jobId,
+          documentId: docUuid,
           fileKey: file?.fileKey || jobId,
           jobId,
           name: finalBackgroundName,
@@ -1248,7 +1266,17 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       await Promise.all(
         runningJobs.map(async (job) => {
           try {
-            await cancelOcr(job.jobId || job.id);
+            // cancelOcr accepts document UUID instead of doc_ jobId
+            const docUuid =
+              job.documentId ||
+              (job.fileKey && !String(job.fileKey).startsWith("doc_") ? job.fileKey : null) ||
+              (job.id && !String(job.id).startsWith("doc_") ? job.id : null) ||
+              job.fileKey ||
+              job.id;
+
+            if (docUuid) {
+              await cancelOcr(docUuid);
+            }
           } catch (e) {
             console.warn(`Failed to cancel job ${job.id}:`, e);
           }

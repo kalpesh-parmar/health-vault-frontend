@@ -107,6 +107,12 @@ const MedicationForm = ({
     };
   }, []);
 
+  const scrollRef = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    scrollRef.current?.scrollTo?.({ y: 0, animated: false });
+  }, [currentIndex]);
+
   const buildMedicationPayload = (): AddOrEditMedication | null => {
     const errors: string[] = [];
     if (!formName.trim()) {
@@ -212,6 +218,7 @@ const MedicationForm = ({
   return (
     <View style={{ flex: 1 }}>
       <ScrollContent
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}

@@ -2576,7 +2576,13 @@ export default function OnboardingScreen() {
       }
 
       const jobId = createdItem.jobId || createdItem.fileKey;
-      const docId = createdItem.fileKey || createdItem.jobId;
+      const docId =
+        createdItem.documentId ||
+        createdItem.id ||
+        createdItem.uuid ||
+        (createdItem.fileKey && !String(createdItem.fileKey).startsWith("doc_") ? createdItem.fileKey : null) ||
+        createdItem.fileKey ||
+        createdItem.jobId;
       const streamUrl = createdItem.streamUrl;
       currentDocIdRef.current = docId;
 
