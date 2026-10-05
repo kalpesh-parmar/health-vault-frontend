@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { Animated, TouchableOpacity, View, Modal, ScrollView, ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,18 +11,154 @@ import { useMutation } from "@tanstack/react-query";
 import { useAppTheme } from "../../../../context/ThemeContext";
 import {
   addMedication,
+  addMedicationsBatch,
   updateMedication,
 } from "../../../../services/medicationservice";
 import MedicationForm from "../../../../components/MedicationForm";
+import MedicationBatchReview from "./MedicationBatchReview";
 import { AddOrEditMedication } from "../../../../types";
 import { queryClient } from "../../../../config/queryClient";
 import { MedicationStackParamList } from "../../../../types/navigation";
-import { createMedicationReminder } from "../../../../services/reminderService";
+import {
+  createMedicationReminder,
+  createMedicationRemindersBatch,
+} from "../../../../services/reminderService";
 
 type AddMedicationScreenRouteProp = RouteProp<
   MedicationStackParamList,
   "MedicationOperation"
 >;
+
+const formatMedicationForBatchApi = (med: AddOrEditMedication) => {
+  const normType = String(med.medicationType || "TABLET").toUpperCase().trim();
+
+  // Frequency mapping
+  let normFreq = "ONCE_DAILY";
+  const freqStr = String(med.frequency || "").toUpperCase().trim();
+  if (freqStr.includes("TWICE") || freqStr.includes("2")) {
+    normFreq = "TWICE_DAILY";
+  } else if (freqStr.includes("THRICE") || freqStr.includes("3") || freqStr.includes("THREE")) {
+    normFreq = "THRICE_DAILY";
+  } else if (freqStr.includes("ONCE") || freqStr.includes("1")) {
+    normFreq = "ONCE_DAILY";
+  } else if (freqStr) {
+    normFreq = freqStr.replace(/\s+/g, "_");
+  }
+
+  // Food frequency mapping
+  let normFood = "AFTER_FOOD";
+  const foodStr = String(med.foodFrequency || "").toUpperCase().trim().replace(/\s+/g, "_");
+  if (foodStr.includes("BEFORE")) {
+    normFood = "BEFORE_FOOD";
+  } else if (foodStr.includes("AFTER")) {
+    normFood = "AFTER_FOOD";
+  } else if (foodStr.includes("WITH")) {
+    normFood = "WITH_FOOD";
+  } else if (foodStr) {
+    normFood = foodStr;
+  }
+
+  // Schedule mapping: ensure object with HH:mm:ss format
+  const scheduleObj: Record<string, string> = {};
+  if (med.medicationSchedule && typeof med.medicationSchedule === "object" && !Array.isArray(med.medicationSchedule)) {
+    Object.entries(med.medicationSchedule).forEach(([k, rawVal]) => {
+      const v = rawVal as any;
+      if (typeof v === "string") {
+        const timeVal = v.length === 5 ? `${v}:00` : v;
+        scheduleObj[k.toUpperCase()] = timeVal;
+      } else if (Array.isArray(v) && v.length > 0) {
+        const firstTime = String(v[0]);
+        scheduleObj[k.toUpperCase()] = firstTime.length === 5 ? `${firstTime}:00` : firstTime;
+      }
+    });
+  } else if (Array.isArray(med.medicationSchedule)) {
+    const times = [...med.medicationSchedule].sort();
+    times.forEach((t, i) => {
+      const timeStr = String(t);
+      const timeWithSec = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+      let slotKey = i === 0 ? "MORNING" : i === 1 ? (times.length === 2 ? "NIGHT" : "NOON") : "NIGHT";
+      if (timeStr.startsWith("08:") || timeStr.startsWith("09:")) slotKey = "MORNING";
+      else if (timeStr.startsWith("13:") || timeStr.startsWith("14:") || timeStr.startsWith("15:")) slotKey = "NOON";
+      else if (timeStr.startsWith("19:") || timeStr.startsWith("20:") || timeStr.startsWith("21:")) slotKey = "NIGHT";
+      scheduleObj[slotKey] = timeWithSec;
+    });
+  }
+
+  if (Object.keys(scheduleObj).length === 0) {
+    if (normFreq === "TWICE_DAILY") {
+      scheduleObj["MORNING"] = "08:00:00";
+      scheduleObj["NIGHT"] = "20:00:00";
+    } else if (normFreq === "THRICE_DAILY") {
+      scheduleObj["MORNING"] = "08:00:00";
+      scheduleObj["NOON"] = "14:00:00";
+      scheduleObj["NIGHT"] = "20:00:00";
+    } else {
+      scheduleObj["MORNING"] = "08:00:00";
+    }
+  }
+
+  let startDateStr = med.startDate;
+  if (!startDateStr) {
+    const d = new Date();
+    startDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  } else if (startDateStr.includes("T")) {
+    startDateStr = startDateStr.split("T")[0];
+  }
+
+  const payloadItem: any = {
+    medicationName: (med.medicationName || "").trim(),
+    medicationType: normType,
+    frequency: normFreq,
+    startDate: startDateStr,
+    medicationSchedule: scheduleObj,
+    foodFrequency: normFood,
+    totalQuantity: typeof med.totalQuantity === "number" ? med.totalQuantity : parseInt(String(med.totalQuantity || 10), 10) || 10,
+  };
+
+  if (med.dosePerIntake !== undefined && med.dosePerIntake !== null) {
+    payloadItem.dosePerIntake = typeof med.dosePerIntake === "number" ? med.dosePerIntake : parseFloat(String(med.dosePerIntake)) || 1;
+  }
+  if (med.unit) {
+    payloadItem.unit = med.unit;
+  }
+  if (med.prescribedBy) {
+    payloadItem.prescribedBy = med.prescribedBy.trim();
+  }
+  if (med.notes) {
+    payloadItem.notes = med.notes.trim();
+  }
+  if (med.resolution) {
+    payloadItem.resolution = med.resolution;
+  }
+  if (med.replaceMedicationId) {
+    payloadItem.replaceMedicationId = med.replaceMedicationId;
+  }
+
+  return payloadItem;
+};
+
+const extractCreatedMedicationIds = (responseData: any): string[] => {
+  if (!responseData) return [];
+  const rawList = Array.isArray(responseData)
+    ? responseData
+    : Array.isArray(responseData.data)
+      ? responseData.data
+      : Array.isArray(responseData.items)
+        ? responseData.items
+        : Array.isArray(responseData.data?.items)
+          ? responseData.data.items
+          : Array.isArray(responseData.data?.medications)
+            ? responseData.data.medications
+            : Array.isArray(responseData.medications)
+              ? responseData.medications
+              : responseData.id || responseData.data?.id
+                ? [responseData.id || responseData.data?.id]
+                : [];
+
+  return rawList
+    .map((item: any) => (typeof item === "string" ? item : item?.id || item?._id || item?.medicationId))
+    .filter(Boolean);
+};
 
 const MedicationOperation = ({
   route,
@@ -34,16 +170,38 @@ const MedicationOperation = ({
   const { isDark } = useAppTheme();
   const { operation, medication } = route.params;
 
-  const [currentOperation, setCurrentOperation] = React.useState(operation);
-  const [currentMedication, setCurrentMedication] = React.useState(medication);
-  const [duplicateConflict, setDuplicateConflict] = React.useState<any | null>(null);
-  const [pendingFormData, setPendingFormData] = React.useState<AddOrEditMedication | null>(null);
-  const [isReplacing, setIsReplacing] = React.useState(false);
+  const [currentOperation, setCurrentOperation] = useState(operation);
+  const [currentMedication, setCurrentMedication] = useState(medication);
+  
+  // Batch Add states
+  const [mode, setMode] = useState<"form" | "review">("form");
+  const [drafts, setDrafts] = useState<AddOrEditMedication[]>([]);
+  const [currentDraftIndex, setCurrentDraftIndex] = useState<number>(0);
+  const [isBatchSaving, setIsBatchSaving] = useState(false);
+
+  // Duplicate conflict states
+  const [duplicateConflict, setDuplicateConflict] = useState<any | null>(null);
+  const [pendingFormData, setPendingFormData] = useState<AddOrEditMedication | null>(null);
+  const [isReplacing, setIsReplacing] = useState(false);
 
   const medicationId = currentMedication?.id;
-  const scrollY = React.useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   const headerTitle =
-    currentOperation === "add" ? "Add Medication" : "Edit Medication";
+    currentOperation === "edit"
+      ? "Edit Medication"
+      : mode === "review"
+        ? "Review Medications"
+        : "Add Medication";
+
+  const headerSubtitle =
+    currentOperation === "edit"
+      ? "Maintain your medical schedule"
+      : mode === "review"
+        ? `${drafts.length} medication${drafts.length > 1 ? "s" : ""} ready to save`
+        : drafts.length > 0
+          ? `${drafts.length} medicine${drafts.length > 1 ? "s" : ""} added · Add another or review`
+          : "Maintain your medical schedule";
 
   const headerPaddingTop = scrollY.interpolate({
     inputRange: [0, 90],
@@ -86,9 +244,9 @@ const MedicationOperation = ({
     { useNativeDriver: false },
   );
 
-  const { mutateAsync: addMedicationMutation, isPending: isLoading } =
+  const { mutateAsync: addMedicationsBatchMutation, isPending: isLoading } =
     useMutation({
-      mutationFn: addMedication,
+      mutationFn: addMedicationsBatch,
     });
 
   const { mutateAsync: editMedicationMutation, isPending: isEditingLoading } =
@@ -107,29 +265,37 @@ const MedicationOperation = ({
       queryClient.invalidateQueries({ queryKey: ["allReminders"] }),
       queryClient.invalidateQueries({ queryKey: ["notificationCount"] }),
       queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] }),
-      queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] })
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] }),
     ]);
   };
 
+  // Form submission (saves via batch endpoint in array format)
   const handleSubmit = async (formData: AddOrEditMedication) => {
     try {
       if (currentOperation === "add") {
-        const responseData = await addMedicationMutation(formData);
-        
-        Toast.show({
-          type: "success",
-          text1: `Medication added successfully`,
-        });
+        let draftsToSave = [...drafts];
+        if (currentDraftIndex < draftsToSave.length) {
+          draftsToSave[currentDraftIndex] = formData;
+        } else {
+          draftsToSave.push(formData);
+        }
 
-        if (responseData?.data?.id) {
+        const batchPayload = draftsToSave.map(formatMedicationForBatchApi);
+        const responseData = await addMedicationsBatchMutation(batchPayload);
+
+        const createdIds = extractCreatedMedicationIds(responseData);
+        if (createdIds.length > 0) {
           try {
-            await createMedicationReminder({
-              medicationId: responseData.data.id,
-            });
+            await createMedicationRemindersBatch(createdIds);
           } catch (error) {
-            console.log("Failed to create reminder:", error);
+            console.log("Failed to create reminders for added medications:", error);
           }
         }
+
+        Toast.show({
+          type: "success",
+          text1: `${draftsToSave.length > 1 ? `${draftsToSave.length} Medications` : "Medication"} added successfully`,
+        });
       } else {
         await editMedicationMutation({
           medicationId: medicationId || "",
@@ -157,6 +323,147 @@ const MedicationOperation = ({
     }
   };
 
+  // Add & Continue handler: adds to drafts and moves to next form
+  const handleAddAndContinue = (validMed: AddOrEditMedication) => {
+    const updated = [...drafts];
+    if (currentDraftIndex < updated.length) {
+      updated[currentDraftIndex] = validMed;
+    } else {
+      updated.push(validMed);
+    }
+    setDrafts(updated);
+
+    const nextIdx = updated.length;
+    setCurrentDraftIndex(nextIdx);
+
+    Toast.show({
+      type: "success",
+      text1: `Added ${validMed.medicationName}`,
+      text2: `Now add Medicine #${nextIdx + 1}`,
+      visibilityTime: 1800,
+    });
+  };
+
+  // Review handler: validates and saves current draft, then opens review mode
+  const handleReview = (currentValidData?: AddOrEditMedication | null) => {
+    let updated = [...drafts];
+    if (currentValidData) {
+      if (currentDraftIndex < updated.length) {
+        updated[currentDraftIndex] = currentValidData;
+      } else {
+        updated.push(currentValidData);
+      }
+      setDrafts(updated);
+    }
+
+    if (updated.length > 0) {
+      setMode("review");
+    } else {
+      Toast.show({
+        type: "info",
+        text1: "No medications added yet",
+        text2: "Please fill in the medication details first",
+      });
+    }
+  };
+
+  // Stepper navigation handler
+  const handleNavigateDraft = (
+    targetIndex: number,
+    currentValidData?: AddOrEditMedication | null,
+  ) => {
+    if (currentValidData) {
+      const updated = [...drafts];
+      if (currentDraftIndex < updated.length) {
+        updated[currentDraftIndex] = currentValidData;
+      } else {
+        updated.push(currentValidData);
+      }
+      setDrafts(updated);
+    }
+    setCurrentDraftIndex(targetIndex);
+  };
+
+  // Edit from review screen
+  const handleEditDraftFromReview = (index: number) => {
+    setCurrentDraftIndex(index);
+    setMode("form");
+  };
+
+  // Delete from review screen
+  const handleDeleteDraftFromReview = (index: number) => {
+    const updated = drafts.filter((_, idx) => idx !== index);
+    setDrafts(updated);
+    if (updated.length === 0) {
+      setCurrentDraftIndex(0);
+      setMode("form");
+    } else if (currentDraftIndex >= updated.length) {
+      setCurrentDraftIndex(updated.length - 1);
+    }
+  };
+
+  // Add new from review screen
+  const handleAddNewFromReview = () => {
+    setCurrentDraftIndex(drafts.length);
+    setMode("form");
+  };
+
+  // Batch Save handler
+  const handleConfirmBatchSave = async (selectedDrafts: AddOrEditMedication[]) => {
+    if (selectedDrafts.length === 0) {
+      Toast.show({
+        type: "info",
+        text1: "No medications selected",
+        text2: "Please select at least one medication to save",
+      });
+      return;
+    }
+
+    setIsBatchSaving(true);
+    try {
+      const batchPayload = selectedDrafts.map(formatMedicationForBatchApi);
+      const responseData = await addMedicationsBatchMutation(batchPayload);
+
+      const createdIds = extractCreatedMedicationIds(responseData);
+      if (createdIds.length > 0) {
+        try {
+          await createMedicationRemindersBatch(createdIds);
+        } catch (remErr) {
+          console.log("Failed to create reminders for batch:", remErr);
+        }
+      }
+
+      await invalidateMedicationQueries();
+
+      Toast.show({
+        type: "success",
+        text1: `${selectedDrafts.length} Medication${selectedDrafts.length > 1 ? "s" : ""} added successfully`,
+      });
+      navigation.goBack();
+    } catch (error: any) {
+      if (error?.isDuplicate && error?.responseData?.details?.duplicateInfo) {
+        setDuplicateConflict(error.responseData);
+        setPendingFormData(selectedDrafts[0]);
+      } else {
+        Toast.show({
+          type: "error",
+          text1: error?.message || "Something went wrong while saving medications",
+        });
+      }
+    } finally {
+      setIsBatchSaving(false);
+    }
+  };
+
+  // Back button in header handler
+  const handleHeaderBack = () => {
+    if (mode === "review") {
+      setMode("form");
+    } else {
+      navigation.goBack();
+    }
+  };
+
   const handleReplace = async (replaceMedId: string) => {
     if (!pendingFormData) return;
     setIsReplacing(true);
@@ -168,20 +475,20 @@ const MedicationOperation = ({
       };
 
       if (currentOperation === "add") {
-        const responseData = await addMedicationMutation(replacePayload);
+        const batchPayload = [formatMedicationForBatchApi(replacePayload)];
+        const responseData = await addMedicationsBatchMutation(batchPayload);
+        const createdIds = extractCreatedMedicationIds(responseData);
+        if (createdIds.length > 0) {
+          try {
+            await createMedicationRemindersBatch(createdIds);
+          } catch (e) {
+            console.log("Failed to create reminder for replaced medication:", e);
+          }
+        }
         Toast.show({
           type: "success",
           text1: "Medication replaced successfully",
         });
-        if (responseData?.data?.id) {
-          try {
-            await createMedicationReminder({
-              medicationId: responseData.data.id,
-            });
-          } catch (e) {
-            console.log("Failed to create reminder:", e);
-          }
-        }
       } else {
         await editMedicationMutation({
           medicationId: medicationId || "",
@@ -205,13 +512,6 @@ const MedicationOperation = ({
     } finally {
       setIsReplacing(false);
     }
-  };
-
-  const handleEditPrevious = (existingMed: any) => {
-    setDuplicateConflict(null);
-    setPendingFormData(null);
-    setCurrentOperation("edit");
-    setCurrentMedication(existingMed);
   };
 
   const handleKeepExisting = () => {
@@ -406,8 +706,16 @@ const MedicationOperation = ({
     );
   };
 
+  // Determine active form data
+  const activeFormData =
+    currentOperation === "edit"
+      ? currentMedication
+      : currentDraftIndex < drafts.length
+        ? drafts[currentDraftIndex]
+        : undefined;
+
   return (
-    <Container>
+    <Container isDark={isDark}>
       <StatusBar style="light" />
       <HeaderGradient
         colors={
@@ -430,7 +738,7 @@ const MedicationOperation = ({
         }}
       >
         <TopRow>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={handleHeaderBack}>
             <Ionicons name="chevron-back" size={28} color="#fff" />
           </TouchableOpacity>
           <HeaderTitle>{headerTitle}</HeaderTitle>
@@ -445,18 +753,41 @@ const MedicationOperation = ({
           }}
         >
           <SummaryTitle>{headerTitle}</SummaryTitle>
-          <SummarySub>Maintain your medical schedule</SummarySub>
+          <SummarySub>{headerSubtitle}</SummarySub>
         </SummaryRow>
       </HeaderGradient>
 
-      <MedicationForm
-        key={currentMedication?.id || "new"}
-        initialData={currentMedication}
-        onSubmit={handleSubmit}
-        isLoading={currentOperation === "add" ? isLoading : isEditingLoading}
-        onScroll={handleFormScroll}
-        operation={currentOperation}
-      />
+      {mode === "form" ? (
+        <MedicationForm
+          key={
+            currentOperation === "edit"
+              ? currentMedication?.id || "edit"
+              : `draft_${currentDraftIndex}_${drafts[currentDraftIndex]?.client_med_id || "new"}`
+          }
+          initialData={activeFormData}
+          onSubmit={handleSubmit}
+          isLoading={currentOperation === "add" ? isLoading : isEditingLoading}
+          onScroll={handleFormScroll}
+          operation={currentOperation}
+          drafts={drafts}
+          currentIndex={currentDraftIndex}
+          onAddAndContinue={handleAddAndContinue}
+          onReview={handleReview}
+          onNavigateDraft={handleNavigateDraft}
+          onCancel={() => navigation.goBack()}
+        />
+      ) : (
+        <MedicationBatchReview
+          drafts={drafts}
+          onEditDraft={handleEditDraftFromReview}
+          onDeleteDraft={handleDeleteDraftFromReview}
+          onAddNew={handleAddNewFromReview}
+          onConfirmSave={handleConfirmBatchSave}
+          onCancel={() => navigation.goBack()}
+          isSaving={isBatchSaving}
+          onScroll={handleFormScroll}
+        />
+      )}
 
       {renderDuplicateConflictModal()}
     </Container>
@@ -466,9 +797,9 @@ const MedicationOperation = ({
 export default MedicationOperation;
 
 /** Styled Components for the Screen Wrapper */
-const Container = styled.View`
+const Container = styled.View<{ isDark: boolean }>`
   flex: 1;
-  background-color: #f8fafc;
+  background-color: ${(props: any) => (props.isDark ? "#0f172a" : "#f8fafc")};
 `;
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
@@ -578,47 +909,45 @@ const MedBadge = styled.View`
 
 const MedBadgeText = styled.Text`
   color: white;
-  font-size: 9px;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
 `;
 
 const MedName = styled.Text<{ isDark: boolean }>`
   font-size: 16px;
   font-weight: 700;
-  color: ${(props: any) => (props.isDark ? "#cbd5e1" : "#1e293b")};
+  color: ${(props: any) => (props.isDark ? "#f8fafc" : "#1e293b")};
   margin-bottom: 8px;
-  margin-right: 120px; /* Leave space for badge */
+  margin-top: 6px;
 `;
 
 const MedDetailRow = styled.View`
   flex-direction: row;
   align-items: center;
-  margin-top: 4px;
-  gap: 8px;
+  margin-bottom: 4px;
 `;
 
 const MedDetailText = styled.Text<{ isDark: boolean }>`
   font-size: 12px;
-  color: ${(props: any) => (props.isDark ? "#94a3b8" : "#475569")};
+  color: ${(props: any) => (props.isDark ? "#cbd5e1" : "#475569")};
+  margin-left: 6px;
 `;
 
 const ModalFooter = styled.View`
-  margin-top: 20px;
   width: 100%;
-  align-items: center;
+  margin-top: 16px;
 `;
 
 const ModalButton = styled.TouchableOpacity`
-  width: 100%;
-  padding-vertical: 14px;
+  padding: 14px;
   border-radius: 14px;
   align-items: center;
   justify-content: center;
+  width: 100%;
 `;
 
 const ModalButtonText = styled.Text`
   color: white;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
 `;

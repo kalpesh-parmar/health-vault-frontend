@@ -144,12 +144,14 @@ export const uploadDocumentsBatch = async (
 };
 
 export interface RetryDocumentPayload {
-  fileKey: string;
+  jobId?: string;
+  fileKey?: string;
   batchId?: string;
   file?: { uri: string; name: string; type: string };
 }
 export interface RetryDocumentResponse {
-  fileKey: string;
+  jobId?: string;
+  fileKey?: string;
   batchId?: string;
   status: string;
   streamUrl: string;
@@ -160,7 +162,8 @@ export interface RetryDocumentResponse {
 export const retryDocumentProcessing = async (
   payload: RetryDocumentPayload,
 ): Promise<ApiResponse<RetryDocumentResponse>> => {
-  const cleanFileKey = payload.fileKey.replace(/['"]+/g, '');
+  const fileKey = payload.fileKey || payload.jobId || "";
+  const cleanFileKey = String(fileKey).replace(/['"]+/g, "");
   let endpoint = `${DOCUMENT_ENDPOINTS.RETRY_DOCUMENT}?fileKey=${encodeURIComponent(cleanFileKey)}`;
   if (payload.batchId) {
     endpoint += `&batchId=${encodeURIComponent(payload.batchId)}`;

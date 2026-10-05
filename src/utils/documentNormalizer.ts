@@ -365,3 +365,197 @@ export const extractMedicationsFromDocuments = (docs: any[]): any[] => {
   });
   return meds;
 };
+
+/**
+ * Normalizes report summary objects (from REPORT_SUMMARY action or reportSummary field)
+ * into a standardized structured document object suitable for StructuredReportSummaryCard and ReportSummaryChatCard.
+ */
+export const normalizeReportSummaryToDocument = (
+  reportSummary: any,
+  fallbackDoc?: any,
+): any => {
+  if (!reportSummary && !fallbackDoc) return null;
+  const src = reportSummary || fallbackDoc;
+  if (!src || typeof src !== "object") return null;
+
+  const id =
+    src.id ||
+    src.report_id ||
+    src.reportId ||
+    src.fileKey ||
+    src.s3Key ||
+    fallbackDoc?.id ||
+    fallbackDoc?.report_id ||
+    `doc-${Date.now()}`;
+
+  const fileName =
+    src.fileName ||
+    src.report_name ||
+    src.reportName ||
+    src.name ||
+    fallbackDoc?.fileName ||
+    fallbackDoc?.report_name ||
+    "Medical Report";
+
+  const documentType =
+    src.documentType ||
+    src.document_type ||
+    src.reportType ||
+    src.report_type ||
+    fallbackDoc?.documentType ||
+    "LAB_REPORT";
+
+  const reportDate =
+    src.reportDate ||
+    src.report_date ||
+    src.date ||
+    fallbackDoc?.reportDate ||
+    fallbackDoc?.report_date ||
+    null;
+
+  const hospitalName =
+    src.hospitalName ||
+    src.hospital_name ||
+    src.clinicName ||
+    src.clinic_name ||
+    fallbackDoc?.hospitalName ||
+    null;
+
+  const doctorName =
+    src.doctorName ||
+    src.doctor_name ||
+    fallbackDoc?.doctorName ||
+    null;
+
+  const patientName =
+    src.patientName ||
+    src.patient_name ||
+    src.patientDetails?.name ||
+    fallbackDoc?.patientName ||
+    null;
+
+  const summary =
+    src.summary ||
+    src.summaryEnglish ||
+    fallbackDoc?.summary ||
+    fallbackDoc?.summaryEnglish ||
+    "";
+
+  const keyFindings =
+    src.keyFindings ||
+    src.key_findings ||
+    fallbackDoc?.keyFindings ||
+    fallbackDoc?.key_findings ||
+    summary;
+
+  const rawAbnormal =
+    src.abnormalResults ||
+    src.abnormal_values ||
+    src.abnormalValues ||
+    src.abnormal_results ||
+    fallbackDoc?.abnormalResults ||
+    fallbackDoc?.abnormal_values ||
+    [];
+
+  const abnormalResults = Array.isArray(rawAbnormal)
+    ? rawAbnormal.map((item: any) => ({
+        name: item.name || item.testName || item.parameter || "Parameter",
+        value: item.value !== undefined ? String(item.value) : "",
+        unit: item.unit || "",
+        status: item.status || "Abnormal",
+        referenceRange:
+          item.referenceRange || item.reference_range || item.normalRange || "",
+        isAbnormal: item.isAbnormal !== undefined ? item.isAbnormal : true,
+      }))
+    : [];
+
+  const rawNormal =
+    src.normalResults ||
+    src.normal_values ||
+    src.normalValues ||
+    src.normal_results ||
+    fallbackDoc?.normalResults ||
+    fallbackDoc?.normal_values ||
+    [];
+
+  const normalResults = Array.isArray(rawNormal)
+    ? rawNormal.map((item: any) => ({
+        name: item.name || item.testName || item.parameter || "Parameter",
+        value: item.value !== undefined ? String(item.value) : "",
+        unit: item.unit || "",
+        status: item.status || "Normal",
+        referenceRange:
+          item.referenceRange || item.reference_range || item.normalRange || "",
+        isAbnormal: false,
+      }))
+    : [];
+
+  const rawMeds =
+    src.extractedMedicines ||
+    src.extracted_medicines ||
+    src.medications ||
+    src.medicines ||
+    fallbackDoc?.extractedMedicines ||
+    fallbackDoc?.extracted_medicines ||
+    [];
+
+  const medicationFindings = Array.isArray(rawMeds)
+    ? rawMeds.map((med: any) => ({
+        name: med.name || med.medicationName || med.medicineName || "",
+        dosage:
+          med.dosage ||
+          med.dose ||
+          (med.dosePerIntake ? `${med.dosePerIntake}` : ""),
+        frequency: med.frequency || "",
+        instructions:
+          med.instructions || med.foodInstructions || med.foodContext || "",
+        type: med.type || med.medicationType || "TABLET",
+      }))
+    : [];
+
+  const labFindings = [
+    ...abnormalResults,
+    ...normalResults,
+    ...(Array.isArray(src.labFindings) ? src.labFindings : []),
+  ];
+
+  return {
+    ...fallbackDoc,
+    ...src,
+    id,
+    report_id: id,
+    fileName,
+    report_name: fileName,
+    name: fileName,
+    documentType,
+    reportDate,
+    report_date: reportDate,
+    hospitalName,
+    doctorName,
+    patientName,
+    patientDetails: src.patientDetails || {
+      name: patientName,
+      reportDate,
+      doctorName,
+      hospitalName,
+      age: src.patientAge || src.age || null,
+      gender: src.patientGender || src.gender || null,
+      uhid: src.uhid || src.patientUhid || null,
+    },
+    summary,
+    keyFindings,
+    key_findings: keyFindings,
+    abnormalResults,
+    abnormal_values: abnormalResults,
+    normalResults,
+    normal_values: normalResults,
+    medicationFindings,
+    extracted_medicines: medicationFindings,
+    labFindings,
+    isLabReport:
+      documentType === "LAB_REPORT" ||
+      src.isLabReport === true ||
+      abnormalResults.length > 0 ||
+      normalResults.length > 0,
+  };
+};

@@ -19,6 +19,8 @@ export interface ChatMessage {
   mode?: ChatMode | string;
   emergency?: boolean;
   action?: string;
+  actions?: any[];
+  reportSummary?: any;
   options?: any[];
   rawValue?: string;
   stepKey?: string;

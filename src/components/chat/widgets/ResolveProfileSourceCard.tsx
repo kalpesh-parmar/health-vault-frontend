@@ -88,7 +88,7 @@ export function ResolveProfileSourceCard({
       const rawVal =
         localEditedData && localEditedData[f.key] !== undefined
           ? localEditedData[f.key]
-          : f.value || "";
+          : (f.loginValue || f.documentValue || f.value || "");
       initData[f.key] = f.key === "gender" ? normalizeGenderFrontend(rawVal) : rawVal;
     });
     setEditedProfileData(initData);
@@ -102,7 +102,7 @@ export function ResolveProfileSourceCard({
 
   const handleConfirmProfile = () => {
     const payload = localEditedData
-      ? { confirmed: true, edited: localEditedData }
+      ? { confirmed: true, source: "MANUAL", edited: localEditedData, ...localEditedData }
       : { confirmed: true };
     const updatedState = {
       ...state,
@@ -121,7 +121,9 @@ export function ResolveProfileSourceCard({
 
   const handleSelectProvider = () => {
     const isManual = Boolean(localEditedData);
-    const payload = { source: isManual ? "MANUAL" : "LOGIN" };
+    const payload = isManual
+      ? { source: "MANUAL", edited: localEditedData, ...localEditedData }
+      : { source: "LOGIN" };
     const updatedState = isManual
       ? { ...state, existingUserData: { ...(state?.existingUserData || {}), ...localEditedData } }
       : state;

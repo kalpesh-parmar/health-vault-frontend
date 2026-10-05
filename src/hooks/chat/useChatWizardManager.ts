@@ -14,6 +14,7 @@ import { ExtractedMedicine } from "../../types/medicationReview";
 import { AddOrEditMedication } from "../../types";
 import { ChatMessage, ChatWizardState, ConflictResolution } from "../../types/chat";
 import { buildMedicationPayload, normalizeDocumentIds } from "../../utils/chatUtils";
+import { normalizeReportSummaryToDocument } from "../../utils/documentNormalizer";
 import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
 import { sanitizeMedicineForPayload } from "../../components/chat/widgets/MedicineHelpers";
 import { queryClient } from "../../config/queryClient";
@@ -972,15 +973,30 @@ export const useChatWizardManager = ({
       const resData = res.data?.data;
       if (resData && (resData.reply || resData.message || resData.actionType || resData.action)) {
         const replyText = resData.reply || resData.message || "";
+        const reportSummaryData =
+          resData.reportSummary ||
+          (Array.isArray(resData.actions)
+            ? resData.actions.find(
+                (a: any) =>
+                  a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+              )?.reportSummary
+            : null);
+        const resolvedDoc = normalizeReportSummaryToDocument(
+          reportSummaryData || resData.document,
+          resData.document,
+        );
+
         const aiMsg: ChatMessage = {
           id: `ai-opt-res-${Date.now()}`,
           role: "ai",
           text: replyText,
           action: resData.actionType || resData.action || "NORMAL_CHAT",
+          actions: resData.actions || [],
+          reportSummary: reportSummaryData || null,
           options: resData.options || [],
           medicines: resData.medicines || [],
           medicine: resData.medicine || null,
-          document: resData.document || null,
+          document: resolvedDoc || resData.document || null,
           documentSummary: resData.documentSummary || null,
           documents: resData.documents || [],
           onboardingState: resData.onboardingState || resData.state || null,

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -85,6 +86,8 @@ import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
 
+import { normalizeReportSummaryToDocument } from "../../utils/documentNormalizer";
+
 const getMedicineName = (medicine: any): string =>
   String(medicine?.name || medicine?.medicationName || medicine?.medicineName || "")
     .trim()
@@ -96,6 +99,8 @@ type Message = {
   content: string;
   rawValue?: string;
   action?: string;
+  actions?: any[];
+  reportSummary?: any;
   task?: string;
   options?: any[];
   fields?: any[];
@@ -387,6 +392,10 @@ export default function OnboardingScreen() {
     bloodGroupSkipped: false,
     allergiesSkipped: false,
     hasSocialData: undefined as boolean | undefined,
+    loginProvider: undefined as string | undefined,
+    provider: undefined as string | undefined,
+    socialData: undefined as any,
+    loginData: undefined as any,
     foundMedicines: [] as any[],
     medicinesFlowStarted: false,
     medicinesConfirmed: false,
@@ -664,7 +673,11 @@ export default function OnboardingScreen() {
         documentExtracted: false,
         bloodGroupSkipped: false,
         allergiesSkipped: false,
-        hasSocialData: undefined,
+        hasSocialData: undefined as boolean | undefined,
+        loginProvider: undefined as string | undefined,
+        provider: undefined as string | undefined,
+        socialData: undefined as any,
+        loginData: undefined as any,
         foundMedicines: [],
         medicinesFlowStarted: false,
         medicinesConfirmed: false,
@@ -676,7 +689,72 @@ export default function OnboardingScreen() {
 
       const fetchOnboardingHistory = async () => {
         setLoading(true);
+        let baseState = { ...newState };
         try {
+          let detectedProvider =
+            (userData as any)?.provider ||
+            (userData as any)?.authProvider ||
+            (userData as any)?.loginProvider ||
+            (userData as any)?.socialProvider ||
+            "";
+
+          if (!detectedProvider) {
+            try {
+              detectedProvider =
+                (await AsyncStorage.getItem("loginProvider")) ||
+                (await SecureStore.getItemAsync("loginProvider")) ||
+                "";
+            } catch {}
+          }
+
+          let isSocialStored = false;
+          try {
+            isSocialStored = (await AsyncStorage.getItem("isSocialLogin")) === "true";
+          } catch {}
+
+          const isSocialFlag =
+            isSocialStored ||
+            Boolean(
+              detectedProvider &&
+              ["google", "facebook", "microsoft", "apple", "social"].includes(String(detectedProvider).toLowerCase())
+            ) ||
+            Boolean((userData as any)?.loginType === "social") ||
+            Boolean(userData.email && !userData.mobile);
+
+          const providerToUse = detectedProvider
+            ? String(detectedProvider).toLowerCase().trim()
+            : (isSocialFlag ? "google" : undefined);
+          const hasSocial = isSocialFlag || Boolean(providerToUse);
+
+          const socialProfileData = hasSocial
+            ? {
+                firstName: initialUserData.firstName,
+                lastName: initialUserData.lastName,
+                email: initialUserData.email,
+                dateOfBirth: initialUserData.dateOfBirth,
+                gender: initialUserData.gender,
+              }
+            : undefined;
+
+          const loginProfileData = hasSocial
+            ? {
+                firstName: { value: initialUserData.firstName, verified: true },
+                lastName: { value: initialUserData.lastName, verified: true },
+                email: { value: initialUserData.email, verified: true },
+                dateOfBirth: { value: initialUserData.dateOfBirth, verified: false },
+                gender: { value: initialUserData.gender, verified: false },
+              }
+            : undefined;
+
+          baseState = {
+            ...newState,
+            hasSocialData: hasSocial ? true : undefined,
+            loginProvider: providerToUse,
+            provider: providerToUse,
+            socialData: socialProfileData,
+            loginData: loginProfileData,
+          };
+
           console.log("[ONBOARDING] Fetching onboarding history...");
           const response = await apiClient.get("/v1/onboarding/history");
           const {
@@ -686,11 +764,16 @@ export default function OnboardingScreen() {
             canSkip: historyCanSkip,
           } = response.data?.data || {};
 
-          let mergedState = { ...newState };
+          let mergedState = { ...baseState };
           if (resumableState) {
             mergedState = {
               ...mergedState,
               ...resumableState,
+              hasSocialData: resumableState.hasSocialData ?? baseState.hasSocialData,
+              loginProvider: resumableState.loginProvider || baseState.loginProvider,
+              provider: resumableState.provider || baseState.provider,
+              socialData: resumableState.socialData || baseState.socialData,
+              loginData: resumableState.loginData || baseState.loginData,
             };
           }
 
@@ -785,7 +868,7 @@ export default function OnboardingScreen() {
             error,
           );
           // Fallback: start fresh
-          await startOnboardingChat(newState);
+          await startOnboardingChat(baseState);
         } finally {
           setLoading(false);
         }
@@ -806,6 +889,9 @@ export default function OnboardingScreen() {
         history: [],
         state: currentState,
         fromScreen: "Onboarding",
+        loginProvider: (currentState as any)?.loginProvider,
+        provider: (currentState as any)?.loginProvider,
+        hasSocialData: (currentState as any)?.hasSocialData,
         documentId: normalizeDocumentIds(currentState?.documentId),
         stream: false,
       };
@@ -860,12 +946,25 @@ export default function OnboardingScreen() {
     );
     const isReportCardResponse =
       action === "ASK_REPORT" &&
-      Boolean(aiRes.document) &&
+      Boolean(aiRes.document || aiRes.reportSummary) &&
       !messageContent?.trim();
     const messageAction =
       action === "ASK_REPORT" && !isReportCardResponse
         ? "NORMAL_CHAT"
         : action;
+
+    const reportSummaryData =
+      aiRes.reportSummary ||
+      (Array.isArray(aiRes.actions)
+        ? aiRes.actions.find(
+            (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+          )?.reportSummary
+        : null);
+
+    const resolvedDoc = normalizeReportSummaryToDocument(
+      reportSummaryData || aiRes.document,
+      aiRes.document,
+    );
 
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
@@ -876,6 +975,8 @@ export default function OnboardingScreen() {
             ? (medListResult.rawText || "")
             : (messageContent || "Please provide the information.")),
       action: messageAction,
+      actions: aiRes.actions,
+      reportSummary: reportSummaryData,
       task: aiRes.task || (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined),
       options: aiRes.options,
       fields: aiRes.fields,
@@ -886,7 +987,12 @@ export default function OnboardingScreen() {
       title: aiRes.title,
       subtitle: aiRes.subtitle,
       explainer: aiRes.explainer,
-      loginProvider: aiRes.loginProvider,
+      loginProvider:
+        aiRes.loginProvider ||
+        (currentState as any)?.loginProvider ||
+        state?.loginProvider ||
+        (currentState as any)?.provider ||
+        (state as any)?.provider,
       sourceComparison: aiRes.sourceComparison,
       medicine: aiRes.medicine,
       medicines: medListResult.isMedicationList ? medListResult.items : aiRes.medicines,
@@ -894,10 +1000,11 @@ export default function OnboardingScreen() {
       pagination: medListResult.pagination || aiRes.pagination,
       totalBuffered: aiRes.totalBuffered,
       summary: aiRes.summary,
-      document: aiRes.document,
+      document: resolvedDoc || aiRes.document,
       suggestedQuestions: aiRes.suggestedQuestions,
-      keyFindings: aiRes.document?.keyFindings || aiRes.keyFindings,
+      keyFindings: resolvedDoc?.keyFindings || aiRes.document?.keyFindings || aiRes.keyFindings,
       documentIds: normalizeDocumentIds(
+        resolvedDoc?.id,
         aiRes.document?.id,
         aiRes.documentId,
         aiRes.documentIds,
@@ -962,7 +1069,7 @@ export default function OnboardingScreen() {
             title: newMsg.title,
             subtitle: newMsg.subtitle,
             explainer: newMsg.explainer,
-            loginProvider: newMsg.loginProvider,
+            loginProvider: newMsg.loginProvider || existingMsg.loginProvider,
             sourceComparison: newMsg.sourceComparison || aiRes.sourceComparison,
             createdAt: newMsg.createdAt,
           };
@@ -1073,6 +1180,23 @@ export default function OnboardingScreen() {
           aiRes.hasSocialData !== undefined
             ? aiRes.hasSocialData
             : finalState.hasSocialData,
+        loginProvider:
+          aiRes.loginProvider ||
+          finalState.loginProvider ||
+          (currentState as any)?.loginProvider,
+        provider:
+          aiRes.provider ||
+          aiRes.loginProvider ||
+          finalState.provider ||
+          (currentState as any)?.provider,
+        socialData:
+          aiRes.socialData ||
+          finalState.socialData ||
+          (currentState as any)?.socialData,
+        loginData:
+          aiRes.loginData ||
+          finalState.loginData ||
+          (currentState as any)?.loginData,
         foundMedicines: aiRes.foundMedicines || finalState.foundMedicines,
         medicinesFlowStarted:
           aiRes.medicinesFlowStarted !== undefined
@@ -1463,6 +1587,9 @@ export default function OnboardingScreen() {
         state: updatedState,
         displayLabel,
         fromScreen: "Onboarding",
+        loginProvider: updatedState?.loginProvider || state?.loginProvider,
+        provider: updatedState?.loginProvider || state?.loginProvider,
+        hasSocialData: updatedState?.hasSocialData ?? state?.hasSocialData,
         documentId: normalizeDocumentIds(
           updatedState?.documentId,
           latestAssistantMessage?.documentIds,
@@ -2258,7 +2385,17 @@ export default function OnboardingScreen() {
     uploadRetryCountRef.current = nextRetryCount;
     setUploadRetryCount(nextRetryCount);
 
-    const docId = currentDocIdRef.current;
+    const rawDocId =
+      currentDocIdRef.current ||
+      (await AsyncStorage.getItem("onboarding_pending_document_id")) ||
+      state?.documentId;
+
+    const docId: string | null = Array.isArray(rawDocId)
+      ? rawDocId[0]
+      : typeof rawDocId === "string"
+        ? rawDocId
+        : null;
+
     if (!docId) {
       const file = selectedFileRef.current || selectedFile;
       if (file) {
@@ -2267,10 +2404,11 @@ export default function OnboardingScreen() {
       return;
     }
 
+    currentDocIdRef.current = docId;
     setUploadState("queued");
-    setUploadPercent(0);
+    setUploadPercent(10);
     try {
-      const response = await retryDocumentProcessing({ fileKey: docId });
+      const response = await retryDocumentProcessing({ jobId: docId, fileKey: docId });
       const respData = (response as any)?.data?.data || (response as any)?.data || response;
       const streamUrl =
         respData?.streamUrl ||
@@ -3528,24 +3666,89 @@ export default function OnboardingScreen() {
       );
     }
 
-    if (activeMsg.action === "ASK_REPORT") {
-      const doc = activeMsg.document || {};
-      const questions =
-        activeMsg.suggestedQuestions && activeMsg.suggestedQuestions.length > 0
-          ? activeMsg.suggestedQuestions
-          : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+    const isReportOrConfirmActive =
+      activeMsg.action === "ASK_REPORT" ||
+      activeMsg.action === "CONFIRM_MEDICINES" ||
+      activeMsg.action === "CONFIRM_MEDICINE" ||
+      (activeMsg as any).actionType === "CONFIRM_MEDICINES" ||
+      activeMsg.action === "REPORT_SUMMARY" ||
+      (activeMsg as any).actionType === "REPORT_SUMMARY";
 
-      const isStructured = Boolean(
-        doc.patientDetails ||
-        (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
-        (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
-        doc.whatThisMayMean ||
-        doc.isLabReport
+    if (isReportOrConfirmActive) {
+      const doc =
+        normalizeReportSummaryToDocument(
+          activeMsg.reportSummary ||
+          (Array.isArray((activeMsg as any).actions)
+            ? (activeMsg as any).actions.find(
+                (a: any) =>
+                  a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+              )?.reportSummary
+            : null) ||
+          activeMsg.document,
+          activeMsg.document,
+        ) ||
+        activeMsg.document ||
+        {};
+
+      const hasDoc = Boolean(
+        doc &&
+        !Array.isArray(doc) &&
+        (doc.id ||
+          doc.report_id ||
+          doc.summary ||
+          (doc.keyFindings && doc.keyFindings.length > 0) ||
+          doc.key_findings ||
+          (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
+          (Array.isArray(doc.abnormal_values) && doc.abnormal_values.length > 0) ||
+          doc.extractedStructuredData ||
+          doc.fileName ||
+          doc.report_name ||
+          doc.s3Key),
       );
 
-      if (isStructured) {
+      if (hasDoc) {
+        const questions =
+          activeMsg.suggestedQuestions && activeMsg.suggestedQuestions.length > 0
+            ? activeMsg.suggestedQuestions
+            : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+
+        const isStructured = Boolean(
+          doc.patientDetails ||
+          (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
+          (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
+          (Array.isArray(doc.abnormal_values) && doc.abnormal_values.length > 0) ||
+          (Array.isArray(doc.normal_values) && doc.normal_values.length > 0) ||
+          doc.whatThisMayMean ||
+          doc.isLabReport
+        );
+
+        if (isStructured) {
+          return (
+            <StructuredReportSummaryCard
+              document={doc}
+              suggestedQuestions={questions}
+              isDark={isDark}
+              theme={theme}
+              preferredLang={preferredLang}
+              onQuestionPress={(q) => {
+                const newState = {
+                  ...state,
+                  documentConfirmed: true,
+                };
+                setState(newState);
+                sendMessage(q, newState, q);
+              }}
+              onViewFullReport={() => {
+                setViewerDoc(doc);
+                setIsViewerOpen(true);
+              }}
+              readOnly={isHistorical}
+            />
+          );
+        }
+
         return (
-          <StructuredReportSummaryCard
+          <ReportSummaryChatCard
             document={doc}
             suggestedQuestions={questions}
             isDark={isDark}
@@ -3567,29 +3770,6 @@ export default function OnboardingScreen() {
           />
         );
       }
-
-      return (
-        <ReportSummaryChatCard
-          document={doc}
-          suggestedQuestions={questions}
-          isDark={isDark}
-          theme={theme}
-          preferredLang={preferredLang}
-          onQuestionPress={(q) => {
-            const newState = {
-              ...state,
-              documentConfirmed: true,
-            };
-            setState(newState);
-            sendMessage(q, newState, q);
-          }}
-          onViewFullReport={() => {
-            setViewerDoc(doc);
-            setIsViewerOpen(true);
-          }}
-          readOnly={isHistorical}
-        />
-      );
     }
 
     if (
@@ -3649,7 +3829,11 @@ export default function OnboardingScreen() {
           pointerEvents={isHistorical || loading ? "none" : "auto"}
         >
           {activeMsg.options.map((opt) => {
-            const label = typeof opt === "string" ? opt : opt.label;
+            const rawLabel = typeof opt === "string" ? opt : opt.label;
+            const label =
+              rawLabel === "editManually" || rawLabel === "edit_manually" || rawLabel === "EDIT_MANUALLY"
+                ? (uiT("editManually") || "Edit Manually")
+                : rawLabel;
             const value = typeof opt === "string" ? opt : opt.value;
             const isChosen =
               isHistorical &&

@@ -427,12 +427,12 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
 
   const handleGalleryPickMultiple = async () => {
     if (hasActiveProcessing) {
-      Toast.show({
-        type: "info",
-        position: "top",
-        text1: "Processing in Progress",
-        text2: "A document is currently being processed. Please wait for it to complete.",
-      });
+        Toast.show({
+          type: "info",
+          position: "top",
+          text1: "Processing in Progress",
+          text2: "A document is currently being processed. Please wait for it to complete.",
+        });
       return;
     }
 
@@ -511,12 +511,12 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
 
   const handleOpenCamera = async () => {
     if (hasActiveProcessing) {
-      Toast.show({
-        type: "info",
-        position: "top",
-        text1: "Processing in Progress",
-        text2: "Documents are currently being processed. Please wait for it to complete.",
-      });
+        Toast.show({
+          type: "info",
+          position: "top",
+          text1: "Processing in Progress",
+          text2: "Documents are currently being processed. Please wait for it to complete.",
+        });
       return;
     }
 
@@ -614,12 +614,12 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
   const handleUpload = async () => {
     if (!userId) return;
     if (hasActiveProcessing) {
-      Toast.show({
-        type: "info",
-        position: "top",
-        text1: "Processing in Progress",
-        text2: "A document is currently being processed. Please wait for it to complete.",
-      });
+        Toast.show({
+          type: "info",
+          position: "top",
+          text1: "Processing in Progress",
+          text2: "A document is currently being processed. Please wait for it to complete.",
+        });
       return;
     }
     ref.current?.dismiss();

@@ -10,6 +10,14 @@ export const addMedication = async (data: AddOrEditMedication): Promise<ApiRespo
   return response.data;
 };
 
+export const addMedicationsBatch = async (data: any[]): Promise<ApiResponse<any>> => {
+  const response = await apiClient.post(
+    MEDICATION_ENDPOINTS.CREATE_BATCH_MEDICATIONS,
+    data,
+  );
+  return response.data;
+};
+
 export const deleteMedication = async (id: string): Promise<ApiResponse<void>> => {
   const endpoint = MEDICATION_ENDPOINTS.DELETE_MEDICATION.replace("{id}", id);
   const response = await apiClient.delete(endpoint);

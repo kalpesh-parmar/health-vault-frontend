@@ -9,6 +9,7 @@ interface LoginSuccessParams {
     createdAt?: string;
   }) => Promise<void>;
   backendResponse: any;
+  provider?: string;
   customSuccessTitle?: string;
   customSuccessMessage?: string;
 }
@@ -19,6 +20,7 @@ interface LoginSuccessParams {
 export const handleSuccessfulSocialLogin = async ({
   authContextLogin,
   backendResponse,
+  provider,
   customSuccessTitle = "Logged In Successfully! 🎉",
   customSuccessMessage = "Welcome to your secure health vault.",
 }: LoginSuccessParams): Promise<boolean> => {
@@ -27,8 +29,31 @@ export const handleSuccessfulSocialLogin = async ({
   const userId = user?.id || user?._id || data?.userId;
   const accessToken = data?.accessToken || data?.token;
   const refreshToken = data?.refreshToken;
+  const detectedProvider =
+    provider ||
+    data?.provider ||
+    backendResponse?.provider ||
+    user?.provider ||
+    user?.authProvider ||
+    "";
 
   if (userId && accessToken && refreshToken) {
+    if (detectedProvider) {
+      try {
+        const SecureStore = require("expo-secure-store");
+        await SecureStore.setItemAsync("loginProvider", String(detectedProvider).toLowerCase().trim());
+      } catch (e) {
+        console.warn("[SocialAuth] Failed to set loginProvider in SecureStore:", e);
+      }
+      try {
+        const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+        await AsyncStorage.setItem("loginProvider", String(detectedProvider).toLowerCase().trim());
+        await AsyncStorage.setItem("isSocialLogin", "true");
+      } catch (e) {
+        console.warn("[SocialAuth] Failed to set loginProvider in AsyncStorage:", e);
+      }
+    }
+
     await authContextLogin({
       accessToken: String(accessToken),
       refreshToken: String(refreshToken),

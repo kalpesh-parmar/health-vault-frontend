@@ -35,12 +35,20 @@ export function AskUploadOrSkipCard({
     return dict[key] || I18N_ONBOARDING_UI.english[key] || key;
   };
 
+  const formatLabel = (raw: string | undefined, defaultKey: string) => {
+    if (!raw) return uiT(defaultKey);
+    if (raw === "editManually" || raw === "edit_manually" || raw === "EDIT_MANUALLY") {
+      return uiT("editManually") || "Edit Manually";
+    }
+    return raw;
+  };
+
   const uploadOpt =
-    (activeMsg?.options || []).find((o: any) => o.value === "UPLOAD") || {};
+    (activeMsg?.options || []).find((o: any) => o.value === "UPLOAD" || o.value === "useDocument") || {};
   const manualOpt =
-    (activeMsg?.options || []).find((o: any) => o.value === "MANUAL") || {};
-  const uploadLabel = uploadOpt.label || uiT("useDocument");
-  const manualLabel = manualOpt.label || uiT("editManuallyInstead");
+    (activeMsg?.options || []).find((o: any) => o.value === "MANUAL" || o.value === "editManually" || o.value === "EDIT_MANUALLY") || {};
+  const uploadLabel = formatLabel(uploadOpt.label, "useDocument");
+  const manualLabel = formatLabel(manualOpt.label, "editManually");
 
   const isUploadChosen = isHistorical && !!(
     chosenVal === "UPLOAD" ||

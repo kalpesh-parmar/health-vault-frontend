@@ -206,7 +206,11 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
         await onRetry(key, doc.batchId);
       }
 
-      const response = await retryDocumentProcessing({ fileKey: key, batchId: doc.batchId });
+      const response = await retryDocumentProcessing({
+        jobId: doc.jobId || doc.id || doc.fileKey || key,
+        fileKey: key,
+        batchId: doc.batchId,
+      });
       const data = (response as any)?.data?.data || (response as any)?.data || response;
       const streamEndpoint =
         data?.streamUrl ||

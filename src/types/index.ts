@@ -186,6 +186,7 @@ export interface FilterDocumentsRequest {
 // ─── Medication ────────────────────────────────────────
 export interface AddOrEditMedication {
   id?: string;
+  client_med_id?: string;
   medicationName: string;
   medicationType?: string;
   prescribedBy: string;

@@ -39,13 +39,34 @@ export function useProfileSourceState({
     state?.loginProvider ||
     activeMsg?.provider ||
     onboardingState?.provider ||
+    state?.provider ||
+    activeMsg?.socialProvider ||
+    onboardingState?.socialProvider ||
+    state?.socialProvider ||
     "";
-  const loginProvider = typeof rawProvider === "string" ? rawProvider.toLowerCase().trim() : "";
+  let loginProvider = typeof rawProvider === "string" ? rawProvider.toLowerCase().trim() : "";
+  if (!loginProvider) {
+    try {
+      const SecureStore = require("expo-secure-store");
+      const stored = SecureStore.getItem("loginProvider");
+      if (stored) loginProvider = String(stored).toLowerCase().trim();
+    } catch {}
+  }
 
   const isSocialLogin = Boolean(
-    loginProvider &&
-    ["google", "facebook", "microsoft", "apple", "social"].includes(loginProvider)
+    (loginProvider && ["google", "facebook", "microsoft", "apple", "social"].includes(loginProvider)) ||
+    activeMsg?.hasSocialData ||
+    onboardingState?.hasSocialData ||
+    state?.hasSocialData ||
+    Boolean(activeMsg?.socialData && Object.keys(activeMsg.socialData).length > 0) ||
+    Boolean(onboardingState?.socialData && Object.keys(onboardingState.socialData).length > 0) ||
+    Boolean(activeMsg?.loginSummary && Object.keys(activeMsg.loginSummary).length > 0) ||
+    Boolean(activeMsg?.sourceComparison && Object.keys(activeMsg.sourceComparison).length > 0)
   );
+
+  if (!loginProvider && isSocialLogin) {
+    loginProvider = "google";
+  }
 
   const rawMode = typeof activeMsg?.mode === "string"
     ? activeMsg.mode.toUpperCase()
@@ -55,9 +76,11 @@ export function useProfileSourceState({
       ? "CONFLICT"
       : rawMode === "CONFIRM"
         ? "CONFIRM"
-        : activeMsg?.action === "RESOLVE_PROFILE_SOURCE" && isSocialLogin
+        : activeMsg?.action === "RESOLVE_PROFILE_SOURCE" && (isSocialLogin || rawMode !== "CONFIRM")
           ? "CONFLICT"
-          : "CONFIRM";
+          : isSocialLogin
+            ? "CONFLICT"
+            : "CONFIRM";
 
   const [isEditingProfileManually, setIsEditingProfileManually] = useState(false);
   const [editedProfileData, setEditedProfileData] = useState<any>({});
@@ -72,9 +95,21 @@ export function useProfileSourceState({
 
   let fields: ProfileField[] = activeMsg?.fields || [];
   if (!fields || fields.length === 0) {
-    const documentData = onboardingState?.documentData || {};
-    const loginData = onboardingState?.loginData || {};
-    const existingUserData = onboardingState?.existingUserData || {};
+    const documentData =
+      onboardingState?.documentData ||
+      activeMsg?.documentSummary ||
+      activeMsg?.document ||
+      {};
+    const loginData =
+      onboardingState?.loginData ||
+      activeMsg?.loginData ||
+      {};
+    const socialData =
+      onboardingState?.socialData ||
+      activeMsg?.socialData ||
+      activeMsg?.loginSummary ||
+      {};
+    const existingUserData = onboardingState?.existingUserData || state?.existingUserData || {};
 
     const fieldKeys = [
       { key: "firstName", label: uiT("firstName") || "First Name" },
@@ -86,13 +121,20 @@ export function useProfileSourceState({
     ];
 
     fields = fieldKeys.map((f) => {
-      const docVal = documentData[f.key] || existingUserData[f.key] || "";
-      const loginVal = loginData[f.key]?.value || onboardingState?.socialData?.[f.key] || "";
-      const isVerified = loginData[f.key]?.verified || false;
+      const loginVal =
+        loginData[f.key]?.value ||
+        socialData[f.key] ||
+        (isSocialLogin ? existingUserData[f.key] : "") ||
+        "";
+      const docVal =
+        documentData[f.key] ||
+        (!isSocialLogin ? existingUserData[f.key] : "") ||
+        "";
+      const isVerified = loginData[f.key]?.verified ?? (isSocialLogin && Boolean(loginVal));
 
-      const defaultValue = docVal || loginVal || "";
-      const hasLoginVal = loginVal && String(loginVal).trim();
-      const hasDocVal = docVal && String(docVal).trim();
+      const defaultValue = docVal || loginVal || existingUserData[f.key] || "";
+      const hasLoginVal = Boolean(loginVal && String(loginVal).trim());
+      const hasDocVal = Boolean(docVal && String(docVal).trim());
       const isMismatch =
         hasLoginVal &&
         hasDocVal &&
@@ -104,7 +146,7 @@ export function useProfileSourceState({
         value: defaultValue,
         loginValue: loginVal,
         documentValue: docVal,
-        verified: isVerified,
+        verified: Boolean(isVerified),
         isMismatch: Boolean(isMismatch),
       };
     });

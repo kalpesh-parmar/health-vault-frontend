@@ -212,9 +212,8 @@ const AIChatScreen = ({ route }: any) => {
 
   // Load history on focus / mount
   useEffect(() => {
-    fetchOnboardingHistory();
     initChatHistory();
-  }, [fetchOnboardingHistory, initChatHistory]);
+  }, [initChatHistory]);
 
   // Sync route document if provided
   useEffect(() => {
@@ -307,20 +306,40 @@ const AIChatScreen = ({ route }: any) => {
   const keyExtractor = useCallback((item: any, index: number) => item.id || `msg-${index}`, []);
 
   const shouldAutoScrollRef = useRef(true);
+  const isInitialLoadRef = useRef(true);
 
   const displayMessages = useMemo(() => {
     return [...mergedMessages].reverse();
   }, [mergedMessages]);
 
   const scrollToBottom = useCallback((animated = true) => {
+    flatListRef.current?.scrollToEnd({ animated });
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated });
-    }, 100);
+    }, 50);
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    }, 150);
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    }, 350);
   }, []);
 
   useEffect(() => {
-    if (shouldAutoScrollRef.current) {
-      scrollToBottom();
+    if (isFocused && displayMessages.length > 0) {
+      scrollToBottom(false);
+    }
+  }, [isFocused, displayMessages.length, scrollToBottom]);
+
+  useEffect(() => {
+    if (!isLoadingHistory && displayMessages.length > 0) {
+      scrollToBottom(false);
+    }
+  }, [isLoadingHistory, displayMessages.length, scrollToBottom]);
+
+  useEffect(() => {
+    if (shouldAutoScrollRef.current || isInitialLoadRef.current) {
+      scrollToBottom(isInitialLoadRef.current ? false : true);
     }
   }, [displayMessages.length, isSending, isActivelyStreaming, scrollToBottom]);
 
@@ -502,9 +521,9 @@ const AIChatScreen = ({ route }: any) => {
             onViewableItemsChanged={onViewableItemsChanged.current}
             viewabilityConfig={viewabilityConfig.current}
             renderItem={renderChatItem}
-            initialNumToRender={15}
+            initialNumToRender={20}
             maxToRenderPerBatch={10}
-            windowSize={7}
+            windowSize={11}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews={false}
             automaticallyAdjustKeyboardInsets={false}
@@ -516,8 +535,18 @@ const AIChatScreen = ({ route }: any) => {
             ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            onLayout={() => {
+              if (displayMessages.length > 0) {
+                flatListRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
             onContentSizeChange={() => {
-              if (shouldAutoScrollRef.current) {
+              if (isInitialLoadRef.current) {
+                flatListRef.current?.scrollToEnd({ animated: false });
+                if (displayMessages.length > 0) {
+                  isInitialLoadRef.current = false;
+                }
+              } else if (shouldAutoScrollRef.current) {
                 flatListRef.current?.scrollToEnd({ animated: true });
               }
             }}

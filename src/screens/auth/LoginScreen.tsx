@@ -199,6 +199,7 @@ const LoginScreen = () => {
           await handleSuccessfulSocialLogin({
             authContextLogin,
             backendResponse,
+            provider: "microsoft",
             customSuccessTitle: "Logged In Successfully! 🚀",
           });
         } else {
@@ -329,6 +330,7 @@ const LoginScreen = () => {
           await handleSuccessfulSocialLogin({
             authContextLogin,
             backendResponse,
+            provider: "google",
             customSuccessTitle: "Logged In Successfully! 🎉",
           });
         } else {
@@ -402,6 +404,7 @@ const LoginScreen = () => {
           await handleSuccessfulSocialLogin({
             authContextLogin,
             backendResponse,
+            provider: "facebook",
             customSuccessTitle: "Logged In Successfully! 🎉",
           });
         } else {
@@ -491,6 +494,7 @@ const LoginScreen = () => {
             await handleSuccessfulSocialLogin({
               authContextLogin,
               backendResponse,
+              provider: "apple",
               customSuccessTitle: "Logged In Successfully! 🚀",
             });
 

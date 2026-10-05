@@ -31,6 +31,14 @@ const clearStoredAuth = async () => {
   await SecureStore.deleteItemAsync("accessToken");
   await SecureStore.deleteItemAsync("refreshDate");
   await SecureStore.deleteItemAsync("userId");
+  try {
+    await SecureStore.deleteItemAsync("loginProvider");
+  } catch {}
+  try {
+    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+    await AsyncStorage.removeItem("loginProvider");
+    await AsyncStorage.removeItem("isSocialLogin");
+  } catch {}
 };
 
 const calculateRefreshDateString = (createdAt?: string): string => {

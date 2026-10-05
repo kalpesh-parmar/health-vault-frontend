@@ -36,7 +36,11 @@ import { StructuredReportListCard } from "./widgets/StructuredReportListCard";
 import { DocumentProgressSummaryContainer } from "./widgets/DocumentProgressSummaryContainer";
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { ChatMessage } from "../../types/chat";
-import { extractMedicationsFromDocuments, normalizeDocumentsList } from "../../utils/documentNormalizer";
+import {
+  extractMedicationsFromDocuments,
+  normalizeDocumentsList,
+  normalizeReportSummaryToDocument,
+} from "../../utils/documentNormalizer";
 import { normalizeMedicationItem } from "../../utils/medicationListNormalizer";
 import { normalizeReportItem } from "../../utils/reportListNormalizer";
 export type { ChatMessage };
@@ -260,16 +264,39 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   }
 
   if (isComplexStep) {
-    if (item.action === "ASK_REPORT") {
-      const doc = item.document;
+    const isReportOrConfirmAction =
+      item.action === "ASK_REPORT" ||
+      item.action === "CONFIRM_MEDICINES" ||
+      item.action === "CONFIRM_MEDICINE" ||
+      (item as any).actionType === "CONFIRM_MEDICINES" ||
+      item.action === "REPORT_SUMMARY" ||
+      (item as any).actionType === "REPORT_SUMMARY";
+
+    if (isReportOrConfirmAction) {
+      const doc = normalizeReportSummaryToDocument(
+        item.reportSummary ||
+        (Array.isArray((item as any).actions)
+          ? (item as any).actions.find(
+              (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+            )?.reportSummary
+          : null) ||
+        item.document,
+        item.document,
+      );
+
       const hasDoc = Boolean(
         doc &&
         !Array.isArray(doc) &&
         (doc.id ||
+          doc.report_id ||
           doc.summary ||
           (doc.keyFindings && doc.keyFindings.length > 0) ||
+          doc.key_findings ||
+          (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
+          (Array.isArray(doc.abnormal_values) && doc.abnormal_values.length > 0) ||
           doc.extractedStructuredData ||
           doc.fileName ||
+          doc.report_name ||
           doc.s3Key),
       );
 
@@ -283,6 +310,8 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           doc.patientDetails ||
           (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
           (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
+          (Array.isArray(doc.abnormal_values) && doc.abnormal_values.length > 0) ||
+          (Array.isArray(doc.normal_values) && doc.normal_values.length > 0) ||
           doc.whatThisMayMean ||
           doc.isLabReport
         );
@@ -333,21 +362,31 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         );
       }
 
-      const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
-      if (msgDocs.length > 0) {
-        return renderAssistantPrompt(
-          <DocumentProgressSummaryContainer
-            documents={msgDocs}
-            preferredLang={preferredLang}
-            isDark={isDark}
-            theme={theme}
-            onRetry={onRetryDocument}
-            canRetry={isLatest && !isReadOnly}
-            readOnly={isReadOnly}
-          />,
-        );
+      if (item.action === "ASK_REPORT") {
+        const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
+        if (msgDocs.length > 0) {
+          return renderAssistantPrompt(
+            <DocumentProgressSummaryContainer
+              documents={msgDocs}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+              onRetry={onRetryDocument}
+              canRetry={isLatest && !isReadOnly}
+              readOnly={isReadOnly}
+            />,
+          );
+        }
+        return renderAssistantPrompt(null);
       }
-      return renderAssistantPrompt(null);
+
+      if (
+        item.action === "CONFIRM_MEDICINES" ||
+        item.action === "CONFIRM_MEDICINE" ||
+        (item as any).actionType === "CONFIRM_MEDICINES"
+      ) {
+        return renderAssistantPrompt(null);
+      }
     }
     if (item.action === "RESOLVE_PROFILE_SOURCE") {
       return renderAssistantPrompt(
@@ -1284,27 +1323,33 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                 String(label).toLowerCase().includes("dashboard");
               const isOptDisabled = isHistorical || isLoadingResults || isConfirmingMeds || (isLatest && isDashboard);
 
-              return (
-                <TouchableOpacity
-                  key={value || idx}
-                  disabled={isOptDisabled}
-                  onPress={() => {
-                    if (isOptDisabled) return;
-                    handleGenericOptionPress(opt, typeof label === "string" ? label : undefined);
-                  }}
-                  style={[
-                    widgetStyles.chip,
-                    {
-                      backgroundColor: theme.colors.primary,
-                      opacity: isOptDisabled ? 0.5 : 1,
-                    },
-                  ]}
-                >
-                  <Text style={styles.chipText}>
-                    {opt.label || opt}
-                  </Text>
-                </TouchableOpacity>
-              );
+                const rawChipLabel = typeof opt === "string" ? opt : (opt.label || opt.value || "");
+                const displayChipLabel =
+                  rawChipLabel === "editManually" || rawChipLabel === "edit_manually" || rawChipLabel === "EDIT_MANUALLY"
+                    ? (tOnboarding("editManually") || "Edit Manually")
+                    : rawChipLabel;
+
+                return (
+                  <TouchableOpacity
+                    key={value || idx}
+                    disabled={isOptDisabled}
+                    onPress={() => {
+                      if (isOptDisabled) return;
+                      handleGenericOptionPress(opt, typeof label === "string" ? label : undefined);
+                    }}
+                    style={[
+                      widgetStyles.chip,
+                      {
+                        backgroundColor: theme.colors.primary,
+                        opacity: isOptDisabled ? 0.5 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.chipText}>
+                      {displayChipLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
             })}
           </View>
         </View>

@@ -190,31 +190,49 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
   const t = I18N_STRUCTURED_CARD[langKey] || I18N_STRUCTURED_CARD.english;
 
   const patient = document.patientDetails || {
-    name: document.patientName || null,
-    reportDate: document.reportDate || null,
-    doctorName: document.doctorName || null,
-    hospitalName: document.hospitalName || null,
+    name: document.patientName || (document as any).patient_name || null,
+    reportDate: document.reportDate || (document as any).report_date || null,
+    doctorName: document.doctorName || (document as any).doctor_name || null,
+    hospitalName: document.hospitalName || (document as any).hospital_name || null,
+    age: (document as any).patientAge || (document as any).age || null,
+    gender: (document as any).patientGender || (document as any).gender || null,
+    uhid: (document as any).uhid || (document as any).patientUhid || null,
   };
 
   const abnormalResults: StructuredLabResult[] = useMemo(() => {
     if (Array.isArray(document.abnormalResults) && document.abnormalResults.length > 0) {
       return document.abnormalResults;
     }
+    if (Array.isArray((document as any).abnormal_values) && (document as any).abnormal_values.length > 0) {
+      return (document as any).abnormal_values;
+    }
+    if (Array.isArray((document as any).abnormalValues) && (document as any).abnormalValues.length > 0) {
+      return (document as any).abnormalValues;
+    }
     const allLabs = document.labFindings || [];
     return allLabs.filter((item) => item.isAbnormal);
-  }, [document.abnormalResults, document.labFindings]);
+  }, [document.abnormalResults, (document as any).abnormal_values, (document as any).abnormalValues, document.labFindings]);
 
   const normalResults: StructuredLabResult[] = useMemo(() => {
     if (Array.isArray(document.normalResults) && document.normalResults.length > 0) {
       return document.normalResults;
     }
+    if (Array.isArray((document as any).normal_values) && (document as any).normal_values.length > 0) {
+      return (document as any).normal_values;
+    }
+    if (Array.isArray((document as any).normalValues) && (document as any).normalValues.length > 0) {
+      return (document as any).normalValues;
+    }
     const allLabs = document.labFindings || [];
     return allLabs.filter((item) => !item.isAbnormal);
-  }, [document.normalResults, document.labFindings]);
+  }, [document.normalResults, (document as any).normal_values, (document as any).normalValues, document.labFindings]);
 
   const keyFindingsText = useMemo(() => {
     if (typeof document.keyFindings === "string" && document.keyFindings.trim()) {
       return document.keyFindings.trim();
+    }
+    if (typeof (document as any).key_findings === "string" && (document as any).key_findings.trim()) {
+      return (document as any).key_findings.trim();
     }
     if (document.summary && document.summary.trim()) {
       return document.summary.trim();
@@ -223,7 +241,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
       return `${abnormalResults.length} abnormal parameter(s) requiring attention detected.`;
     }
     return t.noAbnormalFound;
-  }, [document.keyFindings, document.summary, abnormalResults, t.noAbnormalFound]);
+  }, [document.keyFindings, (document as any).key_findings, document.summary, abnormalResults, t.noAbnormalFound]);
 
   const whatThisMayMeanText = useMemo(() => {
     if (document.whatThisMayMean && document.whatThisMayMean.trim()) {
@@ -241,6 +259,24 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     if (patient.gender) parts.push(String(patient.gender).toUpperCase());
     return parts.length > 0 ? parts.join(" • ") : null;
   }, [patient.age, patient.gender]);
+
+  const displayFileName =
+    document.fileName ||
+    (document as any).report_name ||
+    (document as any).reportName ||
+    (document as any).name ||
+    "Medical Report";
+
+  const displayDocType =
+    document.documentType ||
+    (document as any).document_type ||
+    (document as any).reportType ||
+    "LAB_REPORT";
+
+  const displayReportDate =
+    patient.reportDate ||
+    document.reportDate ||
+    (document as any).report_date;
 
   return (
     <View style={styles.container} testID="structured-report-summary-card">
@@ -275,11 +311,11 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
                 style={[styles.fileName, { color: colors.textPrimary }]}
                 numberOfLines={1}
               >
-                {document.fileName || "Medical Report"}
+                {displayFileName}
               </Text>
               <Text style={[styles.docTypeBadge, { color: colors.primary }]}>
-                {document.documentType || "LAB_REPORT"}
-                {patient.reportDate ? ` • ${patient.reportDate}` : ""}
+                {displayDocType}
+                {displayReportDate ? ` • ${displayReportDate}` : ""}
               </Text>
             </View>
           </View>

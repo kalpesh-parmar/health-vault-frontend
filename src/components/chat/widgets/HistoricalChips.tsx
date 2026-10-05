@@ -99,6 +99,10 @@ export function HistoricalChips({
         );
 
         const isUnchosen = !isChosen && (chosenVal !== null || chosenLabel !== null);
+        const displayLabel =
+          label === "editManually" || label === "edit_manually" || label === "EDIT_MANUALLY"
+            ? "Edit Manually"
+            : label;
 
         return (
           <View
@@ -122,7 +126,7 @@ export function HistoricalChips({
                   style={{ marginRight: 4 }}
                 />
               )}
-              <Text style={[styles.chipText, isChosen && { fontWeight: "700" }]}>{label}</Text>
+              <Text style={[styles.chipText, isChosen && { fontWeight: "700" }]}>{displayLabel}</Text>
             </View>
           </View>
         );

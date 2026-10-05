@@ -105,7 +105,10 @@ export const ProfileFieldEditor = React.memo(function ProfileFieldEditor({
           }
 
           if (field.key === "gender") {
-            const currentGen = (editedProfileData.gender || "").toLowerCase();
+            const currentGen = (editedProfileData.gender || "").toLowerCase().trim();
+            const isMale = currentGen === "male" || currentGen === "m";
+            const isFemale = currentGen === "female" || currentGen === "f";
+
             return (
               <View key={field.key} style={styles.inputGroup}>
                 <View style={styles.labelRow}>
@@ -119,23 +122,19 @@ export const ProfileFieldEditor = React.memo(function ProfileFieldEditor({
                     {field.label}
                   </Text>
                 </View>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View style={styles.radioGroupContainer}>
+                  {/* Male Radio Option */}
                   <TouchableOpacity
+                    activeOpacity={0.7}
                     style={[
-                      styles.genderBtn,
+                      styles.radioOptionCard,
                       {
-                        backgroundColor:
-                          currentGen === "male"
-                            ? theme.colors.primary
-                            : isDark
-                              ? "#1e293b"
-                              : "#f1f5f9",
-                        borderColor:
-                          currentGen === "male"
-                            ? theme.colors.primary
-                            : isDark
-                              ? "#475569"
-                              : "#cbd5e1",
+                        backgroundColor: isMale
+                          ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                          : (isDark ? "#1e293b" : "#f8fafc"),
+                        borderColor: isMale
+                          ? (isDark ? "#3b82f6" : "#2563eb")
+                          : (isDark ? "#334155" : "#cbd5e1"),
                       },
                     ]}
                     onPress={() =>
@@ -145,31 +144,60 @@ export const ProfileFieldEditor = React.memo(function ProfileFieldEditor({
                       }))
                     }
                   >
+                    <View
+                      style={[
+                        styles.radioOuterCircle,
+                        {
+                          borderColor: isMale
+                            ? (isDark ? "#3b82f6" : "#2563eb")
+                            : (isDark ? "#64748b" : "#94a3b8"),
+                        },
+                      ]}
+                    >
+                      {isMale && (
+                        <View
+                          style={[
+                            styles.radioInnerCircle,
+                            {
+                              backgroundColor: isDark ? "#3b82f6" : "#2563eb",
+                            },
+                          ]}
+                        />
+                      )}
+                    </View>
+                    <Ionicons
+                      name="male"
+                      size={16}
+                      color={isMale ? (isDark ? "#60a5fa" : "#2563eb") : (isDark ? "#94a3b8" : "#64748b")}
+                      style={{ marginRight: 6 }}
+                    />
                     <Text
                       style={[
-                        styles.genderBtnText,
-                        { color: currentGen === "male" ? "#ffffff" : theme.colors.textPrimary },
+                        styles.radioLabel,
+                        {
+                          color: isMale
+                            ? (isDark ? "#60a5fa" : "#2563eb")
+                            : theme.colors.textPrimary,
+                          fontWeight: isMale ? "700" : "500",
+                        },
                       ]}
                     >
                       {uiT("male")}
                     </Text>
                   </TouchableOpacity>
+
+                  {/* Female Radio Option */}
                   <TouchableOpacity
+                    activeOpacity={0.7}
                     style={[
-                      styles.genderBtn,
+                      styles.radioOptionCard,
                       {
-                        backgroundColor:
-                          currentGen === "female"
-                            ? theme.colors.primary
-                            : isDark
-                              ? "#1e293b"
-                              : "#f1f5f9",
-                        borderColor:
-                          currentGen === "female"
-                            ? theme.colors.primary
-                            : isDark
-                              ? "#475569"
-                              : "#cbd5e1",
+                        backgroundColor: isFemale
+                          ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                          : (isDark ? "#1e293b" : "#f8fafc"),
+                        borderColor: isFemale
+                          ? (isDark ? "#3b82f6" : "#2563eb")
+                          : (isDark ? "#334155" : "#cbd5e1"),
                       },
                     ]}
                     onPress={() =>
@@ -179,10 +207,42 @@ export const ProfileFieldEditor = React.memo(function ProfileFieldEditor({
                       }))
                     }
                   >
+                    <View
+                      style={[
+                        styles.radioOuterCircle,
+                        {
+                          borderColor: isFemale
+                            ? (isDark ? "#3b82f6" : "#2563eb")
+                            : (isDark ? "#64748b" : "#94a3b8"),
+                        },
+                      ]}
+                    >
+                      {isFemale && (
+                        <View
+                          style={[
+                            styles.radioInnerCircle,
+                            {
+                              backgroundColor: isDark ? "#3b82f6" : "#2563eb",
+                            },
+                          ]}
+                        />
+                      )}
+                    </View>
+                    <Ionicons
+                      name="female"
+                      size={16}
+                      color={isFemale ? (isDark ? "#60a5fa" : "#2563eb") : (isDark ? "#94a3b8" : "#64748b")}
+                      style={{ marginRight: 6 }}
+                    />
                     <Text
                       style={[
-                        styles.genderBtnText,
-                        { color: currentGen === "female" ? "#ffffff" : theme.colors.textPrimary },
+                        styles.radioLabel,
+                        {
+                          color: isFemale
+                            ? (isDark ? "#60a5fa" : "#2563eb")
+                            : theme.colors.textPrimary,
+                          fontWeight: isFemale ? "700" : "500",
+                        },
                       ]}
                     >
                       {uiT("female")}
@@ -317,18 +377,35 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
   },
-  genderBtn: {
+  radioGroupContainer: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  radioOptionCard: {
     flex: 1,
-    marginHorizontal: 4,
-    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  radioOuterCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 8,
   },
-  genderBtnText: {
+  radioInnerCircle: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+  },
+  radioLabel: {
     fontSize: 13,
-    fontWeight: "600",
   },
   actionsRow: {
     flexDirection: "row",

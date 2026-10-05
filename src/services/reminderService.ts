@@ -2,8 +2,19 @@ import apiClient from "./apiClient";
 import { MEDICATION_REMINDER_ENDPOINTS } from "../constants/endpoints";
 import { CreateMedicationReminderRequest, ListRemindersRequest } from "../types";
 
-export const createMedicationReminder = async (data: CreateMedicationReminderRequest) => {
-  const response = await apiClient.post(MEDICATION_REMINDER_ENDPOINTS.CREATE_MEDICATION_REMINDER, data);
+export const createMedicationReminder = async (data: CreateMedicationReminderRequest | string | string[]) => {
+  const payload = Array.isArray(data)
+    ? data
+    : typeof data === "string"
+      ? [data]
+      : data;
+  const response = await apiClient.post(MEDICATION_REMINDER_ENDPOINTS.CREATE_MEDICATION_REMINDER, payload);
+  return response.data;
+};
+
+export const createMedicationRemindersBatch = async (medicationIds: string[]) => {
+  if (!medicationIds || medicationIds.length === 0) return null;
+  const response = await apiClient.post(MEDICATION_REMINDER_ENDPOINTS.CREATE_MEDICATION_REMINDER, medicationIds);
   return response.data;
 };
 

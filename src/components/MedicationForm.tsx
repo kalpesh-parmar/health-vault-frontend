@@ -6,9 +6,11 @@ import {
   Keyboard,
   ActivityIndicator,
   Text,
+  TouchableOpacity,
 } from "react-native";
 import { format } from "date-fns";
 import styled from "styled-components/native";
+import { Ionicons } from "@expo/vector-icons";
 import { AddOrEditMedication } from "../types";
 import ModernLoader from "./shared/Loader";
 import { useAppTheme } from "../context/ThemeContext";
@@ -23,6 +25,12 @@ interface MedicationFormProps {
   isLoading: boolean;
   onScroll?: (...args: any[]) => void;
   operation?: string;
+  drafts?: AddOrEditMedication[];
+  currentIndex?: number;
+  onAddAndContinue?: (data: AddOrEditMedication) => void;
+  onReview?: (data?: AddOrEditMedication | null) => void;
+  onNavigateDraft?: (index: number, currentData?: AddOrEditMedication | null) => void;
+  onCancel?: () => void;
 }
 
 const MedicationForm = ({
@@ -30,7 +38,13 @@ const MedicationForm = ({
   onSubmit,
   isLoading,
   onScroll,
-  operation,
+  operation = "add",
+  drafts = [],
+  currentIndex = 0,
+  onAddAndContinue,
+  onReview,
+  onNavigateDraft,
+  onCancel,
 }: MedicationFormProps) => {
   const { theme, isDark } = useAppTheme();
   const formState = useMedicationFormState(initialData, "english");
@@ -93,7 +107,7 @@ const MedicationForm = ({
     };
   }, []);
 
-  const handleSubmit = () => {
+  const buildMedicationPayload = (): AddOrEditMedication | null => {
     const errors: string[] = [];
     if (!formName.trim()) {
       errors.push("Name is required");
@@ -115,7 +129,7 @@ const MedicationForm = ({
 
     if (errors.length > 0) {
       setLocalErrors(errors);
-      return;
+      return null;
     }
 
     setLocalErrors([]);
@@ -129,12 +143,12 @@ const MedicationForm = ({
       return ma - mb;
     });
 
-    sortedTimes.forEach((timeStr, index) => {
+    sortedTimes.forEach((timeStr) => {
       let key = "CUSTOM";
       if (timeStr === "08:00") key = "MORNING";
       else if (timeStr === "14:00") key = "NOON";
       else if (timeStr === "20:00") key = "NIGHT";
-      
+
       const timeWithSec = `${timeStr}:00`;
       if (scheduleObj[key]) {
         if (Array.isArray(scheduleObj[key])) {
@@ -147,7 +161,9 @@ const MedicationForm = ({
       }
     });
 
-    onSubmit({
+    return {
+      client_med_id: initialData?.client_med_id || `draft_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: initialData?.id,
       medicationName: formName.trim(),
       medicationType: formType,
       prescribedBy: formPrescribed.trim(),
@@ -158,13 +174,40 @@ const MedicationForm = ({
       frequency: formFreq === "ONCE" ? "Once Daily" : formFreq === "TWICE" ? "Twice Daily" : "3x Daily",
       foodFrequency: formFoodFreq,
       startDate: startDate ? format(startDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
-      ongoing: true, // medication is ongoing by default
+      ongoing: true,
       medicationSchedule: scheduleObj,
       totalQuantity: parsedQty,
       notes: formNotes.trim(),
-      // reminderBeforeMinutes is completely removed!
-    });
+    };
   };
+
+  const handleSubmit = () => {
+    const data = buildMedicationPayload();
+    if (!data) return;
+    onSubmit(data);
+  };
+
+  const handleAddAndContinue = () => {
+    const data = buildMedicationPayload();
+    if (!data) return;
+    if (onAddAndContinue) {
+      onAddAndContinue(data);
+    }
+  };
+
+  const handleReview = () => {
+    if (formName.trim()) {
+      const data = buildMedicationPayload();
+      if (!data) return;
+      onReview?.(data);
+    } else {
+      onReview?.(null);
+    }
+  };
+
+  const isAddMode = operation === "add";
+  const canGoLeft = isAddMode && currentIndex > 0;
+  const canGoRight = isAddMode && currentIndex < drafts.length;
 
   return (
     <View style={{ flex: 1 }}>
@@ -181,6 +224,111 @@ const MedicationForm = ({
         }}
       >
         <ModernLoader visible={isLoading} title="This May Take A While." />
+
+        {/* Stepper Navigation for Batch Adding */}
+        {isAddMode && (drafts.length > 0 || currentIndex > 0) && (
+          <StepperCard isDark={isDark}>
+            <TouchableOpacity
+              disabled={!canGoLeft || isLoading}
+              activeOpacity={0.7}
+              onPress={() => onNavigateDraft?.(currentIndex - 1, formName.trim() ? buildMedicationPayload() : null)}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                backgroundColor: isDark ? "#334155" : "#f1f5f9",
+                opacity: canGoLeft ? 1 : 0.3,
+              }}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={20}
+                color={canGoLeft ? (isDark ? "#f8fafc" : "#1e293b") : isDark ? "#64748b" : "#94a3b8"}
+              />
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "700",
+                  color: isDark ? "#f8fafc" : "#1e293b",
+                }}
+              >
+                Medicine #{currentIndex + 1}
+              </Text>
+              {currentIndex < drafts.length && (
+                <View
+                  style={{
+                    marginLeft: 8,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 4,
+                    backgroundColor: isDark ? "#064e3b" : "#d1fae5",
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: isDark ? "#6ee7b7" : "#047857" }}>
+                    Added
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity
+              disabled={!canGoRight || isLoading}
+              activeOpacity={0.7}
+              onPress={() => onNavigateDraft?.(currentIndex + 1, formName.trim() ? buildMedicationPayload() : null)}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                backgroundColor: isDark ? "#334155" : "#f1f5f9",
+                opacity: canGoRight ? 1 : 0.3,
+              }}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={canGoRight ? (isDark ? "#f8fafc" : "#1e293b") : isDark ? "#64748b" : "#94a3b8"}
+              />
+            </TouchableOpacity>
+          </StepperCard>
+        )}
+
+        {/* Ready to review banner */}
+        {isAddMode && drafts.length > 0 && (
+          <ReviewBanner
+            onPress={handleReview}
+            activeOpacity={0.8}
+            isDark={isDark}
+          >
+            <Ionicons
+              name="file-tray-full-outline"
+              size={18}
+              color={isDark ? "#818cf8" : "#4f46e5"}
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "600",
+                color: isDark ? "#c7d2fe" : "#3730a3",
+                flex: 1,
+              }}
+            >
+              {drafts.length} medicine{drafts.length > 1 ? "s" : ""} added ·{" "}
+              <Text style={{ textDecorationLine: "underline", fontWeight: "700" }}>
+                Review All
+              </Text>
+            </Text>
+            <Ionicons
+              name="arrow-forward"
+              size={16}
+              color={isDark ? "#818cf8" : "#4f46e5"}
+            />
+          </ReviewBanner>
+        )}
+
         <Card style={{ marginTop: 0 }}>
           <MedicationFormFields
             formState={formState}
@@ -201,16 +349,76 @@ const MedicationForm = ({
         </Card>
 
         <Footer>
-          <SaveButton onPress={handleSubmit} disabled={isLoading}>
-            {isLoading ? (
-              <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-                <ActivityIndicator color="#ffffff" />
-                <SaveButtonText>Saving...</SaveButtonText>
+          {isAddMode ? (
+            <View style={{ gap: 10 }}>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                {/* Add & Continue Button */}
+                <AddAndContinueButton
+                  onPress={handleAddAndContinue}
+                  disabled={isLoading}
+                  isDark={isDark}
+                >
+                  <Ionicons
+                    name="add"
+                    size={18}
+                    color={isDark ? "#a5b4fc" : "#4f46e5"}
+                    style={{ marginRight: 4 }}
+                  />
+                  <AddAndContinueButtonText isDark={isDark}>
+                    Add & Continue
+                  </AddAndContinueButtonText>
+                </AddAndContinueButton>
+
+                {/* Review & Save or Save Button */}
+                {drafts.length > 0 ? (
+                  <SaveButton
+                    style={{ flex: 1 }}
+                    onPress={handleReview}
+                    disabled={isLoading}
+                  >
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="list" size={18} color="#ffffff" />
+                      <SaveButtonText numberOfLines={1}>
+                        Review ({drafts.length + (formName.trim() ? 1 : 0)})
+                      </SaveButtonText>
+                    </View>
+                  </SaveButton>
+                ) : (
+                  <SaveButton
+                    style={{ flex: 1 }}
+                    onPress={handleSubmit}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                        <ActivityIndicator color="#ffffff" />
+                        <SaveButtonText>Saving...</SaveButtonText>
+                      </View>
+                    ) : (
+                      <SaveButtonText>Save Medication</SaveButtonText>
+                    )}
+                  </SaveButton>
+                )}
               </View>
-            ) : (
-              <SaveButtonText>Save Medication</SaveButtonText>
-            )}
-          </SaveButton>
+
+              {onCancel && (
+                <CancelButton onPress={onCancel} disabled={isLoading} isDark={isDark}>
+                  <CancelButtonText isDark={isDark}>Cancel</CancelButtonText>
+                </CancelButton>
+              )}
+            </View>
+          ) : (
+            <SaveButton onPress={handleSubmit} disabled={isLoading}>
+              {isLoading ? (
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  <ActivityIndicator color="#ffffff" />
+                  <SaveButtonText>Saving...</SaveButtonText>
+                </View>
+              ) : (
+                <SaveButtonText>Save Medication</SaveButtonText>
+              )}
+            </SaveButton>
+          )}
         </Footer>
       </ScrollContent>
     </View>
@@ -235,8 +443,53 @@ export const Card = styled.View`
   shadow-color: #000;
 `;
 
+const StepperCard = styled.View<{ isDark: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  background-color: ${(props: any) => (props.isDark ? "#1e293b" : "#ffffff")};
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border-width: 1px;
+  border-color: ${(props: any) => (props.isDark ? "#334155" : "#e2e8f0")};
+`;
+
+const ReviewBanner = styled.TouchableOpacity<{ isDark: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  background-color: ${(props: any) =>
+    props.isDark ? "rgba(99, 102, 241, 0.15)" : "#eef2ff"};
+  padding: 12px 16px;
+  border-radius: 14px;
+  margin-bottom: 14px;
+  border-width: 1px;
+  border-color: ${(props: any) =>
+    props.isDark ? "rgba(99, 102, 241, 0.3)" : "#c7d2fe"};
+`;
+
 export const Footer = styled.View`
   padding: 10px 0px 55px;
+`;
+
+export const AddAndContinueButton = styled.TouchableOpacity<{ isDark: boolean }>`
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 12px;
+  border-radius: 18px;
+  background-color: ${(props: any) =>
+    props.isDark ? "rgba(99, 102, 241, 0.15)" : "#eef2ff"};
+  border-width: 1.5px;
+  border-color: ${(props: any) =>
+    props.isDark ? "rgba(99, 102, 241, 0.4)" : "#818cf8"};
+`;
+
+export const AddAndContinueButtonText = styled.Text<{ isDark: boolean }>`
+  font-size: 15px;
+  font-weight: 700;
+  color: ${(props: any) => (props.isDark ? "#a5b4fc" : "#4f46e5")};
 `;
 
 export const SaveButton = styled.TouchableOpacity`
@@ -244,6 +497,7 @@ export const SaveButton = styled.TouchableOpacity`
   padding: 18px;
   border-radius: 18px;
   align-items: center;
+  justify-content: center;
   shadow-color: #6366f1;
   shadow-opacity: 0.3;
   elevation: 8;
@@ -251,6 +505,22 @@ export const SaveButton = styled.TouchableOpacity`
 
 const SaveButtonText = styled.Text`
   color: white;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
+`;
+
+const CancelButton = styled.TouchableOpacity<{ isDark: boolean }>`
+  padding: 14px;
+  border-radius: 16px;
+  align-items: center;
+  justify-content: center;
+  background-color: ${(props: any) => (props.isDark ? "#1e293b" : "#f1f5f9")};
+  border-width: 1px;
+  border-color: ${(props: any) => (props.isDark ? "#334155" : "#cbd5e1")};
+`;
+
+const CancelButtonText = styled.Text<{ isDark: boolean }>`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${(props: any) => (props.isDark ? "#94a3b8" : "#64748b")};
 `;

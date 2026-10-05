@@ -15,6 +15,7 @@ import { I18N_CHAT_UI, SUGGESTED_QUESTIONS_I18N } from "../../constants/chatCons
 import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
 import { parseMedicationListMessage } from "../../utils/medicationListNormalizer";
 import { parseReportListMessage } from "../../utils/reportListNormalizer";
+import { normalizeReportSummaryToDocument } from "../../utils/documentNormalizer";
 
 interface UseChatSessionProps {
   initialSessionId?: string;
@@ -211,6 +212,19 @@ export const useChatSession = ({
         finalData?.action ||
         "NORMAL_CHAT";
 
+      const reportSummaryData =
+        finalData?.reportSummary ||
+        (Array.isArray(finalData?.actions)
+          ? finalData.actions.find(
+              (a: any) =>
+                a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+            )?.reportSummary
+          : null);
+      const resolvedDoc = normalizeReportSummaryToDocument(
+        reportSummaryData || finalData?.document,
+        finalData?.document,
+      );
+
       upsertAssistantMessage(messageId, (current) => {
         const baseMessage = current || {
           id: messageId,
@@ -228,6 +242,9 @@ export const useChatSession = ({
           sessionId: finalData?.sessionId ?? baseMessage.sessionId,
           mode: finalData?.mode ?? baseMessage.mode,
           action: actionType || baseMessage.action || "NORMAL_CHAT",
+          actions: finalData?.actions ?? (baseMessage as any).actions ?? [],
+          reportSummary:
+            reportSummaryData ?? (baseMessage as any).reportSummary ?? null,
           task: finalData?.task || structRes.task,
           options: finalData?.options ?? baseMessage.options ?? [],
           reports:
@@ -250,18 +267,21 @@ export const useChatSession = ({
             structRes.documents ||
             finalData?.documents ||
             baseMessage.documents,
-          document: finalData?.document ?? baseMessage.document ?? null,
+          document:
+            resolvedDoc || (finalData?.document ?? baseMessage.document ?? null),
           suggestedQuestions:
             finalData?.suggestedQuestions ??
             baseMessage.suggestedQuestions ??
             [],
           keyFindings:
+            resolvedDoc?.keyFindings ??
             finalData?.document?.keyFindings ??
             finalData?.keyFindings ??
             baseMessage.keyFindings ??
             [],
           documentIds:
             normalizeDocumentIds(
+              resolvedDoc?.id,
               finalData?.documentId,
               finalData?.documentIds,
               finalData?.documents,
@@ -485,138 +505,140 @@ export const useChatSession = ({
     hasInitializedHistory.current = true;
     setIsLoadingHistory(true);
     try {
-      const sessionsRes = await apiClient.get("/chat/session", {
-        params: { limit: 50 },
-      });
-      const fetchedSessions =
-        sessionsRes.data?.data?.items || sessionsRes.data?.items || [];
-      setSessions(fetchedSessions);
+      await Promise.allSettled([
+        fetchOnboardingHistory(),
+        (async () => {
+          try {
+            const sessionsRes = await apiClient.get("/chat/session", {
+              params: { limit: 50 },
+            });
+            const fetchedSessions =
+              sessionsRes.data?.data?.items || sessionsRes.data?.items || [];
+            setSessions(fetchedSessions);
 
-      if (fetchedSessions.length > 0) {
-        const mostRecent = fetchedSessions[0];
-        setActiveSessionId(mostRecent.id);
+            if (fetchedSessions.length > 0) {
+              const mostRecent = initialSessionId
+                ? fetchedSessions.find((s: any) => s.id === initialSessionId) || fetchedSessions[0]
+                : fetchedSessions[0];
+              setActiveSessionId(mostRecent.id);
 
-        if (mostRecent.documentId) {
-          const matchedDoc = documentsList.find(
-            (d) => d.id === mostRecent.documentId,
-          );
-          setSelectedDocument(matchedDoc || null);
-        } else {
-          setSelectedDocument(null);
-        }
-
-        const messagesRes = await apiClient.get(
-          `/chat/session/${mostRecent.id}/messages`,
-          { params: { limit: 20 } },
-        );
-        const msgItems =
-          messagesRes.data?.data?.items || messagesRes.data?.items || [];
-        const newCursor =
-          messagesRes.data?.data?.nextCursor ||
-          messagesRes.data?.nextCursor ||
-          null;
-        setNextCursor(newCursor);
-
-        const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => {
-          let meta = dbMsg.metadata;
-          if (typeof meta === "string") {
-            try {
-              meta = JSON.parse(meta);
-            } catch {
-              meta = {};
-            }
-          } else {
-            meta = meta || {};
-          }
-          const structRes = resolveStructuredContent(dbMsg.content, meta);
-
-          let text = dbMsg.content || "";
-          if (
-            dbMsg.role === "user" &&
-            typeof text === "string" &&
-            (text.trim().startsWith("{") || text.trim().startsWith("["))
-          ) {
-            try {
-              const parsed = JSON.parse(text);
-              if (parsed?.displayLabel) {
-                text = parsed.displayLabel;
-              } else if (parsed?.label) {
-                text = parsed.label;
-              } else if (
-                meta.actionType === "SAVE_AND_REVIEW" ||
-                meta.action === "SAVE_AND_REVIEW" ||
-                parsed?.action === "SAVE_AND_REVIEW" ||
-                parsed?.saveAndReview === true
-              ) {
-                text = tOnboarding("saveMedicines") || "Save Medicines";
-              } else if (
-                meta.actionType === "ADD_MEDICINE" ||
-                meta.action === "ADD_MEDICINE" ||
-                parsed?.action === "ADD_MEDICINE" ||
-                parsed?.addNew === true
-              ) {
-                text = tOnboarding("addMedicines") || "Add Medicines";
-              } else if (
-                parsed?.selected !== undefined ||
-                parsed?.medicines !== undefined ||
-                meta.actionType === "CONFIRM_MEDICINES" ||
-                meta.action === "CONFIRM_MEDICINES"
-              ) {
-                text = tOnboarding("confirmSelection") || "Confirm Selection";
-              } else if (
-                parsed?.skipAll ||
-                meta.actionType === "SKIP_MEDICINES" ||
-                meta.action === "SKIP_MEDICINES"
-              ) {
-                text = tOnboarding("skipAll") || "Skip All";
+              if (mostRecent.documentId) {
+                const matchedDoc = documentsList.find(
+                  (d) => d.id === mostRecent.documentId,
+                );
+                setSelectedDocument(matchedDoc || null);
+              } else {
+                setSelectedDocument(null);
               }
-            } catch {
-              // keep as is
-            }
-          }
 
-          return {
-            ...meta,
-            id: dbMsg.id,
-            role: dbMsg.role === "assistant" ? "ai" : "user",
-            text,
-            action: meta.action || meta.actionType || (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined),
-            medicines: meta.medicines || [],
-            rawValue:
-              meta.rawValue ||
-              (dbMsg.role === "user" && typeof dbMsg.content === "string" && dbMsg.content.trim().startsWith("{")
-                ? dbMsg.content
-                : undefined),
-            mode: meta.mode as ChatMode,
-            // action:
-            //   structRes.action ||
-            //   meta.action ||
-            //   meta.actionType ||
-            //   "NORMAL_CHAT",
-            task: meta.task || structRes.task,
-            reports:
-              structRes.reports.length > 0
-                ? structRes.reports
-                : meta.reports || [],
-            // medicines:
-            //   structRes.medicines.length > 0
-            //     ? structRes.medicines
-            //     : meta.medicines || [],
-            items:
-              structRes.items.length > 0 ? structRes.items : meta.items || [],
-            pagination: structRes.pagination || meta.pagination,
-            documents: structRes.documents || meta.documents,
-            createdAt: dbMsg.createdAt,
-          };
-        });
-        setMessages(mapped);
-      }
+              const messagesRes = await apiClient.get(
+                `/chat/session/${mostRecent.id}/messages`,
+                { params: { limit: 50 } },
+              );
+              const msgItems =
+                messagesRes.data?.data?.items || messagesRes.data?.items || [];
+              const newCursor =
+                messagesRes.data?.data?.nextCursor ||
+                messagesRes.data?.nextCursor ||
+                null;
+              setNextCursor(newCursor);
+
+              const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => {
+                let meta = dbMsg.metadata;
+                if (typeof meta === "string") {
+                  try {
+                    meta = JSON.parse(meta);
+                  } catch {
+                    meta = {};
+                  }
+                } else {
+                  meta = meta || {};
+                }
+                const structRes = resolveStructuredContent(dbMsg.content, meta);
+
+                let text = dbMsg.content || "";
+                if (
+                  dbMsg.role === "user" &&
+                  typeof text === "string" &&
+                  (text.trim().startsWith("{") || text.trim().startsWith("["))
+                ) {
+                  try {
+                    const parsed = JSON.parse(text);
+                    if (parsed?.displayLabel) {
+                      text = parsed.displayLabel;
+                    } else if (parsed?.label) {
+                      text = parsed.label;
+                    } else if (
+                      meta.actionType === "SAVE_AND_REVIEW" ||
+                      meta.action === "SAVE_AND_REVIEW" ||
+                      parsed?.action === "SAVE_AND_REVIEW" ||
+                      parsed?.saveAndReview === true
+                    ) {
+                      text = tOnboarding("saveMedicines") || "Save Medicines";
+                    } else if (
+                      meta.actionType === "ADD_MEDICINE" ||
+                      meta.action === "ADD_MEDICINE" ||
+                      parsed?.action === "ADD_MEDICINE" ||
+                      parsed?.addNew === true
+                    ) {
+                      text = tOnboarding("addMedicines") || "Add Medicines";
+                    } else if (
+                      parsed?.selected !== undefined ||
+                      parsed?.medicines !== undefined ||
+                      meta.actionType === "CONFIRM_MEDICINES" ||
+                      meta.action === "CONFIRM_MEDICINES"
+                    ) {
+                      text = tOnboarding("confirmSelection") || "Confirm Selection";
+                    } else if (
+                      parsed?.skipAll ||
+                      meta.actionType === "SKIP_MEDICINES" ||
+                      meta.action === "SKIP_MEDICINES"
+                    ) {
+                      text = tOnboarding("skipAll") || "Skip All";
+                    }
+                  } catch {
+                    // keep as is
+                  }
+                }
+
+                return {
+                  ...meta,
+                  id: dbMsg.id,
+                  role: dbMsg.role === "assistant" ? "ai" : "user",
+                  text,
+                  action: meta.action || meta.actionType || (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined),
+                  medicines: meta.medicines || [],
+                  rawValue:
+                    meta.rawValue ||
+                    (dbMsg.role === "user" && typeof dbMsg.content === "string" && dbMsg.content.trim().startsWith("{")
+                      ? dbMsg.content
+                      : undefined),
+                  mode: meta.mode as ChatMode,
+                  task: meta.task || structRes.task,
+                  reports:
+                    structRes.reports.length > 0
+                      ? structRes.reports
+                      : meta.reports || [],
+                  items:
+                    structRes.items.length > 0 ? structRes.items : meta.items || [],
+                  pagination: structRes.pagination || meta.pagination,
+                  documents: structRes.documents || meta.documents,
+                  createdAt: dbMsg.createdAt,
+                };
+              });
+              setMessages(mapped);
+            }
+          } catch (e) {
+            console.warn("[AI_CHAT] Failed to load session messages:", e);
+          }
+        })(),
+      ]);
     } catch (e) {
       console.warn("[AI_CHAT] Failed to initialize chat history:", e);
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [documentsList, tOnboarding]);
+  }, [documentsList, fetchOnboardingHistory, initialSessionId, tOnboarding]);
 
   const loadMoreMessages = useCallback(async () => {
     if (!activeSessionId || !nextCursor || isLoadingMore) return;
@@ -758,6 +780,19 @@ export const useChatSession = ({
         const resData = response.data?.data;
         if (resData?.reply) {
           const structRes = resolveStructuredContent(resData.reply, resData);
+          const reportSummaryData =
+            resData.reportSummary ||
+            (Array.isArray(resData.actions)
+              ? resData.actions.find(
+                  (a: any) =>
+                    a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+                )?.reportSummary
+              : null);
+          const resolvedDoc = normalizeReportSummaryToDocument(
+            reportSummaryData || resData.document,
+            resData.document,
+          );
+
           const aiMsg: ChatMessage = {
             id: `ai-opt-res-${Date.now()}`,
             role: "ai",
@@ -770,6 +805,8 @@ export const useChatSession = ({
               resData.actionType ||
               resData.action ||
               "NORMAL_CHAT",
+            actions: resData.actions || [],
+            reportSummary: reportSummaryData || null,
             task: resData.task || structRes.task,
             options: resData.options || [],
             reports:
@@ -785,10 +822,11 @@ export const useChatSession = ({
                 ? structRes.items
                 : resData.items || [],
             pagination: structRes.pagination || resData.pagination,
-            document: resData.document || null,
+            document: resolvedDoc || resData.document || null,
             documentSummary: resData.documentSummary || null,
             documents: structRes.documents || resData.documents || [],
             documentIds: normalizeDocumentIds(
+              resolvedDoc?.id,
               resData.documentId,
               resData.documentIds,
               resData.documents,

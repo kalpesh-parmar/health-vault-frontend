@@ -560,7 +560,9 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           ),
         );
 
-        const response = await retryDocumentProcessing({ fileKey, batchId });
+        const targetDoc = uploadingDocs.find((d) => d.fileKey === fileKey || d.id === fileKey || d.jobId === fileKey);
+        const jobIdToRetry = targetDoc?.jobId || targetDoc?.id || targetDoc?.fileKey || fileKey;
+        const response = await retryDocumentProcessing({ jobId: jobIdToRetry, fileKey, batchId });
         const data = (response as any)?.data?.data || (response as any)?.data || response;
         const streamEndpoint =
           data?.streamUrl ||
@@ -744,12 +746,12 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           ))
       ) {
         console.warn("Upload already in progress, ignoring duplicate startUpload request");
-        Toast.show({
-          type: "info",
-          position: "top",
-          text1: "Processing in Progress",
-          text2: "A document is currently being processed. Please wait for it to complete.",
-        });
+          Toast.show({
+            type: "info",
+            position: "top",
+            text1: "Processing in Progress",
+            text2: "A document is currently being processed. Please wait for it to complete.",
+          });
         return;
       }
 
@@ -902,7 +904,11 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
           if (!hasHandledBatchFinishedRef.current) {
             hasHandledBatchFinishedRef.current = true;
-            if (completedCount > 0) {
+            const isFromOnboarding =
+              activeUploadFromScreenRef.current === "Onboarding" ||
+              currentDocs.some((d) => d.fromScreen === "Onboarding");
+
+            if (completedCount > 0 && !isFromOnboarding) {
               Toast.show({
                 type: "success",
                 text1: "Analysis Complete!",
