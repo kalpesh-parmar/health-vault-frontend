@@ -313,16 +313,19 @@ const AIChatScreen = ({ route }: any) => {
   }, [mergedMessages]);
 
   const scrollToBottom = useCallback((animated = true) => {
-    flatListRef.current?.scrollToEnd({ animated });
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated });
-    }, 50);
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated });
-    }, 150);
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated });
-    }, 350);
+    // Message cards can change height after the first layout (for example,
+    // while streamed text or report widgets finish rendering). Retry across
+    // a few layout passes so scrollToEnd uses the final content height.
+    const scroll = () => {
+      if (shouldAutoScrollRef.current) {
+        flatListRef.current?.scrollToEnd({ animated });
+      }
+    };
+
+    scroll();
+    setTimeout(scroll, 50);
+    setTimeout(scroll, 150);
+    setTimeout(scroll, 350);
   }, []);
 
   useEffect(() => {
@@ -342,6 +345,17 @@ const AIChatScreen = ({ route }: any) => {
       scrollToBottom(isInitialLoadRef.current ? false : true);
     }
   }, [displayMessages.length, isSending, isActivelyStreaming, scrollToBottom]);
+
+  // Re-anchor the chat when it is opened or brought back into focus so the
+  // latest message is visible after history has finished loading.
+  useEffect(() => {
+    if (!isFocused || isLoadingHistory || displayMessages.length === 0) {
+      return;
+    }
+
+    shouldAutoScrollRef.current = true;
+    scrollToBottom(false);
+  }, [isFocused, isLoadingHistory, displayMessages.length, scrollToBottom]);
 
   const renderChatItem = useCallback(
     ({ item, index }: { item: any; index: number }) => (
@@ -541,13 +555,8 @@ const AIChatScreen = ({ route }: any) => {
               }
             }}
             onContentSizeChange={() => {
-              if (isInitialLoadRef.current) {
-                flatListRef.current?.scrollToEnd({ animated: false });
-                if (displayMessages.length > 0) {
-                  isInitialLoadRef.current = false;
-                }
-              } else if (shouldAutoScrollRef.current) {
-                flatListRef.current?.scrollToEnd({ animated: true });
+              if (shouldAutoScrollRef.current) {
+                scrollToBottom();
               }
             }}
             onScrollBeginDrag={() => {

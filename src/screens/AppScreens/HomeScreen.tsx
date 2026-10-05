@@ -66,9 +66,6 @@ const HomeScreen = () => {
 
   const {
     uploadingDocs,
-    completedBatch,
-    clearCompletedBatch,
-    retryDocument,
     processingError,
     clearProcessingError,
   } = useDocumentUpload();
@@ -95,46 +92,6 @@ const HomeScreen = () => {
       }
     );
   }, [activeHomeUploadingDocs]);
-
-  const handleRetryFailed = useCallback(async () => {
-    if (!completedBatch?.documents) return;
-    const failedDocs = completedBatch.documents.filter(
-      (d) => (d.status === "FAILED" || d.status === "failed" || d.status === "error") && d.retryable !== false
-    );
-    if (failedDocs.length === 0) return;
-
-    const keys = new Set(failedDocs.map((d) => d.fileKey || d.id));
-    setRetryingKeys(keys);
-
-    try {
-      clearProcessingError();
-      await Promise.all(
-        failedDocs.map((doc) => {
-          const fileKey = doc.fileKey || doc.id;
-          if (fileKey) {
-            return retryDocument(fileKey);
-          }
-          return Promise.resolve();
-        })
-      );
-    } catch (err) {
-      console.error("[handleRetryFailed Error]", err);
-    } finally {
-      setRetryingKeys(new Set());
-      setIsBannerDismissed(true);
-      clearCompletedBatch();
-    }
-  }, [completedBatch, retryDocument, clearCompletedBatch, clearProcessingError]);
-
-  React.useEffect(() => {
-    if (completedBatch && completedBatch.fromScreen !== "Onboarding") {
-      const batchId = completedBatch.jobIds.join(",");
-      if (batchId !== lastBatchIdRef.current) {
-        lastBatchIdRef.current = batchId;
-        setIsBannerDismissed(false);
-      }
-    }
-  }, [completedBatch]);
 
   const handleOpenDrawer = useCallback(() => {
     navigation.dispatch(DrawerActions.openDrawer());

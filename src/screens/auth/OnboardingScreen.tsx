@@ -3388,6 +3388,15 @@ export default function OnboardingScreen() {
         }));
         setActiveMedicineToEdit(null);
         setMedicineCardMode("wizard");
+
+        // The form is rendered below the existing list. Force the chat list to
+        // the bottom after the new form has been laid out, even if the user had
+        // previously scrolled away from the bottom.
+        shouldAutoScrollRef.current = true;
+        scrollToBottom(true);
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 250);
       };
 
       const handleSkipAll = () => {
@@ -3431,9 +3440,33 @@ export default function OnboardingScreen() {
         sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel", "CANCEL");
       };
 
+      const reviewMedicinesList = (
+        <ReviewMedicinesListCard
+          localMedicines={
+            isHistorical ? deduplicateDrafts(activeMsg.medicines || []) : deduplicateDrafts(localMedicines)
+          }
+          setLocalMedicines={setLocalMedicines}
+          preferredLang={preferredLang}
+          isDark={isDark}
+          theme={theme}
+          onConfirm={handleConfirm}
+          onAddNew={handleAddNew}
+          onSkipAll={handleSkipAll}
+          onEdit={handleEdit}
+          onCancel={!isHistorical ? handleExitToOptions : undefined}
+          readOnly={isHistorical}
+          chosenVal={chosenVal}
+          chosenLabel={chosenLabel}
+          documents={activeMsg.documents}
+          showDocumentSummary={false}
+        />
+      );
+
       if (!isHistorical && medicineCardMode === "wizard") {
         return (
-          <AddMedicineCard
+          <View style={{ width: "100%" }}>
+            {reviewMedicinesList}
+            <AddMedicineCard
             key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
             med={activeMedicineToEdit || null}
             initialMedicines={memoizedInitialMedicines}
@@ -3494,14 +3527,13 @@ export default function OnboardingScreen() {
                 medicinesToAdd: uniqueDrafts,
                 currentMedicineIndex: uniqueDrafts.length,
               }));
-              handleDraftSync(uniqueDrafts);
             }}
-            onDraftSync={handleDraftSync}
+            // Review-mode additions are frontend-only until the user confirms the list.
+            onDraftSync={undefined}
             onSaveMedicines={(allDrafts) => {
               const uniqueDrafts = deduplicateDrafts(allDrafts);
               setLocalMedicines(uniqueDrafts);
               setState((prev) => ({ ...prev, medicinesToAdd: uniqueDrafts }));
-              handleDraftSync(uniqueDrafts);
               setActiveMedicineToEdit(null);
               setMedicineCardMode("review");
             }}
@@ -3516,31 +3548,12 @@ export default function OnboardingScreen() {
             readOnly={false}
             chosenVal={null}
             chosenLabel={null}
-          />
+            />
+          </View>
         );
       }
 
-      return (
-        <ReviewMedicinesListCard
-          localMedicines={
-            isHistorical ? deduplicateDrafts(activeMsg.medicines || []) : deduplicateDrafts(localMedicines)
-          }
-          setLocalMedicines={setLocalMedicines}
-          preferredLang={preferredLang}
-          isDark={isDark}
-          theme={theme}
-          onConfirm={handleConfirm}
-          onAddNew={handleAddNew}
-          onSkipAll={handleSkipAll}
-          onEdit={handleEdit}
-          onCancel={!isHistorical ? handleExitToOptions : undefined}
-          readOnly={isHistorical}
-          chosenVal={chosenVal}
-          chosenLabel={chosenLabel}
-          documents={activeMsg.documents}
-          showDocumentSummary={false}
-        />
-      );
+      return reviewMedicinesList;
     }
 
     // if (activeMsg.action === "CONFIRM_MEDICINE") {
