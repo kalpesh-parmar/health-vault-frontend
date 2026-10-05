@@ -769,6 +769,7 @@ const AddButton = styled.TouchableOpacity`
 const RightActions = styled.View`
   flex-direction: row;
   align-items: center;
+  flex-shrink: 0;
 `;
 
 const HeaderTitle = styled.Text`
@@ -776,6 +777,8 @@ const HeaderTitle = styled.Text`
   font-size: 20px;
   font-weight: 700;
   flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 0;
   margin-left: 10px;
 `;
 
@@ -957,6 +960,7 @@ const DeleteBatchButtonText = styled.Text`
 const SelectAllButton = styled.TouchableOpacity`
   flex-direction: row;
   align-items: center;
+  flex-shrink: 0;
   background-color: rgba(255, 255, 255, 0.2);
   padding: 8px 12px;
   border-radius: 20px;

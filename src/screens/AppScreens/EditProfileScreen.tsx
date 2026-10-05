@@ -62,7 +62,6 @@ const getIconColors = (isDark: boolean) => ({
 const GENDER_OPTIONS = [
   { label: "Male", icon: "male", value: "male" },
   { label: "Female", icon: "female", value: "female" },
-  { label: "Other", icon: "male-female-outline", value: "other" },
 ] as const;
 
 export const BLOOD_GROUP_OPTIONS = [

@@ -146,23 +146,23 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
       >
         {/* Review Summary Card */}
         <SummaryBanner isDark={isDark}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+          <SummaryBannerRow>
+            <SummaryBannerContent>
               <Ionicons
                 name="checkmark-done-circle"
                 size={22}
                 color={isDark ? "#818cf8" : "#4f46e5"}
                 style={{ marginRight: 8 }}
               />
-              <View>
-                <SummaryBannerTitle isDark={isDark}>
+              <SummaryBannerText>
+                <SummaryBannerTitle isDark={isDark} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
                   {drafts.length} Medication{drafts.length > 1 ? "s" : ""} Added
                 </SummaryBannerTitle>
-                <SummaryBannerSubtitle isDark={isDark}>
+                <SummaryBannerSubtitle isDark={isDark} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
                   {selectedCount} selected for saving
                 </SummaryBannerSubtitle>
-              </View>
-            </View>
+              </SummaryBannerText>
+            </SummaryBannerContent>
 
             <SelectAllBtn onPress={handleSelectAllToggle} activeOpacity={0.7} isDark={isDark}>
               <MaterialCommunityIcons
@@ -174,7 +174,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                 {isAllSelected ? "Deselect All" : "Select All"}
               </SelectAllText>
             </SelectAllBtn>
-          </View>
+          </SummaryBannerRow>
         </SummaryBanner>
 
         {/* List of Medication Review Cards */}
@@ -201,7 +201,6 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                   />
                   <View style={{ flex: 1 }}>
                     <MedNameText
-                      numberOfLines={1}
                       isDark={isDark}
                       style={{ textDecorationLine: isSelected ? "none" : "line-through", opacity: isSelected ? 1 : 0.6 }}
                     >
@@ -343,7 +342,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
             {isSaving ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <ActivityIndicator color="#ffffff" />
-                <SaveAllText>Saving Medications...</SaveAllText>
+                <SaveAllText>Saving Medications</SaveAllText>
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -383,6 +382,24 @@ const SummaryBanner = styled.View<{ isDark: boolean }>`
     props.isDark ? "rgba(99, 102, 241, 0.3)" : "#c7d2fe"};
 `;
 
+const SummaryBannerRow = styled.View`
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const SummaryBannerContent = styled.View`
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+`;
+
+const SummaryBannerText = styled.View`
+  flex: 1;
+  min-width: 0;
+`;
+
 const SummaryBannerTitle = styled.Text<{ isDark: boolean }>`
   font-size: 15px;
   font-weight: 700;
@@ -398,6 +415,8 @@ const SummaryBannerSubtitle = styled.Text<{ isDark: boolean }>`
 const SelectAllBtn = styled.TouchableOpacity<{ isDark: boolean }>`
   flex-direction: row;
   align-items: center;
+  flex-shrink: 0;
+  margin-left: 8px;
   padding: 6px 10px;
   border-radius: 8px;
   background-color: ${(props: any) => (props.isDark ? "#1e293b" : "#ffffff")};
@@ -415,7 +434,7 @@ const SelectAllText = styled.Text<{ isDark: boolean }>`
 const MedReviewCard = styled.View<{ isDark: boolean; isSelected: boolean }>`
   background-color: ${(props: any) => (props.isDark ? "#1e293b" : "#ffffff")};
   border-radius: 20px;
-  padding: 16px;
+  padding: 10px;
   margin-bottom: 14px;
   elevation: 3;
   shadow-opacity: 0.06;
@@ -439,7 +458,7 @@ const CardHeaderRow = styled.View`
 `;
 
 const MedNameText = styled.Text<{ isDark: boolean }>`
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: ${(props: any) => (props.isDark ? "#f8fafc" : "#1e293b")};
 `;
@@ -472,7 +491,6 @@ const InfoItem = styled.View`
   align-items: center;
   width: 48%;
   gap: 6px;
-  margin-bottom: 4px;
 `;
 
 const InfoText = styled.Text<{ isDark: boolean }>`
@@ -531,14 +549,14 @@ const ActionBtnText = styled.Text`
 const FooterContainer = styled.View`
   margin-top: 10px;
   gap: 10px;
-  padding-bottom: 30px;
+  padding-bottom: 29px;
 `;
 
 const AddAnotherBtn = styled.TouchableOpacity<{ isDark: boolean }>`
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 10px;
   border-radius: 18px;
   background-color: ${(props: any) =>
     props.isDark ? "rgba(99, 102, 241, 0.15)" : "#eef2ff"};
@@ -555,7 +573,7 @@ const AddAnotherText = styled.Text<{ isDark: boolean }>`
 
 const SaveAllBtn = styled.TouchableOpacity`
   background-color: #6366f1;
-  padding: 18px;
+  padding: 10px;
   border-radius: 18px;
   align-items: center;
   justify-content: center;
@@ -571,7 +589,7 @@ const SaveAllText = styled.Text`
 `;
 
 const CancelBtn = styled.TouchableOpacity<{ isDark: boolean }>`
-  padding: 14px;
+  padding: 10px;
   border-radius: 16px;
   align-items: center;
   background-color: ${(props: any) => (props.isDark ? "#1e293b" : "#f1f5f9")};
@@ -580,7 +598,7 @@ const CancelBtn = styled.TouchableOpacity<{ isDark: boolean }>`
 `;
 
 const CancelText = styled.Text<{ isDark: boolean }>`
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: ${(props: any) => (props.isDark ? "#94a3b8" : "#64748b")};
 `;
