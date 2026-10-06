@@ -155,13 +155,28 @@ export const useChatWizardManager = ({
                 resData.medicines && resData.medicines.length > 0
                   ? resData.medicines
                   : flatMeds;
+              const reportSummaryData =
+                resData.reportSummary ||
+                (Array.isArray(resData.actions)
+                  ? resData.actions.find(
+                      (a: any) =>
+                        a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+                    )?.reportSummary
+                  : null);
               const aiMsg: ChatMessage = {
                 id: `ai-doc-res-${Date.now()}`,
                 role: "ai",
                 text: resData.reply,
                 action: resData.actionType || resData.action || "REVIEW_MEDICINES_LIST",
+                actionType: resData.actionType || resData.action,
+                actions: resData.actions || [],
+                reportSummary: reportSummaryData || null,
                 options: resData.options || [],
                 medicines: incomingMeds,
+                document: normalizeReportSummaryToDocument(
+                  reportSummaryData || resData.document,
+                  resData.document,
+                ),
                 documentSummary: resData.documentSummary || null,
                 documents: resData.documents || [],
                 createdAt: new Date().toISOString(),
@@ -344,14 +359,28 @@ export const useChatWizardManager = ({
       queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
 
       if (resData?.reply) {
+        const reportSummaryData =
+          resData.reportSummary ||
+          (Array.isArray(resData.actions)
+            ? resData.actions.find(
+                (a: any) =>
+                  a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+              )?.reportSummary
+            : null);
         const aiMsg: ChatMessage = {
           id: `ai-confirm-res-${Date.now()}`,
           role: "ai",
           text: resData.reply,
           action: resData.actionType || resData.action || "NORMAL_CHAT",
+          actionType: resData.actionType || resData.action,
+          actions: resData.actions || [],
+          reportSummary: reportSummaryData || null,
           options: resData.options || [],
           medicines: resData.medicines || [],
-          document: resData.document || null,
+          document: normalizeReportSummaryToDocument(
+            reportSummaryData || resData.document,
+            resData.document,
+          ),
           documentSummary: resData.documentSummary || null,
           documents: resData.documents || [],
           createdAt: new Date().toISOString(),

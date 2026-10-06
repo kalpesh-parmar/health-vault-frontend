@@ -667,7 +667,71 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       item.action === "REVIEW_MEDICINES_LIST" ||
       item.action === "ADD_DOCUMENT"
     ) {
-      const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
+      const msgDocs = normalizeDocumentsList(
+        item.documents || item.document || item,
+        [],
+        chatWizardState.filesInfo,
+      );
+      const reportSummaryData =
+        item.reportSummary ||
+        (Array.isArray((item as any).actions)
+          ? (item as any).actions.find(
+              (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+            )?.reportSummary
+          : null);
+      const summaryDocument = normalizeReportSummaryToDocument(
+        reportSummaryData ||
+          item.document ||
+          ((item.documentSummary as any)?.summary ? item.documentSummary : null),
+        item.document,
+      );
+      const hasDocumentSummary = Boolean(
+        summaryDocument &&
+          typeof summaryDocument.summary === "string" &&
+          summaryDocument.summary.trim(),
+      );
+      const summaryIsStructured = Boolean(
+        summaryDocument?.patientDetails ||
+          summaryDocument?.isLabReport ||
+          (Array.isArray(summaryDocument?.abnormalResults) &&
+            summaryDocument.abnormalResults.length > 0) ||
+          (Array.isArray(summaryDocument?.normalResults) &&
+            summaryDocument.normalResults.length > 0),
+      );
+      const documentSummaryCard = hasDocumentSummary ? (
+        summaryIsStructured ? (
+          <StructuredReportSummaryCard
+            document={summaryDocument}
+            suggestedQuestions={SUGGESTED_QUESTIONS_I18N.english.document}
+            isDark={isDark}
+            theme={theme}
+            preferredLang={preferredLang}
+            onQuestionPress={(q) =>
+              handleGenericOptionPress({ label: q, value: q, actionType: "NORMAL_CHAT" })
+            }
+            onViewFullReport={
+              onViewFullReport ? () => onViewFullReport(summaryDocument) : undefined
+            }
+            readOnly={isReadOnly}
+          />
+        ) : (
+          <ReportSummaryChatCard
+            document={summaryDocument}
+            documentSummary={item.documentSummary}
+            suggestedQuestions={SUGGESTED_QUESTIONS_I18N.english.document}
+            isDark={isDark}
+            theme={theme}
+            preferredLang={preferredLang}
+            onQuestionPress={(q) =>
+              handleGenericOptionPress({ label: q, value: q, actionType: "NORMAL_CHAT" })
+            }
+            onViewFullReport={
+              onViewFullReport ? () => onViewFullReport(summaryDocument) : undefined
+            }
+            readOnly={isReadOnly}
+          />
+        )
+      ) : null;
       const rawMeds = item.medicines?.length
         ? item.medicines
         : (isReadOnly
@@ -890,31 +954,35 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
       if (displayMeds.length > 0) {
         return renderAssistantPrompt(
-          <ReviewMedicinesListCard
-            localMedicines={displayMeds}
-            setLocalMedicines={setLocalMedicinesWrapper}
-            preferredLang={preferredLang}
-            isDark={isDark}
-            theme={theme}
-            onConfirm={handleConfirm}
-            onAddNew={handleAddNew}
-            onSkipAll={handleSkipAll}
-            onEdit={handleEdit}
-            onCancel={handleCancelReview}
-            readOnly={isReadOnly}
-            chosenVal={chosenVal}
-            chosenLabel={chosenLabel}
-            documents={msgDocs}
-            showDocumentSummary={true}
-            onRetryDocument={onRetryDocument}
-            canRetry={isLatest && !isReadOnly}
-          />,
+          <View style={{ width: "100%" }}>
+            {documentSummaryCard}
+            <ReviewMedicinesListCard
+              localMedicines={displayMeds}
+              setLocalMedicines={setLocalMedicinesWrapper}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+              onConfirm={handleConfirm}
+              onAddNew={handleAddNew}
+              onSkipAll={handleSkipAll}
+              onEdit={handleEdit}
+              onCancel={handleCancelReview}
+              readOnly={isReadOnly}
+              chosenVal={chosenVal}
+              chosenLabel={chosenLabel}
+              documents={msgDocs}
+              showDocumentSummary={true}
+              onRetryDocument={onRetryDocument}
+              canRetry={isLatest && !isReadOnly}
+            />
+          </View>,
         );
       }
 
       if (msgDocs.length > 0) {
         return renderAssistantPrompt(
           <View style={{ width: "100%" }}>
+            {documentSummaryCard}
             <DocumentProgressSummaryContainer
               documents={msgDocs}
               preferredLang={preferredLang}
@@ -941,6 +1009,10 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             )}
           </View>,
         );
+      }
+
+      if (documentSummaryCard) {
+        return renderAssistantPrompt(documentSummaryCard);
       }
 
       return renderAssistantPrompt(null);

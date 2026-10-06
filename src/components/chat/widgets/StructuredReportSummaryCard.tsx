@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LIGHT_THEME, DARK_THEME } from "../../../constants/theme";
+import DocumentViewerModal from "../../shared/DocumentViewerModal";
 
 export interface PatientDetails {
   name?: string | null;
@@ -58,7 +59,7 @@ export interface StructuredReportSummaryCardProps {
   theme?: any;
   preferredLang?: string;
   onQuestionPress?: (question: string) => void;
-  onViewFullReport?: () => void;
+  onViewFullReport?: (document?: StructuredReportDocument) => void;
   readOnly?: boolean;
 }
 
@@ -160,6 +161,11 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
   },
 };
 
+const getFileNameOnly = (value: unknown): string => {
+  if (typeof value !== "string" || !value.trim()) return "Medical Report";
+  return value.trim().split(/[\\/]/).pop() || "Medical Report";
+};
+
 export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardProps> = ({
   document = {},
   suggestedQuestions = [],
@@ -171,6 +177,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
   readOnly = false,
 }) => {
   const [normalExpanded, setNormalExpanded] = useState(false);
+  const [localViewerOpen, setLocalViewerOpen] = useState(false);
 
   const activeTheme = theme || (isDark ? DARK_THEME : LIGHT_THEME);
   const colors = activeTheme.colors;
@@ -189,14 +196,42 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
 
   const t = I18N_STRUCTURED_CARD[langKey] || I18N_STRUCTURED_CARD.english;
 
-  const patient = document.patientDetails || {
-    name: document.patientName || (document as any).patient_name || null,
-    reportDate: document.reportDate || (document as any).report_date || null,
-    doctorName: document.doctorName || (document as any).doctor_name || null,
-    hospitalName: document.hospitalName || (document as any).hospital_name || null,
-    age: (document as any).patientAge || (document as any).age || null,
-    gender: (document as any).patientGender || (document as any).gender || null,
-    uhid: (document as any).uhid || (document as any).patientUhid || null,
+  const patient: PatientDetails = {
+    name:
+      document.patientDetails?.name ||
+      document.patientName ||
+      (document as any).patient_name ||
+      null,
+    reportDate:
+      document.patientDetails?.reportDate ||
+      document.reportDate ||
+      (document as any).report_date ||
+      null,
+    doctorName:
+      document.patientDetails?.doctorName ||
+      document.doctorName ||
+      (document as any).doctor_name ||
+      null,
+    hospitalName:
+      document.patientDetails?.hospitalName ||
+      document.hospitalName ||
+      (document as any).hospital_name ||
+      null,
+    age:
+      document.patientDetails?.age ||
+      (document as any).patientAge ||
+      (document as any).age ||
+      null,
+    gender:
+      document.patientDetails?.gender ||
+      (document as any).patientGender ||
+      (document as any).gender ||
+      null,
+    uhid:
+      document.patientDetails?.uhid ||
+      (document as any).uhid ||
+      (document as any).patientUhid ||
+      null,
   };
 
   const abnormalResults: StructuredLabResult[] = useMemo(() => {
@@ -243,29 +278,15 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     return t.noAbnormalFound;
   }, [document.keyFindings, (document as any).key_findings, document.summary, abnormalResults, t.noAbnormalFound]);
 
-  const whatThisMayMeanText = useMemo(() => {
-    if (document.whatThisMayMean && document.whatThisMayMean.trim()) {
-      return document.whatThisMayMean.trim();
-    }
-    if (document.summary && document.summary.trim()) {
-      return document.summary.trim();
-    }
-    return "";
-  }, [document.whatThisMayMean, document.summary]);
+  const patientAge = patient.age ? `${patient.age} yrs` : null;
+  const patientGender = patient.gender ? String(patient.gender).toUpperCase() : null;
 
-  const ageGenderStr = useMemo(() => {
-    const parts: string[] = [];
-    if (patient.age) parts.push(`${patient.age} yrs`);
-    if (patient.gender) parts.push(String(patient.gender).toUpperCase());
-    return parts.length > 0 ? parts.join(" • ") : null;
-  }, [patient.age, patient.gender]);
-
-  const displayFileName =
+  const displayFileName = getFileNameOnly(
     document.fileName ||
-    (document as any).report_name ||
-    (document as any).reportName ||
-    (document as any).name ||
-    "Medical Report";
+      (document as any).report_name ||
+      (document as any).reportName ||
+      (document as any).name,
+  );
 
   const displayDocType =
     document.documentType ||
@@ -277,6 +298,23 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     patient.reportDate ||
     document.reportDate ||
     (document as any).report_date;
+
+  const hasPatientDetails = Boolean(
+    patient.name ||
+      patientAge ||
+      patientGender ||
+      patient.uhid ||
+      patient.doctorName ||
+      patient.hospitalName,
+  );
+
+  const handleViewFullReport = () => {
+    if (onViewFullReport) {
+      onViewFullReport(document);
+      return;
+    }
+    setLocalViewerOpen(true);
+  };
 
   return (
     <View style={styles.container} testID="structured-report-summary-card">
@@ -309,39 +347,46 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
             <View style={styles.headerTextGroup}>
               <Text
                 style={[styles.fileName, { color: colors.textPrimary }]}
-                numberOfLines={1}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+                maxFontSizeMultiplier={1.1}
               >
                 {displayFileName}
               </Text>
-              <Text style={[styles.docTypeBadge, { color: colors.primary }]}>
+              <Text
+                style={[styles.docTypeBadge, { color: colors.primary }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                maxFontSizeMultiplier={1.1}
+              >
                 {displayDocType}
                 {displayReportDate ? ` • ${displayReportDate}` : ""}
               </Text>
             </View>
           </View>
 
-          {onViewFullReport && (
-            <TouchableOpacity
-              style={[
-                styles.viewReportBtn,
-                {
-                  backgroundColor: isDark ? "rgba(91, 75, 255, 0.15)" : "#f0f4ff",
-                  borderColor: colors.primary,
-                },
-              ]}
-              onPress={onViewFullReport}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="document-text-outline" size={14} color={colors.primary} />
-              <Text style={[styles.viewReportBtnText, { color: colors.primary }]}>
-                {t.viewFullReport}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t.viewFullReport}
+            style={[
+              styles.viewReportBtn,
+              {
+                backgroundColor: isDark ? "rgba(91, 75, 255, 0.15)" : "#f0f4ff",
+                borderColor: colors.primary,
+              },
+            ]}
+            onPress={handleViewFullReport}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+            <Text style={[styles.viewReportBtnText, { color: colors.primary }]}>
+              {t.viewFullReport}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Section 2: Patient Details Card */}
-        <View
+        {hasPatientDetails && <View
           style={[
             styles.patientCard,
             {
@@ -357,48 +402,63 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
             </Text>
           </View>
 
-          <View style={styles.patientGrid}>
-            <View style={styles.patientGridItem}>
+            <View style={styles.patientGrid}>
+            {patient.name && <View style={styles.patientGridItemFull}>
               <Text style={[styles.gridLabel, { color: colors.textSecondary }]}>{t.name}</Text>
               <Text
                 style={[styles.gridValue, { color: colors.textPrimary }]}
-                numberOfLines={1}
+                numberOfLines={2}
+                ellipsizeMode="tail"
               >
-                {patient.name || "Patient"}
+                {patient.name}
               </Text>
-            </View>
+            </View>}
 
-            {ageGenderStr && (
+            {patientAge && (
               <View style={styles.patientGridItem}>
-                <Text style={[styles.gridLabel, { color: colors.textSecondary }]}>{t.ageGender}</Text>
+                <Text style={[styles.gridLabel, { color: colors.textSecondary }]}>Age</Text>
                 <Text style={[styles.gridValue, { color: colors.textPrimary }]}>
-                  {ageGenderStr}
+                  {patientAge}
+                </Text>
+              </View>
+            )}
+
+            {patientGender && (
+              <View style={styles.patientGridItem}>
+                <Text style={[styles.gridLabel, { color: colors.textSecondary }]}>Gender</Text>
+                <Text style={[styles.gridValue, { color: colors.textPrimary }]}>
+                  {patientGender}
                 </Text>
               </View>
             )}
 
             {patient.uhid && (
-              <View style={styles.patientGridItem}>
+              <View style={styles.patientGridItemFull}>
                 <Text style={[styles.gridLabel, { color: colors.textSecondary }]}>{t.uhid}</Text>
-                <Text style={[styles.gridValue, { color: colors.textPrimary }]}>
+                <Text
+                  style={[styles.gridValue, { color: colors.textPrimary }]}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
                   {patient.uhid}
                 </Text>
               </View>
             )}
 
             {(patient.doctorName || patient.hospitalName) && (
-              <View style={styles.patientGridItem}>
+              <View style={styles.patientGridItemFull}>
                 <Text style={[styles.gridLabel, { color: colors.textSecondary }]}>Doctor / Clinic</Text>
                 <Text
                   style={[styles.gridValue, { color: colors.textPrimary }]}
-                  numberOfLines={1}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
                 >
-                  {patient.doctorName || patient.hospitalName}
+                  {[patient.doctorName, patient.hospitalName].filter(Boolean).join(" • ")}
                 </Text>
               </View>
             )}
           </View>
-        </View>
+        </View>}
 
         {/* Section 3: Key Findings Banner */}
         <View
@@ -560,38 +620,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
           </View>
         )}
 
-        {/* Section 6: What This May Mean */}
-        {whatThisMayMeanText ? (
-          <View
-            style={[
-              styles.meaningCard,
-              {
-                backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "#fdf8f6",
-                borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#fed7aa",
-              },
-            ]}
-          >
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="bulb-outline" size={16} color="#ea580c" />
-              <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]}>
-                {t.whatThisMeans}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.meaningText,
-                { color: colors.textPrimary },
-              ]}
-            >
-              {whatThisMayMeanText}
-            </Text>
-            <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
-              {t.disclaimer}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Section 7: Interactive Quick Question Chips */}
+        {/* Interactive Quick Question Chips */}
         {suggestedQuestions && suggestedQuestions.length > 0 && !readOnly && (
           <View style={styles.chipsSection}>
             <ScrollView
@@ -627,6 +656,12 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
           </View>
         )}
       </View>
+      <DocumentViewerModal
+        visible={localViewerOpen}
+        document={document}
+        title={displayFileName}
+        onClose={() => setLocalViewerOpen(false)}
+      />
     </View>
   );
 };
@@ -647,16 +682,17 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   headerRow: {
-    flexDirection: "row",
+    flexDirection: "column",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "stretch",
     marginBottom: 14,
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
-    marginRight: 10,
+    flex: 0,
+    minWidth: 0,
+    marginBottom: 10,
   },
   headerIconCircle: {
     width: 40,
@@ -668,19 +704,23 @@ const styles = StyleSheet.create({
   },
   headerTextGroup: {
     flex: 1,
+    minWidth: 0,
   },
   fileName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
+    lineHeight: 18,
   },
   docTypeBadge: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
     marginTop: 2,
   },
   viewReportBtn: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "stretch",
+    justifyContent: "center",
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -715,6 +755,10 @@ const styles = StyleSheet.create({
     width: "50%",
     marginBottom: 6,
   },
+  patientGridItemFull: {
+    width: "100%",
+    marginBottom: 6,
+  },
   gridLabel: {
     fontSize: 11,
     fontWeight: "500",
@@ -723,6 +767,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     marginTop: 1,
+    flexShrink: 1,
   },
   keyFindingsBanner: {
     borderRadius: 12,
@@ -757,6 +802,8 @@ const styles = StyleSheet.create({
   resultsHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
+    minWidth: 0,
   },
   resultsSectionTitle: {
     fontSize: 14,
@@ -770,7 +817,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   abnormalRowCard: {},
   testMainInfo: {
@@ -806,6 +853,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 0,
+    marginTop: 1,
   },
   abnormalTag: {
     backgroundColor: "rgba(239, 68, 68, 0.15)",

@@ -135,7 +135,15 @@ const AIChatScreen = ({ route }: any) => {
   });
 
   const documentsList: MedicalDocument[] = useMemo(() => {
-    return docsResponse?.data || [];
+    const payload: any = docsResponse?.data;
+
+    // The documents endpoint has returned both { data: [] } and
+    // { data: { data: [] } } shapes across API versions. Always keep this
+    // value as an array because the viewer lookup uses Array.find().
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.documents)) return payload.documents;
+    return [];
   }, [docsResponse]);
 
   // Chat Session Hook
@@ -296,10 +304,33 @@ const AIChatScreen = ({ route }: any) => {
   };
 
   const handleViewFullReport = useCallback((doc: any) => {
+    const documentId = doc?.id || doc?.documentId || doc?.report_id;
+    const documentKey = doc?.s3Key || doc?.fileKey || doc?.file_key;
+    const documentName = doc?.fileName || doc?.report_name || doc?.name;
     const matched = documentsList.find(
-      (d: any) => d.id === doc?.id || d.s3Key === doc?.s3Key || d.fileKey === doc?.fileKey
+      (d: any) =>
+        d.id === documentId ||
+        d.documentId === documentId ||
+        d.s3Key === documentKey ||
+        d.fileKey === documentKey ||
+        d.file_key === documentKey ||
+        d.fileName === documentName ||
+        d.name === documentName
     );
-    setViewerDoc(matched || doc);
+    // Keep the report summary fields, while adding the original file source
+    // from the document list when the summary itself only contains metadata.
+    setViewerDoc(
+      matched
+        ? {
+            ...matched,
+            ...doc,
+            s3Key: doc?.s3Key || (matched as any).s3Key,
+            fileKey: doc?.fileKey || (matched as any).fileKey,
+            fileUrl: doc?.fileUrl || (matched as any).fileUrl,
+            imageUri: doc?.imageUri || (matched as any).imageUri,
+          }
+        : doc,
+    );
     setIsViewerOpen(true);
   }, [documentsList]);
 
