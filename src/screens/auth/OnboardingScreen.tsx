@@ -715,18 +715,25 @@ export default function OnboardingScreen() {
           } catch {}
 
           const isSocialFlag =
-            isSocialStored ||
-            Boolean(
-              detectedProvider &&
-              ["google", "facebook", "microsoft", "apple", "social"].includes(String(detectedProvider).toLowerCase())
-            ) ||
-            Boolean((userData as any)?.loginType === "social") ||
-            Boolean(userData.email && !userData.mobile);
+            !["mobile", "phone", "otp", "sms", "number"].includes(
+              String(detectedProvider).toLowerCase().trim(),
+            ) &&
+            (isSocialStored ||
+              Boolean(
+                detectedProvider &&
+                ["google", "facebook", "microsoft", "apple", "social"].includes(
+                  String(detectedProvider).toLowerCase(),
+                ),
+              ) ||
+              Boolean((userData as any)?.loginType === "social") ||
+              Boolean(userData.email && !userData.mobile));
 
           const providerToUse = detectedProvider
             ? String(detectedProvider).toLowerCase().trim()
             : (isSocialFlag ? "google" : undefined);
-          const hasSocial = isSocialFlag || Boolean(providerToUse);
+          // A provider value is also present for phone/OTP login (for example,
+          // "mobile"). Presence of a provider alone must not imply social login.
+          const hasSocial = isSocialFlag;
 
           const socialProfileData = hasSocial
             ? {
@@ -771,11 +778,17 @@ export default function OnboardingScreen() {
             mergedState = {
               ...mergedState,
               ...resumableState,
-              hasSocialData: resumableState.hasSocialData ?? baseState.hasSocialData,
+              hasSocialData: isSocialFlag
+                ? (resumableState.hasSocialData ?? baseState.hasSocialData)
+                : undefined,
               loginProvider: resumableState.loginProvider || baseState.loginProvider,
               provider: resumableState.provider || baseState.provider,
-              socialData: resumableState.socialData || baseState.socialData,
-              loginData: resumableState.loginData || baseState.loginData,
+              socialData: isSocialFlag
+                ? (resumableState.socialData || baseState.socialData)
+                : undefined,
+              loginData: isSocialFlag
+                ? (resumableState.loginData || baseState.loginData)
+                : undefined,
             };
           }
 
@@ -1550,6 +1563,20 @@ export default function OnboardingScreen() {
         resolvedActionType = "RESOLVE_PROFILE_SOURCE";
         actionData = actionData || { confirmed: true };
         messageString = JSON.stringify(actionData);
+      }
+
+      // A resumed onboarding session can retain ASK_DOB as its persisted
+      // currentStep even though the visible card is now the profile
+      // confirmation step. Keep the explicit profile-confirm action and state
+      // aligned so phone-login sessions advance instead of repeating the card.
+      if (
+        resolvedActionType === "RESOLVE_PROFILE_SOURCE" &&
+        actionData?.confirmed === true
+      ) {
+        updatedState = {
+          ...updatedState,
+          currentStep: "RESOLVE_PROFILE_SOURCE",
+        };
       }
 
       // Sanitize allergies in updatedState so that raw JSON strings or corrupted array fragments are properly cleaned
@@ -3463,12 +3490,19 @@ export default function OnboardingScreen() {
         const cancelState = {
           ...state,
           currentStep: "MEDICINE_OPTIONS",
+          medicinesFlowStarted: true,
+          medicinesConfirmed: false,
           medicinesToAdd: confirmedMeds,
           currentMedicineIndex: confirmedMeds.length,
           cancellationNotice: true,
         };
         setState(cancelState);
-        sendMessage("CANCEL", cancelState, uiT("cancel") || "Cancel", "CANCEL");
+        sendMessage(
+          { skipAll: true },
+          cancelState,
+          uiT("cancel") || "Cancel",
+          "SKIP_MEDICINES",
+        );
       };
 
       const reviewMedicinesList = (
@@ -3712,6 +3746,7 @@ export default function OnboardingScreen() {
 
     const isReportOrConfirmActive =
       activeMsg.action === "ASK_REPORT" ||
+      activeMsg.action === "SKIP_MEDICINES" ||
       activeMsg.action === "CONFIRM_MEDICINES" ||
       activeMsg.action === "CONFIRM_MEDICINE" ||
       (activeMsg as any).actionType === "CONFIRM_MEDICINES" ||
