@@ -22,7 +22,73 @@ interface ProfileConflictSelectorProps {
   onSelectProvider: () => void;
   onSelectDocument: () => void;
   onEditManually: (source: ProfileEditSource) => void;
+  selectedSource?: ProfileEditSource | null;
   isHistorical?: boolean;
+}
+
+interface ProfileSourceActionsProps {
+  selectedSource?: ProfileEditSource | null;
+  isHistorical?: boolean;
+  leftButtonText: string;
+  uiT: (key: string) => string;
+  onSelectProvider: () => void;
+  onSelectDocument: () => void;
+}
+
+export function ProfileSourceActions({
+  selectedSource,
+  isHistorical,
+  leftButtonText,
+  uiT,
+  onSelectProvider,
+  onSelectDocument,
+}: ProfileSourceActionsProps) {
+  const hasUnidentifiedHistoricalSelection =
+    Boolean(isHistorical) && selectedSource == null;
+  const isProviderDisabled =
+    hasUnidentifiedHistoricalSelection || selectedSource === "DOCUMENT";
+  const isDocumentDisabled =
+    hasUnidentifiedHistoricalSelection || selectedSource === "LOGIN";
+
+  return (
+    <View style={styles.actionsContainer}>
+      <TouchableOpacity
+        style={[
+          styles.mainActionBtn,
+          styles.leftMainActionBtn,
+          isProviderDisabled && styles.disabledMainActionBtn,
+        ]}
+        onPress={onSelectProvider}
+        disabled={isProviderDisabled}
+        accessibilityState={{
+          disabled: isProviderDisabled,
+          selected: selectedSource === "LOGIN",
+        }}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.mainActionBtnText}>{leftButtonText}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.mainActionBtn,
+          styles.rightMainActionBtn,
+          isDocumentDisabled && styles.disabledMainActionBtn,
+        ]}
+        onPress={onSelectDocument}
+        disabled={isDocumentDisabled}
+        accessibilityState={{
+          disabled: isDocumentDisabled,
+          selected: selectedSource === "DOCUMENT",
+        }}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.mainActionBtnText}>
+          {uiT("useDocument") || "Use Document"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 const renderSocialLogo = (provider?: string, isDark = false, size = 20) => {
@@ -94,6 +160,7 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
   onSelectProvider,
   onSelectDocument,
   onEditManually,
+  selectedSource,
   isHistorical,
 }: ProfileConflictSelectorProps) {
   const editedLoginData = localEditedData?.LOGIN || null;
@@ -373,29 +440,14 @@ export const ProfileConflictSelector = React.memo(function ProfileConflictSelect
       </View>
 
       {/* Main Action Buttons Below */}
-      {!isHistorical && (
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[styles.mainActionBtn, styles.leftMainActionBtn]}
-            onPress={onSelectProvider}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.mainActionBtnText}>
-              {leftButtonText}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.mainActionBtn, styles.rightMainActionBtn]}
-            onPress={onSelectDocument}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.mainActionBtnText}>
-              {uiT("useDocument") || "Use Document"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <ProfileSourceActions
+        selectedSource={selectedSource}
+        isHistorical={isHistorical}
+        leftButtonText={leftButtonText}
+        uiT={uiT}
+        onSelectProvider={onSelectProvider}
+        onSelectDocument={onSelectDocument}
+      />
     </View>
   );
 });
@@ -544,6 +596,9 @@ const styles = StyleSheet.create({
   },
   rightMainActionBtn: {
     backgroundColor: "#10b981",
+  },
+  disabledMainActionBtn: {
+    opacity: 0.5,
   },
   mainActionBtnText: {
     color: "#ffffff",

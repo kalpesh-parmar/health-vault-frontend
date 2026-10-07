@@ -7,6 +7,7 @@ import { useProfileSourceState } from "./profile-source/useProfileSourceState";
 import { ProfileFieldEditor } from "./profile-source/ProfileFieldEditor";
 import {
   ProfileConflictSelector,
+  ProfileSourceActions,
   ProfileEditSource,
 } from "./profile-source/ProfileConflictSelector";
 import { ProfileConfirmView } from "./profile-source/ProfileConfirmView";
@@ -41,6 +42,8 @@ export function ResolveProfileSourceCard({
 }: ResolveProfileSourceCardProps) {
   const [localEditedData, setLocalEditedData] = useState<Record<string, any>>({});
   const [editedSource, setEditedSource] = useState<ProfileEditSource | "MANUAL" | null>(null);
+  const [locallySelectedSource, setLocallySelectedSource] =
+    useState<ProfileEditSource | null>(null);
 
   const {
     onboardingState,
@@ -69,6 +72,25 @@ export function ResolveProfileSourceCard({
   });
 
   const parsed = parseChosenJson(chosenVal);
+  const chosenSource =
+    typeof parsed?.source === "string" ? parsed.source.toUpperCase() : null;
+  const replySelectedSource: ProfileEditSource | null =
+    chosenSource === "LOGIN"
+      ? "LOGIN"
+      : chosenSource === "DOCUMENT"
+        ? "DOCUMENT"
+        : [
+              uiT("useSocialLogin") || "Use Social Login",
+              uiT("useEditedInformation") || "Use Edited Information",
+            ].includes(chosenLabel || "")
+          ? "LOGIN"
+          : [
+                uiT("useDocument") || "Use Document",
+                uiT("manualDetails") || "Manual Details",
+              ].includes(chosenLabel || "")
+            ? "DOCUMENT"
+            : null;
+  const selectedProfileSource = replySelectedSource ?? locallySelectedSource;
 
   const hasDocumentUploaded = Boolean(
     onboardingState?.uploadedMedicalDocument ||
@@ -141,6 +163,7 @@ export function ResolveProfileSourceCard({
   };
 
   const handleConfirmProfile = () => {
+    setLocallySelectedSource(null);
     const editedData = localEditedData.MANUAL;
     const payload = editedData
       ? { ...editedData, confirmed: true, source: "MANUAL", edited: editedData }
@@ -189,6 +212,16 @@ export function ResolveProfileSourceCard({
         : (uiT("manualDetails") || "Manual Details"),
       "RESOLVE_PROFILE_SOURCE",
     );
+  };
+
+  const handleSelectProviderAndRemember = () => {
+    setLocallySelectedSource("LOGIN");
+    handleSelectProvider();
+  };
+
+  const handleSelectDocumentAndRemember = () => {
+    setLocallySelectedSource("DOCUMENT");
+    handleSelectDocument();
   };
 
   if (isEditingProfileManually && !isHistorical) {
@@ -247,19 +280,35 @@ export function ResolveProfileSourceCard({
       </View>
 
       {mode === "CONFIRM" ? (
-        <ProfileConfirmView
-          fields={fields}
-          localEditedData={localEditedData.MANUAL}
-          parsed={parsed}
-          chosenLabel={chosenLabel}
-          isHistorical={isHistorical}
-          isDark={isDark}
-          theme={theme}
-          uiT={uiT}
-          getFieldIcon={getFieldIcon}
-          onConfirm={handleConfirmProfile}
-          onEditManually={handleStartManualEdit}
-        />
+        <>
+          <ProfileConfirmView
+            fields={fields}
+            localEditedData={localEditedData.MANUAL}
+            parsed={parsed}
+            chosenLabel={chosenLabel}
+            isHistorical={isHistorical}
+            isDark={isDark}
+            theme={theme}
+            uiT={uiT}
+            getFieldIcon={getFieldIcon}
+            onConfirm={handleConfirmProfile}
+            onEditManually={handleStartManualEdit}
+          />
+          {selectedProfileSource && (
+            <ProfileSourceActions
+              selectedSource={selectedProfileSource}
+              isHistorical={isHistorical}
+              leftButtonText={
+                localEditedData.LOGIN
+                  ? uiT("useEditedInformation") || "Use Edited Information"
+                  : uiT("useSocialLogin") || "Use Social Login"
+              }
+              uiT={uiT}
+              onSelectProvider={handleSelectProviderAndRemember}
+              onSelectDocument={handleSelectDocumentAndRemember}
+            />
+          )}
+        </>
       ) : (
         <ProfileConflictSelector
           fields={fields}
@@ -271,9 +320,10 @@ export function ResolveProfileSourceCard({
           getFieldIcon={getFieldIcon}
           renderProviderLogo={renderProviderLogo}
           getProviderLabel={getProviderLabel}
-          onSelectProvider={handleSelectProvider}
-          onSelectDocument={handleSelectDocument}
+          onSelectProvider={handleSelectProviderAndRemember}
+          onSelectDocument={handleSelectDocumentAndRemember}
           onEditManually={handleStartManualEdit}
+          selectedSource={selectedProfileSource}
           isHistorical={isHistorical}
         />
       )}
