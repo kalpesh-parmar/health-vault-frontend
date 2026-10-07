@@ -5,6 +5,7 @@ import DualButtons from "./Buttons/DualButtons";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import { useAuth } from "../../context/ContextAPI";
+import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import { logoutUser } from "../../services/auth.service";
 import { deleteDocument } from "../../services/documentService";
 import { deleteUserAccount } from "../../services/userService";
@@ -35,6 +36,7 @@ const ConfirmationModal = ({
   onSuccess,
 }: ConfirmationModalProps) => {
   const { logout } = useAuth();
+  const { removeTrackedDocuments } = useDocumentUpload();
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const lang = usePreferredLanguage();
@@ -90,7 +92,8 @@ const ConfirmationModal = ({
         }
       }
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, idString) => {
+      removeTrackedDocuments(idString.split(","));
       queryClient.invalidateQueries({
         queryKey: ["documents"],
       });

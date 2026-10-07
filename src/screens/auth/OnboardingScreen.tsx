@@ -33,6 +33,7 @@ import {
 
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../context/ContextAPI";
+import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import { useAppTheme } from "../../context/ThemeContext";
 import apiClient from "../../services/apiClient";
 
@@ -265,6 +266,7 @@ export default function OnboardingScreen() {
   const queryClient = useQueryClient();
   const navigation = useNavigation<any>();
   const { logout } = useAuth();
+  const { cancelUpload, removeTrackedDocuments } = useDocumentUpload();
   const isUploadingRef = useRef(false);
   const isUploadCancelledRef = useRef(false);
 
@@ -2511,8 +2513,10 @@ export default function OnboardingScreen() {
       } catch (err) {
         console.warn("[ONBOARDING] Failed to call cancelOcr endpoint:", err);
       }
+      removeTrackedDocuments([pendingDocId]);
       await handleCancelJob(pendingDocId);
     } else {
+      cancelUpload();
       setUploadState("cancelled");
       Toast.show({ type: "info", text1: "Upload cancelled" });
     }

@@ -20,7 +20,10 @@ import * as DocumentPicker from "expo-document-picker";
 import * as MediaLibrary from "expo-media-library";
 import Toast from "react-native-toast-message";
 
-import { useDocumentUpload } from "../../context/DocumentUploadContext";
+import {
+  isDocumentUploadActive,
+  useDocumentUpload,
+} from "../../context/DocumentUploadContext";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/ContextAPI";
 import { useNavigation } from "@react-navigation/native";
@@ -287,19 +290,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
 
   const hasActiveProcessing =
     isUploading ||
-    (uploadingDocs &&
-      uploadingDocs.some(
-        (d) =>
-          d.status === "UPLOADING" ||
-          d.status === "QUEUED" ||
-          d.status === "PROCESSING" ||
-          (d.progress !== undefined &&
-            d.progress > 0 &&
-            d.progress < 100 &&
-            d.status !== "FAILED" &&
-            d.status !== "REJECTED" &&
-            d.status !== "COMPLETED"),
-      ));
+    uploadingDocs.some(isDocumentUploadActive);
 
   const [isCameraVisible, setIsCameraVisible] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);

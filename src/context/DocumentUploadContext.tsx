@@ -52,6 +52,28 @@ export interface UploadingDoc {
   skippedPages?: (number | { pageNumber: number; reason?: string })[];
   fromScreen?: string;
 }
+
+export const isDocumentUploadActive = (doc: UploadingDoc) => {
+  const status = String(doc.status || doc.stageStatus || doc.stage || "").toUpperCase();
+  const isTerminal = [
+    "FAILED",
+    "ERROR",
+    "REJECTED",
+    "COMPLETED",
+    "CANCELLED",
+    "CANCELED",
+    "DELETED",
+    "REMOVED",
+  ].some((terminalStatus) => status.includes(terminalStatus));
+
+  return !isTerminal && (
+    status === "UPLOADING" ||
+    status === "QUEUED" ||
+    status === "PROCESSING" ||
+    (doc.progress !== undefined && doc.progress > 0 && doc.progress < 100)
+  );
+};
+
 interface DocumentUploadContextType {
   selectedFiles: SelectedDocument[];
   isUploading: boolean;
@@ -75,6 +97,7 @@ interface DocumentUploadContextType {
   setUploadingDocs: React.Dispatch<React.SetStateAction<UploadingDoc[]>>;
   startBackgroundOcr: (jobIds: string[], filesInfo: any[], fromScreen?: string) => void;
   cancelAllProcessing: () => Promise<void>;
+  removeTrackedDocuments: (documentIds: string[]) => void;
   completedBatch: {
     jobIds: string[];
     filesInfo: { jobId: string; fileName: string; fileKey: string }[];
@@ -732,19 +755,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
       if (
         isUploadingRef.current ||
-        (uploadingDocs &&
-          uploadingDocs.some(
-            (d) =>
-              d.status === "UPLOADING" ||
-              d.status === "QUEUED" ||
-              d.status === "PROCESSING" ||
-              (d.progress !== undefined &&
-                d.progress > 0 &&
-                d.progress < 100 &&
-                d.status !== "FAILED" &&
-                d.status !== "REJECTED" &&
-                d.status !== "COMPLETED")
-          ))
+        uploadingDocs.some(isDocumentUploadActive)
       ) {
         console.warn("Upload already in progress, ignoring duplicate startUpload request");
           Toast.show({
@@ -1201,6 +1212,34 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     setUploadingDocs([]);
   }, [uploadingDocs]);
 
+  const removeTrackedDocuments = useCallback((documentIds: string[]) => {
+    const ids = new Set(documentIds.filter(Boolean));
+    if (ids.size === 0) return;
+
+    setUploadingDocs((currentDocs) => {
+      const remainingDocs = currentDocs.filter(
+        (doc) =>
+          ![doc.id, doc.documentId, doc.fileKey, doc.jobId].some(
+            (id) => id && ids.has(id),
+          ),
+      );
+
+      if (remainingDocs.length === 0) {
+        isPollingRef.current = false;
+        if (activeSseUnsubRef.current) {
+          activeSseUnsubRef.current();
+          activeSseUnsubRef.current = null;
+        }
+        isUploadingRef.current = false;
+        setIsUploading(false);
+        activeBatchIdRef.current = null;
+        lastBatchEventIdRef.current = null;
+      }
+
+      return remainingDocs;
+    });
+  }, []);
+
   const startBackgroundOcr = useCallback((jobIds: string[], filesInfo: any[], fromScreen?: string) => {
     setProcessingError(null);
     if (fromScreen) {
@@ -1314,6 +1353,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         setUploadingDocs,
         startBackgroundOcr,
         cancelAllProcessing,
+        removeTrackedDocuments,
         completedBatch,
         clearCompletedBatch,
         isPillHidden,
