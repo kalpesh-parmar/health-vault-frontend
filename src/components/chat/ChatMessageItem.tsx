@@ -203,6 +203,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
     item.action === "MEDICINE_REVIEW_ACCORDION" ||
     item.action === "EXTRACTED_MEDICINES_PARTIAL_FAILURE" ||
     item.action === "ASK_REPORT" ||
+    item.action === "SKIP_MEDICINES" ||
     item.action === "MEDICATION_LIST" ||
     item.task === "MEDICATION_LIST" ||
     item.action === "REPORT_LIST" ||
@@ -266,6 +267,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   if (isComplexStep) {
     const isReportOrConfirmAction =
       item.action === "ASK_REPORT" ||
+      item.action === "SKIP_MEDICINES" ||
       item.action === "CONFIRM_MEDICINES" ||
       item.action === "CONFIRM_MEDICINE" ||
       (item as any).actionType === "CONFIRM_MEDICINES" ||
@@ -860,12 +862,19 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         }));
         handleGenericOptionPress(
           {
-            key: "CANCEL",
-            value: "CANCEL",
+            // Cancelling the extracted list means skipping the medication
+            // extraction step. Use the same action as "Skip All" so the
+            // backend receives SKIP_MEDICINES instead of the local-only
+            // Add Medicine cancellation action.
+            key: "SKIP_MEDICINES",
+            value: { skipAll: true },
             label: displayLabel,
+            actionType: "SKIP_MEDICINES",
             state: {
               currentStep: "MEDICINE_OPTIONS",
               cancellationNotice: true,
+              medicinesFlowStarted: true,
+              medicinesConfirmed: false,
             },
           },
           displayLabel,
