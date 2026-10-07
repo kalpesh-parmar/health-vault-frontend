@@ -124,7 +124,13 @@ export const useMedicationFormState = (initialMed: any, preferredLang: string = 
   const [selectedSlots, setSelectedSlots] = useState<string[]>(() => {
     const scheduleInput = med.medicationSchedule || med.times || med.schedule;
     if (Array.isArray(scheduleInput)) {
-      return scheduleInput.map(t => typeof t === "string" ? t.slice(0, 5) : t).filter(Boolean);
+      return Array.from(
+        new Set(
+          scheduleInput
+            .map(t => typeof t === "string" ? t.slice(0, 5) : t)
+            .filter(Boolean)
+        )
+      );
     }
     if (scheduleInput && typeof scheduleInput === "object") {
       const times: string[] = [];
@@ -138,7 +144,10 @@ export const useMedicationFormState = (initialMed: any, preferredLang: string = 
         }
       });
       if (times.length > 0) {
-        return times;
+        // Some API responses include the same slots in both `times` and
+        // `reminderTimes`. Keep each reminder only once so validation is
+        // based on the actual selected slots.
+        return Array.from(new Set(times));
       }
     }
     // Fallback based on frequency
