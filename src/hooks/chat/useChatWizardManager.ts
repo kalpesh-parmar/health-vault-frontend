@@ -972,12 +972,13 @@ export const useChatWizardManager = ({
         payload.message = "ADD_MEDICINE";
       } else if (
         option?.actionType === "CANCEL" ||
+        option?.actionType === "SKIP_MEDICINE" ||
         normalizedKey === "CANCEL" ||
         option?.value === "CANCEL"
       ) {
-        payload.actionType = "CANCEL";
-        payload.actionData = { action: "CANCEL" };
-        payload.message = "CANCEL";
+        payload.actionType = "";
+        payload.actionData = {};
+        payload.message = "SKIP";
       } else if (
         option?.actionType === "RESOLVE_PROFILE_SOURCE" ||
         normalizedKey === "RESOLVE_PROFILE_SOURCE"

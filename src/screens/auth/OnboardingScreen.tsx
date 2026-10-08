@@ -1439,8 +1439,9 @@ export default function OnboardingScreen() {
           } else if (userText === "GO_TO_DASHBOARD" || userText === "DASHBOARD") {
             messageString = "DASHBOARD";
           } else if (userText === "CANCEL") {
-            resolvedActionType = resolvedActionType || "CANCEL";
-            messageString = displayLabel || "Cancel";
+            resolvedActionType = "";
+            actionData = {};
+            messageString = "SKIP";
           } else {
             messageString = userText;
           }
@@ -1532,9 +1533,10 @@ export default function OnboardingScreen() {
         resolvedActionType = "SKIP_MEDICINES";
         actionData = actionData || { skipAll: true };
         messageString = messageString || displayLabel || "Skip";
-      } else if (actionType === "CANCEL") {
-        resolvedActionType = "CANCEL";
-        messageString = messageString || displayLabel || "Cancel";
+      } else if (actionType === "CANCEL" || actionType === "SKIP_MEDICINE") {
+        resolvedActionType = "";
+        actionData = {};
+        messageString = "SKIP";
       } else if (actionType === "RESOLVE_PROFILE_SOURCE") {
         resolvedActionType = "RESOLVE_PROFILE_SOURCE";
         if (!actionData && userText && typeof userText === "object") {
@@ -1641,10 +1643,10 @@ export default function OnboardingScreen() {
         stream: false,
       };
 
-      if (resolvedActionType) {
+      if (resolvedActionType !== undefined) {
         payload.actionType = resolvedActionType;
       }
-      if (actionData) {
+      if (actionData !== undefined) {
         payload.actionData = actionData;
       }
 
