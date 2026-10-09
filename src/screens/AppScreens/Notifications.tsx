@@ -20,6 +20,8 @@ import FilterTabs from "../../components/shared/FilterTabs";
 import { useAppTheme } from "../../context/ThemeContext";
 import { format } from "date-fns";
 
+import { useAppConstants } from "../../utils/translationUtils";
+
 type NotificationType = "alert" | "info" | "success" | "promo" | "reminder";
 
 interface Notification {
@@ -33,13 +35,13 @@ interface Notification {
   avatar?: string;
 }
 
-const FILTERS = ["All", "Unread"];
-
 export default function NotificationScreen() {
   const { userId } = useAuth();
   const { isDark } = useAppTheme();
   const queryClient = useQueryClient();
-  const [activeFilter, setActiveFilter] = useState("All");
+  const constants = useAppConstants();
+  const FILTERS = [constants?.all || "All", constants?.unread || "Unread"];
+  const [activeFilter, setActiveFilter] = useState(constants?.all || "All");
 
   const {
     data,
@@ -52,7 +54,7 @@ export default function NotificationScreen() {
     queryKey: ["notifications", userId, activeFilter],
     queryFn: ({ pageParam = 0 }) => {
       const filterParams: any = {};
-      if (activeFilter === "Unread") {
+      if (activeFilter === (constants?.unread || "Unread")) {
         filterParams.isRead = false;
       }
       return listNotifications({
@@ -161,7 +163,7 @@ export default function NotificationScreen() {
         backgroundColor="rgba(0,0,0,0.2)"
       />
       <ScreenHeader
-        title="Notifications"
+        title={constants?.notifications || "Notifications"}
         showBack
         rightAction={{
           icon: "checkmark-done-outline",
@@ -192,10 +194,9 @@ export default function NotificationScreen() {
               color="#BDBDBD"
             />
           </EmptyIcon>
-          <EmptyTitle>All Caught Up!</EmptyTitle>
+          <EmptyTitle>{constants?.noNotificationsFound || "All Caught Up!"}</EmptyTitle>
           <EmptySubtitle>
-            No notifications here. We'll let you know when something new
-            arrives.
+            {constants?.noNotifications || "No notifications here. We'll let you know when something new arrives."}
           </EmptySubtitle>
         </EmptyWrapper>
       ) : (

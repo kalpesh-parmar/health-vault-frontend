@@ -13,6 +13,7 @@ import ModernLoader from "../../components/shared/Loader";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
+import { useAppConstants } from "../../utils/translationUtils";
 
 type categoryItems = {
   label: string;
@@ -88,6 +89,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
   const imageUri = route?.params?.images;
   const fileNameParam = route?.params?.fileName;
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   const bottomPadding = useBottomBarPadding(16, 12);
   const sheetBottomPadding = useBottomBarPadding(24, 12);
   const bottomSheetRef = useRef<BottomSheetModal>(null);
@@ -147,10 +149,10 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
   const handleSave = async () => {
     const e: { docName?: string; category?: string } = {};
-    if (!docName.trim()) e.docName = "Document name is required.";
-    else if (docName.trim().length < 2) e.docName = "Minimum 2 characters.";
+    if (!docName.trim()) e.docName = constants?.documentNameRequired || "Document name is required.";
+    else if (docName.trim().length < 2) e.docName = constants?.minimumTwoCharacters || "Minimum 2 characters.";
     
-    if (!category) e.category = "Please select a category.";
+    if (!category) e.category = constants?.pleaseSelectCategory || "Please select a category.";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     await saveDocument({
@@ -172,11 +174,11 @@ const SaveDocumentScreen = ({ route }: Props) => {
       )}
       <Screen>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <ScreenHeader title="Add Document" showBack={true} />
+        <ScreenHeader title={constants?.addDocument || "Add Document"} showBack={true} />
 
         <Header>
           <HGroup>
-            <HSubtitle>Review & save your scan</HSubtitle>
+            <HSubtitle>{constants?.reviewAndSaveScan || "Review & save your scan"}</HSubtitle>
           </HGroup>
         </Header>
 
@@ -186,14 +188,14 @@ const SaveDocumentScreen = ({ route }: Props) => {
               <Section>
                 <SectionTitleRow>
                   <SectionDot bg="#2563eb" />
-                  <SectionTitle>Document Details</SectionTitle>
+                  <SectionTitle>{constants?.documentDetails || "Document Details"}</SectionTitle>
                 </SectionTitleRow>
 
-                <FieldLabel>Document Name</FieldLabel>
+                <FieldLabel>{constants?.documentName || "Document Name"}</FieldLabel>
                 <InputRow focused={docNameFocused} hasError={!!errors.docName}>
                   <TInput
                     value={docName}
-                    placeholder="e.g. Blood Test Report"
+                    placeholder={constants?.bloodTestReportPlaceholder || "e.g. Blood Test Report"}
                     placeholderTextColor="#cbd5e1"
                     cursorColor="#2563eb"
                     onChangeText={(t: string) => {
@@ -209,7 +211,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
                 {errors.docName && <ErrText>{errors.docName}</ErrText>}
 
                 <FieldLabel style={{ marginTop: 15 }}>
-                  Document Category
+                  {constants?.documentCategory || "Document Category"}
                 </FieldLabel>
                 <CatBtn
                   hasError={!!errors.category}
@@ -223,12 +225,12 @@ const SaveDocumentScreen = ({ route }: Props) => {
                   {selected ? (
                     <CatPill bgColor={selected.color}>
                       <CatLabel color={selected.iconColor} isDark={isDark}>
-                        {selected.label}
+                        {constants?.[selected.label] || selected.label}
                       </CatLabel>
                     </CatPill>
                   ) : (
                     <>
-                      <CatPlaceholder>Select a category</CatPlaceholder>
+                      <CatPlaceholder>{constants?.selectCategory || "Select a category"}</CatPlaceholder>
                     </>
                   )}
                 </CatBtn>
@@ -239,8 +241,8 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
               <PreviewSectionHeader>
                 <PreviewSectionLeft>
-                  <PreviewSectionTitle>Document Preview</PreviewSectionTitle>
-                  <PreviewSectionSub>Scanned just now</PreviewSectionSub>
+                  <PreviewSectionTitle>{constants?.documentPreview || "Document Preview"}</PreviewSectionTitle>
+                  <PreviewSectionSub>{constants?.scannedJustNow || "Scanned just now"}</PreviewSectionSub>
                 </PreviewSectionLeft>
                 <PreviewRow>
                   <Thumb>
@@ -253,7 +255,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
                       </ThumbPH>
                     ) : (
                       <ThumbPH>
-                        <ThumbPHTxt>Preview{"\n"}here</ThumbPHTxt>
+                        <ThumbPHTxt>{constants?.previewHere || "Preview\nhere"}</ThumbPHTxt>
                       </ThumbPH>
                     )}
                   </Thumb>
@@ -265,21 +267,21 @@ const SaveDocumentScreen = ({ route }: Props) => {
 
         <BottomBar bottomPadding={bottomPadding}>
           <DualButtons
-            secondaryBtnText="Discard"
+            secondaryBtnText={constants?.discard || "Discard"}
             secondaryBtnColor={`${({ isDark, theme }: any) => (isDark ? theme.colors.error : theme.colors.error)}`}
-            mainBtnText="Save Document"
+            mainBtnText={constants?.saveDocument || "Save Document"}
             mainBtnColor="#2563eb"
             onSecondaryPress={() => navigation?.goBack?.()}
             onMainPress={handleSave}
             isLoading={isSaving}
-            mainLoadingText="Saving..."
+            mainLoadingText={constants?.saving || "Saving..."}
           />
         </BottomBar>
 
         <BottomSheet ref={bottomSheetRef} enablePanDownToClose={true}>
           <SheetContentWrapper bottomPadding={sheetBottomPadding}>
-            <BSTitle>Select Category</BSTitle>
-            <BSSub>Choose the type of medical document</BSSub>
+            <BSTitle>{constants?.selectCategory || "Select Category"}</BSTitle>
+            <BSSub>{constants?.chooseTypeOfMedicalDoc || "Choose the type of medical document"}</BSSub>
             {CATEGORIES.map((item, idx) => (
               <BSItem
                 key={item.label}
@@ -297,7 +299,7 @@ const SaveDocumentScreen = ({ route }: Props) => {
                 <BSIconBadge bgColor={item.color}>
                   <Ionicons name={item.icon} size={20} color={item.iconColor} />
                 </BSIconBadge>
-                <BSLbl selected={category === item.value}>{item.label}</BSLbl>
+                <BSLbl selected={category === item.value}>{constants?.[item.label] || item.label}</BSLbl>
                 {category === item.value && <BSCheck>✓</BSCheck>}
               </BSItem>
             ))}

@@ -21,10 +21,12 @@ import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import { uploadPatientDocuments } from "../../services/documentService";
 import { SelectedFileCard, SelectedFile } from "../../components/upload/SelectedFileCard";
 import { batchCompressFiles } from "../../utils/mediaCompressor";
+import { useAppConstants } from "../../utils/translationUtils";
 
 export const MultiUploadScreen = () => {
   const navigation = useAppNavigation();
   const { isDark, theme } = useAppTheme();
+  const constants = useAppConstants();
   const { userId } = useAuth();
   const { handleMultiDocumentPick } = useDocumentMedia();
   const bottomPadding = useBottomBarPadding(16, 12);
@@ -48,8 +50,8 @@ export const MultiUploadScreen = () => {
         Toast.show({
           type: "error",
           position: "top",
-          text1: "Limit Exceeded",
-          text2: "You can select up to 5 documents at a time.",
+          text1: constants?.limitExceeded || "Limit Exceeded",
+          text2: constants?.maxFiveDocuments || "You can select up to 5 documents at a time.",
         });
       }
       setSelectedFiles(
@@ -87,8 +89,8 @@ export const MultiUploadScreen = () => {
       Toast.show({
         type: "error",
         position: "top",
-        text1: "Limit Exceeded",
-        text2: "You can select up to 5 documents at a time.",
+        text1: constants?.limitExceeded || "Limit Exceeded",
+        text2: constants?.maxFiveDocuments || "You can select up to 5 documents at a time.",
       });
       return;
     }
@@ -123,11 +125,11 @@ export const MultiUploadScreen = () => {
         Toast.show({
           type: "error",
           position: "top",
-          text1: "Document Already Selected",
+          text1: constants?.documentAlreadySelected || "Document Already Selected",
           text2:
             duplicates.length === 1
-              ? `"${duplicates[0].name}" has already been selected.`
-              : "Some selected documents have already been added.",
+              ? `"${duplicates[0].name}" ${constants?.hasAlreadyBeenSelected || "has already been selected."}`
+              : constants?.someDocumentsAlreadyAdded || "Some selected documents have already been added.",
         });
       }
 
@@ -138,8 +140,8 @@ export const MultiUploadScreen = () => {
           Toast.show({
             type: "error",
             position: "top",
-            text1: "Limit Exceeded",
-            text2: "You can select up to 5 documents at a time.",
+            text1: constants?.limitExceeded || "Limit Exceeded",
+            text2: constants?.maxFiveDocuments || "You can select up to 5 documents at a time.",
           });
         }
         setSelectedFiles((prev) => [
@@ -181,9 +183,9 @@ export const MultiUploadScreen = () => {
 
   const renderListHeader = useCallback(() => (
     <>
-      <SectionTitle>Select Documents (Max 5)</SectionTitle>
+      <SectionTitle>{constants?.selectDocumentsMaxFive || "Select Documents (Max 5)"}</SectionTitle>
       <SubText>
-        Upload up to 5 medical documents (PDF, PNG, JPG, WEBP, TIFF up to 150MB each).
+        {constants?.uploadUpToFiveDocsDesc || "Upload up to 5 medical documents (PDF, PNG, JPG, WEBP, TIFF up to 150MB each)."}
       </SubText>
 
       {selectedFiles.length === 0 ? (
@@ -191,19 +193,19 @@ export const MultiUploadScreen = () => {
           <IconCircle>
             <MaterialCommunityIcons name="cloud-upload" size={40} color="#0d9488" />
           </IconCircle>
-          <DropZoneTitle>Tap to Select Documents</DropZoneTitle>
-          <DropZoneSubtitle>Support PDF and Image formats</DropZoneSubtitle>
+          <DropZoneTitle>{constants?.tapToSelectDocuments || "Tap to Select Documents"}</DropZoneTitle>
+          <DropZoneSubtitle>{constants?.supportPdfAndImages || "Support PDF and Image formats"}</DropZoneSubtitle>
         </EmptyDropZone>
       ) : null}
     </>
-  ), [selectedFiles.length]);
+  ), [selectedFiles.length, constants]);
 
   const renderListFooter = useCallback(() => (
     <>
       {selectedFiles.length > 0 && selectedFiles.length < 5 && !isUploading && (
         <AddMoreButton onPress={handlePickMoreFiles}>
           <Ionicons name="add-circle-outline" size={22} color="#0d9488" />
-          <AddMoreText>Add Another Document ({selectedFiles.length}/5)</AddMoreText>
+          <AddMoreText>{constants?.addAnotherDocument || "Add Another Document"} ({selectedFiles.length}/5)</AddMoreText>
         </AddMoreButton>
       )}
 
@@ -221,13 +223,13 @@ export const MultiUploadScreen = () => {
           <RowCenter style={{ marginTop: 10 }}>
             <ActivityIndicator size="small" color="#0d9488" />
             <LoaderSubtitle style={{ marginLeft: 8 }}>
-              Processing files, please do not close the app.
+              {constants?.processingFilesDoNotClose || "Processing files, please do not close the app."}
             </LoaderSubtitle>
           </RowCenter>
         </ProgressCard>
       )}
     </>
-  ), [selectedFiles.length, isUploading, currentActionText, uploadProgress]);
+  ), [selectedFiles.length, isUploading, currentActionText, uploadProgress, constants]);
 
   const getFileNameAndExtension = (fileName: string) => {
     const parts = fileName.split(".");
@@ -348,8 +350,8 @@ export const MultiUploadScreen = () => {
 
       Toast.show({
         type: "success",
-        text1: "Upload Complete",
-        text2: "Documents uploaded and processing started.",
+        text1: constants?.uploadComplete || "Upload Complete",
+        text2: constants?.documentsUploadedProcessingStarted || "Documents uploaded and processing started.",
       });
 
       // 3. Navigate to DocumentProcessingScreen
@@ -363,8 +365,8 @@ export const MultiUploadScreen = () => {
       console.error("[MultiUpload] Upload failed:", error);
       Toast.show({
         type: "error",
-        text1: "Upload Failed",
-        text2: error.message || "An error occurred while uploading documents.",
+        text1: constants?.uploadFailed || "Upload Failed",
+        text2: error.message || (constants?.errorUploadingDocuments || "An error occurred while uploading documents."),
       });
     } finally {
       setIsUploading(false);
@@ -386,7 +388,7 @@ export const MultiUploadScreen = () => {
           <BackButton onPress={() => navigation.goBack()} disabled={isUploading}>
             <Ionicons name="arrow-back" size={28} color="white" />
           </BackButton>
-          <HeaderTitle>Upload Documents</HeaderTitle>
+          <HeaderTitle>{constants?.uploadDocuments || "Upload Documents"}</HeaderTitle>
         </HeaderMain>
       </HeaderWrapper>
 
@@ -416,12 +418,12 @@ export const MultiUploadScreen = () => {
             {isUploading ? (
               <RowCenter>
                 <ActivityIndicator color="#ffffff" size="small" style={{ marginRight: 8 }} />
-                <SubmitButtonText>Processing...</SubmitButtonText>
+                <SubmitButtonText>{constants?.processing || "Processing..."}</SubmitButtonText>
               </RowCenter>
             ) : (
               <RowCenter>
                 <MaterialCommunityIcons name="lightning-bolt" size={20} color="#ffffff" style={{ marginRight: 6 }} />
-                <SubmitButtonText>Upload & Start Processing</SubmitButtonText>
+                <SubmitButtonText>{constants?.uploadAndStartProcessing || "Upload & Start Processing"}</SubmitButtonText>
               </RowCenter>
             )}
           </SubmitButton>
@@ -430,8 +432,8 @@ export const MultiUploadScreen = () => {
 
       <BottomSheet ref={editSheetRef}>
         <SheetContentWrapper>
-          <BSTitle>Confirm & Edit Names</BSTitle>
-          <BSSub>Set custom names for your documents before starting the OCR process.</BSSub>
+          <BSTitle>{constants?.confirmAndEditNames || "Confirm & Edit Names"}</BSTitle>
+          <BSSub>{constants?.setCustomNamesDesc || "Set custom names for your documents before starting the OCR process."}</BSSub>
           <BSScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 60 }}>
             {selectedFiles.map((file, index) => {
               const { ext } = getFileNameAndExtension(file.originalName);
@@ -439,12 +441,12 @@ export const MultiUploadScreen = () => {
               return (
                 <EditItemRow key={index}>
                   <OriginalNameLabel numberOfLines={1}>
-                    Original: {file.originalName}
+                    {constants?.original || "Original"}: {file.originalName}
                   </OriginalNameLabel>
                   <InputContainer>
                     <NameInput
                       value={currentTitlePart}
-                      placeholder="Enter document name"
+                      placeholder={constants?.enterDocumentName || "Enter document name"}
                       onChangeText={(text: string) => handleUpdateFileName(index, text)}
                     />
                     {ext ? <ExtensionLabel>.{ext}</ExtensionLabel> : null}
@@ -458,7 +460,7 @@ export const MultiUploadScreen = () => {
             onPress={handleConfirmAndStartUpload}
             activeOpacity={0.8}
           >
-            <StartProcessingButtonText>Start Processing</StartProcessingButtonText>
+            <StartProcessingButtonText>{constants?.startProcessing || "Start Processing"}</StartProcessingButtonText>
           </StartProcessingButton>
         </SheetContentWrapper>
       </BottomSheet>

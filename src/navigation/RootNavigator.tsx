@@ -7,6 +7,7 @@ import ModernLoader from "../components/shared/Loader";
 import AnimatedSplashScreen from "../components/shared/AnimatedSplashScreen";
 import { useQuery } from "@tanstack/react-query";
 import { getUser } from "../services/userService";
+import { getConstantsByProfile, setAppLanguage } from "../utils/translationUtils";
 import OnboardingScreen from "../screens/auth/OnboardingScreen";
 
 export const navigationRef = createNavigationContainerRef<any>();
@@ -19,10 +20,21 @@ const RootNavigator = () => {
     queryKey: ["profile"],
     queryFn: async () => {
       const response = await getUser();
-      return response?.data || response;
+      const userData = response?.data || response;
+      if (userData?.preferredLanguage) {
+        setAppLanguage(userData.preferredLanguage);
+      }
+      return userData;
     },
     enabled: authContext.isAuthenticated,
   });
+
+  React.useEffect(() => {
+    if (userProfile?.preferredLanguage) {
+      setAppLanguage(userProfile.preferredLanguage);
+    }
+  }, [userProfile?.preferredLanguage]);
+
 
   const isProfileIncomplete = (user: any) => {
     if (!user) return true;

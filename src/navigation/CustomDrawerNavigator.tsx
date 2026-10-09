@@ -10,12 +10,14 @@ import DocumentStack from "./stacks/DocumentStack";
 import MedicationStack from "./stacks/MedicationStack";
 import ReminderScreen from "../screens/AppScreens/Reminders/ReminderScreen";
 import { useAppTheme } from "../context/ThemeContext";
+import { useAppConstants } from "../utils/translationUtils";
 
 const Drawer = createDrawerNavigator();
 
 const CustomDrawerNavigator = () => {
   const { theme } = useAppTheme();
   const dimensions = useWindowDimensions();
+  const constants = useAppConstants();
 
   return (
     <Drawer.Navigator
@@ -44,9 +46,9 @@ const CustomDrawerNavigator = () => {
       <Drawer.Screen
         name="HOME"
         options={{
-          drawerLabel: "My Profile",
+          drawerLabel: constants?.home || "Home",
           drawerIcon: ({ color, size }) => (
-            <Feather name="user" size={size + 2} color={color} />
+            <Feather name="home" size={size + 2} color={color} />
           ),
         }}
       >
@@ -57,7 +59,7 @@ const CustomDrawerNavigator = () => {
         name="MEDICATION"
         component={MedicationStack}
         options={{
-          drawerLabel: "Medications",
+          drawerLabel: constants?.medications || "Medications",
           drawerIcon: ({ color, size }) => (
             <MaterialCommunityIcons
               name="calendar-heart"
@@ -72,7 +74,7 @@ const CustomDrawerNavigator = () => {
         name="DOCUMENTS"
         component={DocumentStack}
         options={{
-          drawerLabel: "My Documents",
+          drawerLabel: constants?.documents || "Documents",
           drawerIcon: ({ color, size }) => (
             <Ionicons
               name="folder-open-outline"
@@ -87,9 +89,9 @@ const CustomDrawerNavigator = () => {
         name="PROFILE"
         component={ProfileStack}
         options={{
-          drawerLabel: "Profile",
+          drawerLabel: constants?.profile || "Profile",
           drawerIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size + 2} color={color} />
+            <Ionicons name="person-outline" size={size + 2} color={color} />
           ),
         }}
       />
@@ -98,7 +100,7 @@ const CustomDrawerNavigator = () => {
         name="REMINDERS"
         component={ReminderScreen}
         options={{
-          drawerLabel: "Reminders",
+          drawerLabel: constants?.reminders || "Reminders",
           drawerIcon: ({ color, size }) => (
             <Ionicons
               name="notifications-outline"
@@ -114,7 +116,7 @@ const CustomDrawerNavigator = () => {
         name="ABOUT"
         component={AboutScreen}
         options={{
-          drawerLabel: "About Us",
+          drawerLabel: constants?.aboutUs || "About Us",
           drawerIcon: ({ color, size }) => (
             <Ionicons
               name="information-circle-outline"

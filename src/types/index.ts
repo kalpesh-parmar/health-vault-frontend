@@ -121,6 +121,9 @@ export interface ResetPasswordRequest {
   password: string;
 }
 
+export * from "./language";
+import type { SupportedLanguage } from "./language";
+
 // ─── Signup Response ────────────────────────────────────────────────
 
 export interface User {
@@ -146,6 +149,8 @@ export interface User {
   isMobileVerified: boolean;
   isEmailVerified: boolean;
   sessionId?: string;
+  preferredLanguage?: SupportedLanguage | string;
+  onboardingCompleted?: boolean;
 }
 
 // ─── Update User Request ────────────────────────────────────────────────

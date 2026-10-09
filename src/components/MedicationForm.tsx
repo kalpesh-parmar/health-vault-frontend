@@ -18,6 +18,8 @@ import {
   useMedicationFormState,
   MedicationFormFields,
 } from "./shared/MedicationFormFields";
+import { useAppConstants } from "../utils/translationUtils";
+import { usePreferredLanguage } from "../hooks/usePreferredLanguage";
 
 interface MedicationFormProps {
   initialData?: AddOrEditMedication;
@@ -47,7 +49,9 @@ const MedicationForm = ({
   onCancel,
 }: MedicationFormProps) => {
   const { theme, isDark } = useAppTheme();
-  const formState = useMedicationFormState(initialData, "english");
+  const constants = useAppConstants();
+  const preferredLang = usePreferredLanguage();
+  const formState = useMedicationFormState(initialData, preferredLang);
   const {
     formName,
     formType,
@@ -116,21 +120,25 @@ const MedicationForm = ({
   const buildMedicationPayload = (): AddOrEditMedication | null => {
     const errors: string[] = [];
     if (!formName.trim()) {
-      errors.push("Name is required");
+      errors.push(constants?.nameIsRequired || "Name is required");
     }
     if (formType !== "TABLET" && formType !== "CAPSULE") {
       if (!formUnit) {
-        errors.push("Unit is required");
+        errors.push(constants?.unitIsRequired || "Unit is required");
       }
     }
     const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
     if (selectedSlots.length !== N) {
-      errors.push(`Please select exactly ${N} reminder times`);
+      errors.push(
+        constants?.selectExactReminderTimes
+          ? `${constants.selectExactReminderTimes} (${N})`
+          : `Please select exactly ${N} reminder times`
+      );
     }
 
     const parsedQty = parseInt(formQty.trim(), 10);
     if (!formQty.trim() || isNaN(parsedQty) || parsedQty <= 0) {
-      errors.push("Total Quantity is required");
+      errors.push(constants?.totalQuantityRequired || "Total Quantity is required");
     }
 
     if (errors.length > 0) {
@@ -230,7 +238,7 @@ const MedicationForm = ({
           paddingBottom: keyboardPadding + 40,
         }}
       >
-        <ModernLoader visible={isLoading} title="This May Take A While." />
+        <ModernLoader visible={isLoading} title={constants?.thisMayTakeAWhile || "This May Take A While."} />
 
         {/* Stepper Navigation for Batch Adding */}
         {isAddMode && (drafts.length > 0 || currentIndex > 0) && (
@@ -262,7 +270,7 @@ const MedicationForm = ({
                   color: isDark ? "#f8fafc" : "#1e293b",
                 }}
               >
-                Medicine #{currentIndex + 1}
+                {constants?.medicine || "Medicine"} #{currentIndex + 1}
               </Text>
               {currentIndex < drafts.length && (
                 <View
@@ -275,7 +283,7 @@ const MedicationForm = ({
                   }}
                 >
                   <Text style={{ fontSize: 10, fontWeight: "700", color: isDark ? "#6ee7b7" : "#047857" }}>
-                    Added
+                    {constants?.added || "Added"}
                   </Text>
                 </View>
               )}
@@ -323,9 +331,9 @@ const MedicationForm = ({
                 flex: 1,
               }}
             >
-              {drafts.length} medicine{drafts.length > 1 ? "s" : ""} added ·{" "}
+              {drafts.length} {drafts.length > 1 ? (constants?.medicines || "medicines") : (constants?.medicine || "medicine")} {constants?.added || "added"} ·{" "}
               <Text style={{ textDecorationLine: "underline", fontWeight: "700" }}>
-                Review All
+                {constants?.reviewAll || "Review All"}
               </Text>
             </Text>
             <Ionicons
@@ -341,7 +349,7 @@ const MedicationForm = ({
             formState={formState}
             isDark={isDark}
             theme={theme}
-            preferredLang="english"
+            preferredLang={preferredLang}
           />
 
           {localErrors.length > 0 && (
@@ -372,7 +380,7 @@ const MedicationForm = ({
                     style={{ marginRight: 4 }}
                   />
                   <AddAndContinueButtonText isDark={isDark}>
-                    Add & Continue
+                    {constants?.addAndContinue || "Add & Continue"}
                   </AddAndContinueButtonText>
                 </AddAndContinueButton>
 
@@ -386,7 +394,7 @@ const MedicationForm = ({
                     <View style={{ flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center" }}>
                       <Ionicons name="list" size={18} color="#ffffff" />
                       <SaveButtonText numberOfLines={1}>
-                        Review ({drafts.length + (formName.trim() ? 1 : 0)})
+                        {constants?.review || "Review"} ({drafts.length + (formName.trim() ? 1 : 0)})
                       </SaveButtonText>
                     </View>
                   </SaveButton>
@@ -399,10 +407,10 @@ const MedicationForm = ({
                     {isLoading ? (
                       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                         <ActivityIndicator color="#ffffff" />
-                        <SaveButtonText>Saving...</SaveButtonText>
+                        <SaveButtonText>{constants?.saving || "Saving..."}</SaveButtonText>
                       </View>
                     ) : (
-                      <SaveButtonText>Save Medication</SaveButtonText>
+                      <SaveButtonText>{constants?.saveMedication || "Save Medication"}</SaveButtonText>
                     )}
                   </SaveButton>
                 )}
@@ -410,7 +418,7 @@ const MedicationForm = ({
 
               {onCancel && (
                 <CancelButton onPress={onCancel} disabled={isLoading} isDark={isDark}>
-                  <CancelButtonText isDark={isDark}>Cancel</CancelButtonText>
+                  <CancelButtonText isDark={isDark}>{constants?.cancel || "Cancel"}</CancelButtonText>
                 </CancelButton>
               )}
             </View>
@@ -419,10 +427,10 @@ const MedicationForm = ({
               {isLoading ? (
                 <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                   <ActivityIndicator color="#ffffff" />
-                  <SaveButtonText>Saving...</SaveButtonText>
+                  <SaveButtonText>{constants?.saving || "Saving..."}</SaveButtonText>
                 </View>
               ) : (
-                <SaveButtonText>Save Medication</SaveButtonText>
+                <SaveButtonText>{constants?.saveMedication || "Save Medication"}</SaveButtonText>
               )}
             </SaveButton>
           )}

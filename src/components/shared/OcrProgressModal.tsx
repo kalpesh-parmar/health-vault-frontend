@@ -3,6 +3,7 @@ import React from "react";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface OcrProgressModalProps {
   visible: boolean;
@@ -20,6 +21,7 @@ const OcrProgressModal = ({
   onClose,
 }: OcrProgressModalProps) => {
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
 
   return (
     <Modal
@@ -45,11 +47,17 @@ const OcrProgressModal = ({
           </IconWrapper>
 
           <ContentContainer>
-            <Title>{hasError ? "Processing Failed" : percentage >= 100 ? "Processing Complete" : "Processing Document"}</Title>
+            <Title>
+              {hasError
+                ? (constants?.processingFailed || "Processing Failed")
+                : percentage >= 100
+                ? (constants?.processingComplete || "Processing Complete")
+                : (constants?.processingDocument || "Processing Document")}
+            </Title>
             <Description>
               {hasError
-                ? "There was an error analyzing your document. Please try again."
-                : currentStep || "Extracting information from your document..."}
+                ? (constants?.documentAnalysisError || "There was an error analyzing your document. Please try again.")
+                : currentStep || (constants?.extractingDocumentInfo || "Extracting information from your document...")}
             </Description>
           </ContentContainer>
 
@@ -65,13 +73,13 @@ const OcrProgressModal = ({
           {(!hasError && percentage < 100) && (
             <LoaderContainer>
               <ActivityIndicator size="small" color="#3b82f6" />
-              <LoaderText>Please wait, this might take a moment.</LoaderText>
+              <LoaderText>{constants?.pleaseWaitMoment || "Please wait, this might take a moment."}</LoaderText>
             </LoaderContainer>
           )}
 
           {hasError && (
             <CloseButton onPress={onClose}>
-              <CloseButtonText>Close</CloseButtonText>
+              <CloseButtonText>{constants?.close || "Close"}</CloseButtonText>
             </CloseButton>
           )}
         </ModalCard>

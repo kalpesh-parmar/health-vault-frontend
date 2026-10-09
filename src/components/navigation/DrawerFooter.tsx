@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface DrawerFooterProps {
   onLogoutPress: () => void;
@@ -9,6 +10,8 @@ interface DrawerFooterProps {
 }
 
 const DrawerFooter = React.memo(({ onLogoutPress, insetsBottom, theme }: DrawerFooterProps) => {
+  const constants = useAppConstants();
+
   return (
     <View
       style={[
@@ -45,7 +48,7 @@ const DrawerFooter = React.memo(({ onLogoutPress, insetsBottom, theme }: DrawerF
               fontSize: theme.typography.body.fontSize || 16,
             }
           ]} allowFontScaling={true}>
-            Logout
+            {constants?.logout || "Logout"}
           </Text>
         </Pressable>
       </View>

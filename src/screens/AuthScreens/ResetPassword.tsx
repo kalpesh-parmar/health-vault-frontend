@@ -20,6 +20,7 @@ import ModernLoader from "../../components/shared/Loader";
 import { useAppTheme } from "../../context/ThemeContext";
 import { queryClient } from "../../config/queryClient";
 import { useAuth } from "../../context/ContextAPI";
+import { useAppConstants } from "../../utils/translationUtils";
 
 type StrengthLevel = "none" | "weak" | "fair" | "good" | "strong";
 
@@ -40,42 +41,43 @@ const getStrength = (password: string): StrengthLevel => {
   return "strong";
 };
 
-const strengthConfig: Record<
-  StrengthLevel,
-  { label: string; color: string; filled: number }
-> = {
-  none: {
-    label: "Password strength",
-    color: "#e2e8f0",
-    filled: 0,
-  },
-  weak: {
-    label: "Weak — add more variety",
-    color: "#ef4444",
-    filled: 1,
-  },
-  fair: {
-    label: "Fair — getting there",
-    color: "#f59e0b",
-    filled: 2,
-  },
-  good: {
-    label: "Good — almost strong!",
-    color: "#10b981",
-    filled: 3,
-  },
-  strong: {
-    label: "Strong — great password",
-    color: "#10b981",
-    filled: 4,
-  },
-};
-
 const ResetPassword = () => {
+  const constants = useAppConstants();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const strengthConfig: Record<
+    StrengthLevel,
+    { label: string; color: string; filled: number }
+  > = {
+    none: {
+      label: constants?.password || "Password strength",
+      color: "#e2e8f0",
+      filled: 0,
+    },
+    weak: {
+      label: "Weak — add more variety",
+      color: "#ef4444",
+      filled: 1,
+    },
+    fair: {
+      label: "Fair — getting there",
+      color: "#f59e0b",
+      filled: 2,
+    },
+    good: {
+      label: "Good — almost strong!",
+      color: "#10b981",
+      filled: 3,
+    },
+    strong: {
+      label: "Strong — great password",
+      color: "#10b981",
+      filled: 4,
+    },
+  };
 
   const [errors, setErrors] = useState({
     password: "",
@@ -241,22 +243,21 @@ const ResetPassword = () => {
               />
             </LockCircle>
 
-            <HeaderTitle>Reset Password</HeaderTitle>
+            <HeaderTitle>{constants?.resetPassword || "Reset Password"}</HeaderTitle>
 
             <HeaderSubtitle>
-              Create a secure new password for your account
+              {constants?.createPassword || "Create a secure new password for your account"}
             </HeaderSubtitle>
           </HeaderContent>
 
           <CardWrapper>
             <Card>
               <InfoText>
-                Your new password must be different from your previously used
-                password.
+                {constants?.resetPasswordTitle || "Your new password must be different from your previously used password."}
               </InfoText>
 
               <FieldContainer>
-                <FieldLabel>New Password</FieldLabel>
+                <FieldLabel>{constants?.newPassword || "New Password"}</FieldLabel>
 
                 <InputWrapper hasError={!!errors.password}>
                   <InputIconContainer>
@@ -268,7 +269,7 @@ const ResetPassword = () => {
                   </InputIconContainer>
 
                   <StyledInput
-                    placeholder="Enter new password"
+                    placeholder={constants?.enterPassword || "Enter new password"}
                     placeholderTextColor="#94a3b8"
                     secureTextEntry={!showPassword}
                     value={password}
@@ -313,7 +314,7 @@ const ResetPassword = () => {
               </FieldContainer>
 
               <FieldContainer>
-                <FieldLabel>Confirm Password</FieldLabel>
+                <FieldLabel>{constants?.confirmPassword || "Confirm Password"}</FieldLabel>
 
                 <InputWrapper hasError={!!errors.confirm}>
                   <InputIconContainer>
@@ -325,7 +326,7 @@ const ResetPassword = () => {
                   </InputIconContainer>
 
                   <StyledInput
-                    placeholder="Confirm new password"
+                    placeholder={constants?.confirmPassword || "Confirm new password"}
                     placeholderTextColor="#94a3b8"
                     secureTextEntry={!showConfirm}
                     value={confirmPassword}
@@ -381,10 +382,10 @@ const ResetPassword = () => {
                   {isLoading ? (
                     <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                       <ActivityIndicator color="#ffffff" />
-                      <ResetButtonText>Resetting Password...</ResetButtonText>
+                      <ResetButtonText>{constants?.loading || "Resetting Password..."}</ResetButtonText>
                     </View>
                   ) : (
-                    <ResetButtonText>Reset Password</ResetButtonText>
+                    <ResetButtonText>{constants?.resetPassword || "Reset Password"}</ResetButtonText>
                   )}
                 </LinearGradient>
               </ResetButton>

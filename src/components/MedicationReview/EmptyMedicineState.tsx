@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface EmptyMedicineStateProps {
   onBackPress: () => void;
@@ -9,6 +10,7 @@ interface EmptyMedicineStateProps {
 
 export const EmptyMedicineState: React.FC<EmptyMedicineStateProps> = ({ onBackPress }) => {
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
 
   return (
     <Container isDark={isDark}>
@@ -16,10 +18,11 @@ export const EmptyMedicineState: React.FC<EmptyMedicineStateProps> = ({ onBackPr
         <Ionicons name="medical-outline" size={48} color={theme.colors.primary} />
       </IconContainer>
       
-      <Title isDark={isDark}>No Medicines Found</Title>
+      <Title isDark={isDark}>{constants?.noMedicinesFound || "No Medicines Found"}</Title>
       
       <Subtitle isDark={isDark}>
-        We couldn't detect any medications in these documents. You can still manage medications manually or try uploading again.
+        {constants?.noMedicinesFoundDesc ||
+          "We couldn't detect any medications in these documents. You can still manage medications manually or try uploading again."}
       </Subtitle>
 
       <CTAButton
@@ -27,7 +30,7 @@ export const EmptyMedicineState: React.FC<EmptyMedicineStateProps> = ({ onBackPr
         onPress={onBackPress}
         activeOpacity={0.8}
       >
-        <CTAButtonText>Back to Dashboard</CTAButtonText>
+        <CTAButtonText>{constants?.backToDashboard || "Back to Dashboard"}</CTAButtonText>
       </CTAButton>
     </Container>
   );

@@ -1,24 +1,22 @@
-import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '../context/ContextAPI';
+import { useState, useEffect } from "react";
+import {
+  getActiveLanguage,
+  subscribeToLanguageChange,
+  SupportedLanguage,
+} from "../utils/translationUtils";
 
-export const usePreferredLanguage = () => {
-  const [lang, setLang] = useState<string>('english');
-  const { isAuthenticated } = useAuth();
+export const usePreferredLanguage = (): SupportedLanguage => {
+  const [lang, setLang] = useState<SupportedLanguage>(getActiveLanguage);
 
   useEffect(() => {
-    const fetchLang = async () => {
-      try {
-        const storedLang = await AsyncStorage.getItem('preferredLanguage');
-        if (storedLang) {
-          setLang(storedLang.toLowerCase());
-        }
-      } catch (error) {
-        console.warn("Failed to fetch preferredLanguage from AsyncStorage", error);
-      }
-    };
-    fetchLang();
-  }, [isAuthenticated]);
+    setLang(getActiveLanguage());
+
+    const unsubscribe = subscribeToLanguageChange((newLang) => {
+      setLang(newLang);
+    });
+
+    return unsubscribe;
+  }, []);
 
   return lang;
 };

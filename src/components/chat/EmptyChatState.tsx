@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface EmptyChatStateProps {
   isDark: boolean;
@@ -14,6 +15,7 @@ export const EmptyChatState: React.FC<EmptyChatStateProps> = ({
   suggestedQuestions,
   onPressQuestion,
 }) => {
+  const constants = useAppConstants();
   const cardBgColor = isDark ? "#1e293b" : "#ffffff";
   const titleColor = isDark ? "#ffffff" : "#1e293b";
   const textColor = isDark ? "#cbd5e1" : "#475569";
@@ -40,14 +42,19 @@ export const EmptyChatState: React.FC<EmptyChatStateProps> = ({
             </LinearGradient>
           </View>
           <View style={styles.headerTextContainer}>
-            <Text style={[styles.welcomeTitle, { color: titleColor }]}>Dr. Health AI</Text>
-            <Text style={[styles.welcomeSub, { color: "#22c55e" }]}>🟢 Local Medical Assistant</Text>
+            <Text style={[styles.welcomeTitle, { color: titleColor }]}>
+              {constants?.drHealthAi || "Dr. Health AI"}
+            </Text>
+            <Text style={[styles.welcomeSub, { color: "#22c55e" }]}>
+              {constants?.localMedicalAssistant || "🟢 Local Medical Assistant"}
+            </Text>
           </View>
         </View>
 
         {/* Main Intro Text */}
         <Text style={[styles.introText, { color: textColor }]}>
-          A secure local AI pipeline to analyze medical reports, explain clinical terminology, and provide general health guidance.
+          {constants?.chatWelcomeIntro ||
+            "A secure local AI pipeline to analyze medical reports, explain clinical terminology, and provide general health guidance."}
         </Text>
 
         {/* Divider */}
@@ -61,9 +68,12 @@ export const EmptyChatState: React.FC<EmptyChatStateProps> = ({
               <Ionicons name="document-text-outline" size={15} color="#5B4BFF" />
             </View>
             <View style={styles.capContent}>
-              <Text style={[styles.capTitle, { color: titleColor }]}>Analyze Documents</Text>
+              <Text style={[styles.capTitle, { color: titleColor }]}>
+                {constants?.analyzeDocuments || "Analyze Documents"}
+              </Text>
               <Text style={[styles.capText, { color: subColor }]}>
-                Ask follow-up questions, summarize insights, and check report ranges.
+                {constants?.analyzeDocumentsDesc ||
+                  "Ask follow-up questions, summarize insights, and check report ranges."}
               </Text>
             </View>
           </View>
@@ -74,9 +84,12 @@ export const EmptyChatState: React.FC<EmptyChatStateProps> = ({
               <Ionicons name="shield-checkmark-outline" size={15} color="#0ea5e9" />
             </View>
             <View style={styles.capContent}>
-              <Text style={[styles.capTitle, { color: titleColor }]}>100% Secure & Local</Text>
+              <Text style={[styles.capTitle, { color: titleColor }]}>
+                {constants?.secureAndLocal || "100% Secure & Local"}
+              </Text>
               <Text style={[styles.capText, { color: subColor }]}>
-                Processed locally on device server to completely protect patient privacy.
+                {constants?.secureAndLocalDesc ||
+                  "Processed locally on device server to completely protect patient privacy."}
               </Text>
             </View>
           </View>
@@ -87,9 +100,12 @@ export const EmptyChatState: React.FC<EmptyChatStateProps> = ({
               <Ionicons name="leaf-outline" size={15} color="#22c55e" />
             </View>
             <View style={styles.capContent}>
-              <Text style={[styles.capTitle, { color: titleColor }]}>General Guidance</Text>
+              <Text style={[styles.capTitle, { color: titleColor }]}>
+                {constants?.generalGuidance || "General Guidance"}
+              </Text>
               <Text style={[styles.capText, { color: subColor }]}>
-                Explore diets, lifestyle tips, and symptoms. Always consult clinical doctors.
+                {constants?.generalGuidanceDesc ||
+                  "Explore diets, lifestyle tips, and symptoms. Always consult clinical doctors."}
               </Text>
             </View>
           </View>

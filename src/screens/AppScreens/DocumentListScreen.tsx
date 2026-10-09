@@ -48,40 +48,49 @@ import { useAppNavigation } from "../../types/navigation";
 import { useAppTheme } from "../../context/ThemeContext";
 import { MedicalDocument } from "../../types";
 import ErrorBoundary from "../../components/shared/ErrorBoundary";
+import { useAppConstants } from "../../utils/translationUtils";
 
 const CATEGORIES = [
-  { key: "All", value: "All" },
-  { key: "Prescription", value: "Prescription" },
-  { key: "Lab Report", value: "Lab Report" },
-  { key: "Imaging Report", value: "Imaging Report" },
-  { key: "Discharge Summary", value: "Discharge Summary" },
-  { key: "Consultation Report", value: "Consultation Report" },
-  { key: "Surgery Report", value: "Surgery Report" },
-  { key: "Vaccination Report", value: "Vaccination Report" },
-  { key: "Medical Certificate", value: "Medical Certificate" },
-  { key: "Other Medical Document", value: "Other Medical Document" },
+  { key: "all", value: "All" },
+  { key: "prescription", value: "Prescription" },
+  { key: "labReport", value: "Lab Report" },
+  { key: "imagingReport", value: "Imaging Report" },
+  { key: "dischargeSummary", value: "Discharge Summary" },
+  { key: "consultationReport", value: "Consultation Report" },
+  { key: "surgeryReport", value: "Surgery Report" },
+  { key: "vaccinationReport", value: "Vaccination Report" },
+  { key: "medicalCertificate", value: "Medical Certificate" },
+  { key: "otherMedicalDocument", value: "Other Medical Document" },
 ];
 
 const SORT_OPTIONS = [
   {
+    key: "newestFirst",
+    descKey: "recentlyAddedItems",
     label: "Newest First",
     description: "Recently added items",
     value: "date_desc",
     icon: "calendar",
   },
   {
+    key: "oldestFirst",
+    descKey: "earliestAddedItems",
     label: "Oldest First",
     description: "Earliest added items",
     value: "date_asc",
     icon: "calendar-outline",
   },
   {
+    key: "aToZ",
+    descKey: "alphabeticalAscending",
     label: "A-Z",
     description: "Alphabetical ascending",
     value: "name_asc",
     icon: "alpha-a-box",
   },
   {
+    key: "zToA",
+    descKey: "alphabeticalDescending",
     label: "Z-A",
     description: "Alphabetical descending",
     value: "name_desc",
@@ -92,6 +101,7 @@ const SORT_OPTIONS = [
 const DocumentList = () => {
   const navigation = useAppNavigation();
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   const refRBSheet = useRef<BottomSheetModal>(null);
   const filterSheetRef = useRef<BottomSheetModal>(null);
   const editSheetRef = useRef<BottomSheetModal>(null);
@@ -150,7 +160,9 @@ const DocumentList = () => {
   }, [userDetails?.profileImageKey]);
 
   const userFirstName = userDetails?.firstName?.trim();
-  const userDisplayName = userFirstName ? `${userFirstName} (You)` : "Me (You)";
+  const userDisplayName = userFirstName
+    ? `${userFirstName} (${constants?.you || "You"})`
+    : `${constants?.me || "Me"} (${constants?.you || "You"})`;
   const initials = useMemo(() => {
     return getInitials(userDetails?.firstName, userDetails?.lastName) || "U";
   }, [userDetails?.firstName, userDetails?.lastName]);
@@ -183,11 +195,11 @@ const DocumentList = () => {
   const handleFeatureComingSoon = useCallback(() => {
     Toast.show({
       type: "info",
-      text1: "Coming Soon",
-      text2: "This feature will be implemented soon.",
+      text1: constants?.comingSoon || "Coming Soon",
+      text2: constants?.featureImplementedSoon || "This feature will be implemented soon.",
       position: "bottom",
     });
-  }, []);
+  }, [constants]);
 
 
 
@@ -339,15 +351,15 @@ const DocumentList = () => {
           Toast.show({
             type: "error",
             position: "top",
-            text1: "Limit Exceeded",
-            text2: "You can select up to 5 documents at a time.",
+            text1: constants?.limitExceeded || "Limit Exceeded",
+            text2: constants?.selectUpTo5Docs || "You can select up to 5 documents at a time.",
           });
           return prev;
         }
         return [...prev, id];
       }
     });
-  }, []);
+  }, [constants]);
 
   const isSelectionMode = selectedDocIds.length > 0;
 
@@ -379,20 +391,20 @@ const DocumentList = () => {
     Toast.show({
       type: "info",
       position: "top",
-      text1: "Feature will be implemented soon.",
+      text1: constants?.featureImplementedSoon || "Feature will be implemented soon.",
     });
     setSelectedDocIds([]);
-  }, [selectedDocIds]);
+  }, [selectedDocIds, constants]);
 
   const handleBulkShare = useCallback(() => {
     if (selectedDocIds.length === 0) return;
     Toast.show({
       type: "info",
       position: "top",
-      text1: "Feature will be implemented soon.",
+      text1: constants?.featureImplementedSoon || "Feature will be implemented soon.",
     });
     setSelectedDocIds([]);
-  }, [selectedDocIds]);
+  }, [selectedDocIds, constants]);
 
   const handleBulkDelete = useCallback(() => {
     if (selectedDocIds.length === 0) return;
@@ -425,7 +437,7 @@ const DocumentList = () => {
           <BackButton onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={28} color="white" />
           </BackButton>
-          <HeaderTitle>My Documents</HeaderTitle>
+          <HeaderTitle>{constants?.myDocuments || "My Documents"}</HeaderTitle>
           <RightActions>
             <IconButton onPress={() => filterSheetRef.current?.present()}>
               <MaterialCommunityIcons name="filter" size={20} color="white" />
@@ -436,8 +448,8 @@ const DocumentList = () => {
                   Toast.show({
                     type: "info",
                     position: "top",
-                    text1: "Processing in Progress",
-                    text2: "A document is currently being processed. Please wait for it to complete.",
+                    text1: constants?.processingInProgress || "Processing in Progress",
+                    text2: constants?.processingInProgressDesc || "A document is currently being processed. Please wait for it to complete.",
                   });
                   return;
                 }
@@ -453,9 +465,9 @@ const DocumentList = () => {
 
         <FamilySection>
           <FamilyHeader>
-            <FamilyTitle>Family Members</FamilyTitle>
+            <FamilyTitle>{constants?.familyMembers || "Family Members"}</FamilyTitle>
             <ManageButton onPress={handleFeatureComingSoon}>
-              <ManageText>Manage</ManageText>
+              <ManageText>{constants?.manage || "Manage"}</ManageText>
             </ManageButton>
           </FamilyHeader>
           <FamilyScroll>
@@ -483,7 +495,7 @@ const DocumentList = () => {
                   color={isDark ? "#9ca3af" : "#6b7280"}
                 />
               </AddCircle>
-              <MemberName>Add</MemberName>
+              <MemberName>{constants?.add || "Add"}</MemberName>
             </MemberItem>
           </FamilyScroll>
         </FamilySection>
@@ -493,10 +505,17 @@ const DocumentList = () => {
 
       <ContentContainer>
         <FilterTabs
-          data={CATEGORIES.map((category) => category.value)}
-          activeTab={activeTab}
+          data={CATEGORIES.map((category) => constants?.[category.key] || constants?.[category.value] || category.value)}
+          activeTab={
+            constants?.[CATEGORIES.find((c) => c.value === activeTab)?.key || ""] ||
+            constants?.[activeTab] ||
+            activeTab
+          }
           onSelectTab={(tab) => {
-            setActiveTab(tab);
+            const foundCategory = CATEGORIES.find(
+              (c) => (constants?.[c.key] || constants?.[c.value] || c.value) === tab
+            );
+            setActiveTab(foundCategory ? foundCategory.value : tab);
             setIsFilterApplied(false); // Reset sort/filter on tab change
           }}
           isDark={isDark}
@@ -517,7 +536,7 @@ const DocumentList = () => {
               />
             ) : (
               <EmptyDocuments
-                message={`No ${activeTab === "All" ? "documents" : activeTab.toLowerCase() + " documents"} found.`}
+                message={constants?.noDocumentsFound || `No ${activeTab === "All" ? "documents" : activeTab.toLowerCase() + " documents"} found.`}
               />
             )
           }
@@ -551,20 +570,20 @@ const DocumentList = () => {
         {isSelectionMode && (
           <SelectionBottomBar isDark={isDark} insets={insets}>
             <SelectionText isDark={isDark}>
-              {selectedDocIds.length} selected
+              {selectedDocIds.length} {constants?.selected || "selected"}
             </SelectionText>
             <BarActionsContainer>
               <BarActionButton onPress={handleBulkDownload}>
                 <Ionicons name="download-outline" size={22} color={isDark ? "#cbd5e1" : "#1e293b"} />
-                <BarActionLabel isDark={isDark}>Download</BarActionLabel>
+                <BarActionLabel isDark={isDark}>{constants?.download || "Download"}</BarActionLabel>
               </BarActionButton>
               <BarActionButton onPress={handleBulkShare}>
                 <Ionicons name="share-social-outline" size={22} color={isDark ? "#cbd5e1" : "#1e293b"} />
-                <BarActionLabel isDark={isDark}>Share</BarActionLabel>
+                <BarActionLabel isDark={isDark}>{constants?.share || "Share"}</BarActionLabel>
               </BarActionButton>
               <BarActionButton onPress={handleBulkDelete}>
                 <Ionicons name="trash-outline" size={22} color="#ef4444" />
-                <BarActionLabel style={{ color: "#ef4444" }}>Delete</BarActionLabel>
+                <BarActionLabel style={{ color: "#ef4444" }}>{constants?.delete || "Delete"}</BarActionLabel>
               </BarActionButton>
             </BarActionsContainer>
           </SelectionBottomBar>
@@ -606,8 +625,8 @@ const DocumentList = () => {
 
       <FilterBottomSheet
         ref={filterSheetRef}
-        title="Sort Documents"
-        subtitle="Choose how to order your items"
+        title={constants?.sortDocuments || "Sort Documents"}
+        subtitle={constants?.chooseHowToOrder || "Choose how to order your items"}
         onApply={() => {
           setIsFilterApplied(true);
           filterSheetRef.current?.dismiss();
@@ -620,8 +639,8 @@ const DocumentList = () => {
         {SORT_OPTIONS.map((option) => (
           <FilterOptionItem
             key={option.value}
-            title={option.label}
-            subtitle={option.description}
+            title={constants?.[option.key] || constants?.[option.label] || option.label}
+            subtitle={constants?.[option.descKey] || constants?.[option.description] || option.description}
             icon={option.icon}
             isActive={sortOption === option.value}
             onPress={() => setSortOption(option.value)}
@@ -632,17 +651,23 @@ const DocumentList = () => {
   );
 };
 
-const DocumentListWithErrorBoundary = (props: any) => (
-  <ErrorBoundary
-    componentName="DocumentList"
-    receivedProps={props}
-    navigationParams={props.route?.params}
-    fallbackTitle="Unable to load documents"
-    fallbackSubtitle="There was an error displaying your documents list."
-  >
-    <DocumentList {...props} />
-  </ErrorBoundary>
-);
+const DocumentListWithErrorBoundary = (props: any) => {
+  const constants = useAppConstants();
+  return (
+    <ErrorBoundary
+      componentName="DocumentList"
+      receivedProps={props}
+      navigationParams={props.route?.params}
+      fallbackTitle={constants?.unableToLoadDocuments || "Unable to load documents"}
+      fallbackSubtitle={
+        constants?.errorDisplayingDocuments ||
+        "There was an error displaying your documents list."
+      }
+    >
+      <DocumentList {...props} />
+    </ErrorBoundary>
+  );
+};
 
 export default DocumentListWithErrorBoundary;
 

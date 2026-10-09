@@ -6,6 +6,7 @@ import { AppStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import ScreenHeader from "../../components/shared/Header";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useAppConstants } from "../../utils/translationUtils";
 
 type Props = {
   route: RouteProp<AppStackParamList, "ImagePreview">;
@@ -19,6 +20,7 @@ const ImagePreviewScreen = ({ route }: Props) => {
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [loading, setLoading] = useState(false);
   const { isDark, theme } = useAppTheme();
+  const constants = useAppConstants();
 
   const handleProceed = async () => {
     try {
@@ -48,23 +50,23 @@ const ImagePreviewScreen = ({ route }: Props) => {
         backgroundColor="transparent"
       />
       <Container>
-        <ScreenHeader title="Image Preview" showBack={true} />
+        <ScreenHeader title={constants?.imagePreview || "Image Preview"} showBack={true} />
         <View style={{ flex: 1, paddingTop: 100 }}>
           <ImageWrapper>
             <PreviewImage source={{ uri: images || "" }} resizeMode="cover" />
           </ImageWrapper>
         </View>
-        <Label>1 Image Selected</Label>
+        <Label>{constants?.oneImageSelected || "1 Image Selected"}</Label>
 
         <ActionArea>
           {loading ? (
             <LoadingWrapper>
               <ActivityIndicator size="large" color={theme.colors.primary} />
-              <LoadingText>Analysing document…</LoadingText>
+              <LoadingText>{constants?.analysingDocument || "Analysing document…"}</LoadingText>
             </LoadingWrapper>
           ) : (
             <ProceedButton onPress={handleProceed} activeOpacity={0.85}>
-              <ProceedButtonText>Proceed</ProceedButtonText>
+              <ProceedButtonText>{constants?.proceed || "Proceed"}</ProceedButtonText>
               <ArrowIcon>
                 <ArrowText>→</ArrowText>
               </ArrowIcon>

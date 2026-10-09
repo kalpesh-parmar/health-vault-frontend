@@ -41,6 +41,7 @@ import {
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
+import { useAppConstants } from "../../utils/translationUtils";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -61,6 +62,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [askText, setAskText] = useState("");
   const { isDark, theme } = useAppTheme();
+  const constants = useAppConstants();
 
   const scrollViewRef = useRef<ScrollView>(null);
   const editSheetRef = useRef<BottomSheetModal>(null);
@@ -428,44 +430,44 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
         {/* Document Details Grid Card */}
         <Card>
-          <CardTitle>Document Details</CardTitle>
+          <CardTitle>{constants?.documentDetails || "Document Details"}</CardTitle>
 
           <DetailRow>
-            <DetailKey>Document Type</DetailKey>
-            <DetailValue>{formatDocumentType(localDoc?.documentType)}</DetailValue>
+            <DetailKey>{constants?.documentType || "Document Type"}</DetailKey>
+            <DetailValue>{constants?.[localDoc?.documentType] || formatDocumentType(localDoc?.documentType)}</DetailValue>
           </DetailRow>
 
           <DetailRow>
-            <DetailKey>Uploaded By</DetailKey>
-            <DetailValue>You</DetailValue>
+            <DetailKey>{constants?.uploadedBy || "Uploaded By"}</DetailKey>
+            <DetailValue>{constants?.you || "You"}</DetailValue>
           </DetailRow>
 
           <DetailRow>
-            <DetailKey>Uploaded On</DetailKey>
+            <DetailKey>{constants?.uploadedOn || "Uploaded On"}</DetailKey>
             <DetailValue>
               {formattedDate} • {formattedTime}
             </DetailValue>
           </DetailRow>
 
           <DetailRow>
-            <DetailKey>File Size</DetailKey>
+            <DetailKey>{constants?.fileSize || "File Size"}</DetailKey>
             <DetailValue>{formattedSize}</DetailValue>
           </DetailRow>
 
           <DetailRow>
-            <DetailKey>Notes</DetailKey>
+            <DetailKey>{constants?.notes || "Notes"}</DetailKey>
             <DetailValue>
-              {localDoc?.notes || "No notes available"}
+              {localDoc?.notes || (constants?.noNotesAvailable || "No notes available")}
             </DetailValue>
           </DetailRow>
 
           <DetailRow style={{ marginBottom: 4 }}>
-            <DetailKey>Tags</DetailKey>
+            <DetailKey>{constants?.tags || "Tags"}</DetailKey>
             <View style={{ flex: 1 }}>
               <TagContainer>
                 <TagPill>
                   <TagText>
-                    {localDoc?.documentType || "Health Document"}
+                    {constants?.[localDoc?.documentType] || localDoc?.documentType || (constants?.healthDocument || "Health Document")}
                   </TagText>
                 </TagPill>
                 <TagPill>
@@ -478,7 +480,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
           </DetailRow>
 
           <DetailRow style={{ marginTop: 10, marginBottom: 0 }}>
-            <DetailKey>File Name</DetailKey>
+            <DetailKey>{constants?.fileName || "File Name"}</DetailKey>
             <DetailValue
               style={{
                 fontSize: 12,
@@ -494,7 +496,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
         {/* View Document Card */}
         <Card>
-          <CardTitle>View Document</CardTitle>
+          <CardTitle>{constants?.viewDocument || "View Document"}</CardTitle>
           <ThumbnailContainer>
             <TouchableOpacity
               activeOpacity={0.9}
@@ -505,7 +507,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                   <View style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#1e293b" : "#f1f5f9" }}>
                     <ActivityIndicator size="small" color={theme.colors.primary} />
                     <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 6 }}>
-                      Loading preview...
+                      {constants?.loadingPreview || "Loading preview..."}
                     </Text>
                   </View>
                 ) : imageSource && !isSourceError ? (
@@ -518,7 +520,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                         {localDoc?.fileName}
                       </Text>
                       <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 }}>
-                        Tap to open interactive PDF viewer
+                        {constants?.tapToOpenInteractivePdf || "Tap to open interactive PDF viewer"}
                       </Text>
                     </View>
                   ) : (
@@ -536,7 +538,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                       color="#cbd5e1"
                     />
                     <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                      Preview unavailable
+                      {constants?.previewUnavailable || "Preview unavailable"}
                     </Text>
                   </EmptyPreviewBox>
                 )}
@@ -548,7 +550,7 @@ const SummaryScreen = ({ route, navigation }: any) => {
                 activeOpacity={0.8}
                 onPress={() => setIsPreviewModalOpen(true)}
               >
-                <GreenButtonText>View Fullscreen</GreenButtonText>
+                <GreenButtonText>{constants?.viewFullscreen || "View Fullscreen"}</GreenButtonText>
                 <Ionicons name="expand" size={14} color="white" />
               </GreenButton>
             </ActionRow>
@@ -587,12 +589,12 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
         {/* Questions You Can Ask Card */}
         <Card style={{ marginBottom: 30 }}>
-          <CardTitle>Questions You Can Ask</CardTitle>
+          <CardTitle>{constants?.questionsYouCanAsk || "Questions You Can Ask"}</CardTitle>
 
           <QuestionRow
             activeOpacity={0.7}
             onPress={() =>
-              handleAskQuestion("What do my blood sugar levels indicate?")
+              handleAskQuestion(constants?.bloodSugarQuestion || "What do my blood sugar levels indicate?")
             }
           >
             <Ionicons
@@ -601,13 +603,13 @@ const SummaryScreen = ({ route, navigation }: any) => {
               color="#10b981"
               style={{ marginRight: 8 }}
             />
-            <QuestionText>What do my blood sugar levels indicate?</QuestionText>
+            <QuestionText>{constants?.bloodSugarQuestion || "What do my blood sugar levels indicate?"}</QuestionText>
           </QuestionRow>
 
           <QuestionRow
             activeOpacity={0.7}
             onPress={() =>
-              handleAskQuestion("Are my cholesterol levels normal?")
+              handleAskQuestion(constants?.cholesterolQuestion || "Are my cholesterol levels normal?")
             }
           >
             <Ionicons
@@ -616,13 +618,13 @@ const SummaryScreen = ({ route, navigation }: any) => {
               color="#10b981"
               style={{ marginRight: 8 }}
             />
-            <QuestionText>Are my cholesterol levels normal?</QuestionText>
+            <QuestionText>{constants?.cholesterolQuestion || "Are my cholesterol levels normal?"}</QuestionText>
           </QuestionRow>
 
           <QuestionRow
             activeOpacity={0.7}
             onPress={() =>
-              handleAskQuestion("Please highlight any abnormal results.")
+              handleAskQuestion(constants?.abnormalResultsQuestion || "Please highlight any abnormal results.")
             }
           >
             <Ionicons
@@ -631,14 +633,14 @@ const SummaryScreen = ({ route, navigation }: any) => {
               color="#10b981"
               style={{ marginRight: 8 }}
             />
-            <QuestionText>Please highlight any abnormal results.</QuestionText>
+            <QuestionText>{constants?.abnormalResultsQuestion || "Please highlight any abnormal results."}</QuestionText>
           </QuestionRow>
 
           <InputBar>
             <AskInput
               value={askText}
               onChangeText={setAskText}
-              placeholder="Ask a question about this document..."
+              placeholder={constants?.askQuestionPlaceholder || "Ask a question about this document..."}
               placeholderTextColor={theme.colors.textMuted}
               returnKeyType="send"
               onSubmitEditing={() => {

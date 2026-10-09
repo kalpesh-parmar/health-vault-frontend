@@ -3,15 +3,21 @@ import { ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useAppConstants } from "../../utils/translationUtils";
 
 export const LoadingScreen = () => {
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   return (
     <Container isDark={isDark}>
       <Card>
         <ActivityIndicator size="large" color="#0f766e" />
-        <Title style={{ marginTop: 20 }}>Loading Assistant</Title>
-        <Subtitle>Preparing secure connection...</Subtitle>
+        <Title style={{ marginTop: 20 }}>
+          {constants?.loadingAssistant || "Loading Assistant"}
+        </Title>
+        <Subtitle>
+          {constants?.preparingSecureConnection || "Preparing secure connection..."}
+        </Subtitle>
       </Card>
     </Container>
   );
@@ -22,19 +28,20 @@ interface ErrorScreenProps {
   onRetry?: () => void;
 }
 
-export const ErrorScreen = ({ message = "Something went wrong.", onRetry }: ErrorScreenProps) => {
+export const ErrorScreen = ({ message, onRetry }: ErrorScreenProps) => {
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   return (
     <Container isDark={isDark}>
       <Card>
         <IconContainer style={{ backgroundColor: "#fee2e2" }}>
           <Ionicons name="alert-circle-outline" size={32} color="#dc2626" />
         </IconContainer>
-        <Title>Connection Failed</Title>
-        <Subtitle>{message}</Subtitle>
+        <Title>{constants?.connectionFailed || "Connection Failed"}</Title>
+        <Subtitle>{message || constants?.somethingWentWrong || "Something went wrong."}</Subtitle>
         {onRetry && (
           <Button onPress={onRetry}>
-            <ButtonText>Retry</ButtonText>
+            <ButtonText>{constants?.retry || "Retry"}</ButtonText>
           </Button>
         )}
       </Card>
@@ -47,18 +54,21 @@ interface EmptyDocumentsProps {
   onAction?: () => void;
 }
 
-export const EmptyDocuments = ({ message = "Please upload medical documents to get started.", onAction }: EmptyDocumentsProps) => {
+export const EmptyDocuments = ({ message, onAction }: EmptyDocumentsProps) => {
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   return (
     <Container isDark={isDark}>      
         <IconContainer style={{ backgroundColor: "#e0f2fe" }}>
           <Ionicons name="document-text-outline" size={32} color="#0284c7" />
         </IconContainer>
-        <Title>No Documents Found</Title>
-        <Subtitle>{message}</Subtitle>
+        <Title>{constants?.noDocumentsFound || "No Documents Found"}</Title>
+        <Subtitle>
+          {message || constants?.pleaseUploadDocsToGetStarted || "Please upload medical documents to get started."}
+        </Subtitle>
         {onAction && (
           <Button onPress={onAction}>
-            <ButtonText>Upload Document</ButtonText>
+            <ButtonText>{constants?.uploadDocument || "Upload Document"}</ButtonText>
           </Button>
         )}
     </Container>
@@ -70,18 +80,21 @@ interface EmptyMedicationsProps {
   onAction?: () => void;
 }
 
-export const EmptyMedications = ({ message = "Please add your medications to get started.", onAction }: EmptyMedicationsProps) => {
+export const EmptyMedications = ({ message, onAction }: EmptyMedicationsProps) => {
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   return (
     <Container isDark={isDark}>
         <IconContainer style={{ backgroundColor: "#fce7f3" }}>
           <Ionicons name="medkit-outline" size={32} color="#be185d" />
         </IconContainer>
-        <Title>No Medications Found</Title>
-        <Subtitle>{message}</Subtitle>
+        <Title>{constants?.noMedicationsFound || "No Medications Found"}</Title>
+        <Subtitle>
+          {message || constants?.pleaseAddMedsToGetStarted || "Please add your medications to get started."}
+        </Subtitle>
         {onAction && (
           <Button onPress={onAction}>
-            <ButtonText>Add Medication</ButtonText>
+            <ButtonText>{constants?.addMedication || "Add Medication"}</ButtonText>
           </Button>
         )}
     </Container>

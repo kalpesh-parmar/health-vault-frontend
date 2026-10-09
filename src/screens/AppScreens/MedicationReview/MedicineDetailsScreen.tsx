@@ -14,6 +14,8 @@ import {
 } from "../../../components/shared/MedicationFormFields";
 import { useBottomBarPadding } from "../../../hooks/useBottomBarPadding";
 import { StatusBar } from "expo-status-bar";
+import { useAppConstants } from "../../../utils/translationUtils";
+import { usePreferredLanguage } from "../../../hooks/usePreferredLanguage";
 
 type DetailsRouteProp = RouteProp<
   {
@@ -40,6 +42,7 @@ export const MedicineDetailsScreen: React.FC = () => {
   const route = useRoute<DetailsRouteProp>();
   const navigation = useAppNavigation();
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
 
   const { medicineId } = route.params || {};
   const { medicines, updateMedicineDraft } = useMedicationReview();
@@ -50,8 +53,8 @@ export const MedicineDetailsScreen: React.FC = () => {
     return (
       <SafeContainer edges={["top"]} isDark={isDark}>
         <StatusBar style="light" />
-        <ReviewProgressHeader title="Details Not Found" onBackPress={() => navigation.goBack()} />
-        <ErrorText>Medicine details not found.</ErrorText>
+        <ReviewProgressHeader title={constants?.detailsNotFound || "Details Not Found"} onBackPress={() => navigation.goBack()} />
+        <ErrorText>{constants?.medicineDetailsNotFound || "Medicine details not found."}</ErrorText>
       </SafeContainer>
     );
   }
@@ -78,7 +81,8 @@ export const MedicineDetailsScreen: React.FC = () => {
     medicationSchedule: originalMedicine.medicationSchedule,
   };
 
-  const formState = useMedicationFormState(initialMedData, "english");
+  const preferredLang = usePreferredLanguage();
+  const formState = useMedicationFormState(initialMedData, preferredLang);
   const {
     formName,
     formType,
@@ -195,7 +199,7 @@ export const MedicineDetailsScreen: React.FC = () => {
               formState={formState}
               isDark={isDark}
               theme={theme}
-              preferredLang="english"
+              preferredLang={preferredLang}
             />
 
             {localErrors.length > 0 && (
@@ -216,7 +220,7 @@ export const MedicineDetailsScreen: React.FC = () => {
             themeColor={theme.colors.primary}
             activeOpacity={0.8}
           >
-            <CTAButtonText>Save Changes</CTAButtonText>
+            <CTAButtonText>{constants?.saveChanges || "Save Changes"}</CTAButtonText>
           </CTAButton>
         </StickyFooter>
       </KeyboardAvoidingView>

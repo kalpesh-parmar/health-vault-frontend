@@ -46,6 +46,8 @@ import AuthButton from "../../components/auth/AuthButton";
 import { useAuth } from "../../hooks/useAuth";
 import SocialAuthButton from "../../components/auth/SocialAuthButton";
 
+import { useAppConstants } from "../../utils/translationUtils";
+
 WebBrowser.maybeCompleteAuthSession();
 
 const microsoftDiscovery = {
@@ -68,6 +70,7 @@ const LoginScreen = () => {
     useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
   const { theme } = useAppTheme();
   const { login: authContextLogin } = useAuth();
+  const constants = useAppConstants();
 
   useEffect(() => {
     console.log("[OTP_LOG] Component Mounted: LoginScreen");
@@ -552,10 +555,10 @@ const LoginScreen = () => {
 
               <BottomCard themeColor={theme.colors}>
                 <WelcomeText themeColor={theme.colors}>
-                  Verify Your Identity
+                  {constants?.verifyMobile || "Verify Your Identity"}
                 </WelcomeText>
                 <DescriptionText themeColor={theme.colors}>
-                  Enter your mobile number to receive a secure login OTP
+                  {constants?.loginSubtitle || "Enter your mobile number to receive a secure login OTP"}
                 </DescriptionText>
 
                 <PhoneInput
@@ -572,7 +575,7 @@ const LoginScreen = () => {
                 <Spacer />
 
                 <AuthButton
-                  title="Send Verification Code"
+                  title={constants?.getOtp || "Send Verification Code"}
                   onPress={handleContinue}
                   loading={loading}
                 />
@@ -580,34 +583,34 @@ const LoginScreen = () => {
                 <DividerContainer>
                   <DividerLine themeColor={theme.colors} />
                   <DividerText themeColor={theme.colors}>
-                    or continue with
+                    {constants?.orContinueWith || "or continue with"}
                   </DividerText>
                   <DividerLine themeColor={theme.colors} />
                 </DividerContainer>
 
                 <SocialAuthButton
                   provider="google"
-                  label="Continue with Google"
+                  label={`${constants?.continue || "Continue"} with ${constants?.google || "Google"}`}
                   onPress={handleGoogleSignIn}
                   loading={isGoogleLoading}
                   disabled={loading}
                 />
                 <SocialAuthButton
                   provider="apple"
-                  label="Continue with Apple"
+                  label={`${constants?.continue || "Continue"} with ${constants?.apple || "Apple"}`}
                   onPress={handleAppleSignIn}
                   disabled={loading || Platform.OS === "android"}
                 />
                 <SocialAuthButton
                   provider="facebook"
-                  label="Continue with Facebook"
+                  label={`${constants?.continue || "Continue"} with ${constants?.facebook || "Facebook"}`}
                   onPress={handleFacebookSignIn}
                   loading={isFacebookLoading}
                   disabled={loading}
                 />
                 <SocialAuthButton
                   provider="microsoft"
-                  label="Continue with Microsoft"
+                  label={`${constants?.continue || "Continue"} with ${constants?.microsoft || "Microsoft"}`}
                   onPress={handleMicrosoftSignIn}
                   loading={isMicrosoftLoading}
                   disabled={loading || !request}

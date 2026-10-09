@@ -13,6 +13,7 @@ import MedicineSummaryCard from "../../../components/MedicationReview/MedicineSu
 import { useBottomBarPadding } from "../../../hooks/useBottomBarPadding";
 import { StatusBar } from "expo-status-bar";
 import { useDocumentUpload } from "../../../context/DocumentUploadContext";
+import { useAppConstants } from "../../../utils/translationUtils";
 
 type ConfirmMedicinesRouteProp = RouteProp<
   {
@@ -27,6 +28,7 @@ export const ConfirmMedicinesScreen: React.FC = () => {
   const route = useRoute<ConfirmMedicinesRouteProp>();
   const navigation = useAppNavigation();
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
 
   const { fromScreen } = route.params || {};
 
@@ -122,7 +124,7 @@ export const ConfirmMedicinesScreen: React.FC = () => {
   return (
     <SafeContainer edges={["top"]} isDark={isDark}>
       <StatusBar style="light" />
-      <ReviewProgressHeader title="Review & Confirm" onBackPress={handleBack} />
+      <ReviewProgressHeader title={constants?.reviewAndConfirm || "Review & Confirm"} onBackPress={handleBack} />
 
       <ScrollWrapper contentContainerStyle={{ padding: 20, paddingBottom: bottomPadding + 130 }}>
         <HeaderIllustrationContainer>
@@ -133,13 +135,13 @@ export const ConfirmMedicinesScreen: React.FC = () => {
               color={theme.colors.primary}
             />
           </IllustrationCircle>
-          <IllustrationTitle isDark={isDark}>Review & Confirm</IllustrationTitle>
+          <IllustrationTitle isDark={isDark}>{constants?.reviewAndConfirm || "Review & Confirm"}</IllustrationTitle>
           <IllustrationSubtitle isDark={isDark}>
-            You are about to add {selectedCount} medicine{selectedCount === 1 ? "" : "s"} to your Health Vault.
+            {constants?.youAreAboutToAdd || "You are about to add"} {selectedCount} {selectedCount === 1 ? (constants?.medicine || "medicine") : (constants?.medicines || "medicines")} {constants?.toYourHealthVault || "to your Health Vault."}
           </IllustrationSubtitle>
         </HeaderIllustrationContainer>
 
-        <SectionLabel isDark={isDark}>{selectedCount} Selected Medicine{selectedCount === 1 ? "" : "s"}</SectionLabel>
+        <SectionLabel isDark={isDark}>{selectedCount} {constants?.selected || "Selected"} {selectedCount === 1 ? (constants?.medicine || "Medicine") : (constants?.medicines || "Medicines")}</SectionLabel>
 
         {selectedMeds.map((med) => (
           <MedicineSummaryCard key={med.id} medicine={med} />
@@ -156,10 +158,10 @@ export const ConfirmMedicinesScreen: React.FC = () => {
           {isSubmitting ? (
             <LoadingRow>
               <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
-              <CTAButtonText>Saving...</CTAButtonText>
+              <CTAButtonText>{constants?.saving || "Saving..."}</CTAButtonText>
             </LoadingRow>
           ) : (
-            <CTAButtonText>Confirm & Save</CTAButtonText>
+            <CTAButtonText>{constants?.confirmAndSave || "Confirm & Save"}</CTAButtonText>
           )}
         </CTAButton>
 
@@ -168,7 +170,7 @@ export const ConfirmMedicinesScreen: React.FC = () => {
           disabled={isSubmitting}
           activeOpacity={0.7}
         >
-          <SecondaryButtonText isDark={isDark}>Back to Edit</SecondaryButtonText>
+          <SecondaryButtonText isDark={isDark}>{constants?.backToEdit || "Back to Edit"}</SecondaryButtonText>
         </SecondaryButton>
       </StickyFooter>
     </SafeContainer>

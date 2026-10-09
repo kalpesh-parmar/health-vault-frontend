@@ -481,7 +481,7 @@ export const I18N_ONBOARDING_UI: Record<string, Record<string, string>> = {
     dose: "खुराक की मात्रा",
     frequency: "खुराक की आवृत्ति",
     times: "खुराक का समय",
-    prescribedBy: "डॉक्टर द्वारा पर्ची",
+    prescribedBy: "डॉक्टर",
     notes: "विशेष निर्देश / नोट्स",
     refillAlert: "रिफिल अलर्ट अधिसूचना",
     totalQuantity: "कुल मात्रा",

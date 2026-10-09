@@ -11,6 +11,7 @@ import ExtractedMedicineCard from "../../../components/MedicationReview/Extracte
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomBarPadding } from "../../../hooks/useBottomBarPadding";
 import { StatusBar } from "expo-status-bar";
+import { useAppConstants } from "../../../utils/translationUtils";
 
 type ReviewAllMedicinesRouteProp = RouteProp<
   {
@@ -25,6 +26,7 @@ export const ReviewAllMedicinesScreen: React.FC = () => {
   const route = useRoute<ReviewAllMedicinesRouteProp>();
   const navigation = useAppNavigation();
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
 
   const { fromScreen } = route.params || {};
 
@@ -53,8 +55,8 @@ export const ReviewAllMedicinesScreen: React.FC = () => {
     <SafeContainer edges={["top"]} isDark={isDark}>
       <StatusBar style="light" />
       <ReviewProgressHeader
-        title="Review Medicines"
-        rightText={`${selectedCount} of ${totalCount} selected`}
+        title={constants?.reviewMedicines || "Review Medicines"}
+        rightText={`${selectedCount} ${constants?.of || "of"} ${totalCount} ${constants?.selected || "selected"}`}
         onBackPress={handleBack}
       />
 
@@ -93,7 +95,7 @@ export const ReviewAllMedicinesScreen: React.FC = () => {
           activeOpacity={0.8}
           selected={selectedCount > 0}
         >
-          <CTAButtonText>Continue ({selectedCount} Selected)</CTAButtonText>
+          <CTAButtonText>{constants?.continue || "Continue"} ({selectedCount} {constants?.selected || "Selected"})</CTAButtonText>
         </CTAButton>
       </StickyFooter>
     </SafeContainer>

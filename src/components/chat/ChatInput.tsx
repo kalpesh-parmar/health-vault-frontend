@@ -20,6 +20,7 @@ import {
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
 import { usePreferredLanguage } from "../../hooks/usePreferredLanguage";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface ChatInputProps {
   value: string;
@@ -104,6 +105,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   mode = "default",
   onAttachPress,
 }) => {
+  const constants = useAppConstants();
   const [isListening, setIsListening] = useState(false);
   const pulseScale = useSharedValue(1);
   const storedPreferredLanguage = usePreferredLanguage();
@@ -236,7 +238,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* TextInput */}
       <TextInput
         style={[styles.textInput, { color: inputTextColor }]}
-        placeholder={isListening ? "Listening..." : "Message Dr. Health..."}
+        placeholder={
+          isListening
+            ? (constants?.listening || "Listening...")
+            : (constants?.messageDrHealth || "Message Dr. Health...")
+        }
         placeholderTextColor={
           isListening ? themePrimaryColor : placeholderColor
         }

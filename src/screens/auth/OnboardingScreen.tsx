@@ -45,6 +45,7 @@ import {
   pickDocumentAsset,
 } from "../../services/mediaServices";
 import { getUser } from "../../services/userService";
+import { setAppLanguage } from "../../utils/translationUtils";
 import { listMedications } from "../../services/medicationservice";
 import {
   uploadDocumentsBatch,
@@ -1258,7 +1259,7 @@ export default function OnboardingScreen() {
       finalState.preferredLanguage,
     );
     if (finalState.preferredLanguage) {
-      AsyncStorage.setItem("preferredLanguage", finalState.preferredLanguage);
+      setAppLanguage(finalState.preferredLanguage);
     }
     setState(finalState);
     if (Boolean((finalState as any).cancellationNotice)) {
@@ -2757,7 +2758,7 @@ export default function OnboardingScreen() {
   const renderOptions = (activeMsg: Message, isHistorical: boolean = false) => {
     const preferredLang = state.preferredLanguage || "english";
     if (preferredLang) {
-      AsyncStorage.setItem("preferredLanguage", preferredLang);
+      setAppLanguage(preferredLang);
     }
 
     const { chosenVal, chosenLabel } = findHistoricalUserReply(
@@ -3786,10 +3787,11 @@ export default function OnboardingScreen() {
       );
 
       if (hasDoc) {
+        const langKey = (preferredLang || "english").toLowerCase().trim();
         const questions =
           activeMsg.suggestedQuestions && activeMsg.suggestedQuestions.length > 0
             ? activeMsg.suggestedQuestions
-            : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
+            : (SUGGESTED_QUESTIONS_I18N[langKey] || SUGGESTED_QUESTIONS_I18N.english).document;
 
         const isStructured = Boolean(
           doc.patientDetails ||

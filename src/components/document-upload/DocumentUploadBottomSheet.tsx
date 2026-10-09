@@ -31,6 +31,7 @@ import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
 import CameraModal from "../shared/CameraModal";
 import { capturePhoto } from "../../services/cameraServices";
 import { SelectedDocument } from "../../types/documentUpload";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface DocumentRowItemProps {
   file: SelectedDocument;
@@ -105,6 +106,7 @@ interface EditDocumentModalProps {
 const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalProps) => {
   if (!file) return null;
 
+  const constants = useAppConstants();
   const { theme } = useAppTheme();
   const [tempName, setTempName] = useState(file.displayName);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -132,7 +134,7 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
   const handleSave = () => {
     const trimmed = tempName.trim();
     if (!trimmed) {
-      setNameError("Document name cannot be empty.");
+      setNameError(constants?.documentNameCannotBeEmpty || "Document name cannot be empty.");
       return;
     }
     onSave(trimmed);
@@ -151,9 +153,9 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
             {/* Header Section */}
             <ModalHeaderRow>
               <ModalTitleSection>
-                <ModalTitleText isDark={isDark}>Edit Document</ModalTitleText>
+                <ModalTitleText isDark={isDark}>{constants?.editDocument || "Edit Document"}</ModalTitleText>
                 <ModalSubtitleText>
-                  Review the document and update the name if needed.
+                  {constants?.editDocumentSubtitle || "Review the document and update the name if needed."}
                 </ModalSubtitleText>
               </ModalTitleSection>
               <ModalCloseButton onPress={onClose}>
@@ -174,12 +176,12 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
                 }}
               >
                 {/* Document Preview */}
-                <PreviewLabel>Document Preview</PreviewLabel>
+                <PreviewLabel>{constants?.documentPreview || "Document Preview"}</PreviewLabel>
                 <PreviewWrapper isDark={isDark}>
                   {isPdf ? (
                     <PdfPreviewWrapper>
                       <MaterialCommunityIcons name="file-pdf-box" size={56} color="#ef4444" />
-                      <PdfPreviewText isDark={isDark}>PDF Document</PdfPreviewText>
+                      <PdfPreviewText isDark={isDark}>{constants?.pdfDocument || "PDF Document"}</PdfPreviewText>
                     </PdfPreviewWrapper>
                   ) : (
                     <Image
@@ -191,13 +193,13 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
                 </PreviewWrapper>
 
                 {/* Original File Name (Show in a line) */}
-                <FieldLabelText style={{ marginTop: 16 }}>Original File Name</FieldLabelText>
+                <FieldLabelText style={{ marginTop: 16 }}>{constants?.originalFileName || "Original File Name"}</FieldLabelText>
                 <OriginalNameTextLine isDark={isDark} numberOfLines={1}>
                   {file.originalName}
                 </OriginalNameTextLine>
 
                 {/* Editable Document Name */}
-                <FieldLabelText style={{ marginTop: 16 }}>Document Name *</FieldLabelText>
+                <FieldLabelText style={{ marginTop: 16 }}>{constants?.documentName ? `${constants.documentName} *` : "Document Name *"}</FieldLabelText>
                 <ModalInputWrapper
                   isDark={isDark}
                   style={{ borderColor: nameError ? "#ef4444" : isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1" }}
@@ -208,7 +210,7 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
                       setTempName(text);
                       if (text.trim()) setNameError(null);
                     }}
-                    placeholder="Enter document name"
+                    placeholder={constants?.enterDocumentName || "Enter document name"}
                     placeholderTextColor="#94a3b8"
                     isDark={isDark}
                   />
@@ -221,11 +223,11 @@ const EditDocumentModal = ({ file, isDark, onClose, onSave }: EditDocumentModalP
             {/* Action Buttons */}
             <ModalFooterButtons>
               <DiscardButton onPress={onClose}>
-                <DiscardButtonText>Discard</DiscardButtonText>
+                <DiscardButtonText>{constants?.discard || "Discard"}</DiscardButtonText>
               </DiscardButton>
 
               <SaveButton onPress={handleSave}>
-                <SaveButtonText>Save</SaveButtonText>
+                <SaveButtonText>{constants?.save || "Save"}</SaveButtonText>
               </SaveButton>
             </ModalFooterButtons>
           </ModalCard>
@@ -243,6 +245,7 @@ interface DocumentUploadBottomSheetProps {
 }
 
 export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSuccess, onUploadStart, singleDocument }: DocumentUploadBottomSheetProps, ref: any) => {
+  const constants = useAppConstants();
   const { theme, isDark } = useAppTheme();
   const { userId } = useAuth();
   const navigation = useNavigation<any>();
@@ -294,7 +297,15 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
 
   const [isCameraVisible, setIsCameraVisible] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState("Uploading documents...");
+  const [uploadMessage, setUploadMessage] = useState(
+    constants?.uploadingDocuments || "Uploading documents..."
+  );
+
+  useEffect(() => {
+    if (constants?.uploadingDocuments) {
+      setUploadMessage(constants.uploadingDocuments);
+    }
+  }, [constants?.uploadingDocuments]);
 
   // Editing file states
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -337,8 +348,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       Toast.show({
         type: "info",
         position: "top",
-        text1: "Processing in Progress",
-        text2: "A document is currently being processed. Please wait for it to complete.",
+        text1: constants?.processingInProgress || "Processing in Progress",
+        text2: constants?.singleDocumentProcessingWait || "A document is currently being processed. Please wait for it to complete.",
       });
       return;
     }
@@ -347,8 +358,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       Toast.show({
         type: "error",
         position: "top",
-        text1: "Limit Exceeded",
-        text2: "You can select up to 5 documents at a time.",
+        text1: constants?.limitExceeded || "Limit Exceeded",
+        text2: constants?.maxFiveDocumentsAllowed || "You can select up to 5 documents at a time.",
       });
       return;
     }
@@ -410,8 +421,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       Toast.show({
         type: "error",
         position: "top",
-        text1: "Error",
-        text2: "Failed to pick documents.",
+        text1: constants?.error || "Error",
+        text2: constants?.failedToPickDocuments || "Failed to pick documents.",
       });
     }
   };
@@ -421,8 +432,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
         Toast.show({
           type: "info",
           position: "top",
-          text1: "Processing in Progress",
-          text2: "A document is currently being processed. Please wait for it to complete.",
+          text1: constants?.processingInProgress || "Processing in Progress",
+          text2: constants?.singleDocumentProcessingWait || "A document is currently being processed. Please wait for it to complete.",
         });
       return;
     }
@@ -431,8 +442,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       Toast.show({
         type: "error",
         position: "top",
-        text1: "Limit Exceeded",
-        text2: "You can select up to 5 documents at a time.",
+        text1: constants?.limitExceeded || "Limit Exceeded",
+        text2: constants?.maxFiveDocumentsAllowed || "You can select up to 5 documents at a time.",
       });
       return;
     }
@@ -494,8 +505,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       Toast.show({
         type: "error",
         position: "top",
-        text1: "Error",
-        text2: "Failed to pick images.",
+        text1: constants?.error || "Error",
+        text2: constants?.failedToPickImages || "Failed to pick images.",
       });
     }
   };
@@ -505,8 +516,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
         Toast.show({
           type: "info",
           position: "top",
-          text1: "Processing in Progress",
-          text2: "Documents are currently being processed. Please wait for it to complete.",
+          text1: constants?.processingInProgress || "Processing in Progress",
+          text2: constants?.documentsProcessingWait || "Documents are currently being processed. Please wait for it to complete.",
         });
       return;
     }
@@ -515,8 +526,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       Toast.show({
         type: "error",
         position: "top",
-        text1: "Limit Exceeded",
-        text2: "You can select up to 5 documents at a time.",
+        text1: constants?.limitExceeded || "Limit Exceeded",
+        text2: constants?.maxFiveDocumentsAllowed || "You can select up to 5 documents at a time.",
       });
       return;
     }
@@ -534,10 +545,10 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
       Toast.show({
         type: "error",
         position: "top",
-        text1: "Permission Denied",
+        text1: constants?.permissionDenied || "Permission Denied",
         text2: permission.canAskAgain
-          ? "Camera permission is required."
-          : "Please enable camera access from iPhone Settings.",
+          ? (constants?.cameraPermissionRequired || "Camera permission is required.")
+          : (constants?.enableCameraFromSettings || "Please enable camera access from Settings."),
       });
     }
   };
@@ -608,8 +619,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
         Toast.show({
           type: "info",
           position: "top",
-          text1: "Processing in Progress",
-          text2: "A document is currently being processed. Please wait for it to complete.",
+          text1: constants?.processingInProgress || "Processing in Progress",
+          text2: constants?.singleDocumentProcessingWait || "A document is currently being processed. Please wait for it to complete.",
         });
       return;
     }
@@ -696,8 +707,8 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
           {/* Header Section & Upload Options - FIXED */}
           <HeaderSection style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
             <View style={{ flex: 1, paddingRight: 10 }}>
-              <SheetTitle isDark={isDark}>Add Document</SheetTitle>
-              <SheetSubtitle>Select documents and edit metadata before starting processing.</SheetSubtitle>
+              <SheetTitle isDark={isDark}>{constants?.addDocument || "Add Document"}</SheetTitle>
+              <SheetSubtitle>{constants?.addDocumentSubtitle || "Select documents and edit metadata before starting processing."}</SheetSubtitle>
             </View>
               <ModalCloseButton onPress={() => ref?.current?.dismiss()}>
                 <Ionicons name="close" size={24} color={isDark ? "#cbd5e1" : "#64748b"} />
@@ -711,28 +722,28 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
               <IconCircle bgColor="#f5f3ff">
                 <MaterialCommunityIcons name="camera-outline" size={24} color="#7c3aed" />
               </IconCircle>
-              <OptionLabel isDark={isDark}>Camera</OptionLabel>
+              <OptionLabel isDark={isDark}>{constants?.camera || "Camera"}</OptionLabel>
             </OptionItem>
 
             <OptionItem onPress={handleGalleryPickMultiple} disabled={isUploading}>
               <IconCircle bgColor="#fff1f2">
                 <MaterialCommunityIcons name="image-outline" size={24} color="#f43f5e" />
               </IconCircle>
-              <OptionLabel isDark={isDark}>Gallery</OptionLabel>
+              <OptionLabel isDark={isDark}>{constants?.gallery || "Gallery"}</OptionLabel>
             </OptionItem>
 
             <OptionItem onPress={handleDocumentPickMultiple} disabled={isUploading}>
               <IconCircle bgColor="#f0fdfa">
                 <MaterialCommunityIcons name="file-document-outline" size={24} color="#0d9488" />
               </IconCircle>
-              <OptionLabel isDark={isDark}>Files</OptionLabel>
+              <OptionLabel isDark={isDark}>{constants?.files || "Files"}</OptionLabel>
             </OptionItem>
           </OptionsRow>
 
           {/* Selected documents list - SCROLLABLE */}
           {selectedFiles.length > 0 && (
             <SelectedSection>
-              <SectionTitle isDark={isDark}>Selected Documents ({selectedFiles.length})</SectionTitle>
+              <SectionTitle isDark={isDark}>{constants?.selectedDocuments ? `${constants.selectedDocuments} (${selectedFiles.length})` : `Selected Documents (${selectedFiles.length})`}</SectionTitle>
               {selectedFiles.map((file) => {
                 return (
                   <DocumentRowItem
@@ -762,7 +773,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(({ fromScreen, onSucce
                   <UploadButtonText>{uploadMessage}</UploadButtonText>
                 </View>
               ) : (
-                <UploadButtonText>Upload Files</UploadButtonText>
+                <UploadButtonText>{constants?.uploadFiles || "Upload Files"}</UploadButtonText>
               )}
             </UploadButton>
           )}

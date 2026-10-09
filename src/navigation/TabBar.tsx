@@ -15,12 +15,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAppTheme } from "../context/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppConstants } from "../utils/translationUtils";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
   withRepeat,
+  withTiming,
   Easing,
 } from "react-native-reanimated";
 
@@ -95,6 +96,7 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
   const { isDark, theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { width, height: screenHeight } = useWindowDimensions();
+  const constants = useAppConstants();
 
   const translateY = useRef(new RNAnimated.Value(0)).current;
   const pulseScale = useSharedValue(1.0);
@@ -164,7 +166,7 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
               isFocused={state.routes[state.index].name === "Home"}
               icon="home-outline"
               activeIcon="home"
-              label="Home"
+              label={constants?.home || "Home"}
               onPress={() => handlePress("Home")}
             />
           </TabCol>
@@ -178,7 +180,7 @@ const TabBar = ({ state, navigation }: BottomTabBarProps) => {
               isFocused={state.routes[state.index].name === "Profile"}
               icon="person-outline"
               activeIcon="person"
-              label="Profile"
+              label={constants?.profile || "Profile"}
               onPress={() => handlePress("Profile")}
             />
           </TabCol>

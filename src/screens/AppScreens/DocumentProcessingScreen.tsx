@@ -24,6 +24,7 @@ import { useOcrJobPolling, JobState } from "../../hooks/useOcrJobPolling";
 import { getOcrStatus } from "../../services/documentService";
 import { useDocumentUpload } from "../../context/DocumentUploadContext";
 import Toast from "react-native-toast-message";
+import { useAppConstants } from "../../utils/translationUtils";
 
 type DocumentProcessingRouteProp = RouteProp<
   {
@@ -40,6 +41,7 @@ export const DocumentProcessingScreen = () => {
   const navigation = useAppNavigation();
   const route = useRoute<DocumentProcessingRouteProp>();
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   const { userId } = useAuth();
   const bottomPadding = useBottomBarPadding(20);
   const { startBackgroundOcr, retryDocument, uploadingDocs } = useDocumentUpload();
@@ -210,19 +212,19 @@ export const DocumentProcessingScreen = () => {
           <BackButton onPress={handleBackAction}>
             <Ionicons name="close" size={26} color="white" />
           </BackButton>
-          <HeaderTitle>Document Processing</HeaderTitle>
+          <HeaderTitle>{constants?.documentProcessing || "Document Processing"}</HeaderTitle>
         </HeaderMain>
 
         <HeaderProgressSection>
           <ProgressTextRow>
-            <HeaderProgressLabel>Overall Batch Progress</HeaderProgressLabel>
+            <HeaderProgressLabel>{constants?.overallBatchProgress || "Overall Batch Progress"}</HeaderProgressLabel>
             <HeaderProgressPct>{aggregatePercentage}%</HeaderProgressPct>
           </ProgressTextRow>
           <HeaderProgressBarBg>
             <HeaderProgressBarFill style={{ width: `${aggregatePercentage}%` }} />
           </HeaderProgressBarBg>
           <HeaderStatusSubtext>
-            {completedCount} Completed • {failedCount} Failed • {runningCount + queuedCount} In Progress
+            {completedCount} {constants?.completed || "Completed"} • {failedCount} {constants?.failed || "Failed"} • {runningCount + queuedCount} {constants?.inProgress || "In Progress"}
           </HeaderStatusSubtext>
         </HeaderProgressSection>
       </HeaderWrapper>
@@ -232,9 +234,9 @@ export const DocumentProcessingScreen = () => {
           contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
         >
-          <SectionTitle>Document Queue ({jobList.length})</SectionTitle>
+          <SectionTitle>{constants?.documentQueue || "Document Queue"} ({jobList.length})</SectionTitle>
           <SectionSubtitle>
-            Live status of document AI parsing and medical extraction.
+            {constants?.liveStatusOfDocumentAi || "Live status of document AI parsing and medical extraction."}
           </SectionSubtitle>
 
           {jobList.map((job) => {
@@ -264,16 +266,16 @@ export const DocumentProcessingScreen = () => {
                     <JobFileName numberOfLines={1}>{fileName}</JobFileName>
                     <JobStepText numberOfLines={1}>
                       {job.status === "COMPLETED"
-                        ? "Extraction Ready — Tap to view"
+                        ? (constants?.extractionReadyTapToView || "Extraction Ready — Tap to view")
                         : job.status === "FAILED"
-                          ? `Rejected: ${job.error || "Processing failed"}`
-                          : job.currentStep || "Processing..."}
+                          ? `${constants?.rejected || "Rejected"}: ${job.error || (constants?.processingFailed || "Processing failed")}`
+                          : job.currentStep || (constants?.processing || "Processing...")}
                     </JobStepText>
                   </HeaderInfo>
 
                   <StatusBadge status={job.status} nonMedical={nonMedical}>
                     <StatusBadgeText status={job.status} nonMedical={nonMedical}>
-                      {job.status}
+                      {constants?.[job.status] || job.status}
                     </StatusBadgeText>
                   </StatusBadge>
                 </JobCardHeader>
@@ -293,11 +295,11 @@ export const DocumentProcessingScreen = () => {
                   <AdSkipBanner>
                     <MaterialCommunityIcons name="alert-decagram" size={20} color="#b45309" />
                     <AdSkipText>
-                      Advertisement detected on page{" "}
+                      {constants?.adDetectedOnPage || "Advertisement detected on page"}{" "}
                       {job.skippedPages
                         .map((p) => (typeof p === "object" ? p.pageNumber : p))
                         .join(", ")}{" "}
-                      — skipped
+                      — {constants?.skipped || "skipped"}
                     </AdSkipText>
                   </AdSkipBanner>
                 )}
@@ -307,8 +309,8 @@ export const DocumentProcessingScreen = () => {
                   <RejectionContainer>
                     <RejectionReasonText style={{ color: "#ef4444" }}>
                       {nonMedical
-                        ? "This file was detected as a non-medical record and could not be processed."
-                        : job.error || "Document extraction failed."}
+                        ? (constants?.nonMedicalRecordError || "This file was detected as a non-medical record and could not be processed.")
+                        : job.error || (constants?.documentExtractionFailed || "Document extraction failed.")}
                     </RejectionReasonText>
                     {!nonMedical && (
                       <TouchableOpacity
@@ -329,7 +331,7 @@ export const DocumentProcessingScreen = () => {
                         }}
                       >
                         <Ionicons name="refresh" size={14} color="#ffffff" style={{ marginRight: 4 }} />
-                        <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "600" }}>Retry Extraction</Text>
+                        <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "600" }}>{constants?.retryExtraction || "Retry Extraction"}</Text>
                       </TouchableOpacity>
                     )}
                   </RejectionContainer>
@@ -340,7 +342,7 @@ export const DocumentProcessingScreen = () => {
                 {isLoadingResult === job.jobId && (
                   <CardLoadingOverlay>
                     <ActivityIndicator size="small" color="#0d9488" />
-                    <CardLoadingText>Fetching extracted fields...</CardLoadingText>
+                    <CardLoadingText>{constants?.fetchingExtractedFields || "Fetching extracted fields..."}</CardLoadingText>
                   </CardLoadingOverlay>
                 )}
               </JobCard>
@@ -351,9 +353,9 @@ export const DocumentProcessingScreen = () => {
             completedCount === 0 && failedCount > 0 ? (
               <DoneBanner style={{ backgroundColor: "#fef2f2", borderColor: "#fca5a5" }}>
                 <Ionicons name="alert-circle" size={32} color="#ef4444" />
-                <DoneTitle style={{ color: "#b91c1c" }}>Processing Failed</DoneTitle>
+                <DoneTitle style={{ color: "#b91c1c" }}>{constants?.processingFailed || "Processing Failed"}</DoneTitle>
                 <DoneSubtitle style={{ color: "#991b1b" }}>
-                  We encountered an error processing your documents. Please check your connection and try again.
+                  {constants?.processingFailedDesc || "We encountered an error processing your documents. Please check your connection and try again."}
                 </DoneSubtitle>
                 {jobList.some(job => job.status === "FAILED" && !isNonMedicalError(job.error)) && (
                   <DoneButton 
@@ -369,17 +371,17 @@ export const DocumentProcessingScreen = () => {
                     }}
                   >
                     <Ionicons name="refresh" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-                    <DoneButtonText>Retry Failed Documents</DoneButtonText>
+                    <DoneButtonText>{constants?.retryFailedDocuments || "Retry Failed Documents"}</DoneButtonText>
                   </DoneButton>
                 )}
               </DoneBanner>
             ) : (
               <DoneBanner>
                 <Ionicons name="checkmark-done-circle" size={32} color="#10b981" />
-                <DoneTitle>All Tasks Finished</DoneTitle>
-                <DoneSubtitle>Your medical document library has been updated.</DoneSubtitle>
+                <DoneTitle>{constants?.allTasksFinished || "All Tasks Finished"}</DoneTitle>
+                <DoneSubtitle>{constants?.medicalLibraryUpdated || "Your medical document library has been updated."}</DoneSubtitle>
                 <DoneButton onPress={() => navigation.navigate("DocumentStack" as any)}>
-                  <DoneButtonText>Go to My Documents</DoneButtonText>
+                  <DoneButtonText>{constants?.goToMyDocuments || "Go to My Documents"}</DoneButtonText>
                 </DoneButton>
               </DoneBanner>
             )
@@ -390,16 +392,16 @@ export const DocumentProcessingScreen = () => {
               <InfoBoxContainer style={{ marginHorizontal: 20, marginTop: 15, marginBottom: 20 }}>
                 <Ionicons name="information-circle-outline" size={20} color="#4f46e5" style={{ marginRight: 8, marginTop: 1 }} />
                 <View style={{ flex: 1 }}>
-                  <InfoBoxTitle>Running in background</InfoBoxTitle>
+                  <InfoBoxTitle>{constants?.runningInBackground || "Running in background"}</InfoBoxTitle>
                   <InfoBoxText>
-                    You can safely navigate anywhere in the application. It will not affect the background document processing.
+                    {constants?.runningInBackgroundDesc || "You can safely navigate anywhere in the application. It will not affect the background document processing."}
                   </InfoBoxText>
                 </View>
               </InfoBoxContainer>
             ) : (
               <BackgroundButton onPress={handleMoveToBackground} activeOpacity={0.8} style={{ marginBottom: 20 }}>
                 <Ionicons name="arrow-back-outline" size={16} color="white" style={{ marginRight: 8 }} />
-                <BackgroundButtonText>Move to Background</BackgroundButtonText>
+                <BackgroundButtonText>{constants?.moveToBackground || "Move to Background"}</BackgroundButtonText>
               </BackgroundButton>
             )
           )}
@@ -423,14 +425,14 @@ export const DocumentProcessingScreen = () => {
             </ModalHeader>
 
             <ScrollView contentContainerStyle={{ padding: 16 }}>
-              <ModalSectionHeader>English Summary</ModalSectionHeader>
+              <ModalSectionHeader>{constants?.englishSummary || "English Summary"}</ModalSectionHeader>
               <ModalSummaryBox>
                 <ModalBodyText>
                   {selectedResult?.result?.extractedStructuredData?.summaryEnglish ||
                     selectedResult?.result?.structuredExtractedData?.summaryEnglish ||
                     selectedResult?.result?.summaries?.summaryEnglish ||
                     selectedResult?.result?.summary ||
-                    "No English summary generated."}
+                    (constants?.noEnglishSummaryGenerated || "No English summary generated.")}
                 </ModalBodyText>
               </ModalSummaryBox>
 
@@ -440,7 +442,7 @@ export const DocumentProcessingScreen = () => {
                 selectedResult?.result?.summaries?.summaryInPreferredLanguage,
               ) && (
                   <>
-                    <ModalSectionHeader>Localized Summary</ModalSectionHeader>
+                    <ModalSectionHeader>{constants?.localizedSummary || "Localized Summary"}</ModalSectionHeader>
                     <ModalSummaryBox>
                       <ModalBodyText>
                         {selectedResult?.result?.extractedStructuredData?.summaryInPreferredLanguage ||
@@ -451,7 +453,7 @@ export const DocumentProcessingScreen = () => {
                   </>
                 )}
 
-              <ModalSectionHeader>Extracted Medical Data</ModalSectionHeader>
+              <ModalSectionHeader>{constants?.extractedMedicalData || "Extracted Medical Data"}</ModalSectionHeader>
               <RawJsonContainer>
                 <RawJsonText>
                   {JSON.stringify(
@@ -466,7 +468,7 @@ export const DocumentProcessingScreen = () => {
             </ScrollView>
 
             <ModalFooterButton onPress={() => setSelectedResult(null)}>
-              <ModalFooterButtonText>Close</ModalFooterButtonText>
+              <ModalFooterButtonText>{constants?.close || "Close"}</ModalFooterButtonText>
             </ModalFooterButton>
           </ModalContentCard>
         </ModalOverlay>

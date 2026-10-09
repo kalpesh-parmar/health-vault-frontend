@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAppConstants } from "../../utils/translationUtils";
 
 export interface NetworkErrorScreenProps {
   onRetry?: () => void | Promise<any>;
@@ -23,6 +24,7 @@ export const NetworkErrorScreen: React.FC<NetworkErrorScreenProps> = ({
   isChecking = false,
   isOffline = false,
 }) => {
+  const constants = useAppConstants();
   const insets = useSafeAreaInsets();
   const [showRestored, setShowRestored] = useState(false);
   const wasOffline = useRef(false);
@@ -237,10 +239,10 @@ export const NetworkErrorScreen: React.FC<NetworkErrorScreenProps> = ({
               numberOfLines={1}
             >
               {isChecking
-                ? "Connecting..."
+                ? (constants?.connecting || "Connecting...")
                 : isRestored
-                ? "You're online"
-                : "You're offline"}
+                ? (constants?.youreOnline || "You're online")
+                : (constants?.youreOffline || "You're offline")}
             </Text>
           </TouchableOpacity>
         </Animated.View>

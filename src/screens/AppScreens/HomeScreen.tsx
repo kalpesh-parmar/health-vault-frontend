@@ -34,6 +34,7 @@ import { listMedications } from "../../services/medicationservice";
 import { getDocumentsSummary } from "../../services/documentService";
 import { Reminder } from "../../types";
 import { getInitials } from "../../utils/avatarUtils";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface ActionItemProps {
   onPress: () => void;
@@ -104,6 +105,8 @@ const HomeScreen = () => {
       return response?.data || response;
     },
   });
+
+  const constants = useAppConstants();
 
   const [profileImageSource, setProfileImageSource] = React.useState<any>(null);
 
@@ -261,7 +264,7 @@ const HomeScreen = () => {
             ) : (
               <>
                 <GreetingText>Hi, {data?.firstName}!</GreetingText>
-                <SubGreetingText>Health Vault Welcomes You.</SubGreetingText>
+                <SubGreetingText>{constants?.healthVaultWelcomesYou || "Health Vault Welcomes You"}</SubGreetingText>
               </>
             )}
           </UserTextContent>
@@ -278,9 +281,9 @@ const HomeScreen = () => {
         }}
       >
         <OverviewTextContainer>
-          <OverviewTitle>Health Overview</OverviewTitle>
+          <OverviewTitle>{constants?.myVault || "Health Overview"}</OverviewTitle>
           <OverviewSubtitle>
-            Complete insights about your health
+            {constants?.completeHealthInsights || "Complete insights about your health"}
           </OverviewSubtitle>
         </OverviewTextContainer>
         <MaterialCommunityIcons
@@ -293,7 +296,7 @@ const HomeScreen = () => {
 
       <ScrollContent showsVerticalScrollIndicator={false}>
         <SectionHeader>
-          <SectionTitle>Health Vault Summary</SectionTitle>
+          <SectionTitle>{constants?.healthVaultSummary || "Health Vault Summary"}</SectionTitle>
         </SectionHeader>
 
         <SummaryRow>
@@ -306,7 +309,7 @@ const HomeScreen = () => {
               <SummaryIconCircle color="#ffe4e6">
                 <MaterialCommunityIcons name="pill" size={20} color="#f43f5e" />
               </SummaryIconCircle>
-              <SummaryCardLabel numberOfLines={1}>Medications</SummaryCardLabel>
+              <SummaryCardLabel numberOfLines={1}>{constants?.medications || "Medications"}</SummaryCardLabel>
               <SummaryPrimaryValue>{medicationsCount}</SummaryPrimaryValue>
             </SummaryCard>
           </Animated.View>
@@ -320,7 +323,7 @@ const HomeScreen = () => {
               <SummaryIconCircle color="#dbeafe">
                 <Ionicons name="document-text" size={20} color="#2563eb" />
               </SummaryIconCircle>
-              <SummaryCardLabel numberOfLines={1}>Documents</SummaryCardLabel>
+              <SummaryCardLabel numberOfLines={1}>{constants?.documents || "Documents"}</SummaryCardLabel>
               <SummaryPrimaryValue>{documentsCount}</SummaryPrimaryValue>
             </SummaryCard>
           </Animated.View>
@@ -334,7 +337,7 @@ const HomeScreen = () => {
               <SummaryIconCircle color="#e0f2fe">
                 <Ionicons name="calendar" size={20} color="#0284c7" />
               </SummaryIconCircle>
-              <SummaryCardLabel numberOfLines={2} style={{ textAlign: "center" }}>Today's Doses</SummaryCardLabel>
+              <SummaryCardLabel numberOfLines={2} style={{ textAlign: "center" }}>{constants?.todaySchedule || "Today's Doses"}</SummaryCardLabel>
               <SummaryPrimaryValue>{pendingMedicinesCount}</SummaryPrimaryValue>
             </SummaryCard>
           </Animated.View>
@@ -342,7 +345,7 @@ const HomeScreen = () => {
 
         {/* --- SECTION: QUICK ACTIONS --- */}
         <SectionHeader style={{ marginTop: 15 }}>
-          <SectionTitle>Quick Actions</SectionTitle>
+          <SectionTitle>{constants?.quickActions || "Quick Actions"}</SectionTitle>
         </SectionHeader>
 
         <ActionsRow>
@@ -352,7 +355,7 @@ const HomeScreen = () => {
                 Toast.show({
                   type: "info",
                   position: "top",
-                  text1: "Processing in Progress",
+                  text1: constants?.processing || "Processing in Progress",
                   text2: "A document is currently being processed. Please wait for it to complete.",
                 });
                 return;
@@ -360,7 +363,7 @@ const HomeScreen = () => {
               refRBSheet?.current?.present();
             }}
             icon="add"
-            label="Add Documents"
+            label={constants?.uploadDocument || "Add Documents"}
             color="#ecfdf5"
             iconColor="#10b981"
           />
@@ -372,14 +375,14 @@ const HomeScreen = () => {
               })
             }
             icon="document-text-outline"
-            label="My Documents"
+            label={constants?.allDocuments || "My Documents"}
             color="#eff6ff"
             iconColor="#2563eb"
           />
           <ActionItem
             onPress={() => navigation.navigate("Reminders")}
             icon="calendar-outline"
-            label="Reminders"
+            label={constants?.reminders || "Reminders"}
             color="#f5f3ff"
             iconColor="#8b5cf6"
           />
@@ -390,7 +393,7 @@ const HomeScreen = () => {
               })
             }
             icon="medkit"
-            label="Medications"
+            label={constants?.medications || "Medications"}
             color="#fff1f2"
             iconColor="#f43f5e"
           />
@@ -401,10 +404,10 @@ const HomeScreen = () => {
           <ProcessingCard style={{ marginHorizontal: 24, marginTop: 15, paddingBottom: 15 }}>
             <SheetHeaderRow style={{ flexWrap: "nowrap", marginBottom: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8, flexShrink: 1 }}>
-                <SheetHeaderTitle style={{ color: "#4f46e5", flexShrink: 1 }} numberOfLines={1}>Processing</SheetHeaderTitle>
+                <SheetHeaderTitle style={{ color: "#4f46e5", flexShrink: 1 }} numberOfLines={1}>{constants?.processing || "Processing"}</SheetHeaderTitle>
                 <SheetHeaderBadge style={{ backgroundColor: "#e0e7ff", marginLeft: 6 }}>
                   <SheetHeaderBadgeText style={{ color: "#4f46e5" }}>
-                    {uploadingDocs.filter(d => d.status === "COMPLETED" || d.status === "completed" || d.status === "success" || d.status === "FAILED" || d.status === "failed").length}/{uploadingDocs.length} Completed
+                    {uploadingDocs.filter(d => d.status === "COMPLETED" || d.status === "completed" || d.status === "success" || d.status === "FAILED" || d.status === "failed").length}/{uploadingDocs.length} {constants?.done || "Completed"}
                   </SheetHeaderBadgeText>
                 </SheetHeaderBadge>
               </View>
@@ -436,7 +439,7 @@ const HomeScreen = () => {
                   flexShrink: 0,
                 }}
               >
-                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 12 }}>View</Text>
+                <Text style={{ color: "#ffffff", fontWeight: "bold", fontSize: 12 }}>{constants?.view || "View"}</Text>
               </TouchableOpacity>
             </SheetHeaderRow>
 
@@ -477,12 +480,12 @@ const HomeScreen = () => {
               />
               <View style={{ flex: 1 }}>
                 <AnalysisCompleteTitle style={{ color: isDark ? "#f87171" : "#b45309" }}>
-                  Processing Failed or Interrupted
+                  {constants?.errorTitle || "Processing Failed or Interrupted"}
                 </AnalysisCompleteTitle>
                 <AnalysisCompleteSub style={{ color: isDark ? "#cbd5e1" : "#78350f", marginTop: 4, marginLeft: 0 }}>
                   {processingError.type === "cancelled"
                     ? "Document processing was stopped or interrupted."
-                    : "The document analysis failed. Please ensure the document is a valid medical report."}
+                    : (constants?.retryFailed || "The document analysis failed. Please ensure the document is a valid medical report.")}
                 </AnalysisCompleteSub>
               </View>
             </View>
@@ -497,9 +500,9 @@ const HomeScreen = () => {
 
         {/* --- SECTION: UPCOMING REMINDERS --- */}
         <SectionHeader style={{ marginTop: 25 }}>
-          <SectionTitle>Today's Reminders</SectionTitle>
+          <SectionTitle>{constants?.todaysReminders || "Today's Reminders"}</SectionTitle>
           <ViewAllButton onPress={() => navigation.navigate("Reminders")}>
-            <ViewAllText>View All</ViewAllText>
+            <ViewAllText>{constants?.viewAll || "View All"}</ViewAllText>
           </ViewAllButton>
         </SectionHeader>
 
@@ -523,7 +526,7 @@ const HomeScreen = () => {
               {recentTwoReminders.length === 0 && (
                 <View style={{ alignItems: "center", marginVertical: 20 }}>
                   <SectionTitle style={{ fontSize: 14, color: "#64748b" }}>
-                    No Reminders For Today
+                    {constants?.noRemindersToday || "No Reminders For Today"}
                   </SectionTitle>
                 </View>
               )}

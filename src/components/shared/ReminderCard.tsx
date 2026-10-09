@@ -9,6 +9,8 @@ import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Reminder } from "../../types";
 import { formatUTCDateTime } from "../../utils/dateFormatter";
+import { useAppConstants } from "../../utils/translationUtils";
+import { AppConstants } from "../../types/language";
 import Animated, {
   ZoomIn,
   ZoomOut,
@@ -44,7 +46,7 @@ const parseSafeDate = (dateVal: any): Date => {
   return date;
 };
 
-const getReminderState = (item: Reminder, isDark: boolean) => {
+const getReminderState = (item: Reminder, isDark: boolean, constants?: AppConstants) => {
   const baseStatus = (item.status || "pending").toUpperCase();
   let normalizedStatus = (baseStatus === "PENDING" && item.isOverdue) ? "OVERDUE" : baseStatus;
   if (baseStatus === "COMPLETED" && (item as any).isOverdue) {
@@ -70,7 +72,7 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
   };
 
   // Actual MedicationTime
-  let formattedTime = "Time Unknown";
+  let formattedTime = constants?.timeUnknown || "Time Unknown";
   let dateLabel = "";
   if (item.actualMedicationTime) {
     const medDate = parseSafeDate(item.actualMedicationTime);
@@ -99,9 +101,9 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       );
 
       if (medDateOnly.getTime() === today.getTime()) {
-        dateLabel = "Today";
+        dateLabel = constants?.today || "Today";
       } else if (medDateOnly.getTime() === tomorrow.getTime()) {
-        dateLabel = "Tomorrow";
+        dateLabel = constants?.tomorrow || "Tomorrow";
       } else {
         dateLabel = formatUTCDateTime(medDate, "dd-MMM-yyyy", true);
       }
@@ -144,13 +146,13 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
   if (hasValidDiff) {
     if (diffH >= 24) {
       const days = Math.floor(diffH / 24);
-      calculatedDueTime = `${days} Day${days > 1 ? "s" : ""}`;
+      calculatedDueTime = `${days} ${days > 1 ? (constants?.days || "Days") : (constants?.day || "Day")}`;
     } else {
       calculatedDueTime = `${diffH}h ${diffM}m`;
     }
   }
 
-  let completedAt = "Unknown";
+  let completedAt = constants?.unknown || "Unknown";
   if (item.completedAt) {
     const d = parseSafeDate(item.completedAt);
     if (!isNaN(d.getTime())) {
@@ -170,11 +172,11 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       reminderDate: dateLabel,
       topRightTextLine2: actualMedicationTimeStr,
       topRightIcon: "calendar-outline" as any,
-      bottomLeftText: `Due in ${calculatedDueTime}`,
+      bottomLeftText: `${constants?.dueIn || "Due in"} ${calculatedDueTime}`,
       bottomLeftIcon: "time-outline" as any,
-      btnText: "Mark Complete",
+      btnText: constants?.markComplete || "Mark Complete",
       btnIcon: "checkmark-circle" as any,
-      badgeText: "PENDING",
+      badgeText: constants?.pending?.toUpperCase() || "PENDING",
     },
     COMPLETED: {
       themeColor: "#10b981", // green
@@ -185,11 +187,11 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       reminderDate: dateLabel,
       topRightTextLine2: actualMedicationTimeStr,
       topRightIcon: "checkmark-done-outline" as any,
-      bottomLeftText: `Completed at ${completedAt}`,
+      bottomLeftText: `${constants?.completedAtLabel || "Completed at"} ${completedAt}`,
       bottomLeftIcon: "time-outline" as any,
       btnText: "",
       btnIcon: "" as any,
-      badgeText: "COMPLETED",
+      badgeText: constants?.completed?.toUpperCase() || "COMPLETED",
     },
     COMPLETED_LATE: {
       themeColor: "#10b981", // green (rest of card)
@@ -197,14 +199,14 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       bgDark: "#0f291e",
       borderLight: "#dcfce7",
       borderDark: "#1a402d",
-      reminderDate: calculatedDueTime ? "Late By" : dateLabel,
+      reminderDate: calculatedDueTime ? (constants?.lateBy || "Late By") : dateLabel,
       topRightTextLine2: calculatedDueTime ? calculatedDueTime : actualMedicationTimeStr,
       topRightIcon: "checkmark-done-outline" as any,
-      bottomLeftText: `Completed at ${completedAt}`,
+      bottomLeftText: `${constants?.completedAtLabel || "Completed at"} ${completedAt}`,
       bottomLeftIcon: "time-outline" as any,
       btnText: "",
       btnIcon: "" as any,
-      badgeText: "COMPLETED LATE",
+      badgeText: constants?.completedLate?.toUpperCase() || "COMPLETED LATE",
     },
     OVERDUE: {
       themeColor: "#ef4444", // red
@@ -212,14 +214,14 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       bgDark: "#2d1618",
       borderLight: "#fee2e2",
       borderDark: "#451e20",
-      reminderDate: `Late: ${calculatedDueTime}`,
+      reminderDate: `${constants?.lateBy || "Late"}: ${calculatedDueTime}`,
       topRightTextLine2: actualMedicationTimeStr,
       topRightIcon: "alarm-outline" as any,
-      bottomLeftText: `Scheduled at ${actualMedicationTimeStr}`,
+      bottomLeftText: `${constants?.scheduledAt || "Scheduled at"} ${actualMedicationTimeStr}`,
       bottomLeftIcon: "calendar-outline" as any,
-      btnText: "Complete Now",
+      btnText: constants?.completeNow || "Complete Now",
       btnIcon: "checkmark-circle" as any,
-      badgeText: "OVERDUE",
+      badgeText: constants?.overdue?.toUpperCase() || "OVERDUE",
     },
   };
 
@@ -263,8 +265,9 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
   index,
   onActionPress,
 }) => {
+  const constants = useAppConstants();
   const [isCompleting, setIsCompleting] = useState(false);
-  const state = getReminderState(item, isDark);
+  const state = getReminderState(item, isDark, constants);
 
   const handlePress = async () => {
     if (onActionPress) {
@@ -328,7 +331,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
             </HeaderRow>
 
             <TitleText isDark={isDark} numberOfLines={1}>
-              {item.medicationName || "Medication"}
+              {item.medicationName || constants?.medication || "Medication"}
             </TitleText>
             <DescText isDark={isDark} numberOfLines={2}>
               {description}
@@ -404,7 +407,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
                   style={{ marginRight: 4 }}
                 />
                 <NotAllowedText isDark={isDark}>
-                  Action available at {state.availableAtTimeStr}
+                  {constants?.actionAvailableAt ? `${constants.actionAvailableAt} ${state.availableAtTimeStr}` : `Action available at ${state.availableAtTimeStr}`}
                 </NotAllowedText>
               </NotAllowedContainer>
             ))}

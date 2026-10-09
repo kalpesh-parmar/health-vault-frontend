@@ -9,28 +9,31 @@ import ScreenHeader from "../../components/shared/Header";
 import { useAppTheme } from "../../context/ThemeContext";
 import HealthVaultLogo from "../../components/shared/HealthVaultLogo";
 
+import { useAppConstants } from "../../utils/translationUtils";
+
 const AboutScreen = () => {
   const navigation = useNavigation();
   const { isDark, theme } = useAppTheme();
+  const constants = useAppConstants();
 
   return (
     <Container>
       <StatusBar barStyle={"light-content"} translucent backgroundColor="rgba(0,0,0,0.2)" />
-      <ScreenHeader title="About Us" showBack={true} />
+      <ScreenHeader title={constants?.aboutUs || "About Us"} showBack={true} />
 
       <StyledScrollView showsVerticalScrollIndicator={false}>
         <BrandSection>
           <LogoContainer>
             <HealthVaultLogo size={90} />
           </LogoContainer>
-          <VersionBadge>Version 2.0.4</VersionBadge>
+          <VersionBadge>{constants?.version || "Version"} 2.0.4</VersionBadge>
           <MissionText>
-            Securing your medical legacy through decentralized accessibility and
-            modern design.
+            {constants?.aboutTagline ||
+              "Securing your medical legacy through decentralized accessibility and modern design."}
           </MissionText>
         </BrandSection>
 
-        <SectionTitle>Our Mission</SectionTitle>
+        <SectionTitle>{constants?.ourMission || "Our Mission"}</SectionTitle>
         <Card>
           <IconCircle style={{ backgroundColor: theme.colors.surfaceLight }}>
             <MaterialCommunityIcons
@@ -40,10 +43,10 @@ const AboutScreen = () => {
             />
           </IconCircle>
           <CardContent>
-            <CardTitle>Vision</CardTitle>
+            <CardTitle>{constants?.vision || "Vision"}</CardTitle>
             <CardDescription>
-              To be the world's most trusted digital vault for personal health
-              information.
+              {constants?.visionDescription ||
+                "To be the world's most trusted digital vault for personal health information."}
             </CardDescription>
           </CardContent>
         </Card>
@@ -57,21 +60,22 @@ const AboutScreen = () => {
             />
           </IconCircle>
           <CardContent>
-            <CardTitle>Privacy First</CardTitle>
+            <CardTitle>{constants?.privacyFirst || "Privacy First"}</CardTitle>
             <CardDescription>
-              Your data is encrypted locally. Not even we can see your records.
+              {constants?.privacyFirstDescription ||
+                "Your data is encrypted locally. Not even we can see your records."}
             </CardDescription>
           </CardContent>
         </Card>
 
-        <SectionTitle>Our Projects</SectionTitle>
+        <SectionTitle>{constants?.ourProjects || "Our Projects"}</SectionTitle>
         <HorizontalScroll horizontal showsHorizontalScrollIndicator={false}>
           <ProjectCard>
             <ProjectIcon bg={isDark ? "#78350f" : "#fef3c7"}>
               <MaterialCommunityIcons name="brain" size={24} color="#d97706" />
             </ProjectIcon>
-            <ProjectName>Health AI</ProjectName>
-            <ProjectStatus>Coming Soon</ProjectStatus>
+            <ProjectName>{constants?.healthAI || "Health AI"}</ProjectName>
+            <ProjectStatus>{constants?.comingSoon || "Coming Soon"}</ProjectStatus>
           </ProjectCard>
 
           <ProjectCard>
@@ -82,12 +86,12 @@ const AboutScreen = () => {
                 color="#7c3aed"
               />
             </ProjectIcon>
-            <ProjectName>Family Vault</ProjectName>
-            <ProjectStatus>Beta</ProjectStatus>
+            <ProjectName>{constants?.familyVault || "Family Vault"}</ProjectName>
+            <ProjectStatus>{constants?.beta || "Beta"}</ProjectStatus>
           </ProjectCard>
         </HorizontalScroll>
 
-        <SectionTitle>Get in Touch</SectionTitle>
+        <SectionTitle>{constants?.getInTouch || "Get in Touch"}</SectionTitle>
         <ContactGrid>
           <ContactButton
             onPress={() => Linking.openURL("mailto:support@healthvault.com")}
@@ -97,14 +101,14 @@ const AboutScreen = () => {
               size={24}
               color={theme.colors.textPrimary}
             />
-            <ContactText>Email Us</ContactText>
+            <ContactText>{constants?.emailUs || "Email Us"}</ContactText>
           </ContactButton>
 
           <ContactButton
             onPress={() => Linking.openURL("https://techrover.us")}
           >
             <MaterialCommunityIcons name="web" size={24} color={theme.colors.textPrimary} />
-            <ContactText>Website</ContactText>
+            <ContactText>{constants?.website || "Website"}</ContactText>
           </ContactButton>
         </ContactGrid>
 

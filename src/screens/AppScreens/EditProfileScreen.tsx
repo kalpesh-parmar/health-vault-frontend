@@ -31,6 +31,7 @@ import { useDocumentMedia } from "../../hooks/useDocumentMedia";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import CameraModal from "../../components/shared/CameraModal";
 import DualButtons from "../../components/shared/Buttons/DualButtons";
+import { useAppConstants } from "../../utils/translationUtils";
 
 const getIconColors = (isDark: boolean) => ({
   fullname: {
@@ -127,6 +128,7 @@ type EditableFieldProps = {
   isVerified?: boolean;
   showEditIcon?: boolean;
   rightAccessory?: React.ReactNode;
+  placeholder?: string;
 };
 
 const EditableField = ({
@@ -147,8 +149,10 @@ const EditableField = ({
   isVerified = false,
   showEditIcon = true,
   rightAccessory,
+  placeholder,
 }: EditableFieldProps) => {
   const { theme } = useAppTheme();
+  const constants = useAppConstants();
   const actuallyEditable = editable && !isVerified;
   const showDisabledStyle = isEditing && isVerified;
 
@@ -183,7 +187,7 @@ const EditableField = ({
             {isVerified && (
               <VerifiedBadge>
                 <Ionicons name="checkmark-circle" size={14} color="#0284c7" />
-                <VerifiedText>Verified</VerifiedText>
+                <VerifiedText>{constants?.verified || "Verified"}</VerifiedText>
               </VerifiedBadge>
             )}
           </View>
@@ -197,7 +201,7 @@ const EditableField = ({
               keyboardType={keyboardType}
               autoCapitalize={autoCapitalize}
               placeholderTextColor={theme.colors.textMuted}
-              placeholder={`Enter ${label.toLowerCase()}`}
+              placeholder={placeholder || `Enter ${label}`}
               isFocused={isFocused}
               accentColor={colors.icon}
               editable={actuallyEditable}
@@ -231,6 +235,7 @@ const EditableField = ({
 
 const EditProfile = () => {
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
   const bottomPadding = useBottomBarPadding(16, 12);
   const iconColors = getIconColors(isDark);
   const refRBSheet = useRef<BottomSheetModal>(null);
@@ -585,14 +590,14 @@ const EditProfile = () => {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ScreenHeader
-        title={isEditing ? "Edit Profile" : "Profile"}
+        title={isEditing ? (constants?.editProfile || "Edit Profile") : (constants?.profile || "Profile")}
         showBack
         rightAction={
           isEditing
             ? undefined
             : {
                 icon: "create-outline",
-                Label: "Edit",
+                Label: constants?.edit || "Edit",
                 onPress: handleStartEdit,
               }
         }
@@ -644,15 +649,16 @@ const EditProfile = () => {
                 </AvatarEditBadge>
               )}
               {isEditing && (
-                <AvatarHint>Tap the camera to change photo</AvatarHint>
+                <AvatarHint>{constants?.tapCameraToChangePhoto || "Tap the camera to change photo"}</AvatarHint>
               )}
             </AvatarSection>
 
             {/* ── Personal Info ── */}
-            <SectionLabel>Personal Info</SectionLabel>
+            <SectionLabel>{constants?.personalInfo || "Personal Info"}</SectionLabel>
             <Card>
               <EditableField
-                label="First Name"
+                label={constants?.firstName || "First Name"}
+                placeholder={constants?.enterFirstName || "Enter First Name"}
                 value={form.firstName}
                 icon="person-outline"
                 colors={iconColors.fullname}
@@ -667,7 +673,8 @@ const EditProfile = () => {
               />
               <FieldDivider />
               <EditableField
-                label="Last Name"
+                label={constants?.lastName || "Last Name"}
+                placeholder={constants?.enterLastName || "Enter Last Name"}
                 value={form.lastName}
                 icon="person-outline"
                 colors={iconColors.fullname}
@@ -682,10 +689,11 @@ const EditProfile = () => {
             </Card>
 
             {/* ── Contact Info ── */}
-            <SectionLabel>Contact Info</SectionLabel>
+            <SectionLabel>{constants?.contactInfo || "Contact Info"}</SectionLabel>
             <Card>
               <EditableField
-                label="Email Address"
+                label={constants?.emailAddress || "Email Address"}
+                placeholder={constants?.enterEmailAddress || "Enter Email Address"}
                 value={form?.email!}
                 icon="mail-outline"
                 colors={iconColors.email}
@@ -702,7 +710,8 @@ const EditProfile = () => {
               />
               <FieldDivider />
               <EditableField
-                label="Mobile Number"
+                label={constants?.mobileNumber || "Mobile Number"}
+                placeholder={constants?.enterMobileNumber || "Enter Mobile Number"}
                 value={form.mobile || ""}
                 icon="call-outline"
                 colors={iconColors.mobile}
@@ -718,7 +727,7 @@ const EditProfile = () => {
               />
             </Card>
 
-            <SectionLabel>More Details</SectionLabel>
+            <SectionLabel>{constants?.moreDetails || "More Details"}</SectionLabel>
             <Card>
               <TouchableOpacity
                 activeOpacity={isEditing ? 0.7 : 1}
@@ -736,16 +745,16 @@ const EditProfile = () => {
                   </FieldIconBox>
                   <FieldContent>
                     <FieldLabel>
-                      {isEditing ? "Date of Birth" : "Age"}
+                      {isEditing ? (constants?.dateOfBirth || "Date of Birth") : (constants?.age || "Age")}
                     </FieldLabel>
                     <AgeInput hasValue={!!form.dateOfBirth} editable={false}>
                       {isEditing
                         ? form.dateOfBirth
                           ? format(form.dateOfBirth, "dd MMM yyyy")
-                          : "Select Date"
+                          : (constants?.selectDate || "Select Date")
                         : form.dateOfBirth
-                          ? `${calculateAge(form.dateOfBirth)} Years`
-                          : "Not specified"}
+                          ? `${calculateAge(form.dateOfBirth)} ${constants?.years || "Years"}`
+                          : (constants?.notSpecified || "Not specified")}
                     </AgeInput>
                   </FieldContent>
                 </FieldRow>
@@ -766,7 +775,7 @@ const EditProfile = () => {
                       color={iconColors.gender.icon}
                     />
                   </FieldIconBox>
-                  <FieldLabel style={{ marginBottom: 0 }}>Gender</FieldLabel>
+                  <FieldLabel style={{ marginBottom: 0 }}>{constants?.gender || "Gender"}</FieldLabel>
                 </GenderLabelRow>
                 <GenderRow>
                   {GENDER_OPTIONS.map((opt) => {
@@ -793,7 +802,7 @@ const EditProfile = () => {
                           }
                         />
                         <GenderChipText selected={selected}>
-                          {opt.label}
+                          {constants?.[opt.value] || constants?.[opt.label] || opt.label}
                         </GenderChipText>
                       </GenderChip>
                     );
@@ -810,7 +819,8 @@ const EditProfile = () => {
 
               <View>
                 <EditableField
-                  label="Blood Group"
+                  label={constants?.bloodGroup || "Blood Group"}
+                  placeholder={constants?.enterBloodGroup || "Enter Blood Group"}
                   value={form.bloodGroup}
                   icon="water-outline"
                   colors={{ bg: "#fee2e2", icon: "#ef4444" }}
@@ -853,7 +863,7 @@ const EditProfile = () => {
                 {isEditing && focusedField === "bloodGroup" && (
                   <BloodGroupDropdownContainer>
                     <BloodGroupDropdownTitle>
-                      Select Blood Group
+                      {constants?.selectBloodGroup || "Select Blood Group"}
                     </BloodGroupDropdownTitle>
                     {filteredBloodGroups.length > 0 ? (
                       <BloodGroupGrid>
@@ -879,7 +889,7 @@ const EditProfile = () => {
                       </BloodGroupGrid>
                     ) : (
                       <NoMatchText>
-                        No matching blood group. (Allowed: A+, A-, B+, B-, AB+, AB-, O+, O-)
+                        {constants?.noMatchingBloodGroup || "No matching blood group. (Allowed: A+, A-, B+, B-, AB+, AB-, O+, O-)"}
                       </NoMatchText>
                     )}
                   </BloodGroupDropdownContainer>
@@ -901,7 +911,7 @@ const EditProfile = () => {
                       marginBottom: 6,
                     }}
                   >
-                    <FieldLabel style={{ marginBottom: 0 }}>Allergies</FieldLabel>
+                    <FieldLabel style={{ marginBottom: 0 }}>{constants?.allergies || "Allergies"}</FieldLabel>
                     {isEditing && (
                       <TouchableOpacity
                         onPress={() => {
@@ -915,7 +925,7 @@ const EditProfile = () => {
                       >
                         <Ionicons name="add-circle" size={18} color={theme.colors.primary} />
                         <AddAllergyBtnText>
-                          {allergiesList.length > 0 ? "Edit / Add" : "Add"}
+                          {allergiesList.length > 0 ? (constants?.editAdd || "Edit / Add") : (constants?.add || "Add")}
                         </AddAllergyBtnText>
                       </TouchableOpacity>
                     )}
@@ -952,7 +962,7 @@ const EditProfile = () => {
                       }}
                     >
                       <NoAllergyText isEditing={isEditing}>
-                        {isEditing ? "Tap + to add allergies" : "No allergies added"}
+                        {isEditing ? (constants?.tapToAddAllergies || "Tap + to add allergies") : (constants?.noAllergiesAdded || "No allergies added")}
                       </NoAllergyText>
                     </TouchableOpacity>
                   )}
@@ -963,14 +973,14 @@ const EditProfile = () => {
             {isEditing && (
               <View style={{ marginTop: 10, marginBottom: 20 }}>
                 <DualButtons
-                  secondaryBtnText="Cancel"
+                  secondaryBtnText={constants?.cancel || "Cancel"}
                   secondaryBtnColor={isDark ? "#475569" : "#64748b"}
-                  mainBtnText="Save Profile"
+                  mainBtnText={constants?.saveProfile || "Save Profile"}
                   mainBtnColor={theme.colors.primary}
                   onSecondaryPress={handleCancelEdit}
                   onMainPress={() => updateProfileMutation.mutate()}
                   isLoading={updateProfileMutation.isPending}
-                  mainLoadingText="Saving Profile..."
+                  mainLoadingText={constants?.savingProfile || "Saving Profile..."}
                 />
               </View>
             )}
@@ -1024,7 +1034,7 @@ const EditProfile = () => {
                 >
                   <Ionicons name="medical" size={16} color="#a855f7" />
                 </View>
-                <ModalTitle isDark={isDark}>Add Your Allergies</ModalTitle>
+                <ModalTitle isDark={isDark}>{constants?.addYourAllergies || "Add Your Allergies"}</ModalTitle>
               </View>
               <TouchableOpacity
                 onPress={() => setShowAllergiesModal(false)}
@@ -1039,7 +1049,7 @@ const EditProfile = () => {
             </ModalHeaderRow>
 
             <ModalSubtitle isDark={isDark}>
-              Select from common allergies or type custom allergies below.
+              {constants?.selectCommonAllergies || "Select from common allergies or type custom allergies below."}
             </ModalSubtitle>
 
             {/* Common Allergies Chips */}
@@ -1088,7 +1098,7 @@ const EditProfile = () => {
                   setCustomAllergyInput(t);
                   if (allergyError) setAllergyError(null);
                 }}
-                placeholder="Type allergy name..."
+                placeholder={constants?.typeAllergyName || "Type allergy name..."}
                 placeholderTextColor={theme.colors.textMuted}
                 isDark={isDark}
                 onSubmitEditing={() => {
@@ -1099,7 +1109,7 @@ const EditProfile = () => {
                       (a) => a.toLowerCase() === trimmed.toLowerCase(),
                     )
                   ) {
-                    setAllergyError("Allergy already added");
+                    setAllergyError(constants?.allergyAlreadyAdded || "Allergy already added");
                     return;
                   }
                   setTempAllergiesList((prev) => [...prev, trimmed]);
@@ -1118,7 +1128,7 @@ const EditProfile = () => {
                       (a) => a.toLowerCase() === trimmed.toLowerCase(),
                     )
                   ) {
-                    setAllergyError("Allergy already added");
+                    setAllergyError(constants?.allergyAlreadyAdded || "Allergy already added");
                     return;
                   }
                   setTempAllergiesList((prev) => [...prev, trimmed]);
@@ -1132,7 +1142,7 @@ const EditProfile = () => {
                   color={customAllergyInput.trim() ? "#ffffff" : theme.colors.textMuted}
                 />
                 <AddCustomBtnText hasText={!!customAllergyInput.trim()}>
-                  Add
+                  {constants?.add || "Add"}
                 </AddCustomBtnText>
               </AddCustomBtn>
             </CustomInputRow>
@@ -1148,7 +1158,7 @@ const EditProfile = () => {
             {tempAllergiesList.length > 0 && (
               <AddedAllergiesSection>
                 <AddedAllergiesLabel isDark={isDark}>
-                  Added Allergies ({tempAllergiesList.length})
+                  {constants?.addedAllergies || "Added Allergies"} ({tempAllergiesList.length})
                 </AddedAllergiesLabel>
                 <AddedChipsRow>
                   {tempAllergiesList.map((allergy, idx) => (
@@ -1177,7 +1187,7 @@ const EditProfile = () => {
             {/* Modal Actions */}
             <ModalActionRow>
               <ModalCancelBtn onPress={() => setShowAllergiesModal(false)}>
-                <ModalCancelBtnText isDark={isDark}>Cancel</ModalCancelBtnText>
+                <ModalCancelBtnText isDark={isDark}>{constants?.cancel || "Cancel"}</ModalCancelBtnText>
               </ModalCancelBtn>
               <ModalDoneBtn
                 onPress={() => {
@@ -1195,7 +1205,7 @@ const EditProfile = () => {
                   setShowAllergiesModal(false);
                 }}
               >
-                <ModalDoneBtnText>Done</ModalDoneBtnText>
+                <ModalDoneBtnText>{constants?.done || "Done"}</ModalDoneBtnText>
               </ModalDoneBtn>
             </ModalActionRow>
           </AllergiesModalCard>

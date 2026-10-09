@@ -303,10 +303,12 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       );
 
       if (hasDoc) {
+        const langKey = (preferredLang || "english").toLowerCase().trim();
+        const defaultDocQuestions = (SUGGESTED_QUESTIONS_I18N[langKey] || SUGGESTED_QUESTIONS_I18N.english).document;
         const questions =
           item.suggestedQuestions && item.suggestedQuestions.length > 0
             ? item.suggestedQuestions
-            : SUGGESTED_QUESTIONS_I18N.english.document;
+            : defaultDocQuestions;
 
         const isStructured = Boolean(
           doc.patientDetails ||
@@ -700,11 +702,13 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           (Array.isArray(summaryDocument?.normalResults) &&
             summaryDocument.normalResults.length > 0),
       );
+      const langKey = (preferredLang || "english").toLowerCase().trim();
+      const defaultDocQuestions = (SUGGESTED_QUESTIONS_I18N[langKey] || SUGGESTED_QUESTIONS_I18N.english).document;
       const documentSummaryCard = hasDocumentSummary ? (
         summaryIsStructured ? (
           <StructuredReportSummaryCard
             document={summaryDocument}
-            suggestedQuestions={SUGGESTED_QUESTIONS_I18N.english.document}
+            suggestedQuestions={defaultDocQuestions}
             isDark={isDark}
             theme={theme}
             preferredLang={preferredLang}
@@ -720,7 +724,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           <ReportSummaryChatCard
             document={summaryDocument}
             documentSummary={item.documentSummary}
-            suggestedQuestions={SUGGESTED_QUESTIONS_I18N.english.document}
+            suggestedQuestions={defaultDocQuestions}
             isDark={isDark}
             theme={theme}
             preferredLang={preferredLang}

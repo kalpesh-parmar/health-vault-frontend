@@ -23,6 +23,7 @@ import {
   createMedicationReminder,
   createMedicationRemindersBatch,
 } from "../../../../services/reminderService";
+import { useAppConstants } from "../../../../utils/translationUtils";
 
 type AddMedicationScreenRouteProp = RouteProp<
   MedicationStackParamList,
@@ -168,6 +169,7 @@ const MedicationOperation = ({
   const navigation =
     useNavigation<NativeStackNavigationProp<MedicationStackParamList>>();
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
   const { operation, medication } = route.params;
 
   const [currentOperation, setCurrentOperation] = useState(operation);
@@ -194,19 +196,19 @@ const MedicationOperation = ({
 
   const headerTitle =
     currentOperation === "edit"
-      ? "Edit Medication"
+      ? (constants?.editMedication || "Edit Medication")
       : mode === "review"
-        ? "Review Medications"
-        : "Add Medication";
+        ? (constants?.reviewMedications || "Review Medications")
+        : (constants?.addMedication || "Add Medication");
 
   const headerSubtitle =
     currentOperation === "edit"
-      ? "Maintain your medical schedule"
+      ? (constants?.maintainMedicalSchedule || "Maintain your medical schedule")
       : mode === "review"
-        ? `${drafts.length} medication${drafts.length > 1 ? "s" : ""} ready to save`
+        ? `${drafts.length} ${drafts.length > 1 ? (constants?.medications || "medications") : (constants?.medication || "medication")} ${constants?.readyToSave || "ready to save"}`
         : drafts.length > 0
-          ? `${drafts.length} medicine${drafts.length > 1 ? "s" : ""} added · Add another or review`
-          : "Maintain your medical schedule";
+          ? `${drafts.length} ${drafts.length > 1 ? (constants?.medicines || "medicines") : (constants?.medicine || "medicine")} ${constants?.addedAddAnother || "added · Add another or review"}`
+          : (constants?.maintainMedicalSchedule || "Maintain your medical schedule");
 
   const headerPaddingTop = scrollY.interpolate({
     inputRange: [0, 90],
@@ -588,9 +590,9 @@ const MedicationOperation = ({
               <WarningIconContainer>
                 <Ionicons name="warning" size={32} color="#f97316" />
               </WarningIconContainer>
-              <ModalTitle isDark={isDark}>Conflict Detected</ModalTitle>
+              <ModalTitle isDark={isDark}>{constants?.conflictDetected || "Conflict Detected"}</ModalTitle>
               <ModalSubtitle isDark={isDark}>
-                A similar medication already exists in your profile.
+                {constants?.similarMedicationExists || "A similar medication already exists in your profile."}
               </ModalSubtitle>
             </ModalHeader>
 
@@ -604,39 +606,39 @@ const MedicationOperation = ({
               {existingMed && (
                 <MedCard style={{ backgroundColor: isDark ? "#1e293b" : "#f1f5f9", borderColor: isDark ? "#334155" : "#cbd5e1", borderWidth: 1 }}>
                   <MedBadge style={{ backgroundColor: "#3b82f6" }}>
-                    <MedBadgeText>Existing Medication</MedBadgeText>
+                    <MedBadgeText>{constants?.existingMedication || "Existing Medication"}</MedBadgeText>
                   </MedBadge>
                   <MedName isDark={isDark}>{existingMed.medicationName}</MedName>
                   <MedDetailRow>
                     <Ionicons name="layers-outline" size={14} color="#64748b" />
-                    <MedDetailText isDark={isDark}>Type: {existingMed.medicationType}</MedDetailText>
+                    <MedDetailText isDark={isDark}>{constants?.type || "Type"}: {existingMed.medicationType}</MedDetailText>
                   </MedDetailRow>
                   {existingMed.prescribedBy ? (
                     <MedDetailRow>
                       <Ionicons name="person-outline" size={14} color="#64748b" />
-                      <MedDetailText isDark={isDark}>Doctor: {existingMed.prescribedBy}</MedDetailText>
+                      <MedDetailText isDark={isDark}>{constants?.doctor || "Doctor"}: {existingMed.prescribedBy}</MedDetailText>
                     </MedDetailRow>
                   ) : null}
                   <MedDetailRow>
                     <Ionicons name="disc-outline" size={14} color="#64748b" />
                     <MedDetailText isDark={isDark}>
-                      Dose: {existingMed.dosePerIntake} {existingMed.unit || "unit(s)"}
+                      {constants?.dose || "Dose"}: {existingMed.dosePerIntake} {existingMed.unit || "unit(s)"}
                     </MedDetailText>
                   </MedDetailRow>
                   <MedDetailRow>
                     <Ionicons name="alarm-outline" size={14} color="#64748b" />
-                    <MedDetailText isDark={isDark}>Frequency: {existingMed.frequency || "Once Daily"}</MedDetailText>
+                    <MedDetailText isDark={isDark}>{constants?.frequency || "Frequency"}: {existingMed.frequency || "Once Daily"}</MedDetailText>
                   </MedDetailRow>
                   <MedDetailRow>
                     <Ionicons name="restaurant-outline" size={14} color="#64748b" />
                     <MedDetailText isDark={isDark}>
-                      Timing: {formatFoodFrequency(existingMed.foodFrequency)}
+                      {constants?.timing || "Timing"}: {formatFoodFrequency(existingMed.foodFrequency)}
                     </MedDetailText>
                   </MedDetailRow>
                   <MedDetailRow>
                     <Ionicons name="time-outline" size={14} color="#64748b" />
                     <MedDetailText isDark={isDark}>
-                      Schedule: {formatMedicationSchedule(existingMed.medicationSchedule)}
+                      {constants?.schedule || "Schedule"}: {formatMedicationSchedule(existingMed.medicationSchedule)}
                     </MedDetailText>
                   </MedDetailRow>
                 </MedCard>
@@ -646,39 +648,39 @@ const MedicationOperation = ({
               {pendingFormData && (
                 <MedCard style={{ backgroundColor: isDark ? "#064e3b20" : "#d1fae540", borderColor: "#10b981", borderWidth: 1.5, marginTop: 12 }}>
                   <MedBadge style={{ backgroundColor: "#10b981" }}>
-                    <MedBadgeText>Incoming New Medication</MedBadgeText>
+                    <MedBadgeText>{constants?.incomingNewMedication || "Incoming New Medication"}</MedBadgeText>
                   </MedBadge>
                   <MedName isDark={isDark}>{pendingFormData.medicationName}</MedName>
                   <MedDetailRow>
                     <Ionicons name="layers-outline" size={14} color="#64748b" />
-                    <MedDetailText isDark={isDark}>Type: {pendingFormData.medicationType}</MedDetailText>
+                    <MedDetailText isDark={isDark}>{constants?.type || "Type"}: {pendingFormData.medicationType}</MedDetailText>
                   </MedDetailRow>
                   {pendingFormData.prescribedBy ? (
                     <MedDetailRow>
                       <Ionicons name="person-outline" size={14} color="#64748b" />
-                      <MedDetailText isDark={isDark}>Doctor: {pendingFormData.prescribedBy}</MedDetailText>
+                      <MedDetailText isDark={isDark}>{constants?.doctor || "Doctor"}: {pendingFormData.prescribedBy}</MedDetailText>
                     </MedDetailRow>
                   ) : null}
                   <MedDetailRow>
                     <Ionicons name="disc-outline" size={14} color="#64748b" />
                     <MedDetailText isDark={isDark}>
-                      Dose: {pendingFormData.dosePerIntake}
+                      {constants?.dose || "Dose"}: {pendingFormData.dosePerIntake}
                     </MedDetailText>
                   </MedDetailRow>
                   <MedDetailRow>
                     <Ionicons name="alarm-outline" size={14} color="#64748b" />
-                    <MedDetailText isDark={isDark}>Frequency: {pendingFormData.frequency || "Once Daily"}</MedDetailText>
+                    <MedDetailText isDark={isDark}>{constants?.frequency || "Frequency"}: {pendingFormData.frequency || "Once Daily"}</MedDetailText>
                   </MedDetailRow>
                   <MedDetailRow>
                     <Ionicons name="restaurant-outline" size={14} color="#64748b" />
                     <MedDetailText isDark={isDark}>
-                      Timing: {formatFoodFrequency(pendingFormData.foodFrequency)}
+                      {constants?.timing || "Timing"}: {formatFoodFrequency(pendingFormData.foodFrequency)}
                     </MedDetailText>
                   </MedDetailRow>
                   <MedDetailRow>
                     <Ionicons name="time-outline" size={14} color="#64748b" />
                     <MedDetailText isDark={isDark}>
-                      Schedule: {formatMedicationSchedule(pendingFormData.medicationSchedule)}
+                      {constants?.schedule || "Schedule"}: {formatMedicationSchedule(pendingFormData.medicationSchedule)}
                     </MedDetailText>
                   </MedDetailRow>
                 </MedCard>
@@ -696,7 +698,7 @@ const MedicationOperation = ({
                       style={{ backgroundColor: "#ef4444" }}
                       onPress={() => handleReplace(existingMed.id)}
                     >
-                      <ModalButtonText>Replace</ModalButtonText>
+                      <ModalButtonText>{constants?.replace || "Replace"}</ModalButtonText>
                     </ModalButton>
                   )}
 
@@ -705,7 +707,7 @@ const MedicationOperation = ({
                       style={{ backgroundColor: "#64748b" }}
                       onPress={handleKeepExisting}
                     >
-                      <ModalButtonText>Keep Existing</ModalButtonText>
+                      <ModalButtonText>{constants?.keepExisting || "Keep Existing"}</ModalButtonText>
                     </ModalButton>
                   )}
                 </View>

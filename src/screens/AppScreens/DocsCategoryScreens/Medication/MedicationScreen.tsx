@@ -29,6 +29,7 @@ import SearchBar from "../../../../components/shared/SearchBar";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import FilterBottomSheet, { FilterOptionItem } from "../../../../components/shared/FilterBottomSheet";
 import RefillBottomSheet from "./RefillBottomSheet";
+import { useAppConstants } from "../../../../utils/translationUtils";
 
 const MED_CATEGORIES = [
   "All",
@@ -39,36 +40,46 @@ const MED_CATEGORIES = [
   "Injection",
 ];
 
-const SORT_OPTIONS = [
-  {
-    label: "Newest First",
-    description: "Recently added items",
-    value: "date_desc",
-    icon: "calendar",
-  },
-  {
-    label: "Oldest First",
-    description: "Earliest added items",
-    value: "date_asc",
-    icon: "calendar-outline",
-  },
-  {
-    label: "A-Z",
-    description: "Alphabetical ascending",
-    value: "name_asc",
-    icon: "alpha-a-box",
-  },
-  {
-    label: "Z-A",
-    description: "Alphabetical descending",
-    value: "name_desc",
-    icon: "alpha-z-box",
-  },
-];
-
 const MedicationScreen = () => {
+  const constants = useAppConstants();
   const [activeTab, setActiveTab] = useState("All");
   const [sortOption, setSortOption] = useState("date_desc");
+
+  const medCategories = useMemo(() => [
+    { key: "All", label: constants?.all || "All" },
+    { key: "Tablet", label: constants?.tablet || "Tablet" },
+    { key: "Capsule", label: constants?.capsule || "Capsule" },
+    { key: "Syrup", label: constants?.syrup || "Syrup" },
+    { key: "Drop", label: constants?.drop || constants?.drops || "Drop" },
+    { key: "Injection", label: constants?.injection || "Injection" },
+  ], [constants]);
+
+  const sortOptions = useMemo(() => [
+    {
+      label: constants?.newestFirst || "Newest First",
+      description: constants?.recentlyAddedItems || "Recently added items",
+      value: "date_desc",
+      icon: "calendar",
+    },
+    {
+      label: constants?.oldestFirst || "Oldest First",
+      description: constants?.earliestAddedItems || "Earliest added items",
+      value: "date_asc",
+      icon: "calendar-outline",
+    },
+    {
+      label: constants?.aToZ || "A-Z",
+      description: constants?.alphabeticalAscending || "Alphabetical ascending",
+      value: "name_asc",
+      icon: "alpha-a-box",
+    },
+    {
+      label: constants?.zToA || "Z-A",
+      description: constants?.alphabeticalDescending || "Alphabetical descending",
+      value: "name_desc",
+      icon: "alpha-z-box",
+    },
+  ], [constants]);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -468,7 +479,7 @@ const MedicationScreen = () => {
                   })
                 }
               >
-                <ActionText>Edit</ActionText>
+                <ActionText>{constants?.edit || "Edit"}</ActionText>
               </IconButton>
               <IconButton
                 style={{ marginLeft: 10 }}
@@ -478,7 +489,7 @@ const MedicationScreen = () => {
                 }}
               >
                 <Ionicons name="refresh" size={20} color={"#10b981"} />
-                <ActionText style={{ color: "#10b981" }}>Refill</ActionText>
+                <ActionText style={{ color: "#10b981" }}>{constants?.refill || "Refill"}</ActionText>
               </IconButton>
               <IconButton
                 style={{ marginLeft: 10 }}
@@ -534,8 +545,8 @@ const MedicationScreen = () => {
             </BackButton>
             <HeaderTitle>
               {selectedMedicationIds.length > 0
-                ? `${selectedMedicationIds.length} Selected`
-                : "Select Medications"}
+                ? `${selectedMedicationIds.length} ${constants?.selected || "Selected"}`
+                : (constants?.selectMedications || "Select Medications")}
             </HeaderTitle>
             <RightActions>
               <SelectAllButton onPress={handleSelectAllToggle} activeOpacity={0.7}>
@@ -549,7 +560,7 @@ const MedicationScreen = () => {
                   color="#fff"
                 />
                 <SelectAllText>
-                  {isAllSelected ? "Deselect All" : "Select All"}
+                  {isAllSelected ? (constants?.deselectAll || "Deselect All") : (constants?.selectAll || "Select All")}
                 </SelectAllText>
               </SelectAllButton>
             </RightActions>
@@ -559,7 +570,7 @@ const MedicationScreen = () => {
             <BackButton onPress={() => navigation.goBack()}>
               <Ionicons name="arrow-back" size={28} color="#fff" />
             </BackButton>
-            <HeaderTitle>Medications</HeaderTitle>
+            <HeaderTitle>{constants?.medications || "Medications"}</HeaderTitle>
             <RightActions>
               {medicationData.length > 1 && (
                 <HeaderIconButton
@@ -598,13 +609,13 @@ const MedicationScreen = () => {
           <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search medications..."
+            placeholder={constants?.searchMedications || constants?.searchMedicines || "Search medications..."}
           />
         </SearchBarWrapper>
       </HeaderGradient>
 
       <FilterTabs
-        data={MED_CATEGORIES}
+        data={medCategories}
         activeTab={activeTab}
         counts={categoryCounts}
         onSelectTab={(tab) => {
@@ -618,7 +629,7 @@ const MedicationScreen = () => {
         <HintBanner>
           <HintLeft>
             <Ionicons name="information-circle" size={16} color="#6366f1" />
-            <HintText>Tip: Long press any medication to select multiple</HintText>
+            <HintText>{constants?.tipLongPressSelectMultiple || "Tip: Long press any medication to select multiple"}</HintText>
           </HintLeft>
           <HintCloseButton
             onPress={() => setIsTipDismissed(true)}
@@ -640,7 +651,7 @@ const MedicationScreen = () => {
           isLoading ? (
             <ActivityIndicator size="large" color="#4f46e5" style={{ marginTop: 40 }} />
           ) : (
-            <EmptyMedications message={`No ${activeTab.toLowerCase() === 'all' ? 'medications' : activeTab.toLowerCase()} found.`} />
+            <EmptyMedications message={constants?.noMedications || "No medications found"} />
           )
         }
         contentContainerStyle={{
@@ -674,9 +685,9 @@ const MedicationScreen = () => {
           <SelectionInfoText>
             {selectedMedicationIds.length}{" "}
             {selectedMedicationIds.length === 1
-              ? "medication"
-              : "medications"}{" "}
-            selected
+              ? (constants?.medication || "medication")
+              : (constants?.medications || "medications")}{" "}
+            {constants?.selected || "selected"}
           </SelectionInfoText>
           <DeleteBatchButton
             onPress={() => setShowBatchDeleteModal(true)}
@@ -689,7 +700,7 @@ const MedicationScreen = () => {
               style={{ marginRight: 6 }}
             />
             <DeleteBatchButtonText>
-              Delete ({selectedMedicationIds.length})
+              {constants?.delete || "Delete"} ({selectedMedicationIds.length})
             </DeleteBatchButtonText>
           </DeleteBatchButton>
         </SelectionBottomBar>
@@ -697,8 +708,8 @@ const MedicationScreen = () => {
 
       <FilterBottomSheet
         ref={filterSheetRef}
-        title="Sort Medications"
-        subtitle="Choose how to order your items"
+        title={constants?.sortMedications || "Sort Medications"}
+        subtitle={constants?.chooseOrderItems || "Choose how to order your items"}
         onApply={() => {
           setIsFilterApplied(true);
           filterSheetRef.current?.dismiss();
@@ -708,7 +719,7 @@ const MedicationScreen = () => {
           setIsFilterApplied(false);
         }}
       >
-        {SORT_OPTIONS.map((option) => (
+        {sortOptions.map((option) => (
           <FilterOptionItem
             key={option.value}
             title={option.label}

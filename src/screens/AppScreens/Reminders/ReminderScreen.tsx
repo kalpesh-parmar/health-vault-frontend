@@ -23,6 +23,15 @@ import {
   updateReminderOccurrenceStatus,
   filterAndSortReminders,
 } from "../../../services/reminderService";
+import { useAppConstants } from "../../../utils/translationUtils";
+
+export const REMINDER_STATUS = {
+  PENDING: "pending",
+  COMPLETED: "completed",
+  OVERDUE: "overdue",
+} as const;
+
+export type ReminderStatusType = typeof REMINDER_STATUS[keyof typeof REMINDER_STATUS];
 
 const MEDICATION_TYPES = [
   { label: "Tablet", value: "TABLET", icon: "pill" },
@@ -36,10 +45,11 @@ const ReminderScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { isDark } = useAppTheme();
+  const constants = useAppConstants();
 
-  const initialFilter = "Pending";
+  const initialFilter = REMINDER_STATUS.PENDING;
   const [activeTab, setActiveTab] = useState<string>(
-    initialFilter.toLowerCase(),
+    initialFilter,
   );
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortOption, setSortOption] = useState<string>("date_desc");
@@ -56,13 +66,13 @@ const ReminderScreen = () => {
   const allRemindersForCounts = allRemindersData?.data || [];
 
   const pendingCount = allRemindersForCounts.filter(
-    (r: any) => r.status?.toLowerCase() === "pending" && !r.isOverdue,
+    (r: any) => r.status?.toLowerCase() === REMINDER_STATUS.PENDING && !r.isOverdue,
   ).length;
   const completedCount = allRemindersForCounts.filter(
-    (r: any) => r.status?.toLowerCase() === "completed",
+    (r: any) => r.status?.toLowerCase() === REMINDER_STATUS.COMPLETED,
   ).length;
   const overdueCount = allRemindersForCounts.filter(
-    (r: any) => r.status?.toLowerCase() === "pending" && r.isOverdue,
+    (r: any) => r.status?.toLowerCase() === REMINDER_STATUS.PENDING && r.isOverdue,
   ).length;
 
   const {
@@ -76,11 +86,11 @@ const ReminderScreen = () => {
     queryFn: async ({ pageParam = 1 }) => {
       const payload: ListRemindersRequest = {
         filter: {
-          status: activeTab.toLowerCase() === "overdue" ? "PENDING" : activeTab.toUpperCase(),
+          status: activeTab.toLowerCase() === REMINDER_STATUS.OVERDUE ? "PENDING" : activeTab.toUpperCase(),
           medicationType: medTypeFilter || undefined,
           startDate: startDateFilter ? format(startDateFilter, "yyyy-MM-dd") : undefined,
           endDate: endDateFilter ? format(endDateFilter, "yyyy-MM-dd") : undefined,
-          isOverdue: activeTab.toLowerCase() === "overdue" ? true : false,
+          isOverdue: activeTab.toLowerCase() === REMINDER_STATUS.OVERDUE ? true : false,
         },
         sort: {
           sortBy: "actualMedicationTime",
@@ -138,35 +148,43 @@ const ReminderScreen = () => {
 
   const summaryCards = [
     {
-      id: "pending",
-      title: "Pending",
+      id: REMINDER_STATUS.PENDING,
+      title: constants?.pending || "Pending",
       count: pendingCount,
-      subtitle: "Upcoming reminders",
+      subtitle: constants?.upcomingReminders || "Upcoming reminders",
       icon: "time-outline",
       color: "#f97316",
       bgLight: "#fff8f1",
       bgDark: "#2c1c0e",
     },
     {
-      id: "completed",
-      title: "Completed",
+      id: REMINDER_STATUS.COMPLETED,
+      title: constants?.completed || "Completed",
       count: completedCount,
-      subtitle: "Tasks completed",
+      subtitle: constants?.tasksCompleted || "Tasks completed",
       icon: "checkmark-circle-outline",
       color: "#10b981",
       bgLight: "#f0fdf4",
       bgDark: "#0f291e",
     },
     {
-      id: "overdue",
-      title: "Overdue",
+      id: REMINDER_STATUS.OVERDUE,
+      title: constants?.overdue || "Overdue",
       count: overdueCount,
-      subtitle: "Requires attention",
+      subtitle: constants?.requiresAttention || "Requires attention",
       icon: "alarm-outline",
       color: "#ef4444",
       bgLight: "#fef2f2",
       bgDark: "#2d1618",
     },
+  ];
+
+  const medicationTypes = [
+    { label: constants?.tablet || "Tablet", value: "TABLET", icon: "pill" },
+    { label: constants?.capsule || "Capsule", value: "CAPSULE", icon: "pill" },
+    { label: constants?.syrup || "Syrup", value: "SYRUP", icon: "bottle-tonic-outline" },
+    { label: constants?.drops || "Drop", value: "DROP", icon: "water-outline" },
+    { label: constants?.injection || "Injection", value: "INJECTION", icon: "needle" },
   ];
 
   const filterSheetRef = useRef<BottomSheetModal>(null);
@@ -193,8 +211,8 @@ const ReminderScreen = () => {
         // Tab Filter: All, Overdue, Upcoming, Completed
         if (activeTab.toLowerCase() !== "all") {
           const reminderStatus = (rem.status || "").toLowerCase();
-          if (activeTab.toLowerCase() === "overdue") {
-            if (reminderStatus !== "pending" || !rem.isOverdue) return false;
+          if (activeTab.toLowerCase() === REMINDER_STATUS.OVERDUE) {
+            if (reminderStatus !== REMINDER_STATUS.PENDING || !rem.isOverdue) return false;
           } else if (reminderStatus !== activeTab.toLowerCase()) {
             return false;
           }
@@ -227,7 +245,7 @@ const ReminderScreen = () => {
   }, [filteredReminders, activeTab, searchQuery, sortOption]);
 
   const handleToggleStatus = async (item: Reminder) => {
-    if (item.status?.toLowerCase() === "completed") return;
+    if (item.status?.toLowerCase() === REMINDER_STATUS.COMPLETED) return;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await updateStatusMutation.mutateAsync({
       occurrenceId: item.id!,
@@ -269,9 +287,9 @@ const ReminderScreen = () => {
               <Ionicons name="arrow-back-outline" size={30} color="#fff" />
             </BackButton>
             <Header>
-              <HeaderTitle>Reminders</HeaderTitle>
+              <HeaderTitle>{constants?.reminders || "Reminders"}</HeaderTitle>
               <HeaderSubtitle>
-                Stay on track with your daily reminders
+                {constants?.stayOnTrackReminders || "Stay on track with your daily reminders"}
               </HeaderSubtitle>
             </Header>
           </HeaderLeft>
@@ -327,14 +345,20 @@ const ReminderScreen = () => {
 
       <SectionHeader>
         <SectionTitle isDark={isDark}>
-          {`${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Reminders`}
+          {activeTab === REMINDER_STATUS.PENDING
+            ? (constants?.pendingReminders || "Pending Reminders")
+            : activeTab === REMINDER_STATUS.COMPLETED
+            ? (constants?.completedReminders || "Completed Reminders")
+            : activeTab === REMINDER_STATUS.OVERDUE
+            ? (constants?.overdueReminders || "Overdue Reminders")
+            : `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Reminders`}
         </SectionTitle>
         <SectionControls>
           <SortButton
             onPress={() => filterSheetRef.current?.present()}
             isDark={isDark}
           >
-            <SortButtonText isDark={isDark}>Filter</SortButtonText>
+            <SortButtonText isDark={isDark}>{constants?.filter || "Filter"}</SortButtonText>
             <Ionicons
               name="chevron-down"
               size={14}
@@ -378,9 +402,10 @@ const ReminderScreen = () => {
                 color={isDark ? "#334155" : "#e2e8f0"}
               />
             </EmptyImageWrapper>
-            <EmptyTitle isDark={isDark}>No Reminders Found</EmptyTitle>
+            <EmptyTitle isDark={isDark}>{constants?.noRemindersFound || "No Reminders Found"}</EmptyTitle>
             <EmptyDesc isDark={isDark}>
-              {`No pending ${activeTab !== "all" ? activeTab : ""} reminders at the moment.`}
+              {constants?.noRemindersAtTheMoment ||
+                `No ${activeTab === REMINDER_STATUS.PENDING ? (constants?.pending || "pending") : activeTab === REMINDER_STATUS.COMPLETED ? (constants?.completed || "completed") : activeTab !== "all" ? activeTab : ""} reminders at the moment.`}
             </EmptyDesc>
           </EmptyContainer>
           )
@@ -389,8 +414,8 @@ const ReminderScreen = () => {
 
       <FilterBottomSheet
         ref={filterSheetRef}
-        title="Filter Reminders"
-        subtitle="Narrow down your reminders list"
+        title={constants?.filterReminders || "Filter Reminders"}
+        subtitle={constants?.narrowDownReminders || "Narrow down your reminders list"}
         onApply={() => filterSheetRef.current?.dismiss()}
         onReset={() => {
           setMedTypeFilter("");
@@ -399,10 +424,10 @@ const ReminderScreen = () => {
         }}
       >
         <FilterSectionTitle isDark={isDark}>
-          By Medication Type
+          {constants?.byMedicationType || "By Medication Type"}
         </FilterSectionTitle>
         <FilterGrid>
-          {MEDICATION_TYPES.map((option) => (
+          {medicationTypes.map((option) => (
             <FilterGridItem
               key={option.value}
               title={option.label}
@@ -416,7 +441,7 @@ const ReminderScreen = () => {
         </FilterGrid>
 
         <FilterSectionTitle isDark={isDark} style={{ marginTop: 16 }}>
-          By Custom Date
+          {constants?.byCustomDate || "By Custom Date"}
         </FilterSectionTitle>
         <DateRow>
           <DateBtn
@@ -425,7 +450,7 @@ const ReminderScreen = () => {
           >
             <Ionicons name="calendar-outline" size={18} color={isDark ? "#94a3b8" : "#64748b"} />
             <DateBtnText isDark={isDark} hasDate={!!startDateFilter}>
-              {startDateFilter ? format(startDateFilter, "dd MMM yyyy") : "Start Date"}
+              {startDateFilter ? format(startDateFilter, "dd MMM yyyy") : (constants?.startDate || "Start Date")}
             </DateBtnText>
           </DateBtn>
 
@@ -435,7 +460,7 @@ const ReminderScreen = () => {
           >
             <Ionicons name="calendar-outline" size={18} color={isDark ? "#94a3b8" : "#64748b"} />
             <DateBtnText isDark={isDark} hasDate={!!endDateFilter}>
-              {endDateFilter ? format(endDateFilter, "dd MMM yyyy") : "End Date"}
+              {endDateFilter ? format(endDateFilter, "dd MMM yyyy") : (constants?.endDate || "End Date")}
             </DateBtnText>
           </DateBtn>
         </DateRow>

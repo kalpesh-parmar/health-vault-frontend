@@ -11,6 +11,7 @@ import styled from "styled-components/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../../context/ThemeContext";
 import { AddOrEditMedication } from "../../../../types";
+import { useAppConstants } from "../../../../utils/translationUtils";
 
 interface MedicationBatchReviewProps {
   drafts: AddOrEditMedication[];
@@ -34,6 +35,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
   onScroll,
 }) => {
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
   
   // Track selected IDs/keys for inclusion
   const [selectedKeys, setSelectedKeys] = useState<Record<string, boolean>>(() => {
@@ -86,15 +88,15 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
   };
 
   const formatFoodFrequency = (food?: string) => {
-    if (!food) return "After Food";
+    if (!food) return constants?.afterFood || "After Food";
     const normalized = String(food).toUpperCase().replace(/\s+/g, "_");
-    if (normalized === "BEFORE_FOOD" || normalized === "BEFORE") return "Before Food";
-    if (normalized === "AFTER_FOOD" || normalized === "AFTER") return "After Food";
+    if (normalized === "BEFORE_FOOD" || normalized === "BEFORE") return constants?.beforeFood || "Before Food";
+    if (normalized === "AFTER_FOOD" || normalized === "AFTER") return constants?.afterFood || "After Food";
     return food;
   };
 
   const formatSchedule = (schedule: any) => {
-    if (!schedule) return "None";
+    if (!schedule) return constants?.none || "None";
     if (typeof schedule === "string") return schedule;
     if (Array.isArray(schedule)) return schedule.join(", ");
     if (typeof schedule === "object") {
@@ -108,7 +110,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
       });
       if (times.length > 0) return times.join(", ");
     }
-    return "None";
+    return constants?.none || "None";
   };
 
   const getTypeColor = (type?: string) => {
@@ -156,10 +158,10 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
               />
               <SummaryBannerText>
                 <SummaryBannerTitle isDark={isDark} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-                  {drafts.length} Medication{drafts.length > 1 ? "s" : ""} Added
+                  {drafts.length} {drafts.length > 1 ? (constants?.medications || "Medications") : (constants?.medication || "Medication")} {constants?.added || "Added"}
                 </SummaryBannerTitle>
                 <SummaryBannerSubtitle isDark={isDark} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-                  {selectedCount} selected for saving
+                  {selectedCount} {constants?.selectedForSaving || "selected for saving"}
                 </SummaryBannerSubtitle>
               </SummaryBannerText>
             </SummaryBannerContent>
@@ -171,7 +173,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                 color={isAllSelected ? (isDark ? "#818cf8" : "#4f46e5") : isDark ? "#94a3b8" : "#64748b"}
               />
               <SelectAllText isDark={isDark}>
-                {isAllSelected ? "Deselect All" : "Select All"}
+                {isAllSelected ? (constants?.deselectAll || "Deselect All") : (constants?.selectAll || "Select All")}
               </SelectAllText>
             </SelectAllBtn>
           </SummaryBannerRow>
@@ -207,7 +209,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                       {draft.medicationName}
                     </MedNameText>
                     <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b", marginTop: 2 }}>
-                      Medicine #{index + 1}
+                      {constants?.medicine || "Medicine"} #{index + 1}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -226,7 +228,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                 <InfoItem>
                   <Ionicons name="disc-outline" size={14} color={isDark ? "#94a3b8" : "#64748b"} />
                   <InfoText isDark={isDark}>
-                    Dose: <BoldText isDark={isDark}>{draft.dosePerIntake}</BoldText>
+                    {constants?.dose || "Dose"}: <BoldText isDark={isDark}>{draft.dosePerIntake}</BoldText>
                   </InfoText>
                 </InfoItem>
 
@@ -254,14 +256,14 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                 <InfoItem>
                   <Ionicons name="calendar-outline" size={14} color={isDark ? "#94a3b8" : "#64748b"} />
                   <InfoText isDark={isDark}>
-                    Start: {draft.startDate || "Today"}
+                    {constants?.start || "Start"}: {draft.startDate || (constants?.today || "Today")}
                   </InfoText>
                 </InfoItem>
 
                 <InfoItem>
                   <Ionicons name="cube-outline" size={14} color={isDark ? "#94a3b8" : "#64748b"} />
                   <InfoText isDark={isDark}>
-                    Qty: {draft.totalQuantity || 1}
+                    {constants?.qty || "Qty"}: {draft.totalQuantity || 1}
                   </InfoText>
                 </InfoItem>
               </InfoGrid>
@@ -272,13 +274,13 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                   {draft.prescribedBy ? (
                     <DetailRow>
                       <Ionicons name="person-outline" size={14} color={isDark ? "#94a3b8" : "#64748b"} />
-                      <DetailText isDark={isDark}>Doctor: {draft.prescribedBy}</DetailText>
+                      <DetailText isDark={isDark}>{constants?.doctor || "Doctor"}: {draft.prescribedBy}</DetailText>
                     </DetailRow>
                   ) : null}
                   {draft.notes ? (
                     <DetailRow>
                       <Ionicons name="document-text-outline" size={14} color={isDark ? "#94a3b8" : "#64748b"} />
-                      <DetailText isDark={isDark}>Notes: {draft.notes}</DetailText>
+                      <DetailText isDark={isDark}>{constants?.notes || "Notes"}: {draft.notes}</DetailText>
                     </DetailRow>
                   ) : null}
                 </ExpandedSection>
@@ -290,7 +292,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                   style={{ alignSelf: "center", paddingVertical: 4 }}
                 >
                   <Text style={{ fontSize: 12, color: isDark ? "#818cf8" : "#4f46e5", fontWeight: "600" }}>
-                    {isExpanded ? "Hide Details" : "View More Details"}
+                    {isExpanded ? (constants?.hideDetails || "Hide Details") : (constants?.viewMoreDetails || "View More Details")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -306,7 +308,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                 >
                   <Ionicons name="pencil-outline" size={16} color={isDark ? "#818cf8" : "#4f46e5"} />
                   <ActionBtnText style={{ color: isDark ? "#818cf8" : "#4f46e5" }}>
-                    Edit
+                    {constants?.edit || "Edit"}
                   </ActionBtnText>
                 </ActionButton>
 
@@ -317,7 +319,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
                 >
                   <Ionicons name="trash-outline" size={16} color="#ef4444" />
                   <ActionBtnText style={{ color: "#ef4444" }}>
-                    Remove
+                    {constants?.remove || "Remove"}
                   </ActionBtnText>
                 </ActionButton>
               </CardActionsRow>
@@ -330,7 +332,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
           {/* Add Another Medicine Button */}
           <AddAnotherBtn onPress={onAddNew} disabled={isSaving} isDark={isDark}>
             <Ionicons name="add" size={20} color={isDark ? "#818cf8" : "#4f46e5"} style={{ marginRight: 6 }} />
-            <AddAnotherText isDark={isDark}>+ Add Another Medicine</AddAnotherText>
+            <AddAnotherText isDark={isDark}>+ {constants?.addAnotherMedicine || "Add Another Medicine"}</AddAnotherText>
           </AddAnotherBtn>
 
           {/* Confirm & Save Button */}
@@ -342,13 +344,13 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
             {isSaving ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <ActivityIndicator color="#ffffff" />
-                <SaveAllText>Saving Medications</SaveAllText>
+                <SaveAllText>{constants?.savingMedications || "Saving Medications"}</SaveAllText>
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
                 <SaveAllText>
-                  Save {selectedCount} Medication{selectedCount > 1 ? "s" : ""}
+                  {constants?.save || "Save"} {selectedCount} {selectedCount > 1 ? (constants?.medications || "Medications") : (constants?.medication || "Medication")}
                 </SaveAllText>
               </View>
             )}
@@ -356,7 +358,7 @@ const MedicationBatchReview: React.FC<MedicationBatchReviewProps> = ({
 
           {/* Cancel */}
           <CancelBtn onPress={onCancel} disabled={isSaving} isDark={isDark}>
-            <CancelText isDark={isDark}>Cancel</CancelText>
+            <CancelText isDark={isDark}>{constants?.cancel || "Cancel"}</CancelText>
           </CancelBtn>
         </FooterContainer>
       </ScrollContent>

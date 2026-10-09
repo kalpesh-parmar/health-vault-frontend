@@ -10,6 +10,7 @@ import { useAppNavigation } from "../../../types/navigation";
 import { useMedicationReview } from "../../../context/MedicationReviewContext";
 import { useDocumentUpload } from "../../../context/DocumentUploadContext";
 import { StatusBar } from "expo-status-bar";
+import { useAppConstants } from "../../../utils/translationUtils";
 
 type SuccessRouteProp = RouteProp<
   {
@@ -24,6 +25,7 @@ export const MedicinesSuccessScreen: React.FC = () => {
   const route = useRoute<SuccessRouteProp>();
   const navigation = useAppNavigation();
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
   const isFocused = useIsFocused();
   
   const { count = 0 } = route.params || {};
@@ -82,11 +84,11 @@ export const MedicinesSuccessScreen: React.FC = () => {
           <Ionicons name="checkmark-sharp" size={48} color="#ffffff" />
         </SuccessIconCircle>
 
-        <SuccessTitle isDark={isDark}>Medicines Added</SuccessTitle>
-        <SuccessTitle isDark={isDark}>Successfully!</SuccessTitle>
+        <SuccessTitle isDark={isDark}>{constants?.medicinesAdded || "Medicines Added"}</SuccessTitle>
+        <SuccessTitle isDark={isDark}>{constants?.successfully || "Successfully!"}</SuccessTitle>
         
         <SuccessSubtitle isDark={isDark}>
-          {count} medicine{count === 1 ? "" : "s"} have been added to your Health Vault.
+          {count} {count === 1 ? (constants?.medicine || "medicine") : (constants?.medicines || "medicines")} {constants?.haveBeenAddedToHealthVault || "have been added to your Health Vault."}
         </SuccessSubtitle>
       </ContentArea>
 
@@ -96,11 +98,11 @@ export const MedicinesSuccessScreen: React.FC = () => {
           themeColor={theme.colors.primary}
           activeOpacity={0.8}
         >
-          <CTAButtonText>Go to Medications</CTAButtonText>
+          <CTAButtonText>{constants?.goToMedications || "Go to Medications"}</CTAButtonText>
         </CTAButton>
 
         <SecondaryButton onPress={handleGoToHome} activeOpacity={0.7}>
-          <SecondaryButtonText isDark={isDark}>Back to Home</SecondaryButtonText>
+          <SecondaryButtonText isDark={isDark}>{constants?.backToHome || "Back to Home"}</SecondaryButtonText>
         </SecondaryButton>
       </Footer>
     </SafeContainer>

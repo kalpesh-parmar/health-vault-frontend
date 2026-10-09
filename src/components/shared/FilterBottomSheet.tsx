@@ -5,6 +5,7 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import BottomSheet from "./BottomSheet";
 import { useAppTheme } from "../../context/ThemeContext";
 import { useBottomBarPadding } from "../../hooks/useBottomBarPadding";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface FilterBottomSheetProps {
   title: string;
@@ -17,6 +18,7 @@ interface FilterBottomSheetProps {
 export const FilterBottomSheet = forwardRef<any, FilterBottomSheetProps>(
   ({ title, subtitle, onApply, onReset, children }, ref) => {
     const { isDark } = useAppTheme();
+    const constants = useAppConstants();
     const bottomPadding = useBottomBarPadding(24, 12);
 
     return (
@@ -33,10 +35,10 @@ export const FilterBottomSheet = forwardRef<any, FilterBottomSheetProps>(
 
           <ActionRow bottomPadding={bottomPadding}>
             <ResetButton onPress={onReset} activeOpacity={0.8} isDark={isDark}>
-              <ResetButtonText isDark={isDark}>Reset</ResetButtonText>
+              <ResetButtonText isDark={isDark}>{constants?.reset || "Reset"}</ResetButtonText>
             </ResetButton>
             <ApplyButton onPress={onApply} activeOpacity={0.8}>
-              <ApplyButtonText>Apply</ApplyButtonText>
+              <ApplyButtonText>{constants?.apply || "Apply"}</ApplyButtonText>
             </ApplyButton>
           </ActionRow>
         </Container>

@@ -33,6 +33,8 @@ import { resetForceLogout } from "../../services/apiClient";
 import { AuthStackParamList } from "../../types/navigation";
 import { maskPhoneNumber } from "../../utils/auth.utils";
 
+import { useAppConstants } from "../../utils/translationUtils";
+
 type OtpVerificationRouteProp = RouteProp<
   AuthStackParamList,
   "OtpVerification"
@@ -48,6 +50,7 @@ const OtpVerificationScreen = () => {
 
   const isVerifyingRef = useRef(false);
   const otpRef = useRef<OtpInputRef>(null);
+  const constants = useAppConstants();
 
   useEffect(() => {
     console.log("[OTP_LOG] Component Mounted: OtpVerificationScreen");
@@ -227,14 +230,14 @@ const OtpVerificationScreen = () => {
       <MainView>
         <AuthCollapsibleHeader
           scrollY={scrollY}
-          heading="Verify OTP"
-          subHeading={`We have sent a secure code to ${maskPhoneNumber(mobile)}`}
+          heading={constants?.verifyOtp || "Verify OTP"}
+          subHeading={`${constants?.enterCodeSentTo || "We have sent a secure code to"} ${maskPhoneNumber(mobile)}`}
         />
 
         <CardContainer>
           <AnimatedCard style={[animatedCardStyle, { shadowColor: "#000" }]}>
             <InfoText themeColor={theme.colors}>
-              Enter the 6-digit code sent to your mobile phone number.
+              {constants?.enterCodeSentTo || "Enter the 6-digit code sent to your mobile phone number."}
             </InfoText>
 
             <OtpInput
@@ -253,7 +256,7 @@ const OtpVerificationScreen = () => {
 
             <VerifyButtonWrapper>
               <AuthButton
-                title="Verify & Login"
+                title={constants?.verifyAndProceed || "Verify & Login"}
                 onPress={handleVerify}
                 loading={loading}
               />
@@ -268,7 +271,7 @@ const OtpVerificationScreen = () => {
               themeColor={theme.colors}
               style={{ opacity: loading ? 0.5 : 1 }}
             >
-              <BackText themeColor={theme.colors}>Change Mobile Number</BackText>
+              <BackText themeColor={theme.colors}>{constants?.back || "Change Mobile Number"}</BackText>
             </BackButton>
           </AnimatedCard>
         </CardContainer>
@@ -283,9 +286,9 @@ const OtpVerificationScreen = () => {
               size={100}
               color={theme.colors.success}
             />
-            <SuccessTitle themeColor={theme.colors}>Success!</SuccessTitle>
+            <SuccessTitle themeColor={theme.colors}>{constants?.success || "Success!"}</SuccessTitle>
             <SuccessSubtitle themeColor={theme.colors}>
-              Verification complete.
+              {constants?.successMsg || "Verification complete."}
             </SuccessSubtitle>
           </SuccessBadge>
         </SuccessOverlay>

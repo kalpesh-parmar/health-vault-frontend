@@ -49,6 +49,7 @@ import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveSta
 import { ReportReferenceHeader } from "../../components/chat/widgets/ReportReferenceHeader";
 import { getRelativeDateLabel } from "../../utils/dateFormatter";
 import Toast from "react-native-toast-message";
+import { useAppConstants } from "../../utils/translationUtils";
 
 const AIChatScreen = ({ route }: any) => {
   const { isDark, theme } = useAppTheme();
@@ -56,10 +57,11 @@ const AIChatScreen = ({ route }: any) => {
   const isFocused = useIsFocused();
   const bottomPadding = useBottomBarPadding();
   const insets = useSafeAreaInsets();
+  const constants = useAppConstants();
 
   // State
   const storedPreferredLanguage = usePreferredLanguage();
-  const [preferredLang, setPreferredLang] = useState(storedPreferredLanguage || "english");
+  const [preferredLang, setPreferredLang] = useState<string>(storedPreferredLanguage || "english");
 
   useEffect(() => {
     if (storedPreferredLanguage) {
@@ -542,9 +544,9 @@ const AIChatScreen = ({ route }: any) => {
           <View style={styles.emergencyCard}>
             <View style={styles.emergencyTitleRow}>
               <Ionicons name="warning" size={20} color="#dc2626" />
-              <Text style={styles.emergencyTitle}>{t("seekImmediateAttention")}</Text>
+              <Text style={styles.emergencyTitle}>{constants?.seekImmediateAttention || t("seekImmediateAttention")}</Text>
             </View>
-            <Text style={styles.emergencyText}>{t("emergencyWarning")}</Text>
+            <Text style={styles.emergencyText}>{constants?.emergencyWarning || t("emergencyWarning")}</Text>
           </View>
         )}
 
@@ -626,8 +628,8 @@ const AIChatScreen = ({ route }: any) => {
                 Toast.show({
                   type: "info",
                   position: "top",
-                  text1: "Processing in Progress",
-                  text2: "A document is currently being processed. Please wait for it to complete.",
+                  text1: constants?.processingInProgress || "Processing in Progress",
+                  text2: constants?.processingInProgressDesc || "A document is currently being processed. Please wait for it to complete.",
                 });
                 return;
               }

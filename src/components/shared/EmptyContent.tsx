@@ -2,13 +2,15 @@ import React from "react";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
+import { useAppConstants } from "../../utils/translationUtils";
 
 interface EmptyStateProps {
   title?: string;
 }
 
-const EmptyContent = ({ title = "No Documents Found" }: EmptyStateProps) => {
+const EmptyContent = ({ title }: EmptyStateProps) => {
   const { theme } = useAppTheme();
+  const constants = useAppConstants();
 
   return (
     <Container>
@@ -25,7 +27,7 @@ const EmptyContent = ({ title = "No Documents Found" }: EmptyStateProps) => {
       </IconCircle>
 
       <TextContainer>
-        <Title>{title}</Title>
+        <Title>{title || constants?.noDocumentsFound || "No Documents Found"}</Title>
       </TextContainer>
     </Container>
   );

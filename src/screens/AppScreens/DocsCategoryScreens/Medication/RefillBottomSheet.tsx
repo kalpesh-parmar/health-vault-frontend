@@ -6,6 +6,7 @@ import BottomSheet from "../../../../components/shared/BottomSheet";
 import { useAppTheme } from "../../../../context/ThemeContext";
 import { AddOrEditMedication } from "../../../../types";
 import { useBottomBarPadding } from "../../../../hooks/useBottomBarPadding";
+import { useAppConstants } from "../../../../utils/translationUtils";
 
 interface RefillBottomSheetProps {
   medication: AddOrEditMedication | null;
@@ -16,6 +17,7 @@ interface RefillBottomSheetProps {
 export const RefillBottomSheet = forwardRef<any, RefillBottomSheetProps>(
   ({ medication, onCancel, onRefill }, ref) => {
     const { isDark } = useAppTheme();
+    const constants = useAppConstants();
     const [pillsToAdd, setPillsToAdd] = useState("");
     const [keyboardPadding, setKeyboardPadding] = useState(0);
     const bottomPadding = useBottomBarPadding(24, 12);
@@ -55,9 +57,9 @@ export const RefillBottomSheet = forwardRef<any, RefillBottomSheetProps>(
         {medication ? (
             <Container style={{ paddingBottom: keyboardPadding || 16 }}>
               <HeaderRow>
-                <Title>Refill Medication</Title>
+                <Title>{constants?.refillMedication || "Refill Medication"}</Title>
                 <Subtitle>
-                  Add new pills to continue your medication and avoid missing any doses.
+                  {constants?.refillMedicationDesc || "Add new pills to continue your medication and avoid missing any doses."}
                 </Subtitle>
               </HeaderRow>
 
@@ -87,48 +89,48 @@ export const RefillBottomSheet = forwardRef<any, RefillBottomSheetProps>(
                     <MaterialCommunityIcons name="bottle-tonic-plus" size={24} color="#10b981" />
                   </IconBoxGreen>
                   <CardTextContent>
-                    <CardSubtitle isDark={isDark}>Remaining Pills</CardSubtitle>
+                    <CardSubtitle isDark={isDark}>{constants?.remainingPills || "Remaining Pills"}</CardSubtitle>
                     <PillCountRow>
                       <PillCountText isDark={isDark}>{remainingPills}</PillCountText>
-                      <CardSubtitle isDark={isDark}>pills left</CardSubtitle>
+                      <CardSubtitle isDark={isDark}>{constants?.pillsLeft || "pills left"}</CardSubtitle>
                     </PillCountRow>
                   </CardTextContent>
                 </InfoCard>
               </CardsContainer>
 
               <InputSection>
-                <InputTitle isDark={isDark}>Add Pills to Refill</InputTitle>
+                <InputTitle isDark={isDark}>{constants?.addPillsToRefill || "Add Pills to Refill"}</InputTitle>
                 <InputSubtitle isDark={isDark}>
-                  Enter the number of pills you want to add.
+                  {constants?.enterPillsToAdd || "Enter the number of pills you want to add."}
                 </InputSubtitle>
 
                 <InputWrapper isDark={isDark}>
                   <Ionicons name="medkit-outline" size={20} color="#94a3b8" />
                   <StyledInput
                     isDark={isDark}
-                    placeholder="Enter number of pills"
+                    placeholder={constants?.enterNumberOfPills || "Enter number of pills"}
                     placeholderTextColor="#94a3b8"
                     keyboardType="numeric"
                     value={pillsToAdd}
                     onChangeText={setPillsToAdd}
                   />
-                  <InputSuffix isDark={isDark}>pills</InputSuffix>
+                  <InputSuffix isDark={isDark}>{constants?.pills || "pills"}</InputSuffix>
                 </InputWrapper>
               </InputSection>
 
               <InfoBox isDark={isDark}>
                 <Ionicons name="information-circle-outline" size={20} color="#10b981" />
                 <InfoBoxText isDark={isDark}>
-                  These pills will be added to your current remaining pills and your medication will continue as usual.
+                  {constants?.refillInfoNote || "These pills will be added to your current remaining pills and your medication will continue as usual."}
                 </InfoBoxText>
               </InfoBox>
 
               <ActionRow bottomPadding={bottomPadding}>
                 <CancelButton onPress={onCancel} activeOpacity={0.8} isDark={isDark}>
-                  <CancelButtonText isDark={isDark}>Cancel</CancelButtonText>
+                  <CancelButtonText isDark={isDark}>{constants?.cancel || "Cancel"}</CancelButtonText>
                 </CancelButton>
                 <RefillButton onPress={handleRefill} activeOpacity={0.8}>
-                  <RefillButtonText>Refill</RefillButtonText>
+                  <RefillButtonText>{constants?.refill || "Refill"}</RefillButtonText>
                 </RefillButton>
               </ActionRow>
             </Container>

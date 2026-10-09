@@ -950,7 +950,7 @@ export const useChatSession = ({
   }, [messages]);
 
   const suggestedQuestions = useMemo(() => {
-    const langKey = preferredLang || "english";
+    const langKey = (preferredLang || "english").toLowerCase().trim();
     const dict = SUGGESTED_QUESTIONS_I18N[langKey] || SUGGESTED_QUESTIONS_I18N.english;
     return selectedDocument ? dict.document : dict.general;
   }, [preferredLang, selectedDocument]);

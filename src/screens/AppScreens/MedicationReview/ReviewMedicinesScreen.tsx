@@ -14,6 +14,7 @@ import ReviewLoadingState from "../../../components/MedicationReview/ReviewLoadi
 import EmptyMedicineState from "../../../components/MedicationReview/EmptyMedicineState";
 import { useBottomBarPadding } from "../../../hooks/useBottomBarPadding";
 import { StatusBar } from "expo-status-bar";
+import { useAppConstants } from "../../../utils/translationUtils";
 
 type ReviewMedicinesRouteProp = RouteProp<
   {
@@ -34,6 +35,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
   const route = useRoute<ReviewMedicinesRouteProp>();
   const navigation = useAppNavigation();
   const { theme, isDark } = useAppTheme();
+  const constants = useAppConstants();
   const isFocused = useIsFocused();
 
   const { jobIds = [], filesInfo = [], fromScreen } = route.params || {};
@@ -162,8 +164,8 @@ export const ReviewMedicinesScreen: React.FC = () => {
     return (
       <SafeContainer edges={["top", "bottom"]} isDark={isDark}>
         <StatusBar style="light" />
-        <ReviewProgressHeader title="Review Medicines" onBackPress={handleBack} />
-        <ReviewLoadingState message="Loading extracted medicines & checking conflicts..." />
+        <ReviewProgressHeader title={constants?.reviewMedicines || "Review Medicines"} onBackPress={handleBack} />
+        <ReviewLoadingState message={constants?.loadingExtractedMedicines || "Loading extracted medicines & checking conflicts..."} />
       </SafeContainer>
     );
   }
@@ -174,7 +176,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
     return (
       <SafeContainer edges={["top", "bottom"]} isDark={isDark}>
         <StatusBar style="light" />
-        <ReviewProgressHeader title="Review Medicines" onBackPress={handleBack} />
+        <ReviewProgressHeader title={constants?.reviewMedicines || "Review Medicines"} onBackPress={handleBack} />
         <EmptyMedicineState onBackPress={handleBack} />
       </SafeContainer>
     );
@@ -190,8 +192,8 @@ export const ReviewMedicinesScreen: React.FC = () => {
       <SafeContainer edges={["top"]} isDark={isDark}>
         <StatusBar style="light" />
         <ReviewProgressHeader
-          title="Resolve Conflicts"
-          subtitle={`Conflict ${currentConflictIdx + 1} of ${totalCount}`}
+          title={constants?.resolveConflicts || "Resolve Conflicts"}
+          subtitle={`${constants?.conflict || "Conflict"} ${currentConflictIdx + 1} ${constants?.of || "of"} ${totalCount}`}
           onBackPress={() => setViewMode("list")}
         />
 
@@ -201,7 +203,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Ionicons name="warning" size={18} color="#ea580c" />
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#ea580c" }}>
-                Conflict {currentConflictIdx + 1} of {totalCount}
+                {constants?.conflict || "Conflict"} {currentConflictIdx + 1} {constants?.of || "of"} {totalCount}
               </Text>
             </View>
             <TouchableOpacity
@@ -209,7 +211,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
               style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: isDark ? "#1e293b" : "#e2e8f0" }}
             >
               <Text style={{ fontSize: 12, fontWeight: "700", color: isDark ? "#93c5fd" : "#2563eb" }}>
-                View Full List
+                {constants?.viewFullList || "View Full List"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -242,7 +244,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 4 }}>
                 <Ionicons name="folder-outline" size={14} color="#64748b" />
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748b", textTransform: "uppercase" }}>
-                  In Profile
+                  {constants?.inProfile || "In Profile"}
                 </Text>
               </View>
 
@@ -252,21 +254,21 @@ export const ReviewMedicinesScreen: React.FC = () => {
 
               <View style={{ gap: 6 }}>
                 <View>
-                  <Text style={{ fontSize: 10, color: "#64748b", fontWeight: "600" }}>TYPE & DOSE</Text>
+                  <Text style={{ fontSize: 10, color: "#64748b", fontWeight: "600" }}>{constants?.type || "TYPE"} & {constants?.dose || "DOSE"}</Text>
                   <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#334155" }}>
                     {exist?.medicationType || exist?.medicineType || "Tablet"} • {exist?.dosePerIntake || exist?.dosage || "1"} {exist?.dosageUnit || ""}
                   </Text>
                 </View>
 
                 <View>
-                  <Text style={{ fontSize: 10, color: "#64748b", fontWeight: "600" }}>FREQUENCY</Text>
+                  <Text style={{ fontSize: 10, color: "#64748b", fontWeight: "600" }}>{constants?.frequency || "FREQUENCY"}</Text>
                   <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#334155" }}>
                     {exist?.frequency || "Once Daily"}
                   </Text>
                 </View>
 
                 <View>
-                  <Text style={{ fontSize: 10, color: "#64748b", fontWeight: "600" }}>TIMING</Text>
+                  <Text style={{ fontSize: 10, color: "#64748b", fontWeight: "600" }}>{constants?.timing || "TIMING"}</Text>
                   <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#334155" }}>
                     {exist?.foodFrequency || exist?.timing || "After Food"}
                   </Text>
@@ -286,7 +288,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 4 }}>
                 <Ionicons name="document-text-outline" size={14} color="#059669" />
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#059669", textTransform: "uppercase" }}>
-                  Extracted
+                  {constants?.extracted || "Extracted"}
                 </Text>
               </View>
 
@@ -296,21 +298,21 @@ export const ReviewMedicinesScreen: React.FC = () => {
 
               <View style={{ gap: 6 }}>
                 <View>
-                  <Text style={{ fontSize: 10, color: "#059669", fontWeight: "600" }}>TYPE & DOSE</Text>
+                  <Text style={{ fontSize: 10, color: "#059669", fontWeight: "600" }}>{constants?.type || "TYPE"} & {constants?.dose || "DOSE"}</Text>
                   <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#334155" }}>
                     {med.medicineType || "Tablet"} • {med.dosage || "1"} {med.dosageUnit || ""}
                   </Text>
                 </View>
 
                 <View>
-                  <Text style={{ fontSize: 10, color: "#059669", fontWeight: "600" }}>FREQUENCY</Text>
+                  <Text style={{ fontSize: 10, color: "#059669", fontWeight: "600" }}>{constants?.frequency || "FREQUENCY"}</Text>
                   <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#334155" }}>
                     {med.frequency || "Once Daily"}
                   </Text>
                 </View>
 
                 <View>
-                  <Text style={{ fontSize: 10, color: "#059669", fontWeight: "600" }}>TIMING</Text>
+                  <Text style={{ fontSize: 10, color: "#059669", fontWeight: "600" }}>{constants?.timing || "TIMING"}</Text>
                   <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#334155" }}>
                     {med.foodFrequency || med.timing || "After Food"}
                   </Text>
@@ -321,7 +323,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
 
           {/* Action Options Title */}
           <Text style={{ fontSize: 14, fontWeight: "700", color: isDark ? "#cbd5e1" : "#1e293b", marginBottom: 12 }}>
-            Choose how to resolve:
+            {constants?.chooseHowToResolve || "Choose how to resolve:"}
           </Text>
 
           {/* Action 1: Keep Existing */}
@@ -343,10 +345,10 @@ export const ReviewMedicinesScreen: React.FC = () => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "700", color: isDark ? "#f8fafc" : "#1e293b" }}>
-                Keep Existing Profile Medicine
+                {constants?.keepExistingProfileMedicine || "Keep Existing Profile Medicine"}
               </Text>
               <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b", marginTop: 2 }}>
-                Ignore the extracted version and keep your existing medication as-is.
+                {constants?.ignoreExtractedKeepExisting || "Ignore the extracted version and keep your existing medication as-is."}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
@@ -371,10 +373,10 @@ export const ReviewMedicinesScreen: React.FC = () => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "700", color: isDark ? "#f8fafc" : "#1e293b" }}>
-                Replace Existing with New Details
+                {constants?.replaceExistingWithNew || "Replace Existing with New Details"}
               </Text>
               <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b", marginTop: 2 }}>
-                Update your existing medication with the newly extracted dosage & instructions.
+                {constants?.updateExistingWithExtracted || "Update your existing medication with the newly extracted dosage & instructions."}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
@@ -399,10 +401,10 @@ export const ReviewMedicinesScreen: React.FC = () => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "700", color: isDark ? "#f8fafc" : "#1e293b" }}>
-                Keep Both (Add as New)
+                {constants?.keepBothAddAsNew || "Keep Both (Add as New)"}
               </Text>
               <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b", marginTop: 2 }}>
-                Save this medicine as an additional entry in your profile.
+                {constants?.saveAsAdditionalEntry || "Save this medicine as an additional entry in your profile."}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
@@ -427,10 +429,10 @@ export const ReviewMedicinesScreen: React.FC = () => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "700", color: isDark ? "#f8fafc" : "#1e293b" }}>
-                Edit Medicine Details
+                {constants?.editMedicineDetails || "Edit Medicine Details"}
               </Text>
               <Text style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#64748b", marginTop: 2 }}>
-                Manually customize name, dosage, timing, or reminder times before saving.
+                {constants?.manuallyCustomizeBeforeSaving || "Manually customize name, dosage, timing, or reminder times before saving."}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
@@ -451,7 +453,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
                 }}
               >
                 <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#475569" }}>
-                  ← Previous Conflict
+                  ← {constants?.previousConflict || "Previous Conflict"}
                 </Text>
               </TouchableOpacity>
 
@@ -467,7 +469,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
                 }}
               >
                 <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#cbd5e1" : "#475569" }}>
-                  Next Conflict →
+                  {constants?.nextConflict || "Next Conflict"} →
                 </Text>
               </TouchableOpacity>
             </View>
@@ -482,8 +484,8 @@ export const ReviewMedicinesScreen: React.FC = () => {
     <SafeContainer edges={["top"]} isDark={isDark}>
       <StatusBar style="light" />
       <ReviewProgressHeader
-        title="Review Medicines"
-        subtitle={`We found medicines in ${docsWithMeds} document${docsWithMeds === 1 ? "" : "s"}`}
+        title={constants?.reviewMedicines || "Review Medicines"}
+        subtitle={`${constants?.weFoundMedicinesIn || "We found medicines in"} ${docsWithMeds} ${docsWithMeds === 1 ? (constants?.document || "document") : (constants?.documents || "documents")}`}
         onBackPress={handleBack}
       />
 
@@ -496,10 +498,10 @@ export const ReviewMedicinesScreen: React.FC = () => {
             </View>
             <View style={{ flex: 1, marginRight: 8 }}>
               <ConflictAlertTitle isDark={isDark}>
-                {unresolvedConflicts.length} Conflict{unresolvedConflicts.length > 1 ? "s" : ""} Detected
+                {unresolvedConflicts.length} {unresolvedConflicts.length > 1 ? (constants?.conflicts || "Conflicts") : (constants?.conflict || "Conflict")} {constants?.detected || "Detected"}
               </ConflictAlertTitle>
               <ConflictAlertSubtitle isDark={isDark}>
-                Medications already exist in your profile. Resolve them before saving.
+                {constants?.medicationsExistResolveBeforeSaving || "Medications already exist in your profile. Resolve them before saving."}
               </ConflictAlertSubtitle>
             </View>
             <ResolveButton
@@ -509,7 +511,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
               }}
               activeOpacity={0.8}
             >
-              <ResolveButtonText>Resolve</ResolveButtonText>
+              <ResolveButtonText>{constants?.resolve || "Resolve"}</ResolveButtonText>
             </ResolveButton>
           </ConflictAlertBanner>
         )}
@@ -558,7 +560,7 @@ export const ReviewMedicinesScreen: React.FC = () => {
           activeOpacity={0.8}
           selected={selectedCount > 0}
         >
-          <CTAButtonText>Review Selected ({selectedCount})</CTAButtonText>
+          <CTAButtonText>{constants?.reviewSelected || "Review Selected"} ({selectedCount})</CTAButtonText>
         </CTAButton>
       </StickyFooter>
     </SafeContainer>

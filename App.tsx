@@ -15,8 +15,14 @@ import { MedicationReviewProvider } from "./src/context/MedicationReviewContext"
 import { NetworkProvider } from "./src/context/NetworkContext";
 import { usePushNotifications } from "./src/hooks/usePushNotifications";
 
+import { initAppLanguage } from "./src/utils/translationUtils";
+
 export default function App() {
   usePushNotifications();
+
+  React.useEffect(() => {
+    initAppLanguage();
+  }, []);
 
   return (
     <SafeAreaProvider>

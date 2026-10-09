@@ -21,6 +21,7 @@ import { Keyboard } from "react-native";
 import { queryClient } from "../../config/queryClient";
 import Loader from "../../components/shared/Loader";
 import { formatLocalDateToYMD } from "../../utils/dateUtils";
+import { useAppConstants } from "../../utils/translationUtils";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -90,6 +91,7 @@ const CATEGORIES: categoryItems[] = [
 
 const EditScreen = ({ route }: any) => {
   const { document } = route.params;
+  const constants = useAppConstants();
 
   const [filename, setFilename] = useState(document?.fileName ?? "");
   const [category, setCategory] = useState(document?.documentType ?? "");
@@ -116,7 +118,7 @@ const EditScreen = ({ route }: any) => {
       ]);
       Toast.show({
         type: "success",
-        text1: "Document Updated Successfully.",
+        text1: constants?.documentUpdatedSuccessfully || "Document Updated Successfully.",
       });
       navigation.navigate("DocumentStack", {
         screen: "DocumentList",
@@ -126,8 +128,8 @@ const EditScreen = ({ route }: any) => {
     onError: () => {
       Toast.show({
         type: "error",
-        text1: "Error",
-        text2: "Failed to update document",
+        text1: constants?.error || "Error",
+        text2: constants?.failedToUpdateDocument || "Failed to update document",
       });
       setIsSaving(false);
     },
@@ -135,7 +137,7 @@ const EditScreen = ({ route }: any) => {
 
   const handleSave = async () => {
     if (!filename.trim()) {
-      setError("File name is required");
+      setError(constants?.fileNameRequired || "File name is required");
       return;
     }
     
@@ -165,10 +167,10 @@ const EditScreen = ({ route }: any) => {
         mode="Delete Document"
         documentId={document?.id}
       />
-      <ScreenHeader title="Edit Document" showBack={true} />
+      <ScreenHeader title={constants?.editDocument || "Edit Document"} showBack={true} />
 
       <ScrollContent>
-        <SectionLabel>DOCUMENT DETAILS</SectionLabel>
+        <SectionLabel>{(constants?.documentDetails || "DOCUMENT DETAILS").toUpperCase()}</SectionLabel>
 
         <FormCard>
           <FieldBlock>
@@ -181,7 +183,7 @@ const EditScreen = ({ route }: any) => {
                 />
               </FieldIconBadge>
               <FieldMeta>
-                <FieldLabel>File Name</FieldLabel>
+                <FieldLabel>{constants?.fileName || "File Name"}</FieldLabel>
               </FieldMeta>
             </FieldRow>
             <StyledInput
@@ -190,7 +192,7 @@ const EditScreen = ({ route }: any) => {
                 setFilename(text);
                 setError(null);
               }}
-              placeholder="Enter document name"
+              placeholder={constants?.enterDocumentName || "Enter document name"}
               placeholderTextColor="#94A3B8"
               returnKeyType="done"
             />
@@ -209,7 +211,7 @@ const EditScreen = ({ route }: any) => {
                 />
               </FieldIconBadge>
               <FieldMeta>
-                <FieldLabel>Category</FieldLabel>
+                <FieldLabel>{constants?.category || "Category"}</FieldLabel>
               </FieldMeta>
             </FieldRow>
             <CatBtn
@@ -222,12 +224,12 @@ const EditScreen = ({ route }: any) => {
               {selected ? (
                 <CatPill bgColor={selected.color}>
                   <CatLabel color={selected.iconColor}>
-                    {selected.label}
+                    {constants?.[selected.label] || selected.label}
                   </CatLabel>
                 </CatPill>
               ) : (
                 <>
-                  <CatPlaceholder>Select a category</CatPlaceholder>
+                  <CatPlaceholder>{constants?.selectCategory || "Select a category"}</CatPlaceholder>
                 </>
               )}
             </CatBtn>
@@ -245,13 +247,13 @@ const EditScreen = ({ route }: any) => {
                 />
               </FieldIconBadge>
               <FieldMeta>
-                <FieldLabel>Notes</FieldLabel>
+                <FieldLabel>{constants?.notes || "Notes"}</FieldLabel>
               </FieldMeta>
             </FieldRow>
             <StyledTextArea
               value={notes}
               onChangeText={setNotes}
-              placeholder="Add notes about this document…"
+              placeholder={constants?.addNotesPlaceholder || "Add notes about this document…"}
               placeholderTextColor="#94A3B8"
               multiline
               numberOfLines={3}
@@ -271,7 +273,7 @@ const EditScreen = ({ route }: any) => {
                 />
               </FieldIconBadge>
               <FieldMeta>
-                <FieldLabel>Created On</FieldLabel>
+                <FieldLabel>{constants?.createdOn || "Created On"}</FieldLabel>
               </FieldMeta>
             </FieldRow>
             <ReadOnlyText
@@ -291,22 +293,22 @@ const EditScreen = ({ route }: any) => {
         </FormCard>
 
         <DualButtons
-          mainBtnText="Save Changes"
+          mainBtnText={constants?.saveChanges || "Save Changes"}
           mainBtnColor="blue"
-          secondaryBtnText="Delete Document"
+          secondaryBtnText={constants?.deleteDocument || "Delete Document"}
           secondaryBtnColor="red"
           onMainPress={handleSave}
           onSecondaryPress={handleDelete}
           isLoading={isSaving}
-          mainLoadingText="Updating..."
+          mainLoadingText={constants?.updating || "Updating..."}
         />
         <BottomSpacer />
       </ScrollContent>
 
       <BottomSheet ref={bottomSheetRef} enablePanDownToClose={true}>
         <SheetContentWrapper bottomPadding={sheetBottomPadding}>
-          <BSTitle>Select Category</BSTitle>
-          <BSSub>Choose the type of medical document</BSSub>
+          <BSTitle>{constants?.selectCategory || "Select Category"}</BSTitle>
+          <BSSub>{constants?.chooseTypeOfMedicalDoc || "Choose the type of medical document"}</BSSub>
           {CATEGORIES.map((item, idx) => (
             <BSItem
               key={item.label}
@@ -323,7 +325,7 @@ const EditScreen = ({ route }: any) => {
               <BSIconBadge bgColor={item.color}>
                 <Ionicons name={item.icon} size={20} color={item.iconColor} />
               </BSIconBadge>
-              <BSLbl selected={category === item.value}>{item.label}</BSLbl>
+              <BSLbl selected={category === item.value}>{constants?.[item.label] || item.label}</BSLbl>
               {category === item.value && <BSCheck>✓</BSCheck>}
             </BSItem>
           ))}

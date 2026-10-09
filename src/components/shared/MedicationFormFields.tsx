@@ -1208,7 +1208,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
           value={formQty}
           onChangeText={setFormQty}
           keyboardType="numeric"
-          placeholder={preferredLang === "gujarati" ? "દા.ત. 10" : "e.g. 10"}
+          placeholder={t("placeholder.qty") || "e.g. 10"}
           placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
           cursorColor={theme.colors.primary}
           selectionColor={theme.colors.primary}
@@ -1227,7 +1227,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
           <Ionicons name="calendar-outline" size={14} color={theme.colors.textSecondary} style={{ marginRight: 6 }} />
           <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 0 }]}>
-            {preferredLang === "gujarati" ? "શરૂઆતની તારીખ" : "Start Date"}
+            {t("startDate") || "Start Date"}
           </Text>
         </View>
         <TouchableOpacity
@@ -1248,7 +1248,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               color: startDate ? theme.colors.textPrimary : isDark ? "#64748b" : "#94a3b8",
             }}
           >
-            {startDate ? format(startDate, "MMM dd, yyyy") : preferredLang === "gujarati" ? "તારીખ પસંદ કરો" : "Select Start Date"}
+            {startDate ? format(startDate, "MMM dd, yyyy") : (t("chooseDate") || t("selectStartDate") || "Select Start Date")}
           </Text>
         </TouchableOpacity>
         {errors.startDate ? (
