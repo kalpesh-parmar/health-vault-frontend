@@ -460,7 +460,12 @@ export const normalizeReportSummaryToDocument = (
   const abnormalResults = Array.isArray(rawAbnormal)
     ? rawAbnormal.map((item: any) => ({
         name: item.name || item.testName || item.parameter || "Parameter",
-        value: item.value !== undefined ? String(item.value) : "",
+        value:
+          item.value !== undefined &&
+          item.value !== null &&
+          String(item.value).toLowerCase() !== "null"
+            ? String(item.value)
+            : "",
         unit: item.unit || "",
         status: item.status || "Abnormal",
         referenceRange:
@@ -481,7 +486,12 @@ export const normalizeReportSummaryToDocument = (
   const normalResults = Array.isArray(rawNormal)
     ? rawNormal.map((item: any) => ({
         name: item.name || item.testName || item.parameter || "Parameter",
-        value: item.value !== undefined ? String(item.value) : "",
+        value:
+          item.value !== undefined &&
+          item.value !== null &&
+          String(item.value).toLowerCase() !== "null"
+            ? String(item.value)
+            : "",
         unit: item.unit || "",
         status: item.status || "Normal",
         referenceRange:
@@ -558,4 +568,149 @@ export const normalizeReportSummaryToDocument = (
       abnormalResults.length > 0 ||
       normalResults.length > 0,
   };
+};
+
+export const isFailedOrRejectedDocument = (document: any): boolean => {
+  if (!document || typeof document !== "object") return false;
+
+  const statuses = [
+    document.status,
+    document.ocrStatus,
+    document.ocr_status,
+    document.processingStatus,
+    document.processing_status,
+    document.stage,
+    document.stageStatus,
+  ];
+  if (
+    statuses.some((value) =>
+      /FAIL|ERROR|REJECT|CANCEL/i.test(String(value || "")),
+    )
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    document.errorCode ||
+      document.error ||
+      document.errorMessage ||
+      /fail|error|reject/i.test(String(document.reason || "")),
+  );
+};
+
+export const normalizeReportDocumentsToSummaries = (
+  documents: any,
+  reportSummary?: any,
+  actions: any[] = [],
+): any[] => {
+  const sourceDocuments = Array.isArray(documents)
+    ? documents
+    : Array.isArray(documents?.documents)
+      ? documents.documents
+      : documents
+        ? [documents]
+        : [];
+  const actionSummaries = actions
+    .filter((action) => action?.actionType === "REPORT_SUMMARY" || action?.reportSummary)
+    .map((action) => action.reportSummary || action);
+  const reportSummaries = [
+    ...(reportSummary ? [reportSummary] : []),
+    ...actionSummaries,
+  ].filter((summary) => !isFailedOrRejectedDocument(summary));
+  const processedSourceDocuments = sourceDocuments.filter(
+    (document) => !isFailedOrRejectedDocument(document),
+  );
+  const documentsToNormalize =
+    sourceDocuments.length > 0
+      ? processedSourceDocuments
+      : reportSummaries.length > 0
+        ? [reportSummaries[0]]
+        : [];
+
+  return documentsToNormalize.map((rawDocument, index) => {
+    const extracted = rawDocument?.extractedStructuredData || {};
+    const rawId =
+      rawDocument?.id || rawDocument?.report_id || rawDocument?.reportId;
+    const matchingSummary = reportSummaries.find((summary) => {
+      const summaryId = summary?.report_id || summary?.reportId || summary?.id;
+      return rawId && summaryId === rawId;
+    });
+    const summary =
+      matchingSummary ||
+      (documentsToNormalize.length === 1 ? reportSummaries[0] : null);
+    const labResults =
+      extracted.labResults ||
+      extracted.testResults ||
+      rawDocument?.labResults ||
+      rawDocument?.testResults ||
+      [];
+    const labs = Array.isArray(labResults) ? labResults : [];
+    const normalizedSource = {
+      ...extracted,
+      ...rawDocument,
+      ...(summary || {}),
+      id: rawId || summary?.report_id || summary?.reportId || `report-${index}`,
+      fileName:
+        rawDocument?.fileName ||
+        rawDocument?.report_name ||
+        summary?.report_name ||
+        summary?.fileName,
+      documentType:
+        summary?.documentType ||
+        extracted.documentType ||
+        extracted.reportType ||
+        rawDocument?.documentType,
+      reportDate:
+        summary?.report_date ||
+        extracted.reportDate ||
+        extracted.visitDate ||
+        rawDocument?.reportDate,
+      hospitalName:
+        summary?.hospitalName ||
+        extracted.hospitalName ||
+        extracted.hospitalInfo?.name ||
+        rawDocument?.hospitalName,
+      doctorName:
+        summary?.doctorName ||
+        extracted.doctorName ||
+        extracted.doctorInfo?.name ||
+        rawDocument?.doctorName,
+      patientName:
+        summary?.patientName ||
+        extracted.patientName ||
+        extracted.patientInfo?.name ||
+        rawDocument?.patientName,
+      patientDetails:
+        summary?.patientDetails ||
+        extracted.patientDetails ||
+        extracted.patientInfo ||
+        rawDocument?.patientDetails,
+      summary:
+        summary?.summary ||
+        extracted.summary ||
+        rawDocument?.summary ||
+        "",
+      keyFindings:
+        summary?.key_findings ||
+        summary?.keyFindings ||
+        extracted.summary ||
+        rawDocument?.keyFindings,
+      abnormalResults:
+        summary?.abnormal_values ||
+        summary?.abnormalResults ||
+        labs.filter((result: any) => result?.isAbnormal === true),
+      normalResults:
+        summary?.normal_values ||
+        summary?.normalResults ||
+        labs.filter((result: any) => result?.isAbnormal !== true),
+      labFindings: labs,
+      medications:
+        extracted.medications ||
+        extracted.medicines ||
+        rawDocument?.medications ||
+        [],
+    };
+
+    return normalizeReportSummaryToDocument(normalizedSource, rawDocument);
+  });
 };

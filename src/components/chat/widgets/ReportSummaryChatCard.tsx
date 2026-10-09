@@ -66,7 +66,7 @@ export interface ReportSummaryChatCardProps {
   isDark: boolean;
   theme?: any;
   preferredLang?: string;
-  onQuestionPress: (question: string) => void;
+  onQuestionPress: (question: string, document?: ReportSummaryDocument) => void;
   onViewFullReport?: () => void;
   readOnly?: boolean;
 }
@@ -982,7 +982,7 @@ export const ReportSummaryChatCard: React.FC<ReportSummaryChatCardProps> = ({
                     opacity: readOnly ? 0.6 : 1,
                   },
                 ]}
-                onPress={() => onQuestionPress(q)}
+                onPress={() => onQuestionPress(q, document)}
                 disabled={readOnly}
                 activeOpacity={0.75}
               >

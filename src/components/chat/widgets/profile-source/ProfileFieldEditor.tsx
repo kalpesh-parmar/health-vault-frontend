@@ -39,11 +39,27 @@ export const ProfileFieldEditor = React.memo(function ProfileFieldEditor({
   onSave,
   onCancel,
 }: ProfileFieldEditorProps) {
+  const [phoneError, setPhoneError] = React.useState("");
+
   const handleSave = () => {
     const dataToSend = { ...editedProfileData };
+    const phoneField = fields.find((field) =>
+      ["phoneNumber", "phone", "mobile"].includes(field.key),
+    );
+    if (phoneField) {
+      const rawPhone = String(dataToSend[phoneField.key] || "").trim();
+      const phoneDigits = rawPhone.replace(/\D/g, "");
+      if (rawPhone && !/^\d{10}$/.test(phoneDigits)) {
+        setPhoneError("Please enter a valid 10-digit phone number");
+        return;
+      }
+      if (rawPhone) dataToSend[phoneField.key] = phoneDigits;
+    }
+
     if (dataToSend.gender) {
       dataToSend.gender = normalizeGenderFrontend(dataToSend.gender);
     }
+    setPhoneError("");
     onSave(dataToSend);
   };
 
@@ -59,6 +75,7 @@ export const ProfileFieldEditor = React.memo(function ProfileFieldEditor({
       <View style={styles.formBody}>
         {fields.map((field) => {
           if (field.verified) return null;
+          const isPhoneField = ["phoneNumber", "phone", "mobile"].includes(field.key);
 
           if (field.key === "dateOfBirth" || field.key === "dob") {
             return (
@@ -277,24 +294,36 @@ export const ProfileFieldEditor = React.memo(function ProfileFieldEditor({
                 ]}
                 value={editedProfileData[field.key] || ""}
                 onChangeText={(val) =>
-                  setEditedProfileData((prev: any) => ({
-                    ...prev,
-                    [field.key]: val,
-                  }))
+                  {
+                    setEditedProfileData((prev: any) => ({
+                      ...prev,
+                      [field.key]: isPhoneField ? val.replace(/\D/g, "").slice(0, 10) : val,
+                    }));
+                    if (isPhoneField) setPhoneError("");
+                  }
                 }
                 onFocus={() => {
                   setActiveFormDictationCallback((transcript: string) => {
                     setEditedProfileData((prev: any) => ({
                       ...prev,
-                      [field.key]: prev[field.key] ? prev[field.key] + " " + transcript : transcript,
+                      [field.key]: isPhoneField
+                        ? ((prev[field.key] || "") + transcript.replace(/\D/g, "")).slice(0, 10)
+                        : prev[field.key]
+                          ? prev[field.key] + " " + transcript
+                          : transcript,
                     }));
+                    if (isPhoneField) setPhoneError("");
                   });
                 }}
                 placeholder={field.label}
                 placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
-                keyboardType={field.key === "email" ? "email-address" : field.key === "phoneNumber" ? "phone-pad" : "default"}
+                keyboardType={field.key === "email" ? "email-address" : isPhoneField ? "phone-pad" : "default"}
+                maxLength={isPhoneField ? 10 : undefined}
                 autoCapitalize={field.key === "email" ? "none" : "sentences"}
               />
+              {isPhoneField && phoneError ? (
+                <Text style={styles.phoneError}>{phoneError}</Text>
+              ) : null}
             </View>
           );
         })}
@@ -369,6 +398,11 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: "600",
+  },
+  phoneError: {
+    color: "#dc2626",
+    fontSize: 12,
+    marginTop: 4,
   },
   textInput: {
     borderWidth: 1,

@@ -122,17 +122,6 @@ export const useChatWizardManager = ({
 
           extractionSheetRef.current?.dismiss();
 
-          const docNames = chatWizardState.filesInfo
-            .map((f) => f.fileName)
-            .join(", ");
-          const userMsg: ChatMessage = {
-            id: `user-upload-${Date.now()}`,
-            role: "user",
-            text: `Document Uploaded: ${docNames}`,
-            createdAt: new Date().toISOString(),
-          };
-          setMessages((prev) => [...prev, userMsg]);
-
           const filesPayload = chatWizardState.filesInfo.map((f: any) => ({
             fileKey: f.fileKey || f.s3Key || "",
             fileName: f.fileName,
@@ -178,7 +167,9 @@ export const useChatWizardManager = ({
                   resData.document,
                 ),
                 documentSummary: resData.documentSummary || null,
-                documents: resData.documents || [],
+                documents: Array.isArray(resData.document)
+                  ? resData.document
+                  : resData.documents || [],
                 createdAt: new Date().toISOString(),
               };
               setMessages((prev) => [...prev, aiMsg]);
@@ -382,7 +373,9 @@ export const useChatWizardManager = ({
             resData.document,
           ),
           documentSummary: resData.documentSummary || null,
-          documents: resData.documents || [],
+          documents: Array.isArray(resData.document)
+            ? resData.document
+            : resData.documents || [],
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, aiMsg]);
@@ -1028,7 +1021,9 @@ export const useChatWizardManager = ({
           medicine: resData.medicine || null,
           document: resolvedDoc || resData.document || null,
           documentSummary: resData.documentSummary || null,
-          documents: resData.documents || [],
+          documents: Array.isArray(resData.document)
+            ? resData.document
+            : resData.documents || [],
           onboardingState: resData.onboardingState || resData.state || null,
           state: resData.onboardingState || resData.state || null,
           createdAt: new Date().toISOString(),

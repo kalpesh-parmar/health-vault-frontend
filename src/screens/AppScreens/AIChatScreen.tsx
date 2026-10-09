@@ -417,6 +417,9 @@ const AIChatScreen = ({ route }: any) => {
         setChatWizardState={setChatWizardState}
         setMessages={setMessages}
         onViewFullReport={handleViewFullReport}
+        onReportQuestion={(question, document) =>
+          handleSend(question, document, true)
+        }
         onAllergyCardExpand={handleAllergyCardExpand}
         isOnboardingCompleted={isOnboardingCompleted}
       />
@@ -447,6 +450,7 @@ const AIChatScreen = ({ route }: any) => {
       setChatWizardState,
       setMessages,
       handleViewFullReport,
+      handleSend,
     ]
   );
 

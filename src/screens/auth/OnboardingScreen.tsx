@@ -87,7 +87,10 @@ import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal
 import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { normalizeReportSummaryToDocument } from "../../utils/documentNormalizer";
+import {
+  normalizeReportDocumentsToSummaries,
+  normalizeReportSummaryToDocument,
+} from "../../utils/documentNormalizer";
 
 const getMedicineName = (medicine: any): string =>
   String(medicine?.name || medicine?.medicationName || medicine?.medicineName || "")
@@ -963,10 +966,16 @@ export default function OnboardingScreen() {
       aiRes.resumableState?.canSkip ??
       !!aiRes.completionMessage,
     );
+    const reportDocuments = normalizeReportDocumentsToSummaries(
+      Array.isArray(aiRes.document) ? aiRes.document : aiRes.documents,
+      aiRes.reportSummary,
+      aiRes.actions || [],
+    );
+    const hasReportData = Boolean(
+      aiRes.document || aiRes.reportSummary || reportDocuments.length > 0,
+    );
     const isReportCardResponse =
-      action === "ASK_REPORT" &&
-      Boolean(aiRes.document || aiRes.reportSummary) &&
-      !messageContent?.trim();
+      (action === "ASK_REPORT" || action === "REPORT_SUMMARY") && hasReportData;
     const messageAction =
       action === "ASK_REPORT" && !isReportCardResponse
         ? "NORMAL_CHAT"
@@ -998,11 +1007,9 @@ export default function OnboardingScreen() {
     const newMsg: Message = {
       id: `ai-${Date.now()}`,
       role: "assistant",
-      content: isReportCardResponse
-        ? ""
-        : (medListResult.isMedicationList
-            ? (medListResult.rawText || "")
-            : (messageContent || "Please provide the information.")),
+      content: medListResult.isMedicationList
+        ? (medListResult.rawText || "")
+        : (messageContent || (isReportCardResponse ? "" : "Please provide the information.")),
       action: messageAction,
       actions: aiRes.actions,
       reportSummary: reportSummaryData,
@@ -1012,6 +1019,7 @@ export default function OnboardingScreen() {
       onboardingState: aiRes.onboardingState,
       loginSummary: aiRes.loginSummary,
       documentSummary: aiRes.documentSummary,
+      documents: Array.isArray(aiRes.document) ? aiRes.document : aiRes.documents,
       mode: aiRes.mode,
       title: aiRes.title,
       subtitle: aiRes.subtitle,
@@ -1136,7 +1144,8 @@ export default function OnboardingScreen() {
           newMsg.action === "MEDICINE_OPTIONS" ||
           (Array.isArray(newMsg.options) && newMsg.options.length > 0);
         const isReportCardMessage =
-          newMsg.action === "ASK_REPORT" && Boolean(newMsg.document);
+          (newMsg.action === "ASK_REPORT" || newMsg.action === "REPORT_SUMMARY") &&
+          Boolean(newMsg.document || newMsg.documents?.length);
         const isRedundantCompletionMsg =
           newMsg.action === "COMPLETE" ||
           newMsg.action === "POST_ONBOARDING" ||
@@ -3770,8 +3779,14 @@ export default function OnboardingScreen() {
         ) ||
         activeMsg.document ||
         {};
+      const reportDocuments = normalizeReportDocumentsToSummaries(
+        activeMsg.documents?.length ? activeMsg.documents : activeMsg.document,
+        activeMsg.reportSummary,
+        activeMsg.actions || [],
+      );
 
       const hasDoc = Boolean(
+        reportDocuments.length > 0 ||
         doc &&
         !Array.isArray(doc) &&
         (doc.id ||
@@ -3794,6 +3809,7 @@ export default function OnboardingScreen() {
             : (SUGGESTED_QUESTIONS_I18N[preferredLang] || SUGGESTED_QUESTIONS_I18N.english).document;
 
         const isStructured = Boolean(
+          reportDocuments.length > 0 ||
           doc.patientDetails ||
           (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
           (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
@@ -3807,6 +3823,7 @@ export default function OnboardingScreen() {
           return (
             <StructuredReportSummaryCard
               document={doc}
+              reportDocuments={reportDocuments}
               suggestedQuestions={questions}
               isDark={isDark}
               theme={theme}

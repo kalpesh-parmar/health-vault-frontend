@@ -116,6 +116,8 @@ export const useChatSession = ({
   const streamingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitializedHistory = useRef(false);
   const isSendingRef = useRef<boolean>(false);
+  const documentsListRef = useRef(documentsList);
+  documentsListRef.current = documentsList;
 
   const { speakingMessageId, speakMessage } = useTextToSpeech();
 
@@ -179,7 +181,7 @@ export const useChatSession = ({
     [],
   );
 
-  const streamNormalChat = async (payload: any) => {
+  const streamNormalChat = async (payload: any, isReportQuestion = false) => {
     abortActiveStream();
     const controller = new AbortController();
     streamingAbortRef.current = controller;
@@ -206,24 +208,28 @@ export const useChatSession = ({
         finalData,
       );
 
-      const actionType =
-        structRes.action ||
-        finalData?.actionType ||
-        finalData?.action ||
-        "NORMAL_CHAT";
+      const actionType = isReportQuestion
+        ? "NORMAL_CHAT"
+        : structRes.action ||
+          finalData?.actionType ||
+          finalData?.action ||
+          "NORMAL_CHAT";
 
-      const reportSummaryData =
-        finalData?.reportSummary ||
-        (Array.isArray(finalData?.actions)
-          ? finalData.actions.find(
-              (a: any) =>
-                a.actionType === "REPORT_SUMMARY" || a.reportSummary,
-            )?.reportSummary
-          : null);
-      const resolvedDoc = normalizeReportSummaryToDocument(
-        reportSummaryData || finalData?.document,
-        finalData?.document,
-      );
+      const reportSummaryData = isReportQuestion
+        ? null
+        : finalData?.reportSummary ||
+          (Array.isArray(finalData?.actions)
+            ? finalData.actions.find(
+                (a: any) =>
+                  a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+              )?.reportSummary
+            : null);
+      const resolvedDoc = isReportQuestion
+        ? null
+        : normalizeReportSummaryToDocument(
+            reportSummaryData || finalData?.document,
+            finalData?.document,
+          );
 
       upsertAssistantMessage(messageId, (current) => {
         const baseMessage = current || {
@@ -236,49 +242,60 @@ export const useChatSession = ({
         return {
           ...baseMessage,
           text:
-            structRes.isReportList || structRes.isMedicationList
+            !isReportQuestion &&
+            (structRes.isReportList || structRes.isMedicationList)
               ? structRes.text || displayedText || replyText || baseMessage.text
               : displayedText || replyText || baseMessage.text,
           sessionId: finalData?.sessionId ?? baseMessage.sessionId,
-          mode: finalData?.mode ?? baseMessage.mode,
+          mode: isReportQuestion ? "NORMAL_CHAT" : finalData?.mode ?? baseMessage.mode,
           action: actionType || baseMessage.action || "NORMAL_CHAT",
-          actions: finalData?.actions ?? (baseMessage as any).actions ?? [],
+          actions: isReportQuestion
+            ? []
+            : finalData?.actions ?? (baseMessage as any).actions ?? [],
           reportSummary:
             reportSummaryData ?? (baseMessage as any).reportSummary ?? null,
-          task: finalData?.task || structRes.task,
+          task: isReportQuestion ? undefined : finalData?.task || structRes.task,
           options: finalData?.options ?? baseMessage.options ?? [],
-          reports:
-            structRes.reports.length > 0
+          reports: isReportQuestion
+            ? []
+            : structRes.reports.length > 0
               ? structRes.reports
               : (finalData?.reports ?? baseMessage.reports ?? []),
           medicines:
             structRes.medicines.length > 0
               ? structRes.medicines
               : (finalData?.medicines ?? baseMessage.medicines ?? []),
-          items:
-            structRes.items.length > 0
+          items: isReportQuestion
+            ? []
+            : structRes.items.length > 0
               ? structRes.items
               : (finalData?.items ?? (baseMessage as any).items),
-          pagination:
-            structRes.pagination ||
-            finalData?.pagination ||
-            (baseMessage as any).pagination,
-          documents:
-            structRes.documents ||
-            finalData?.documents ||
-            baseMessage.documents,
-          document:
-            resolvedDoc || (finalData?.document ?? baseMessage.document ?? null),
+          pagination: isReportQuestion
+            ? undefined
+            : structRes.pagination ||
+              finalData?.pagination ||
+              (baseMessage as any).pagination,
+          documents: isReportQuestion
+            ? []
+            : Array.isArray(finalData?.document)
+              ? finalData.document
+              : structRes.documents?.length
+                ? structRes.documents
+                : finalData?.documents ?? baseMessage.documents,
+          document: isReportQuestion
+            ? null
+            : resolvedDoc || (finalData?.document ?? baseMessage.document ?? null),
           suggestedQuestions:
             finalData?.suggestedQuestions ??
             baseMessage.suggestedQuestions ??
             [],
-          keyFindings:
-            resolvedDoc?.keyFindings ??
-            finalData?.document?.keyFindings ??
-            finalData?.keyFindings ??
-            baseMessage.keyFindings ??
-            [],
+          keyFindings: isReportQuestion
+            ? []
+            : resolvedDoc?.keyFindings ??
+              finalData?.document?.keyFindings ??
+              finalData?.keyFindings ??
+              baseMessage.keyFindings ??
+              [],
           documentIds:
             normalizeDocumentIds(
               resolvedDoc?.id,
@@ -523,7 +540,7 @@ export const useChatSession = ({
               setActiveSessionId(mostRecent.id);
 
               if (mostRecent.documentId) {
-                const matchedDoc = documentsList.find(
+                const matchedDoc = documentsListRef.current.find(
                   (d) => d.id === mostRecent.documentId,
                 );
                 setSelectedDocument(matchedDoc || null);
@@ -638,7 +655,7 @@ export const useChatSession = ({
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [documentsList, fetchOnboardingHistory, initialSessionId, tOnboarding]);
+  }, [fetchOnboardingHistory, initialSessionId, tOnboarding]);
 
   const loadMoreMessages = useCallback(async () => {
     if (!activeSessionId || !nextCursor || isLoadingMore) return;
@@ -735,13 +752,17 @@ export const useChatSession = ({
     }
   }, [activeSessionId, nextCursor, isLoadingMore, tOnboarding]);
 
-  const handleSend = async (customText?: string) => {
+  const handleSend = async (
+    customText?: string,
+    targetDocument?: any,
+    isReportQuestion = false,
+  ) => {
     const textToSubmit = (customText || input).trim();
     if (!textToSubmit) return;
     if (isSending || isSendingRef.current) return;
     isSendingRef.current = true;
 
-    const isPendingOnboarding = Boolean(
+    const isPendingOnboarding = !isReportQuestion && Boolean(
       pendingStep &&
       pendingStep !== "POST_ONBOARDING" &&
       pendingStep !== "COMPLETE" &&
@@ -824,7 +845,11 @@ export const useChatSession = ({
             pagination: structRes.pagination || resData.pagination,
             document: resolvedDoc || resData.document || null,
             documentSummary: resData.documentSummary || null,
-            documents: structRes.documents || resData.documents || [],
+            documents: Array.isArray(resData.document)
+              ? resData.document
+              : structRes.documents?.length
+                ? structRes.documents
+                : resData.documents || [],
             documentIds: normalizeDocumentIds(
               resolvedDoc?.id,
               resData.documentId,
@@ -911,13 +936,31 @@ export const useChatSession = ({
       return;
     }
 
+    const messageDocument = targetDocument || selectedDocument;
+    const targetDocumentIds = targetDocument
+      ? normalizeDocumentIds(
+          targetDocument,
+          targetDocument?.report_id,
+          targetDocument?.file_key,
+        )
+      : undefined;
+    const messageDocumentIds = normalizeDocumentIds(
+      messageDocument,
+      messageDocument?.report_id,
+      messageDocument?.file_key,
+    );
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
       text: textToSubmit,
-      documents: selectedDocument
-        ? [{ id: selectedDocument.id, fileName: selectedDocument.fileName }]
-        : undefined,
+      documents: messageDocumentIds?.map((id) => ({
+        id,
+        fileName:
+          messageDocument?.fileName ||
+          messageDocument?.report_name ||
+          messageDocument?.name ||
+          "Medical Report",
+      })),
       createdAt: new Date().toISOString(),
     };
 
@@ -931,11 +974,12 @@ export const useChatSession = ({
         message: textToSubmit,
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
+        documentId: targetDocumentIds,
         history: buildChatHistory(messages),
         stream: true,
       };
 
-      await streamNormalChat(payload);
+      await streamNormalChat(payload, isReportQuestion);
     } catch (err) {
       console.warn("[AI_CHAT] Failed to send chat message:", err);
     } finally {

@@ -5,9 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Modal,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LIGHT_THEME, DARK_THEME } from "../../../constants/theme";
+import { formatDateOnly } from "../../../utils/dateFormatter";
 import DocumentViewerModal from "../../shared/DocumentViewerModal";
 
 export interface PatientDetails {
@@ -54,11 +56,12 @@ export interface StructuredReportDocument {
 
 export interface StructuredReportSummaryCardProps {
   document?: StructuredReportDocument;
+  reportDocuments?: StructuredReportDocument[];
   suggestedQuestions?: string[];
   isDark: boolean;
   theme?: any;
   preferredLang?: string;
-  onQuestionPress?: (question: string) => void;
+  onQuestionPress?: (question: string, document?: StructuredReportDocument) => void;
   onViewFullReport?: (document?: StructuredReportDocument) => void;
   readOnly?: boolean;
 }
@@ -82,6 +85,13 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     collapse: "Collapse",
     noAbnormalFound: "No abnormal parameters detected.",
     noNormalFound: "No additional parameters listed.",
+    reportSummary: "Report Summary",
+    reports: "Reports",
+    report: "Report",
+    document: "Document",
+    documents: "Documents",
+    tapToViewDetails: "Tap a report to view details",
+    basedOnUploads: "These reports are based on your uploaded documents and are shown for your reference.",
   },
   gujarati: {
     patientDetails: "દર્દીની વિગતો",
@@ -101,6 +111,13 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     collapse: "છુપાવો",
     noAbnormalFound: "કોઈ અસામાન્ય પરિણામ મળ્યા નથી.",
     noNormalFound: "કોઈ વધારાના પરિણામો નથી.",
+    reportSummary: "રિપોર્ટ સારાંશ",
+    reports: "રિપોર્ટ",
+    report: "રિપોર્ટ",
+    document: "દસ્તાવેજ",
+    documents: "દસ્તાવેજો",
+    tapToViewDetails: "વિગતો જોવા માટે રિપોર્ટ પસંદ કરો",
+    basedOnUploads: "આ રિપોર્ટ અપલોડ કરેલા દસ્તાવેજો પર આધારિત છે અને તમારી જાણ માટે બતાવવામાં આવે છે.",
   },
   hindi: {
     patientDetails: "मरीज़ का विवरण",
@@ -120,6 +137,13 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     collapse: "संक्षिप्त करें",
     noAbnormalFound: "कोई असामान्य पैरामीटर नहीं मिला।",
     noNormalFound: "कोई अन्य पैरामीटर सूचीबद्ध नहीं है।",
+    reportSummary: "रिपोर्ट सारांश",
+    reports: "रिपोर्ट",
+    report: "रिपोर्ट",
+    document: "दस्तावेज़",
+    documents: "दस्तावेज़",
+    tapToViewDetails: "विवरण देखने के लिए रिपोर्ट चुनें",
+    basedOnUploads: "ये रिपोर्ट आपके अपलोड किए गए दस्तावेज़ों पर आधारित हैं और संदर्भ के लिए दिखाई गई हैं।",
   },
   marathi: {
     patientDetails: "रुग्णाचा तपशील",
@@ -139,6 +163,13 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     collapse: "लपवा",
     noAbnormalFound: "कोणतेही असामान्य मूल्य आढळले नाही.",
     noNormalFound: "इतर मूल्ये उपलब्ध नाहीत.",
+    reportSummary: "अहवाल सारांश",
+    reports: "अहवाल",
+    report: "अहवाल",
+    document: "दस्तऐवज",
+    documents: "दस्तऐवज",
+    tapToViewDetails: "तपशील पाहण्यासाठी अहवाल निवडा",
+    basedOnUploads: "हे अहवाल अपलोड केलेल्या दस्तऐवजांवर आधारित असून संदर्भासाठी दाखवले आहेत.",
   },
   tamil: {
     patientDetails: "நோயாளி விவரங்கள்",
@@ -158,6 +189,13 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     collapse: "சுருக்கு",
     noAbnormalFound: "அசாதாரண அளவுகள் எதுவும் இல்லை.",
     noNormalFound: "கூடுதல் அளவுகள் எதுவும் இல்லை.",
+    reportSummary: "அறிக்கை சுருக்கம்",
+    reports: "அறிக்கைகள்",
+    report: "அறிக்கை",
+    document: "ஆவணம்",
+    documents: "ஆவணங்கள்",
+    tapToViewDetails: "விவரங்களைக் காண அறிக்கையைத் தட்டவும்",
+    basedOnUploads: "இந்த அறிக்கைகள் நீங்கள் பதிவேற்றிய ஆவணங்களின் அடிப்படையில் உங்கள் குறிப்புக்காகக் காட்டப்படுகின்றன.",
   },
 };
 
@@ -168,6 +206,7 @@ const getFileNameOnly = (value: unknown): string => {
 
 export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardProps> = ({
   document = {},
+  reportDocuments,
   suggestedQuestions = [],
   isDark,
   theme,
@@ -178,6 +217,8 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
 }) => {
   const [normalExpanded, setNormalExpanded] = useState(false);
   const [localViewerOpen, setLocalViewerOpen] = useState(false);
+  const [selectedReport, setSelectedReport] =
+    useState<StructuredReportDocument | null>(null);
 
   const activeTheme = theme || (isDark ? DARK_THEME : LIGHT_THEME);
   const colors = activeTheme.colors;
@@ -315,6 +356,185 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     }
     setLocalViewerOpen(true);
   };
+
+  if (reportDocuments && reportDocuments.length > 0) {
+    return (
+      <View style={styles.container} testID="structured-report-summary-card">
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: isDark ? "#1a2234" : "#ffffff",
+              borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0",
+            },
+          ]}
+        >
+          <View style={styles.reportListHeader}>
+            <View style={styles.reportListHeaderIcon}>
+              <MaterialCommunityIcons
+                name="file-document-multiple-outline"
+                size={21}
+                color={colors.primary}
+              />
+            </View>
+            <View style={styles.reportListHeaderText}>
+              <Text style={[styles.reportListTitle, { color: colors.textPrimary }]}>
+                {t.reportSummary}
+              </Text>
+              <Text style={[styles.reportListSubtitle, { color: colors.textSecondary }]}>
+                {reportDocuments.length}{" "}
+                {reportDocuments.length === 1 ? t.report : t.reports}
+                {"  ·  "}
+                {reportDocuments.length}{" "}
+                {reportDocuments.length === 1 ? t.document : t.documents}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[styles.reportListSectionTitle, { color: colors.textPrimary }]}>
+            {t.reports}
+          </Text>
+          <Text style={[styles.reportListHint, { color: colors.textSecondary }]}>
+            {t.tapToViewDetails}
+          </Text>
+
+          {reportDocuments.map((report, index) => {
+            const reportType =
+              report.documentType ||
+              (report as any).reportType ||
+              (report as any).report_type ||
+              "Medical Report";
+            const reportName = getFileNameOnly(
+              report.fileName ||
+                (report as any).report_name ||
+                (report as any).reportName,
+            );
+            const reportDate =
+              report.reportDate || (report as any).report_date || null;
+            const accent = ["#5b4bff", "#10b981", "#f97316", "#64748b"][
+              index % 4
+            ];
+
+            return (
+              <TouchableOpacity
+                key={report.id || `${reportName}-${index}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${reportName}, ${reportType}`}
+                style={[
+                  styles.reportListItem,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255, 255, 255, 0.04)"
+                      : "#f8fafc",
+                    borderColor: isDark
+                      ? "rgba(255, 255, 255, 0.12)"
+                      : `${accent}45`,
+                  },
+                ]}
+                onPress={() => setSelectedReport(report)}
+                activeOpacity={0.75}
+              >
+                <View
+                  style={[
+                    styles.reportListItemIcon,
+                    { backgroundColor: `${accent}1a` },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="file-document-outline"
+                    size={21}
+                    color={accent}
+                  />
+                </View>
+                <View style={styles.reportListItemContent}>
+                  <Text
+                    style={[styles.reportListItemName, { color: colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {reportType.replace(/_/g, " ")}
+                  </Text>
+                  <Text
+                    style={[styles.reportListItemType, { color: accent }]}
+                    numberOfLines={1}
+                  >
+                    {reportName}
+                  </Text>
+                  {reportDate ? (
+                    <View style={styles.reportListDateRow}>
+                      <Ionicons name="calendar-outline" size={12} color={colors.textSecondary} />
+                      <Text
+                        style={[styles.reportListItemDate, { color: colors.textSecondary }]}
+                        numberOfLines={1}
+                      >
+                        {formatDateOnly(reportDate, "dd MMM yyyy")}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={19} color={accent} />
+              </TouchableOpacity>
+            );
+          })}
+
+        </View>
+
+        <Modal
+          visible={Boolean(selectedReport)}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSelectedReport(null)}
+        >
+          <View style={styles.reportModalBackdrop}>
+            <View
+              style={[
+                styles.reportModalSheet,
+                { backgroundColor: isDark ? "#111827" : "#ffffff" },
+              ]}
+            >
+              <View style={styles.reportModalTopRow}>
+                <View style={styles.reportModalHandle} />
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Close report details"
+                  onPress={() => setSelectedReport(null)}
+                  style={styles.reportModalClose}
+                >
+                  <Ionicons name="close" size={22} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              {selectedReport ? (
+                <ScrollView
+                  style={styles.reportModalScroll}
+                  contentContainerStyle={styles.reportModalContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <StructuredReportSummaryCard
+                    document={selectedReport}
+                    suggestedQuestions={suggestedQuestions}
+                    isDark={isDark}
+                    theme={theme}
+                    preferredLang={preferredLang}
+                    onQuestionPress={(question, report) =>
+                      onQuestionPress?.(question, report || selectedReport || undefined)
+                    }
+                    onViewFullReport={
+                      onViewFullReport
+                        ? (report) => {
+                            setSelectedReport(null);
+                            onViewFullReport(report || selectedReport);
+                          }
+                        : undefined
+                    }
+                    readOnly={readOnly}
+                  />
+                </ScrollView>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container} testID="structured-report-summary-card">
@@ -638,7 +858,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
                       borderColor: isDark ? "rgba(91, 75, 255, 0.35)" : "#bfdbfe",
                     },
                   ]}
-                  onPress={() => onQuestionPress && onQuestionPress(question)}
+                  onPress={() => onQuestionPress && onQuestionPress(question, document)}
                   activeOpacity={0.7}
                 >
                   <Ionicons
@@ -670,6 +890,140 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     marginVertical: 6,
+  },
+  reportListHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(91, 75, 255, 0.08)",
+    marginBottom: 16,
+  },
+  reportListHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(91, 75, 255, 0.12)",
+    marginRight: 10,
+  },
+  reportListHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reportListTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  reportListSubtitle: {
+    fontSize: 11,
+    marginTop: 3,
+  },
+  reportListSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 3,
+    marginHorizontal: 2,
+  },
+  reportListHint: {
+    fontSize: 11,
+    marginBottom: 10,
+    marginHorizontal: 2,
+  },
+  reportListItem: {
+    minHeight: 78,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 9,
+  },
+  reportListItemIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  reportListItemContent: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  reportListItemName: {
+    fontSize: 13,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  reportListItemType: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+  reportListItemDate: {
+    fontSize: 10,
+    marginLeft: 5,
+    flexShrink: 1,
+  },
+  reportListDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  reportListFooter: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 3,
+  },
+  reportListFooterText: {
+    flex: 1,
+    fontSize: 10,
+    lineHeight: 15,
+    marginLeft: 7,
+  },
+  reportModalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.48)",
+  },
+  reportModalSheet: {
+    maxHeight: "92%",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 8,
+  },
+  reportModalTopRow: {
+    height: 30,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reportModalHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#cbd5e1",
+  },
+  reportModalClose: {
+    position: "absolute",
+    right: 14,
+    top: 1,
+    width: 30,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reportModalScroll: {
+    flexShrink: 1,
+  },
+  reportModalContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 24,
   },
   card: {
     borderRadius: 16,

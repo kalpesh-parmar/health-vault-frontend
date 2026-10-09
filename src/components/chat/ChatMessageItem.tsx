@@ -39,7 +39,9 @@ import { ChatMessage } from "../../types/chat";
 import {
   extractMedicationsFromDocuments,
   normalizeDocumentsList,
+  normalizeReportDocumentsToSummaries,
   normalizeReportSummaryToDocument,
+  isFailedOrRejectedDocument,
 } from "../../utils/documentNormalizer";
 import { normalizeMedicationItem } from "../../utils/medicationListNormalizer";
 import { normalizeReportItem } from "../../utils/reportListNormalizer";
@@ -89,6 +91,7 @@ interface ChatMessageItemProps {
   setMessages?: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onViewFullReport?: (doc: any) => void;
   onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
+  onReportQuestion?: (question: string, document?: any) => Promise<void> | void;
   isOnboardingCompleted?: boolean;
   onAllergyCardExpand?: () => void;
 }
@@ -120,6 +123,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   setMessages,
   onViewFullReport,
   onRetryDocument,
+  onReportQuestion,
   isOnboardingCompleted,
   onAllergyCardExpand,
 }) => {
@@ -248,6 +252,18 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
     );
   };
 
+  const submitReportQuestion = (question: string, document?: any) => {
+    if (isOnboardingCompleted && onReportQuestion) {
+      void onReportQuestion(question, document);
+      return;
+    }
+    void handleGenericOptionPress({
+      label: question,
+      value: question,
+      actionType: "NORMAL_CHAT",
+    });
+  };
+
   // User-role messages are strictly user speech bubbles (with attachments if present)
   // and must never mount assistant cards, wizards, or action prompts.
   if (item.role === "user") {
@@ -275,15 +291,25 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       (item as any).actionType === "REPORT_SUMMARY";
 
     if (isReportOrConfirmAction) {
-      const doc = normalizeReportSummaryToDocument(
-        item.reportSummary ||
+      const reportSummarySource = item.reportSummary ||
         (Array.isArray((item as any).actions)
           ? (item as any).actions.find(
               (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
             )?.reportSummary
-          : null) ||
-        item.document,
-        item.document,
+          : null);
+      const reportSourceFailed =
+        isFailedOrRejectedDocument(reportSummarySource) ||
+        isFailedOrRejectedDocument(item.document);
+      const doc = reportSourceFailed
+        ? null
+        : normalizeReportSummaryToDocument(
+            reportSummarySource || item.document,
+            item.document,
+          );
+      const reportDocuments = normalizeReportDocumentsToSummaries(
+        item.documents?.length ? item.documents : item.document,
+        item.reportSummary,
+        (item as any).actions || [],
       );
 
       const hasDoc = Boolean(
@@ -322,17 +348,12 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           return renderAssistantPrompt(
             <StructuredReportSummaryCard
               document={doc}
+              reportDocuments={reportDocuments}
               suggestedQuestions={questions}
               isDark={isDark}
               theme={theme}
               preferredLang={preferredLang}
-              onQuestionPress={(q) =>
-                handleGenericOptionPress({
-                  label: q,
-                  value: q,
-                  actionType: "NORMAL_CHAT",
-                })
-              }
+              onQuestionPress={(q, report) => submitReportQuestion(q, report || doc)}
               onViewFullReport={
                 onViewFullReport ? () => onViewFullReport(doc) : undefined
               }
@@ -349,13 +370,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             isDark={isDark}
             theme={theme}
             preferredLang={preferredLang}
-            onQuestionPress={(q) =>
-              handleGenericOptionPress({
-                label: q,
-                value: q,
-                actionType: "NORMAL_CHAT",
-              })
-            }
+            onQuestionPress={(q, report) => submitReportQuestion(q, report || doc)}
             onViewFullReport={
               onViewFullReport ? () => onViewFullReport(doc) : undefined
             }
@@ -681,11 +696,19 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
               (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
             )?.reportSummary
           : null);
-      const summaryDocument = normalizeReportSummaryToDocument(
+      const summarySource =
         reportSummaryData ||
-          item.document ||
-          ((item.documentSummary as any)?.summary ? item.documentSummary : null),
-        item.document,
+        item.document ||
+        ((item.documentSummary as any)?.summary ? item.documentSummary : null);
+      const summaryDocument =
+        isFailedOrRejectedDocument(reportSummaryData) ||
+        isFailedOrRejectedDocument(item.document)
+          ? null
+          : normalizeReportSummaryToDocument(summarySource, item.document);
+      const reportDocuments = normalizeReportDocumentsToSummaries(
+        item.documents?.length ? item.documents : item.document,
+        reportSummaryData,
+        (item as any).actions || [],
       );
       const hasDocumentSummary = Boolean(
         summaryDocument &&
@@ -704,12 +727,13 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         summaryIsStructured ? (
           <StructuredReportSummaryCard
             document={summaryDocument}
+            reportDocuments={reportDocuments}
             suggestedQuestions={SUGGESTED_QUESTIONS_I18N.english.document}
             isDark={isDark}
             theme={theme}
             preferredLang={preferredLang}
-            onQuestionPress={(q) =>
-              handleGenericOptionPress({ label: q, value: q, actionType: "NORMAL_CHAT" })
+            onQuestionPress={(q, report) =>
+              submitReportQuestion(q, report || summaryDocument)
             }
             onViewFullReport={
               onViewFullReport ? () => onViewFullReport(summaryDocument) : undefined
@@ -724,8 +748,8 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             isDark={isDark}
             theme={theme}
             preferredLang={preferredLang}
-            onQuestionPress={(q) =>
-              handleGenericOptionPress({ label: q, value: q, actionType: "NORMAL_CHAT" })
+            onQuestionPress={(q, report) =>
+              submitReportQuestion(q, report || summaryDocument)
             }
             onViewFullReport={
               onViewFullReport ? () => onViewFullReport(summaryDocument) : undefined
@@ -989,20 +1013,33 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       }
 
       if (msgDocs.length > 0) {
-        return renderAssistantPrompt(
+        return (
           <View style={{ width: "100%" }}>
-            {documentSummaryCard}
-            <DocumentProgressSummaryContainer
-              documents={msgDocs}
-              preferredLang={preferredLang}
-              isDark={isDark}
-              theme={theme}
-              onRetry={onRetryDocument}
-              canRetry={isLatest && !isReadOnly}
-              readOnly={isReadOnly}
-            />
+            {dateHeader}
+            <View style={styles.optionsWrapper}>
+              <DocumentProgressSummaryContainer
+                documents={msgDocs}
+                preferredLang={preferredLang}
+                isDark={isDark}
+                theme={theme}
+                onRetry={onRetryDocument}
+                canRetry={isLatest && !isReadOnly}
+                readOnly={isReadOnly}
+              />
+            </View>
+            {item.text && item.text.trim().length > 0 && (
+              <MessageBubble
+                message={item as any}
+                isDark={isDark}
+                onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                isSpeaking={speakingMessageId === item.id}
+              />
+            )}
+            {documentSummaryCard && (
+              <View style={styles.optionsWrapper}>{documentSummaryCard}</View>
+            )}
             {item.options && item.options.length > 0 && (
-              <View style={{ marginTop: 10 }}>
+              <View style={[styles.optionsWrapper, { marginTop: 10 }]}>
                 <MedicineOptionsPanel
                   optionsList={item.options}
                   isDark={isDark}
@@ -1016,7 +1053,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                 />
               </View>
             )}
-          </View>,
+          </View>
         );
       }
 

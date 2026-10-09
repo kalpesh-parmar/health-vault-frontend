@@ -292,7 +292,7 @@ export function ResolveProfileSourceCard({
             uiT={uiT}
             getFieldIcon={getFieldIcon}
             onConfirm={handleConfirmProfile}
-            onEditManually={handleStartManualEdit}
+            onEditManually={() => handleStartManualEdit("MANUAL")}
           />
           {selectedProfileSource && (
             <ProfileSourceActions
