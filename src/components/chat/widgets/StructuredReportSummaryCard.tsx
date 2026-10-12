@@ -31,6 +31,41 @@ export interface StructuredLabResult {
   isAbnormal?: boolean;
 }
 
+export interface FinancialLineItem {
+  description: string;
+  category?: string;
+  quantity?: number;
+  unitPrice?: number;
+  totalPrice?: number;
+  isOptional?: boolean;
+  notes?: string;
+}
+
+export interface FinancialSummaryData {
+  totalCost?: number | null;
+  estimatedTotal?: number | null;
+  mandatoryTotal?: number | null;
+  optionalTotal?: number | null;
+  currency?: string | null;
+  lineItems?: FinancialLineItem[];
+  paymentTerms?: string;
+}
+
+export interface TreatmentPhase {
+  phaseNumber?: number;
+  phaseName?: string;
+  description?: string;
+  estimatedDuration?: string;
+  steps?: string[];
+  cost?: number;
+}
+
+export interface TreatmentPlanData {
+  phases?: TreatmentPhase[];
+  followUpInstructions?: string[];
+  notes?: string;
+}
+
 export interface StructuredReportDocument {
   id?: string;
   fileName?: string;
@@ -52,6 +87,11 @@ export interface StructuredReportDocument {
   fileUrl?: string | null;
   isLabReport?: boolean;
   isPrescription?: boolean;
+  isQuotation?: boolean;
+  financialSummary?: FinancialSummaryData | null;
+  treatmentPlan?: TreatmentPlanData | null;
+  treatments?: any[];
+  structuredExtractedData?: any;
 }
 
 export interface StructuredReportSummaryCardProps {
@@ -92,6 +132,12 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     documents: "Documents",
     tapToViewDetails: "Tap a report to view details",
     basedOnUploads: "These reports are based on your uploaded documents and are shown for your reference.",
+    financialSummary: "Financial Summary / Estimate",
+    mandatoryTotal: "Mandatory / Estimated Total",
+    optionalTotal: "Optional Items Total",
+    optionalBadge: "Optional",
+    treatmentPlan: "Treatment Plan",
+    lineItems: "Quoted Items",
   },
   gujarati: {
     patientDetails: "દર્દીની વિગતો",
@@ -118,6 +164,12 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     documents: "દસ્તાવેજો",
     tapToViewDetails: "વિગતો જોવા માટે રિપોર્ટ પસંદ કરો",
     basedOnUploads: "આ રિપોર્ટ અપલોડ કરેલા દસ્તાવેજો પર આધારિત છે અને તમારી જાણ માટે બતાવવામાં આવે છે.",
+    financialSummary: "અંદાજિત ખર્ચ સારાંશ",
+    mandatoryTotal: "આવશ્યક / અંદાજિત કુલ",
+    optionalTotal: "વૈકલ્પિક વસ્તુઓ કુલ",
+    optionalBadge: "વૈકલ્પિક",
+    treatmentPlan: "સારવાર યોજના",
+    lineItems: "વિગતો",
   },
   hindi: {
     patientDetails: "मरीज़ का विवरण",
@@ -144,6 +196,12 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     documents: "दस्तावेज़",
     tapToViewDetails: "विवरण देखने के लिए रिपोर्ट चुनें",
     basedOnUploads: "ये रिपोर्ट आपके अपलोड किए गए दस्तावेज़ों पर आधारित हैं और संदर्भ के लिए दिखाई गई हैं।",
+    financialSummary: "वित्तीय सारांश / अनुमान",
+    mandatoryTotal: "अनिवार्य / अनुमानित कुल",
+    optionalTotal: "वैकल्पिक आइटम कुल",
+    optionalBadge: "वैकल्पिक",
+    treatmentPlan: "उपचार योजना",
+    lineItems: "आइटम सूची",
   },
   marathi: {
     patientDetails: "रुग्णाचा तपशील",
@@ -170,6 +228,12 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     documents: "दस्तऐवज",
     tapToViewDetails: "तपशील पाहण्यासाठी अहवाल निवडा",
     basedOnUploads: "हे अहवाल अपलोड केलेल्या दस्तऐवजांवर आधारित असून संदर्भासाठी दाखवले आहेत.",
+    financialSummary: "आर्थिक सारांश / अंदाज",
+    mandatoryTotal: "अनिवार्य / अंदाजे एकूण",
+    optionalTotal: "पर्यायी आयटम एकूण",
+    optionalBadge: "पर्यायी",
+    treatmentPlan: "उपचार योजना",
+    lineItems: "तपशील",
   },
   tamil: {
     patientDetails: "நோயாளி விவரங்கள்",
@@ -196,6 +260,12 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     documents: "ஆவணங்கள்",
     tapToViewDetails: "விவரங்களைக் காண அறிக்கையைத் தட்டவும்",
     basedOnUploads: "இந்த அறிக்கைகள் நீங்கள் பதிவேற்றிய ஆவணங்களின் அடிப்படையில் உங்கள் குறிப்புக்காகக் காட்டப்படுகின்றன.",
+    financialSummary: "நிதி சுருக்கம் / மதிப்பீடு",
+    mandatoryTotal: "கட்டாய / மதிப்பிடப்பட்ட மொத்தம்",
+    optionalTotal: "விருப்ப பொருட்கள் மொத்தம்",
+    optionalBadge: "விருப்பமானது",
+    treatmentPlan: "சிகிச்சை திட்டம்",
+    lineItems: "பொருட்கள் பட்டியல்",
   },
 };
 
@@ -205,7 +275,7 @@ const getFileNameOnly = (value: unknown): string => {
 };
 
 export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardProps> = ({
-  document = {},
+  document: docProp = {},
   reportDocuments,
   suggestedQuestions = [],
   isDark,
@@ -215,6 +285,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
   onViewFullReport,
   readOnly = false,
 }) => {
+  const document: StructuredReportDocument = docProp || {};
   const [normalExpanded, setNormalExpanded] = useState(false);
   const [localViewerOpen, setLocalViewerOpen] = useState(false);
   const [selectedReport, setSelectedReport] =
@@ -303,6 +374,25 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     return allLabs.filter((item) => !item.isAbnormal);
   }, [document.normalResults, (document as any).normal_values, (document as any).normalValues, document.labFindings]);
 
+  const isQuotation = useMemo(() => {
+    const dt = String(document.documentType || "").toUpperCase();
+    return (
+      Boolean(document.isQuotation) ||
+      dt === "QUOTATION" ||
+      dt.includes("QUOTATION") ||
+      dt.includes("ESTIMATE") ||
+      Boolean(
+        document.financialSummary?.lineItems &&
+          document.financialSummary.lineItems.length > 0,
+      )
+    );
+  }, [document.documentType, document.isQuotation, document.financialSummary]);
+
+  const formatCurrency = (val?: number | null, curr = "₹") => {
+    if (val == null || isNaN(Number(val))) return null;
+    return `${curr} ${Number(val).toLocaleString("en-IN")}`;
+  };
+
   const keyFindingsText = useMemo(() => {
     if (typeof document.keyFindings === "string" && document.keyFindings.trim()) {
       return document.keyFindings.trim();
@@ -313,11 +403,29 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     if (document.summary && document.summary.trim()) {
       return document.summary.trim();
     }
+    if (isQuotation && document.financialSummary) {
+      const tot =
+        document.financialSummary.mandatoryTotal ??
+        document.financialSummary.estimatedTotal ??
+        document.financialSummary.totalCost;
+      if (tot != null) {
+        return `Estimated Total: ${formatCurrency(tot, document.financialSummary.currency || "₹")}`;
+      }
+    }
     if (abnormalResults.length > 0) {
       return `${abnormalResults.length} abnormal parameter(s) requiring attention detected.`;
     }
-    return t.noAbnormalFound;
-  }, [document.keyFindings, (document as any).key_findings, document.summary, abnormalResults, t.noAbnormalFound]);
+    return isQuotation ? "Treatment quotation estimate." : t.noAbnormalFound;
+  }, [document.keyFindings, (document as any).key_findings, document.summary, abnormalResults, isQuotation, document.financialSummary, t.noAbnormalFound]);
+
+  const whatThisMayMeanText = useMemo(() => {
+    const value =
+      document.whatThisMayMean ||
+      (document as any).what_this_may_mean ||
+      (document as any).interpretation ||
+      "";
+    return typeof value === "string" ? value.trim() : "";
+  }, [document.whatThisMayMean, (document as any).what_this_may_mean, (document as any).interpretation]);
 
   const patientAge = patient.age ? `${patient.age} yrs` : null;
   const patientGender = patient.gender ? String(patient.gender).toUpperCase() : null;
@@ -716,7 +824,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
         </View>
 
         {/* Section 4: Abnormal Results Section (High Visibility) */}
-        {abnormalResults.length > 0 && (
+        {!isQuotation && abnormalResults.length > 0 && (
           <View style={styles.resultsBlock}>
             <View style={styles.resultsHeaderRow}>
               <View style={styles.resultsHeaderLeft}>
@@ -768,7 +876,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
         )}
 
         {/* Section 5: Normal Results Section (Collapsible Accordion) */}
-        {normalResults.length > 0 && (
+        {!isQuotation && normalResults.length > 0 && (
           <View style={styles.resultsBlock}>
             <TouchableOpacity
               testID="normal-results-accordion-toggle"
@@ -840,7 +948,212 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
           </View>
         )}
 
-        {/* Interactive Quick Question Chips */}
+        {/* Section: Financial / Quotation Breakdown */}
+        {(isQuotation || document.financialSummary) && document.financialSummary && (
+          <View style={styles.resultsBlock} testID="quotation-financial-summary">
+            <View style={styles.resultsHeaderRow}>
+              <View style={styles.resultsHeaderLeft}>
+                <MaterialCommunityIcons name="currency-inr" size={18} color={colors.primary} />
+                <Text style={[styles.resultsSectionTitle, { color: colors.textPrimary }]}>
+                  {t.financialSummary}
+                </Text>
+              </View>
+            </View>
+
+            {/* Totals Summary Cards */}
+            <View style={styles.financialTotalsRow}>
+              <View
+                style={[
+                  styles.financialTotalCard,
+                  {
+                    backgroundColor: isDark ? "rgba(91, 75, 255, 0.15)" : "#eff6ff",
+                    borderColor: isDark ? "rgba(91, 75, 255, 0.3)" : "#bfdbfe",
+                  },
+                ]}
+              >
+                <Text style={[styles.financialTotalLabel, { color: colors.textSecondary }]}>
+                  {t.mandatoryTotal}
+                </Text>
+                <Text style={[styles.financialTotalValue, { color: colors.primary }]}>
+                  {formatCurrency(
+                    document.financialSummary.mandatoryTotal ??
+                      document.financialSummary.estimatedTotal ??
+                      document.financialSummary.totalCost,
+                    document.financialSummary.currency || "₹",
+                  ) || "—"}
+                </Text>
+              </View>
+
+              {document.financialSummary.optionalTotal != null &&
+              document.financialSummary.optionalTotal > 0 ? (
+                <View
+                  style={[
+                    styles.financialTotalCard,
+                    {
+                      backgroundColor: isDark ? "rgba(245, 158, 11, 0.12)" : "#fffbeb",
+                      borderColor: isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a",
+                    },
+                  ]}
+                >
+                  <Text style={[styles.financialTotalLabel, { color: colors.textSecondary }]}>
+                    {t.optionalTotal}
+                  </Text>
+                  <Text style={[styles.financialTotalValue, { color: "#d97706" }]}>
+                    {formatCurrency(
+                      document.financialSummary.optionalTotal,
+                      document.financialSummary.currency || "₹",
+                    )}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Line Items List */}
+            {Array.isArray(document.financialSummary.lineItems) &&
+              document.financialSummary.lineItems.map((item, idx) => (
+                <View
+                  key={`quote-item-${idx}`}
+                  style={[
+                    styles.testRowCard,
+                    {
+                      backgroundColor: isDark ? "rgba(255, 255, 255, 0.02)" : "#ffffff",
+                      borderColor: item.isOptional
+                        ? isDark
+                          ? "rgba(245, 158, 11, 0.25)"
+                          : "#fde68a"
+                        : isDark
+                          ? "rgba(255, 255, 255, 0.06)"
+                          : "#f1f5f9",
+                    },
+                  ]}
+                >
+                  <View style={styles.testMainInfo}>
+                    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+                      <Text style={[styles.testName, { color: colors.textPrimary, flexShrink: 1 }]}>
+                        {item.description}
+                      </Text>
+                      {item.isOptional ? (
+                        <View style={[styles.statusTag, styles.optionalTag]}>
+                          <Text style={styles.optionalTagText}>{t.optionalBadge}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.testMetaRow}>
+                      {item.quantity != null && (
+                        <Text
+                          style={[styles.testRange, { color: colors.textSecondary, marginRight: 8 }]}
+                        >
+                          Qty: {item.quantity}
+                          {item.unitPrice != null
+                            ? ` × ${formatCurrency(item.unitPrice, document.financialSummary?.currency || "₹")}`
+                            : ""}
+                        </Text>
+                      )}
+                      {item.notes ? (
+                        <Text style={[styles.testRange, { color: colors.textSecondary }]}>
+                          {item.notes}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {item.totalPrice != null ? (
+                    <Text
+                      style={[
+                        styles.testValueHighlight,
+                        { color: item.isOptional ? "#d97706" : colors.primary },
+                      ]}
+                    >
+                      {formatCurrency(item.totalPrice, document.financialSummary?.currency || "₹")}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+          </View>
+        )}
+
+        {/* Section: Treatment Plan */}
+        {document.treatmentPlan &&
+          Array.isArray(document.treatmentPlan.phases) &&
+          document.treatmentPlan.phases.length > 0 && (
+            <View style={styles.resultsBlock} testID="quotation-treatment-plan">
+              <View style={styles.resultsHeaderRow}>
+                <View style={styles.resultsHeaderLeft}>
+                  <MaterialCommunityIcons name="timeline-text-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.resultsSectionTitle, { color: colors.textPrimary }]}>
+                    {t.treatmentPlan}
+                  </Text>
+                </View>
+              </View>
+
+              {document.treatmentPlan.phases.map((phase, pIdx) => (
+                <View
+                  key={`phase-${pIdx}`}
+                  style={[
+                    styles.testRowCard,
+                    {
+                      backgroundColor: isDark ? "rgba(255, 255, 255, 0.02)" : "#ffffff",
+                      borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9",
+                    },
+                  ]}
+                >
+                  <View style={styles.testMainInfo}>
+                    <Text style={[styles.testName, { color: colors.textPrimary }]}>
+                      Phase {phase.phaseNumber || pIdx + 1}: {phase.phaseName || "Procedure"}
+                    </Text>
+                    {phase.description ? (
+                      <Text style={[styles.testRange, { color: colors.textSecondary, marginTop: 2 }]}>
+                        {phase.description}
+                      </Text>
+                    ) : null}
+                    {phase.estimatedDuration ? (
+                      <Text style={[styles.testRange, { color: colors.textSecondary, marginTop: 2 }]}>
+                        Duration: {phase.estimatedDuration}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {phase.cost != null ? (
+                    <Text style={[styles.testValueHighlight, { color: colors.primary }]}>
+                      {formatCurrency(phase.cost, document.financialSummary?.currency || "₹")}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
+
+        {/* Section 6: What This May Mean */}
+        {whatThisMayMeanText ? (
+          <View
+            style={[
+              styles.meaningCard,
+              {
+                backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "#fdf8f6",
+                borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#fed7aa",
+              },
+            ]}
+          >
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="bulb-outline" size={16} color="#ea580c" />
+              <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]}>
+                {t.whatThisMeans}
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.meaningText,
+                { color: colors.textPrimary },
+              ]}
+            >
+              {whatThisMayMeanText}
+            </Text>
+            <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
+              {t.disclaimer}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Section 7: Interactive Quick Question Chips */}
         {suggestedQuestions && suggestedQuestions.length > 0 && !readOnly && (
           <View style={styles.chipsSection}>
             <ScrollView
@@ -1226,6 +1539,38 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     marginLeft: 2,
+  },
+  financialTotalsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  financialTotalCard: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+    alignItems: "center",
+  },
+  financialTotalLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 2,
+    textAlign: "center",
+  },
+  financialTotalValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  optionalTag: {
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    marginLeft: 6,
+  },
+  optionalTagText: {
+    color: "#d97706",
+    fontSize: 10,
+    fontWeight: "700",
   },
   normalAccordionHeader: {
     flexDirection: "row",

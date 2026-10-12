@@ -41,6 +41,10 @@ export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
   );
 
   const isResolved = Boolean(activeResolution && activeResolution !== "NONE");
+  const isFallbackDerived = Boolean(
+    medicine.provenance === "vlm_fallback" ||
+    medicine.verificationRequired
+  );
 
   return (
     <CardContainer
@@ -133,6 +137,16 @@ export const ExtractedMedicineCard: React.FC<ExtractedMedicineCardProps> = ({
             {confidencePct}% confidence • Review recommended
           </ConfidenceText>
         </ConfidenceRow>
+      )}
+
+      {/* Fallback Provenance warning */}
+      {isFallbackDerived && (
+        <FallbackProvenanceRow isDark={isDark}>
+          <Ionicons name="alert-circle-outline" size={13} color="#ea580c" style={{ marginRight: 5 }} />
+          <FallbackProvenanceText isDark={isDark} numberOfLines={1}>
+            AI Fallback • Verify against original scan
+          </FallbackProvenanceText>
+        </FallbackProvenanceRow>
       )}
     </CardContainer>
   );
@@ -316,6 +330,25 @@ const ConfidenceText = styled.Text`
   font-size: 11px;
   font-weight: 600;
   color: #b45309;
+  flex-shrink: 1;
+`;
+
+const FallbackProvenanceRow = styled.View<{ isDark: boolean }>`
+  flex-direction: row;
+  align-items: center;
+  margin-top: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background-color: ${(props: any) => props.isDark ? "rgba(234, 88, 12, 0.15)" : "#ffedd5"};
+  border-width: 1px;
+  border-color: ${(props: any) => props.isDark ? "rgba(234, 88, 12, 0.3)" : "#fed7aa"};
+  width: 100%;
+`;
+
+const FallbackProvenanceText = styled.Text<{ isDark: boolean }>`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${(props: any) => props.isDark ? "#fb923c" : "#c2410c"};
   flex-shrink: 1;
 `;
 

@@ -11,6 +11,9 @@ export interface NormalizedMedicationItem {
   totalQuantity?: number;
   prescribedBy?: string;
   notes?: string;
+  provenance?: string;
+  verificationRequired?: boolean;
+  confidence?: number;
   raw?: any;
 }
 
@@ -104,6 +107,9 @@ export const normalizeMedicationItem = (item: any): NormalizedMedicationItem => 
     totalQuantity: item.totalQuantity || item.quantity,
     prescribedBy: item.prescribedBy || item.doctorName || undefined,
     notes: item.notes || item.instructions || undefined,
+    provenance: item.provenance || item.medicationSchedule?.provenance || (item.source === "VLM_FALLBACK" ? "vlm_fallback" : undefined),
+    verificationRequired: Boolean(item.verificationRequired || item.medicationSchedule?.verificationRequired || item.needsReview?.fallbackVerification || item.provenance === "vlm_fallback"),
+    confidence: item.confidence !== undefined ? item.confidence : item.medicationSchedule?.confidence,
     raw: item,
   };
 };

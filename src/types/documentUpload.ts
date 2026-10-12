@@ -1,11 +1,16 @@
+export type PreUploadValidationStatus = "VALIDATING" | "READY" | "INVALID";
+
 export interface SelectedDocument {
   id: string;
   uri: string;
   originalName: string;
   displayName: string;
-  documentType: string;
+  documentType?: string;
   mimeType: string;
   size: number;
+  validationStatus: PreUploadValidationStatus;
+  validationErrorTitle?: string;
+  validationErrorMessage?: string;
 }
 
 export type DocumentUploadStatus =

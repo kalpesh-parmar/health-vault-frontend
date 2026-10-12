@@ -492,6 +492,20 @@ apiClient.interceptors.request.use(
     pendingRequestControllers.add(controller);
     (config as any).abortController = controller;
 
+    // Ensure FormData payloads never carry a manual or default Content-Type header.
+    // In React Native / Axios, deleting Content-Type allows the native networking layer
+    // (OkHttp on Android, NSURLSession on iOS) to generate the RFC 7578 multipart boundary automatically.
+    const isFormData =
+      config.data &&
+      ((typeof FormData !== "undefined" && config.data instanceof FormData) ||
+        (config.data as any)?._parts ||
+        config.data?.constructor?.name === "FormData");
+
+    if (isFormData && config.headers) {
+      delete config.headers["Content-Type"];
+      delete config.headers["content-type"];
+    }
+
     if (!isAuthRequest) {
       const token = await getValidAccessToken();
       if (token) {

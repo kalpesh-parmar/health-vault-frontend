@@ -20,6 +20,24 @@ export interface DocumentSummaryItem {
   percentage?: number;
   batchId?: string;
   extractedStructuredData?: any;
+  documentType?: string;
+  reportDate?: string | null;
+  doctorName?: string | null;
+  hospitalName?: string | null;
+  documentInfo?: any;
+  patientInfo?: any;
+  providerInfo?: any;
+  facilityInfo?: any;
+  financialSummary?: any;
+  treatments?: any[];
+  treatmentPlan?: any;
+  procedures?: any[];
+  diagnosis?: any[];
+  symptoms?: any[];
+  vitals?: any[];
+  labResults?: any[];
+  medications?: any[];
+  additionalInformation?: any;
 }
 
 export interface DocumentSummaryStats {
@@ -132,6 +150,52 @@ export const normalizeSingleDocument = (doc: any, index = 0): DocumentSummaryIte
     doc.errorMessage ||
     (status === "REJECTED" ? "The uploaded file is not a medical document." : null);
 
+  const structured = doc.extractedStructuredData || doc.structuredExtractedData || {};
+  const docInfo = doc.documentInfo || structured.documentInfo || {};
+  const patientInfo = doc.patientInfo || structured.patientInfo || doc.patient || structured.patient || {};
+  const providerInfo = doc.providerInfo || structured.providerInfo || {};
+  const facilityInfo = doc.facilityInfo || structured.facilityInfo || {};
+
+  const documentType =
+    doc.documentType ||
+    docInfo.documentType ||
+    structured.documentType ||
+    "OTHER_MEDICAL_DOCUMENT";
+
+  const doctorName =
+    doc.doctorName ||
+    providerInfo.primary?.name ||
+    (Array.isArray(providerInfo.providers) && providerInfo.providers.length === 1 ? providerInfo.providers[0]?.name : null) ||
+    doc.doctorInfo?.name ||
+    structured.doctorName ||
+    structured.doctorInfo?.name ||
+    null;
+
+  const hospitalName =
+    doc.hospitalName ||
+    facilityInfo.name ||
+    doc.hospitalInfo?.name ||
+    structured.hospitalName ||
+    structured.hospitalInfo?.name ||
+    null;
+
+  const reportDate =
+    doc.reportDate ||
+    docInfo.documentDate ||
+    structured.reportDate ||
+    null;
+
+  const financialSummary = doc.financialSummary || structured.financialSummary || null;
+  const treatments = doc.treatments || structured.treatments || [];
+  const treatmentPlan = doc.treatmentPlan || structured.treatmentPlan || null;
+  const procedures = doc.procedures || structured.procedures || [];
+  const diagnosis = doc.diagnosis || structured.diagnosis || [];
+  const symptoms = doc.symptoms || structured.symptoms || [];
+  const vitals = doc.vitals || structured.vitals || [];
+  const labResults = doc.labResults || structured.labResults || structured.tests || [];
+  const medications = Array.isArray(meds) ? meds : (structured.medications || []);
+  const additionalInformation = doc.additionalInformation || structured.additionalInformation || null;
+
   return {
     ...doc,
     id,
@@ -153,7 +217,25 @@ export const normalizeSingleDocument = (doc: any, index = 0): DocumentSummaryIte
     progress: typeof doc.progress === "number" ? doc.progress : (status === "COMPLETED" ? 100 : (status === "FAILED" ? -1 : undefined)),
     percentage: typeof doc.percentage === "number" ? doc.percentage : (status === "COMPLETED" ? 100 : (status === "FAILED" ? -1 : undefined)),
     batchId: doc.batchId,
-    extractedStructuredData: doc.extractedStructuredData,
+    extractedStructuredData: structured,
+    documentType,
+    doctorName,
+    hospitalName,
+    reportDate,
+    documentInfo: docInfo,
+    patientInfo,
+    providerInfo,
+    facilityInfo,
+    financialSummary,
+    treatments,
+    treatmentPlan,
+    procedures,
+    diagnosis,
+    symptoms,
+    vitals,
+    labResults,
+    medications,
+    additionalInformation,
   };
 };
 

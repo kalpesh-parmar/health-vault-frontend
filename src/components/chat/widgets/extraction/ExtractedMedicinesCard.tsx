@@ -177,6 +177,30 @@ export const ExtractedMedicinesCard = React.memo(function ExtractedMedicinesCard
                   </Text>
                 </View>
               )}
+
+              {/* Fallback Warning Badge */}
+              {Boolean(med.provenance === "vlm_fallback" || med.verificationRequired) && (
+                <View
+                  style={[
+                    styles.fallbackBadge,
+                    {
+                      backgroundColor: isDark ? "rgba(234, 88, 12, 0.15)" : "#ffedd5",
+                      borderColor: isDark ? "rgba(234, 88, 12, 0.3)" : "#fed7aa",
+                    },
+                  ]}
+                >
+                  <Ionicons name="alert-circle-outline" size={13} color="#ea580c" style={{ marginRight: 5 }} />
+                  <Text
+                    style={[
+                      styles.fallbackText,
+                      { color: isDark ? "#fb923c" : "#c2410c" },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    AI Fallback • Verify against original scan
+                  </Text>
+                </View>
+              )}
             </View>
           );
         })}
@@ -304,5 +328,19 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 13,
     fontWeight: "bold",
+  },
+  fallbackBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  fallbackText: {
+    fontSize: 11,
+    fontWeight: "600",
+    flexShrink: 1,
   },
 });
