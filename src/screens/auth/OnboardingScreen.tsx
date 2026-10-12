@@ -88,6 +88,8 @@ import { SUGGESTED_QUESTIONS_I18N } from "../../constants/chatConstants";
 import { LinearGradient } from "expo-linear-gradient";
 
 import {
+  isFailedOrRejectedDocument,
+  isReportSummaryForFailedDocuments,
   normalizeReportDocumentsToSummaries,
   normalizeReportSummaryToDocument,
 } from "../../utils/documentNormalizer";
@@ -3765,22 +3767,33 @@ export default function OnboardingScreen() {
       (activeMsg as any).actionType === "REPORT_SUMMARY";
 
     if (isReportOrConfirmActive) {
-      const doc =
-        normalizeReportSummaryToDocument(
-          activeMsg.reportSummary ||
+      const reportSummarySource = activeMsg.reportSummary ||
           (Array.isArray((activeMsg as any).actions)
             ? (activeMsg as any).actions.find(
                 (a: any) =>
                   a.actionType === "REPORT_SUMMARY" || a.reportSummary,
               )?.reportSummary
-            : null) ||
-          activeMsg.document,
-          activeMsg.document,
-        ) ||
-        activeMsg.document ||
-        {};
+            : null);
+      const reportSourceDocuments = activeMsg.documents?.length
+        ? activeMsg.documents
+        : activeMsg.document;
+      const reportSourceFailed =
+        isFailedOrRejectedDocument(reportSummarySource) ||
+        isFailedOrRejectedDocument(activeMsg.document) ||
+        isReportSummaryForFailedDocuments(
+          reportSummarySource,
+          reportSourceDocuments,
+        );
+      const doc = reportSourceFailed
+        ? {}
+        : normalizeReportSummaryToDocument(
+            reportSummarySource || activeMsg.document,
+            activeMsg.document,
+          ) ||
+          activeMsg.document ||
+          {};
       const reportDocuments = normalizeReportDocumentsToSummaries(
-        activeMsg.documents?.length ? activeMsg.documents : activeMsg.document,
+        reportSourceDocuments,
         activeMsg.reportSummary,
         activeMsg.actions || [],
       );

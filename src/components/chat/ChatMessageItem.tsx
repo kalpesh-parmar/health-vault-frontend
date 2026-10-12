@@ -42,6 +42,7 @@ import {
   normalizeReportDocumentsToSummaries,
   normalizeReportSummaryToDocument,
   isFailedOrRejectedDocument,
+  isReportSummaryForFailedDocuments,
 } from "../../utils/documentNormalizer";
 import { normalizeMedicationItem } from "../../utils/medicationListNormalizer";
 import { normalizeReportItem } from "../../utils/reportListNormalizer";
@@ -299,7 +300,11 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           : null);
       const reportSourceFailed =
         isFailedOrRejectedDocument(reportSummarySource) ||
-        isFailedOrRejectedDocument(item.document);
+        isFailedOrRejectedDocument(item.document) ||
+        isReportSummaryForFailedDocuments(
+          reportSummarySource,
+          item.documents?.length ? item.documents : item.document,
+        );
       const doc = reportSourceFailed
         ? null
         : normalizeReportSummaryToDocument(
@@ -702,7 +707,11 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         ((item.documentSummary as any)?.summary ? item.documentSummary : null);
       const summaryDocument =
         isFailedOrRejectedDocument(reportSummaryData) ||
-        isFailedOrRejectedDocument(item.document)
+        isFailedOrRejectedDocument(item.document) ||
+        isReportSummaryForFailedDocuments(
+          reportSummaryData,
+          item.documents?.length ? item.documents : item.document,
+        )
           ? null
           : normalizeReportSummaryToDocument(summarySource, item.document);
       const reportDocuments = normalizeReportDocumentsToSummaries(

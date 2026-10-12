@@ -598,6 +598,45 @@ export const isFailedOrRejectedDocument = (document: any): boolean => {
   );
 };
 
+export const isReportSummaryForFailedDocuments = (
+  summary: any,
+  documents: any,
+): boolean => {
+  if (isFailedOrRejectedDocument(summary)) return true;
+
+  const sourceDocuments = Array.isArray(documents)
+    ? documents
+    : Array.isArray(documents?.documents)
+      ? documents.documents
+      : documents
+        ? [documents]
+        : [];
+  if (sourceDocuments.length === 0) return false;
+
+  const summaryIds = [
+    summary?.id,
+    summary?.report_id,
+    summary?.reportId,
+    summary?.fileKey,
+    summary?.s3Key,
+  ].filter(Boolean).map(String);
+  const matchingDocument = summaryIds.length > 0
+    ? sourceDocuments.find((document: any) =>
+        [
+          document?.id,
+          document?.report_id,
+          document?.reportId,
+          document?.fileKey,
+          document?.s3Key,
+          document?.jobId,
+        ].some((id) => id && summaryIds.includes(String(id))),
+      )
+    : null;
+
+  if (matchingDocument) return isFailedOrRejectedDocument(matchingDocument);
+  return sourceDocuments.every(isFailedOrRejectedDocument);
+};
+
 export const normalizeReportDocumentsToSummaries = (
   documents: any,
   reportSummary?: any,
@@ -616,7 +655,10 @@ export const normalizeReportDocumentsToSummaries = (
   const reportSummaries = [
     ...(reportSummary ? [reportSummary] : []),
     ...actionSummaries,
-  ].filter((summary) => !isFailedOrRejectedDocument(summary));
+  ].filter(
+    (summary) =>
+      !isReportSummaryForFailedDocuments(summary, sourceDocuments),
+  );
   const processedSourceDocuments = sourceDocuments.filter(
     (document) => !isFailedOrRejectedDocument(document),
   );
