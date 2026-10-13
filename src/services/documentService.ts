@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { UPLOAD_TIMEOUT } from "../config/api";
 import {
   DOCUMENT_ENDPOINTS,
   FILE_ENDPOINTS,
@@ -141,9 +142,15 @@ export const validateDocumentsPreUpload = async (
   return response.data;
 };
 
+export interface UploadBatchOptions {
+  timeout?: number;
+  signal?: AbortSignal;
+}
+
 export const uploadDocumentsBatch = async (
   files: Array<{ uri: string; name: string; type: string }>,
   onUploadProgress?: (progressEvent: any) => void,
+  options?: UploadBatchOptions,
 ): Promise<ApiResponse<UploadBatchResponse>> => {
   const formData = new FormData();
   files.forEach((file) => {
@@ -155,6 +162,8 @@ export const uploadDocumentsBatch = async (
   });
 
   const response = await apiClient.post(DOCUMENT_ENDPOINTS.UPLOAD_DOCUMENT, formData, {
+    signal: options?.signal,
+    timeout: options?.timeout || UPLOAD_TIMEOUT,
     onUploadProgress,
   });
   return response.data;

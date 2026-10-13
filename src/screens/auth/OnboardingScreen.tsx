@@ -348,7 +348,6 @@ export default function OnboardingScreen() {
   const [activeErrorDetails, setActiveErrorDetails] = useState<string | null>(
     null,
   );
-  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [versionToken, setVersionToken] = useState<string | null>(null);
   const [viewerDoc, setViewerDoc] = useState<any | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
@@ -1157,6 +1156,7 @@ export default function OnboardingScreen() {
           .find((m) => m.role === "assistant");
         const isInteractiveOptionMsg =
           newMsg.action === "MEDICINE_OPTIONS" ||
+          newMsg.action === "ASK_DOB" ||
           (Array.isArray(newMsg.options) && newMsg.options.length > 0);
         const isReportCardMessage =
           (newMsg.action === "ASK_REPORT" || newMsg.action === "REPORT_SUMMARY") &&
@@ -1172,7 +1172,16 @@ export default function OnboardingScreen() {
           return itemsToAdd.length > 0 ? [...prev, ...itemsToAdd] : prev;
         }
 
+        const isValidationRejectionMsg = Boolean(
+          aiRes.isRejected ||
+          aiRes.rejectionReason ||
+          (newMsg as any).isRejected ||
+          (newMsg as any).rejectionReason ||
+          (newMsg.action === "ASK_DOB" && (aiRes.dobRejectedReason || aiRes.rejectionReason))
+        );
+
         const isDuplicateAssistantMsg =
+          !isValidationRejectionMsg &&
           !isInteractiveOptionMsg &&
           lastAssistantMsg &&
           lastAssistantMsg.action === newMsg.action &&
@@ -1760,6 +1769,23 @@ export default function OnboardingScreen() {
       const timeString = format(date, "hh:mm a");
       sendMessage(timeString, state);
     } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selected = new Date(date);
+      selected.setHours(0, 0, 0, 0);
+      if (selected >= today) {
+        const lang = state?.preferredLanguage || "english";
+        const dict = (ONBOARDING_I18N as any)[lang] || ONBOARDING_I18N.english;
+        Toast.show({
+          type: "error",
+          text1: dict?.invalidDob || "Invalid Date of Birth",
+          text2:
+            dict?.dobMustBePast ||
+            "Date of birth must be in the past. Please select your actual birth date.",
+        });
+        return;
+      }
+
       const dobString = format(date, "yyyy-MM-dd");
       if (isEditingProfileManually) {
         setEditedProfileData((prev: any) => ({
@@ -2155,9 +2181,32 @@ export default function OnboardingScreen() {
     uploadSheetRef.current?.present();
   };
 
+  const handleValidationStart = () => {
+    setUploadState("validating");
+    setUploadPercent(0);
+    setIsDocumentRetryable(true);
+  };
+
   const handleUploadStart = () => {
     setUploadState("uploading");
     setUploadPercent(0);
+  };
+
+  const handleValidationError = (error?: any) => {
+    setUploadState("idle");
+    setSelectedFile(null);
+    selectedFileRef.current = null;
+    setValidationDialogVisible(true);
+  };
+
+  const handleUploadError = (err?: any) => {
+    setUploadState("failed");
+    setIsDocumentRetryable(true);
+    Toast.show({
+      type: "error",
+      text1: "Upload Failed",
+      text2: err?.message || "Failed to process document. Please retry or continue manually.",
+    });
   };
 
   const handleUploadSuccess = async (jobIds: string[], filesInfo: any[]) => {
@@ -2579,7 +2628,6 @@ export default function OnboardingScreen() {
     setUploadState("idle");
     setSelectedFile(null);
     setInput("");
-    setIdempotencyKey(null);
     setVersionToken(null);
   };
 
@@ -2686,7 +2734,21 @@ export default function OnboardingScreen() {
 
     try {
       setUploadState("uploading");
-      const uploadRes = await uploadDocumentsBatch([fileToUpload]);
+      const abortController = new AbortController();
+      uploadAbortControllerRef.current = abortController;
+
+      const uploadRes = await uploadDocumentsBatch(
+        [fileToUpload],
+        (progressEvent) => {
+          if (progressEvent.total) {
+            const pct = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadPercent(Math.min(99, pct));
+          }
+        },
+        {
+          signal: abortController.signal,
+        },
+      );
       const responseData = (uploadRes as any)?.data || uploadRes;
       const documents = responseData?.documents;
       const createdItem = documents?.[0];
@@ -2761,12 +2823,20 @@ export default function OnboardingScreen() {
 
   const handleRemoveFile = () => {
     isUploadCancelledRef.current = true;
+    if (uploadAbortControllerRef.current) {
+      uploadAbortControllerRef.current.abort();
+      uploadAbortControllerRef.current = null;
+    }
     setSelectedFile(null);
     setInput("");
   };
 
   const handleSelectAgain = () => {
     setValidationDialogVisible(false);
+    if (uploadAbortControllerRef.current) {
+      uploadAbortControllerRef.current.abort();
+      uploadAbortControllerRef.current = null;
+    }
     setSelectedFile(null);
     setInput("");
     setTimeout(() => {
@@ -4380,7 +4450,11 @@ export default function OnboardingScreen() {
         <DateTimePickerModal
           isVisible={isDatePickerVisible}
           mode={datePickerMode}
-          maximumDate={datePickerMode === "date" ? new Date() : undefined}
+          maximumDate={
+            datePickerMode === "date"
+              ? new Date(Date.now() - 24 * 60 * 60 * 1000)
+              : undefined
+          }
           minimumDate={
             datePickerMode === "date" ? new Date("1900-01-01") : undefined
           }
@@ -4393,8 +4467,11 @@ export default function OnboardingScreen() {
           ref={uploadSheetRef}
           fromScreen="Onboarding"
           singleDocument={true}
-          onSuccess={handleUploadSuccess}
+          onValidationStart={handleValidationStart}
           onUploadStart={handleUploadStart}
+          onValidationError={handleValidationError}
+          onUploadError={handleUploadError}
+          onSuccess={handleUploadSuccess}
         />
 
         <UploadValidationDialog

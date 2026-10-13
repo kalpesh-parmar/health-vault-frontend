@@ -316,11 +316,25 @@ interface DocumentUploadBottomSheetProps {
   fromScreen?: string;
   onSuccess?: (jobIds: string[], filesInfo: any[]) => void;
   onUploadStart?: () => void;
+  onValidationStart?: () => void;
+  onValidationError?: (error: { title?: string; message?: string; code?: string }) => void;
+  onUploadError?: (error: any) => void;
   singleDocument?: boolean;
 }
 
 export const DocumentUploadBottomSheet = React.forwardRef(
-  ({ fromScreen, onSuccess, onUploadStart, singleDocument }: DocumentUploadBottomSheetProps, ref: any) => {
+  (
+    {
+      fromScreen,
+      onSuccess,
+      onUploadStart,
+      onValidationStart,
+      onValidationError,
+      onUploadError,
+      singleDocument,
+    }: DocumentUploadBottomSheetProps,
+    ref: any,
+  ) => {
     const { theme, isDark } = useAppTheme();
     const { userId } = useAuth();
     const navigation = useNavigation<any>();
@@ -355,6 +369,72 @@ export const DocumentUploadBottomSheet = React.forwardRef(
       uploadingDocs,
       setIsBottomSheetVisible,
     } = useDocumentUpload();
+
+    const handleSingleDocumentFlow = async (singleFile: SelectedDocument) => {
+      if (!singleFile) return;
+      ref.current?.dismiss();
+
+      if (onValidationStart) {
+        onValidationStart();
+      } else if (onUploadStart) {
+        onUploadStart();
+      }
+
+      try {
+        clearSelectedFiles();
+        const validatedFiles = await addSelectedFiles([singleFile]);
+        const validatedFile = validatedFiles?.[0] || singleFile;
+
+        if (validatedFile.validationStatus === "INVALID") {
+          if (onValidationError) {
+            onValidationError({
+              title: validatedFile.validationErrorTitle,
+              message: validatedFile.validationErrorMessage,
+            });
+          } else {
+            Toast.show({
+              type: "error",
+              text1: validatedFile.validationErrorTitle || "Invalid Document",
+              text2:
+                validatedFile.validationErrorMessage ||
+                "This file doesn't appear to be a medical document. Please select a valid document.",
+            });
+          }
+          return;
+        }
+
+        if (validatedFile.validationStatus === "READY") {
+          if (onUploadStart) {
+            onUploadStart();
+          }
+          if (userId) {
+            await startUpload(
+              userId,
+              fromScreen,
+              (jobIds, filesInfo) => {
+                if (onSuccess) {
+                  onSuccess(jobIds, filesInfo);
+                }
+              },
+              [validatedFile],
+            );
+          }
+        } else {
+          throw new Error("Document validation did not complete.");
+        }
+      } catch (err: any) {
+        console.error("[DocumentUploadBottomSheet] Single document flow error:", err);
+        if (onUploadError) {
+          onUploadError(err);
+        } else {
+          Toast.show({
+            type: "error",
+            text1: "Validation Error",
+            text2: err?.message || "Failed to validate document.",
+          });
+        }
+      }
+    };
 
     const hasActiveProcessing =
       isUploading ||
@@ -460,24 +540,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(
         if (isSingleDoc) {
           const singleFile = files[0];
           if (!singleFile) return;
-          clearSelectedFiles();
-          addSelectedFiles([singleFile]);
-          ref.current?.dismiss();
-          if (onUploadStart) {
-            onUploadStart();
-          }
-          if (userId) {
-            startUpload(
-              userId,
-              fromScreen,
-              (jobIds, filesInfo) => {
-                if (onSuccess) {
-                  onSuccess(jobIds, filesInfo);
-                }
-              },
-              [singleFile],
-            );
-          }
+          await handleSingleDocumentFlow(singleFile);
         } else {
           addSelectedFiles(files);
         }
@@ -528,24 +591,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(
         if (isSingleDoc) {
           const singleFile = files[0];
           if (!singleFile) return;
-          clearSelectedFiles();
-          addSelectedFiles([singleFile]);
-          ref.current?.dismiss();
-          if (onUploadStart) {
-            onUploadStart();
-          }
-          if (userId) {
-            startUpload(
-              userId,
-              fromScreen,
-              (jobIds, filesInfo) => {
-                if (onSuccess) {
-                  onSuccess(jobIds, filesInfo);
-                }
-              },
-              [singleFile],
-            );
-          }
+          await handleSingleDocumentFlow(singleFile);
         } else {
           addSelectedFiles(files);
         }
@@ -624,24 +670,7 @@ export const DocumentUploadBottomSheet = React.forwardRef(
           };
 
           if (isSingleDoc) {
-            clearSelectedFiles();
-            addSelectedFiles([singleFile]);
-            ref.current?.dismiss();
-            if (onUploadStart) {
-              onUploadStart();
-            }
-            if (userId) {
-              startUpload(
-                userId,
-                fromScreen,
-                (jobIds, filesInfo) => {
-                  if (onSuccess) {
-                    onSuccess(jobIds, filesInfo);
-                  }
-                },
-                [singleFile],
-              );
-            }
+            await handleSingleDocumentFlow(singleFile);
           } else {
             addSelectedFiles([singleFile]);
           }
