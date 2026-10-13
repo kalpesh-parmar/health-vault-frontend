@@ -80,7 +80,7 @@ import { AskAllergiesCard } from "../../components/chat/widgets/AskAllergiesCard
 import { findHistoricalUserReply } from "../../components/chat/widgets/HistoricalChips";
 import { DocumentProcessingModal } from "../../components/chat/widgets/DocumentProcessingModal";
 import { ReportSummaryChatCard } from "../../components/chat/widgets/ReportSummaryChatCard";
-import { StructuredReportSummaryCard } from "../../components/chat/widgets/StructuredReportSummaryCard";
+import { OnboardingReportSummaryCard } from "../../components/onboarding/OnboardingReportSummaryCard";
 import { StructuredMedicationListCard } from "../../components/chat/widgets/StructuredMedicationListCard";
 import { parseMedicationListMessage, normalizeMedicationItem } from "../../utils/medicationListNormalizer";
 import { DocumentViewerModal } from "../../components/shared/DocumentViewerModal";
@@ -3895,9 +3895,8 @@ export default function OnboardingScreen() {
 
         if (isStructured) {
           return (
-            <StructuredReportSummaryCard
+            <OnboardingReportSummaryCard
               document={doc}
-              reportDocuments={reportDocuments}
               suggestedQuestions={questions}
               isDark={isDark}
               theme={theme}
