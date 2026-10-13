@@ -83,7 +83,7 @@ interface DocumentUploadContextType {
   uploadingDocs: UploadingDoc[];
   isProgressExpanded: boolean;
   setIsProgressExpanded: (val: boolean) => void;
-  addSelectedFiles: (files: SelectedDocument[]) => void;
+  addSelectedFiles: (files: SelectedDocument[]) => Promise<SelectedDocument[]>;
   removeSelectedFile: (id: string) => void;
   removeInvalidFiles: () => void;
   updateSelectedFile: (id: string, displayName: string, documentType: string) => void;
@@ -398,6 +398,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   const hasHandledBatchFinishedRef = useRef(false);
   const activeBatchIdRef = useRef<string | null>(null);
   const lastBatchEventIdRef = useRef<string | null>(null);
+  const activeUploadAbortControllerRef = useRef<AbortController | null>(null);
 
   const fetchMedicineCountForDoc = useCallback(async (doc: UploadingDoc): Promise<number> => {
     try {
@@ -481,187 +482,202 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     };
   }, []);
 
-  const addSelectedFiles = useCallback((files: SelectedDocument[]) => {
-    const SUPPORTED_EXTENSIONS_SET = new Set([
-      "pdf",
-      "jpg",
-      "jpeg",
-      "png",
-      "webp",
-      "tiff",
-      "tif",
-      "doc",
-      "docx",
-    ]);
-    const MAX_PRE_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+  const addSelectedFiles = useCallback(
+    async (files: SelectedDocument[]): Promise<SelectedDocument[]> => {
+      const SUPPORTED_EXTENSIONS_SET = new Set([
+        "pdf",
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+        "tiff",
+        "tif",
+        "doc",
+        "docx",
+      ]);
+      const MAX_PRE_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
-    // 1. Initial client-side validation
-    const preparedFiles: SelectedDocument[] = files.map((file) => {
-      const ext = (file.originalName.split(".").pop() || "").toLowerCase();
-      let validationStatus: SelectedDocument["validationStatus"] = "VALIDATING";
-      let validationErrorTitle: string | undefined;
-      let validationErrorMessage: string | undefined;
+      // 1. Initial client-side validation
+      const preparedFiles: SelectedDocument[] = files.map((file) => {
+        const ext = (file.originalName.split(".").pop() || "").toLowerCase();
+        let validationStatus: SelectedDocument["validationStatus"] = "VALIDATING";
+        let validationErrorTitle: string | undefined;
+        let validationErrorMessage: string | undefined;
 
-      if (file.size && file.size > MAX_PRE_UPLOAD_BYTES) {
-        validationStatus = "INVALID";
-        validationErrorTitle = "File is too large";
-        validationErrorMessage = "Maximum allowed size is 25 MB.";
-      } else if (!SUPPORTED_EXTENSIONS_SET.has(ext)) {
-        validationStatus = "INVALID";
-        validationErrorTitle = "Unsupported file type";
-        validationErrorMessage =
-          "This file type isn't supported. Please select PDF, JPG, JPEG or another supported medical file type.";
-      }
-
-      return {
-        ...file,
-        validationStatus,
-        validationErrorTitle,
-        validationErrorMessage,
-      };
-    });
-
-    setSelectedFiles((prev) => {
-      const combined = [...prev, ...preparedFiles];
-      if (combined.length > 5) {
-        Toast.show({
-          type: "error",
-          position: "top",
-          text1: "Limit Exceeded",
-          text2: "You can select up to 5 documents at a time.",
-        });
-        return prev;
-      }
-
-      const duplicates: SelectedDocument[] = [];
-      const uniqueFiles: SelectedDocument[] = [];
-
-      for (const file of files) {
-        const isDuplicateInPrev = prev.some((p) => {
-          if (p.uri && file.uri && p.uri === file.uri) return true;
-          const pName = (p.originalName || p.displayName || "").trim().toLowerCase();
-          const fName = (file.originalName || file.displayName || "").trim().toLowerCase();
-          return Boolean(pName && fName && pName === fName);
-        });
-
-        const isDuplicateInCurrent = uniqueFiles.some((u) => {
-          if (u.uri && file.uri && u.uri === file.uri) return true;
-          const uName = (u.originalName || u.displayName || "").trim().toLowerCase();
-          const fName = (file.originalName || file.displayName || "").trim().toLowerCase();
-          return Boolean(uName && fName && uName === fName);
-        });
-
-        if (isDuplicateInPrev || isDuplicateInCurrent) {
-          duplicates.push(file);
-        } else {
-          uniqueFiles.push(file);
+        if (file.size && file.size > MAX_PRE_UPLOAD_BYTES) {
+          validationStatus = "INVALID";
+          validationErrorTitle = "File is too large";
+          validationErrorMessage = "Maximum allowed size is 25 MB.";
+        } else if (!SUPPORTED_EXTENSIONS_SET.has(ext)) {
+          validationStatus = "INVALID";
+          validationErrorTitle = "Unsupported file type";
+          validationErrorMessage =
+            "This file type isn't supported. Please select PDF, JPG, JPEG or another supported medical file type.";
         }
-      }
 
-      if (duplicates.length > 0) {
-        Toast.show({
-          type: "error",
-          position: "top",
-          text1: "Document Already Selected",
-          text2:
-            duplicates.length === 1
-              ? `"${duplicates[0].displayName || duplicates[0].originalName}" has already been selected.`
-              : "Some selected documents have already been added.",
-        });
-      }
+        return {
+          ...file,
+          validationStatus,
+          validationErrorTitle,
+          validationErrorMessage,
+        };
+      });
 
-      if (uniqueFiles.length === 0) {
-        return prev;
-      }
-
-      const availableSlots = Math.max(0, 5 - prev.length);
-      if (uniqueFiles.length > availableSlots) {
-        Toast.show({
-          type: "error",
-          position: "top",
-          text1: "Limit Exceeded",
-          text2: "You can select up to 5 documents at a time.",
-        });
-        return [...prev, ...uniqueFiles.slice(0, availableSlots)];
-      }
-      return [...prev, ...uniqueFiles];
-    });
-
-    // 2. Async in-process Node validation (Option A) for technical valid candidates
-    const needsRemoteValidation = preparedFiles.filter(
-      (f) => f.validationStatus === "VALIDATING"
-    );
-
-    if (needsRemoteValidation.length > 0) {
-      (async () => {
-        try {
-          const payload = needsRemoteValidation.map((f) => ({
-            uri: f.uri,
-            name: getFileNameWithExtension(f.displayName, f.originalName),
-            type: f.mimeType,
-          }));
-
-          const res = await validateDocumentsPreUpload(payload);
-          const data = (res as any)?.data || res;
-          const results = data?.results || [];
-
-          setSelectedFiles((current) =>
-            current.map((item) => {
-              const itemTargetName = getFileNameWithExtension(
-                item.displayName,
-                item.originalName
-              );
-              const match = results.find(
-                (r: any) =>
-                  r.fileName === itemTargetName ||
-                  r.fileName === item.originalName ||
-                  r.fileName === item.displayName
-              );
-
-              if (!match) return item;
-
-              if (match.isValid) {
-                return {
-                  ...item,
-                  validationStatus: "READY",
-                  validationErrorTitle: undefined,
-                  validationErrorMessage: undefined,
-                };
-              } else {
-                return {
-                  ...item,
-                  validationStatus: "INVALID",
-                  validationErrorTitle: match.title || "Not a medical document",
-                  validationErrorMessage:
-                    match.message ||
-                    "This file doesn't appear to be a medical document. Please remove it before continuing.",
-                };
-              }
-            })
-          );
-        } catch (err) {
-          console.warn("[DocumentUploadContext] Remote pre-validation error, failing open:", err);
-          // Fail open on connection error so valid documents are not permanently blocked
-          setSelectedFiles((current) =>
-            current.map((item) => {
-              if (
-                needsRemoteValidation.some((f) => f.id === item.id) &&
-                item.validationStatus === "VALIDATING"
-              ) {
-                return {
-                  ...item,
-                  validationStatus: "READY",
-                  validationErrorTitle: undefined,
-                  validationErrorMessage: undefined,
-                };
-              }
-              return item;
-            })
-          );
+      setSelectedFiles((prev) => {
+        const combined = [...prev, ...preparedFiles];
+        if (combined.length > 5) {
+          Toast.show({
+            type: "error",
+            position: "top",
+            text1: "Limit Exceeded",
+            text2: "You can select up to 5 documents at a time.",
+          });
+          return prev;
         }
-      })();
-    }
-  }, []);
+
+        const duplicates: SelectedDocument[] = [];
+        const uniqueFiles: SelectedDocument[] = [];
+
+        for (const file of files) {
+          const isDuplicateInPrev = prev.some((p) => {
+            if (p.uri && file.uri && p.uri === file.uri) return true;
+            const pName = (p.originalName || p.displayName || "").trim().toLowerCase();
+            const fName = (file.originalName || file.displayName || "").trim().toLowerCase();
+            return Boolean(pName && fName && pName === fName);
+          });
+
+          const isDuplicateInCurrent = uniqueFiles.some((u) => {
+            if (u.uri && file.uri && u.uri === file.uri) return true;
+            const uName = (u.originalName || u.displayName || "").trim().toLowerCase();
+            const fName = (file.originalName || file.displayName || "").trim().toLowerCase();
+            return Boolean(uName && fName && uName === fName);
+          });
+
+          if (isDuplicateInPrev || isDuplicateInCurrent) {
+            duplicates.push(file);
+          } else {
+            uniqueFiles.push(file);
+          }
+        }
+
+        if (duplicates.length > 0) {
+          Toast.show({
+            type: "error",
+            position: "top",
+            text1: "Document Already Selected",
+            text2:
+              duplicates.length === 1
+                ? `"${duplicates[0].displayName || duplicates[0].originalName}" has already been selected.`
+                : "Some selected documents have already been added.",
+          });
+        }
+
+        if (uniqueFiles.length === 0) {
+          return prev;
+        }
+
+        const availableSlots = Math.max(0, 5 - prev.length);
+        if (uniqueFiles.length > availableSlots) {
+          Toast.show({
+            type: "error",
+            position: "top",
+            text1: "Limit Exceeded",
+            text2: "You can select up to 5 documents at a time.",
+          });
+          return [...prev, ...uniqueFiles.slice(0, availableSlots)];
+        }
+        return [...prev, ...uniqueFiles];
+      });
+
+      // 2. Async in-process Node validation for technical valid candidates
+      const needsRemoteValidation = preparedFiles.filter(
+        (f) => f.validationStatus === "VALIDATING"
+      );
+
+      if (needsRemoteValidation.length === 0) {
+        return preparedFiles;
+      }
+
+      try {
+        const payload = needsRemoteValidation.map((f) => ({
+          uri: f.uri,
+          name: getFileNameWithExtension(f.displayName, f.originalName),
+          type: f.mimeType,
+        }));
+
+        const res = await validateDocumentsPreUpload(payload);
+        const data = (res as any)?.data || res;
+        const results = data?.results || [];
+
+        const validatedFiles = preparedFiles.map((item) => {
+          const itemTargetName = getFileNameWithExtension(
+            item.displayName,
+            item.originalName
+          );
+          const match = results.find(
+            (r: any) =>
+              r.fileName === itemTargetName ||
+              r.fileName === item.originalName ||
+              r.fileName === item.displayName
+          );
+
+          if (!match) return item;
+
+          if (match.isValid) {
+            return {
+              ...item,
+              validationStatus: "READY" as const,
+              documentType: match.documentType || item.documentType,
+              validationErrorTitle: undefined,
+              validationErrorMessage: undefined,
+            };
+          } else {
+            return {
+              ...item,
+              validationStatus: "INVALID" as const,
+              validationErrorTitle: match.title || "Not a medical document",
+              validationErrorMessage:
+                match.message ||
+                "This file doesn't appear to be a medical document. Please remove it before continuing.",
+            };
+          }
+        });
+
+        setSelectedFiles((current) =>
+          current.map((item) => {
+            const match = validatedFiles.find((v) => v.id === item.id);
+            return match || item;
+          })
+        );
+
+        return validatedFiles;
+      } catch (err: any) {
+        console.error("[DocumentUploadContext] Remote pre-validation error:", err);
+        const failedFiles = preparedFiles.map((item) => {
+          if (needsRemoteValidation.some((f) => f.id === item.id)) {
+            return {
+              ...item,
+              validationStatus: "INVALID" as const,
+              validationErrorTitle: "Validation Error",
+              validationErrorMessage:
+                err?.message || "Failed to validate document. Please check connection and retry.",
+            };
+          }
+          return item;
+        });
+
+        setSelectedFiles((current) =>
+          current.map((item) => {
+            const match = failedFiles.find((v) => v.id === item.id);
+            return match || item;
+          })
+        );
+
+        throw err;
+      }
+    },
+    []
+  );
 
   const removeSelectedFile = useCallback((id: string) => {
     setSelectedFiles((prev) => prev.filter((file) => file.id !== id));
@@ -873,7 +889,39 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
       onSuccess?: (jobIds: string[], filesInfo: any[]) => void,
       filesOverride?: SelectedDocument[],
     ) => {
-      const targetFiles = filesOverride && filesOverride.length > 0 ? filesOverride : selectedFiles;
+      let targetFiles = filesOverride && filesOverride.length > 0 ? filesOverride : selectedFiles;
+
+      // Defense in depth: if targetFiles contains any VALIDATING status files, await remote validation before filtering
+      const validatingFiles = targetFiles.filter((f) => f.validationStatus === "VALIDATING");
+      if (validatingFiles.length > 0) {
+        try {
+          const payload = validatingFiles.map((f) => ({
+            uri: f.uri,
+            name: getFileNameWithExtension(f.displayName, f.originalName),
+            type: f.mimeType,
+          }));
+          const res = await validateDocumentsPreUpload(payload);
+          const data = (res as any)?.data || res;
+          const results = data?.results || [];
+
+          targetFiles = targetFiles.map((item) => {
+            const itemTargetName = getFileNameWithExtension(item.displayName, item.originalName);
+            const match = results.find(
+              (r: any) =>
+                r.fileName === itemTargetName ||
+                r.fileName === item.originalName ||
+                r.fileName === item.displayName
+            );
+            if (!match) return item;
+            return match.isValid
+              ? { ...item, validationStatus: "READY" as const, documentType: match.documentType || item.documentType }
+              : { ...item, validationStatus: "INVALID" as const, validationErrorTitle: match.title, validationErrorMessage: match.message };
+          });
+        } catch (valErr) {
+          console.error("[DocumentUploadContext:startUpload] In-flight validation error:", valErr);
+        }
+      }
+
       const readyFiles = targetFiles.filter((f) => f.validationStatus === "READY" || !f.validationStatus);
       if (readyFiles.length === 0) {
         Toast.show({
@@ -935,7 +983,12 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
           };
         });
 
-        const response = await uploadDocumentsBatch(filesPayload);
+        const abortController = new AbortController();
+        activeUploadAbortControllerRef.current = abortController;
+
+        const response = await uploadDocumentsBatch(filesPayload, undefined, {
+          signal: abortController.signal,
+        });
         const batchData = (response as any)?.data || response;
 
         if (!batchData || !batchData.documents || batchData.documents.length === 0) {
@@ -1323,6 +1376,10 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
   );
 
   const cancelUpload = useCallback(() => {
+    if (activeUploadAbortControllerRef.current) {
+      activeUploadAbortControllerRef.current.abort();
+      activeUploadAbortControllerRef.current = null;
+    }
     if (uploadingDocs.length > 0) {
       setProcessingError({
         type: "cancelled",
