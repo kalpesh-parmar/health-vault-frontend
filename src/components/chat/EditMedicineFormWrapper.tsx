@@ -189,7 +189,7 @@ export const EditMedicineFormWrapper = ({
         </TouchableOpacity>
       </View>
       <BottomSheetScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-        <MedicationFormFields formState={formState} isDark={isDark} theme={theme} preferredLang={preferredLang} isInBottomSheet={true} errors={localErrors} />
+        <MedicationFormFields formState={formState} isDark={isDark} theme={theme} preferredLang={preferredLang} isInBottomSheet={true} allowManualStepperInput errors={localErrors} />
       </BottomSheetScrollView>
       <TouchableOpacity
         onPress={handleSave}

@@ -342,6 +342,7 @@ const MedicationForm = ({
             isDark={isDark}
             theme={theme}
             preferredLang="english"
+            allowManualStepperInput
           />
 
           {localErrors.length > 0 && (

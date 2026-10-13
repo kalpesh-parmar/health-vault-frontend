@@ -194,6 +194,7 @@ interface MedicationFormFieldsProps {
   preferredLang?: string;
   readOnly?: boolean;
   isInBottomSheet?: boolean;
+  allowManualStepperInput?: boolean;
   errors?: Record<string, string>;
 }
 
@@ -204,6 +205,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
   preferredLang = "english",
   readOnly = false,
   isInBottomSheet = false,
+  allowManualStepperInput = false,
   errors = {},
 }) => {
   const {
@@ -374,6 +376,68 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
       .replace("{unit}", formUnit);
   };
 
+  const renderSteppedDoseValue = (
+    value: string | number,
+    setValue: React.Dispatch<React.SetStateAction<string | number>>,
+    displayValue: string,
+  ) => {
+    if (!allowManualStepperInput) {
+      return (
+        <Text
+          style={[
+            styles.stepperValue,
+            {
+              color: theme.colors.textPrimary,
+              minWidth: 50,
+              textAlign: "center",
+            },
+          ]}
+        >
+          {displayValue}
+        </Text>
+      );
+    }
+
+    return (
+      <TextInput
+        editable={!readOnly}
+        style={[
+          styles.stepperValue,
+          {
+            color: theme.colors.textPrimary,
+            width: 72,
+            minWidth: 72,
+            textAlign: "center",
+            borderWidth: 1,
+            borderColor: isDark ? "#475569" : "#cbd5e1",
+            borderRadius: 8,
+            paddingVertical: 4,
+            paddingHorizontal: 4,
+          },
+        ]}
+        value={String(value)}
+        onChangeText={(nextValue) => {
+          if (/^\d*\.?\d*$/.test(nextValue)) setValue(nextValue);
+        }}
+        keyboardType="decimal-pad"
+        selectTextOnFocus
+        cursorColor={theme.colors.primary}
+        selectionColor={theme.colors.primary}
+      />
+    );
+  };
+
+  const adjustSteppedDose = (
+    setValue: React.Dispatch<React.SetStateAction<string | number>>,
+    amount: number,
+  ) => {
+    setValue((previous) => {
+      const parsedValue = parseFloat(String(previous));
+      const currentValue = Number.isFinite(parsedValue) ? parsedValue : 0;
+      return Math.max(0.25, Math.round((currentValue + amount) * 100) / 100);
+    });
+  };
+
   const N = formFreq === "ONCE" ? 1 : formFreq === "TWICE" ? 2 : 3;
 
   const renderDoseInput = () => {
@@ -387,24 +451,15 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() =>
-              setFormCount((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
-            }
+            onPress={() => adjustSteppedDose(setFormCount, -0.25)}
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text
-            style={[
-              styles.stepperValue,
-              {
-                color: theme.colors.textPrimary,
-                minWidth: 50,
-                textAlign: "center",
-              },
-            ]}
-          >
-            {formatTabletDose(parseFloat(String(formCount)) || 0)}
-          </Text>
+          {renderSteppedDoseValue(
+            formCount,
+            setFormCount,
+            formatTabletDose(parseFloat(String(formCount)) || 0),
+          )}
           <TouchableOpacity
             disabled={readOnly}
             activeOpacity={0.7}
@@ -412,15 +467,10 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() =>
-              setFormCount((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)
-            }
+            onPress={() => adjustSteppedDose(setFormCount, 0.25)}
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            {resolveDoseUnitDisplay("TABLET", preferredLang)}
-          </Text>
         </View>
       );
     }
@@ -435,24 +485,15 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() =>
-              setFormCount((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
-            }
+            onPress={() => adjustSteppedDose(setFormCount, -0.25)}
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text
-            style={[
-              styles.stepperValue,
-              {
-                color: theme.colors.textPrimary,
-                minWidth: 50,
-                textAlign: "center",
-              },
-            ]}
-          >
-            {formatTabletDose(parseFloat(String(formCount)) || 0)}
-          </Text>
+          {renderSteppedDoseValue(
+            formCount,
+            setFormCount,
+            formatTabletDose(parseFloat(String(formCount)) || 0),
+          )}
           <TouchableOpacity
             disabled={readOnly}
             activeOpacity={0.7}
@@ -460,13 +501,10 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() => setFormCount((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)}
+            onPress={() => adjustSteppedDose(setFormCount, 0.25)}
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={{ marginLeft: 8, color: theme.colors.textSecondary }}>
-            {resolveDoseUnitDisplay("CAPSULE", preferredLang)}
-          </Text>
         </View>
       );
     }
@@ -481,24 +519,15 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() =>
-              setFormVal((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
-            }
+            onPress={() => adjustSteppedDose(setFormVal, -0.25)}
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text
-            style={[
-              styles.stepperValue,
-              {
-                color: theme.colors.textPrimary,
-                minWidth: 50,
-                textAlign: "center",
-              },
-            ]}
-          >
-            {formatTabletDose(parseFloat(String(formVal)) || 0)}
-          </Text>
+          {renderSteppedDoseValue(
+            formVal,
+            setFormVal,
+            formatTabletDose(parseFloat(String(formVal)) || 0),
+          )}
           <TouchableOpacity
             disabled={readOnly}
             activeOpacity={0.7}
@@ -506,7 +535,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() => setFormVal((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)}
+            onPress={() => adjustSteppedDose(setFormVal, 0.25)}
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -527,24 +556,15 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() =>
-              setFormVal((prev) => Math.max(0.25, Math.round((parseFloat(String(prev)) - 0.25) * 100) / 100))
-            }
+            onPress={() => adjustSteppedDose(setFormVal, -0.25)}
           >
             <Ionicons name="remove" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text
-            style={[
-              styles.stepperValue,
-              {
-                color: theme.colors.textPrimary,
-                minWidth: 50,
-                textAlign: "center",
-              },
-            ]}
-          >
-            {formatTabletDose(parseFloat(String(formVal)) || 0)}
-          </Text>
+          {renderSteppedDoseValue(
+            formVal,
+            setFormVal,
+            formatTabletDose(parseFloat(String(formVal)) || 0),
+          )}
           <TouchableOpacity
             disabled={readOnly}
             activeOpacity={0.7}
@@ -552,7 +572,7 @@ export const MedicationFormFields: React.FC<MedicationFormFieldsProps> = ({
               styles.stepperButton,
               { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
             ]}
-            onPress={() => setFormVal((prev) => Math.round((parseFloat(String(prev)) + 0.25) * 100) / 100)}
+            onPress={() => adjustSteppedDose(setFormVal, 0.25)}
           >
             <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>

@@ -244,6 +244,7 @@ export const widgetStyles = StyleSheet.create({
   stepperContainer: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
   },
   stepperButton: {
     width: 36,

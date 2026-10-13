@@ -507,6 +507,7 @@ function MedicineFormFieldsWrapper({
         preferredLang={preferredLang}
         readOnly={readOnly || isConfirmedMed}
         isInBottomSheet={isInBottomSheet}
+        allowManualStepperInput
         errors={localErrors}
       />
 
