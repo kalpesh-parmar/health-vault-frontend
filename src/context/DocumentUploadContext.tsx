@@ -14,6 +14,8 @@ import { ExtractedMedicine } from "../types/medicationReview";
 import { AddOrEditMedication } from "../types";
 import { DOCUMENT_ENDPOINTS } from "../constants/endpoints";
 
+const MAX_UPLOAD_BYTES = 150 * 1024 * 1024; // 150 MB
+
 export interface DuplicateConflict {
   extractedMedicine: ExtractedMedicine;
   existingMedication: AddOrEditMedication;
@@ -494,8 +496,6 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         "doc",
         "docx",
       ]);
-      const MAX_PRE_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
-
       // 1. Initial client-side validation
       const preparedFiles: SelectedDocument[] = files.map((file) => {
         const ext = (file.originalName.split(".").pop() || "").toLowerCase();
@@ -503,10 +503,10 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         let validationErrorTitle: string | undefined;
         let validationErrorMessage: string | undefined;
 
-        if (file.size && file.size > MAX_PRE_UPLOAD_BYTES) {
+        if (file.size && file.size > MAX_UPLOAD_BYTES) {
           validationStatus = "INVALID";
           validationErrorTitle = "File is too large";
-          validationErrorMessage = "Maximum allowed size is 25 MB.";
+          validationErrorMessage = "Maximum allowed size is 150 MB.";
         } else if (!SUPPORTED_EXTENSIONS_SET.has(ext)) {
           validationStatus = "INVALID";
           validationErrorTitle = "Unsupported file type";
@@ -890,7 +890,18 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
     ) => {
       let targetFiles = filesOverride && filesOverride.length > 0 ? filesOverride : selectedFiles;
 
-      // Defense in depth: if targetFiles contains any VALIDATING status files, await remote validation before filtering
+      // Enforce the upload limit even when files are passed directly to startUpload.
+      targetFiles = targetFiles.map((file) =>
+        file.size > MAX_UPLOAD_BYTES
+          ? {
+              ...file,
+              validationStatus: "INVALID" as const,
+              validationErrorTitle: "File is too large",
+              validationErrorMessage: "Maximum allowed size is 150 MB.",
+            }
+          : file,
+      );
+
       const validatingFiles = targetFiles.filter((f) => f.validationStatus === "VALIDATING");
       if (validatingFiles.length > 0) {
         try {
