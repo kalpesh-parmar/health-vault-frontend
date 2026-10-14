@@ -101,13 +101,21 @@ export const normalizeSingleDocument = (doc: any, index = 0): DocumentSummaryIte
   const fileName = cleanDocumentName(rawFileName, `Document ${index + 1}`);
 
   const rawStatus = String(doc.status || doc.stage || doc.stageStatus || "").toUpperCase();
+  const isExplicitCompleted =
+    rawStatus.includes("COMPLETE") ||
+    rawStatus.includes("SUCCESS") ||
+    rawStatus.includes("DONE");
   let status = "COMPLETED";
-  if (
+  if (!isExplicitCompleted && (
     rawStatus.includes("REJECT") ||
     doc.errorCode === "NON_MEDICAL_DOCUMENT" ||
     (typeof doc.reason === "string" && doc.reason.toLowerCase().includes("reject"))
-  ) {
+  )) {
     status = "REJECTED";
+  } else if (isExplicitCompleted) {
+    // A completed backend status is authoritative. Some responses can still
+    // contain a stale/non-fatal error field from an earlier processing step.
+    status = "COMPLETED";
   } else if (rawStatus.includes("FAIL") || rawStatus.includes("ERROR") || doc.error) {
     status = "FAILED";
   } else if (rawStatus.includes("QUEUE") || rawStatus.includes("PENDING")) {
@@ -654,6 +662,13 @@ export const normalizeReportSummaryToDocument = (
 
 export const isFailedOrRejectedDocument = (document: any): boolean => {
   if (!document || typeof document !== "object") return false;
+
+  const explicitStatus = String(
+    document.status || document.ocrStatus || document.ocr_status || document.processingStatus || "",
+  ).toUpperCase();
+  if (["COMPLETED", "SUCCESS", "DONE"].includes(explicitStatus)) {
+    return false;
+  }
 
   const statuses = [
     document.status,

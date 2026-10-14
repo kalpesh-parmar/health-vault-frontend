@@ -59,7 +59,7 @@ export const ExtractedMedicinesCard = React.memo(function ExtractedMedicinesCard
         >
           <Text style={styles.sectionLabel}>{t("reportNames")}</Text>
           {documents.map((doc, idx) => (
-            <View key={doc.id || idx} style={styles.reportRow}>
+            <View key={`${doc.id || "document"}-${idx}`} style={styles.reportRow}>
               <Ionicons
                 name="document-text-outline"
                 size={14}

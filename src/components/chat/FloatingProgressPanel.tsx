@@ -39,12 +39,9 @@ export const FloatingProgressPanel = ({ onOpenSheet, isDark }: FloatingProgressP
     if (!chatDocs) return 0;
     return chatDocs.filter(
       (doc) =>
-        doc.status === "COMPLETED" ||
-        doc.status === "FAILED" ||
-        doc.status === "CANCELLED" ||
-        doc.status === "done" ||
-        doc.status === "completed" ||
-        doc.status === "success"
+        ["COMPLETED", "FAILED", "CANCELLED", "CANCELED", "REJECTED", "ERROR", "DONE", "SUCCESS"].includes(
+          String(doc.status || "").toUpperCase(),
+        )
     ).length;
   }, [chatDocs]);
 

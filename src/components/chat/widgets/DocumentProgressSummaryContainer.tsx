@@ -395,22 +395,28 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
   // Compute breakdown stats for summary display
   const completedCount = allDocs.filter(
     (d) =>
-      d.status === "COMPLETED" ||
-      d.status === "SUCCESS" ||
-      d.status === "DONE" ||
-      d.progress === 100,
+      ["COMPLETED", "SUCCESS", "DONE"].includes(String(d.status || "").toUpperCase()),
   ).length;
   const rejectedCount = allDocs.filter(
-    (d) =>
-      d.status === "REJECTED" ||
-      d.errorCode === "NON_MEDICAL_DOCUMENT" ||
-      (typeof d.reason === "string" && d.reason.toLowerCase().includes("reject")),
+    (d) => {
+      const status = String(d.status || "").toUpperCase();
+      const isDone = ["COMPLETED", "SUCCESS", "DONE"].includes(status);
+      return !isDone && (
+        status === "REJECTED" ||
+        d.errorCode === "NON_MEDICAL_DOCUMENT" ||
+        (typeof d.reason === "string" && d.reason.toLowerCase().includes("reject"))
+      );
+    },
   ).length;
   const failedCount = allDocs.filter(
-    (d) =>
-      (d.status === "FAILED" || d.status === "ERROR" || !!d.error) &&
-      d.errorCode !== "NON_MEDICAL_DOCUMENT" &&
-      !(typeof d.reason === "string" && d.reason.toLowerCase().includes("reject")),
+    (d) => {
+      const status = String(d.status || "").toUpperCase();
+      const isFailedStatus = status === "FAILED" || status === "ERROR";
+      const hasErrorWhileNonTerminal = !!d.error && !["COMPLETED", "SUCCESS", "DONE"].includes(status);
+      return (isFailedStatus || hasErrorWhileNonTerminal) &&
+        d.errorCode !== "NON_MEDICAL_DOCUMENT" &&
+        !(typeof d.reason === "string" && d.reason.toLowerCase().includes("reject"));
+    },
   ).length;
 
   return (
@@ -527,18 +533,15 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
         {allDocs.map((doc, index) => {
           const docId = doc.id || doc.fileKey || doc.jobId || `doc-${index}`;
           const rawStatus = (doc.status || doc.stage || "").toUpperCase();
-          const isDone =
-            rawStatus === "COMPLETED" ||
-            rawStatus === "SUCCESS" ||
-            rawStatus === "DONE" ||
-            doc.progress === 100 ||
-            doc.percentage === 100;
+          const isDone = ["COMPLETED", "SUCCESS", "DONE"].includes(rawStatus);
           const isRejected =
-            rawStatus === "REJECTED" ||
-            doc.errorCode === "NON_MEDICAL_DOCUMENT" ||
-            (typeof doc.reason === "string" && doc.reason.toLowerCase().includes("reject"));
+            !isDone && (
+              rawStatus === "REJECTED" ||
+              doc.errorCode === "NON_MEDICAL_DOCUMENT" ||
+              (typeof doc.reason === "string" && doc.reason.toLowerCase().includes("reject"))
+            );
           const isFailed =
-            (rawStatus === "FAILED" || rawStatus === "ERROR" || !!doc.error) && !isRejected;
+            (rawStatus === "FAILED" || rawStatus === "ERROR" || !!doc.error) && !isRejected && !isDone;
           const isProcessing = !isDone && !isRejected && !isFailed;
 
           const fileName =
@@ -559,7 +562,7 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
 
           return (
             <View
-              key={docId}
+              key={`${docId}-${index}`}
               style={[
                 styles.docItemCard,
                 {

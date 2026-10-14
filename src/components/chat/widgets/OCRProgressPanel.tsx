@@ -168,15 +168,13 @@ const OCRProgressPanel: React.FC<OCRProgressPanelProps> = ({
 
         {isExpanded && (
           <DetailsList isDark={isDark}>
-            {uploadingDocs.map((doc) => {
-              const isFailed = doc.status === "failed" || doc.progress < 0;
-              const isDone =
-                doc.status === "done" ||
-                doc.status === "completed" ||
-                doc.status === "success";
+            {uploadingDocs.map((doc, index) => {
+              const status = String(doc.status || "").toUpperCase();
+              const isFailed = ["FAILED", "ERROR", "REJECTED", "CANCELLED", "CANCELED"].includes(status) || doc.progress < 0;
+              const isDone = ["DONE", "COMPLETED", "SUCCESS"].includes(status);
 
               return (
-                <DocItem key={doc.id}>
+                <DocItem key={`${doc.id || "document"}-${index}`}>
                   <DocInfoRow>
                     <Ionicons
                       name="document-text-outline"

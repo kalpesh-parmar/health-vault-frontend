@@ -340,7 +340,7 @@ export const StructuredReportListCard: React.FC<StructuredReportListCardProps> =
 
             return (
               <TouchableOpacity
-                key={doc.id || `doc-${startIndex + idx}`}
+                key={`${doc.id || "doc"}-${startIndex + idx}`}
                 style={[
                   styles.itemCard,
                   { backgroundColor: itemBg, borderColor: itemBorder },

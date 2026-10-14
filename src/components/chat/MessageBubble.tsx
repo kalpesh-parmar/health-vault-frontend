@@ -259,7 +259,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, isDark,
         {message.documents && message.documents.length > 0 && (
           <View style={styles.userDocumentsContainer}>
             {message.documents.map((doc, idx) => (
-              <View key={doc.id || idx} style={styles.userDocumentBox}>
+              <View key={`${doc.id || "document"}-${idx}`} style={styles.userDocumentBox}>
                 <Ionicons name="document-text" size={24} color="#5B4BFF" />
                 <Text style={styles.userDocumentText} numberOfLines={1}>{doc.fileName}</Text>
               </View>

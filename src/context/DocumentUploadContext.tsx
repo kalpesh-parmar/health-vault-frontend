@@ -312,13 +312,14 @@ export const extractMedicinesFromOcrData = (apiResult: any): any[] => {
 };
 
 const getBatchCounts = (event: any, docs: UploadingDoc[]) => {
+  const isCompleted = (d: UploadingDoc) => {
+    const s = (d.status || d.stageStatus || d.stage || "").toUpperCase();
+    return s === "COMPLETED" || s === "SUCCESS" || s === "DONE";
+  };
   const completed =
     typeof event?.completed === "number"
       ? event.completed
-      : docs.filter((d) => {
-        const s = (d.status || "").toUpperCase();
-        return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
-      }).length;
+      : docs.filter(isCompleted).length;
   const failed =
     typeof event?.failed === "number"
       ? event.failed
@@ -421,9 +422,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         const isDocCompleted =
           statusUpper === "COMPLETED" ||
           statusUpper === "SUCCESS" ||
-          statusUpper === "DONE" ||
-          doc.progress === 100 ||
-          doc.percentage === 100;
+          statusUpper === "DONE";
 
         let medCount = doc.medicineCount;
         if (isDocCompleted && (medCount === undefined || medCount === null)) {
@@ -438,7 +437,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
     const completedDocs = updatedDocs.filter((d) => {
       const s = (d.status || "").toUpperCase();
-      return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
+      return s === "COMPLETED" || s === "SUCCESS" || s === "DONE";
     });
     const failedDocs = updatedDocs.filter((d) => {
       const s = (d.status || "").toUpperCase();
@@ -1087,7 +1086,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
           const completedDocs = currentDocs.filter((d) => {
             const s = (d.status || "").toUpperCase();
-            return s === "COMPLETED" || s === "SUCCESS" || s === "DONE" || d.progress === 100 || d.percentage === 100;
+            return s === "COMPLETED" || s === "SUCCESS" || s === "DONE";
           });
           const failedDocs = currentDocs.filter((d) => {
             const s = (d.status || "").toUpperCase();
@@ -1096,6 +1095,17 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
           const completedCount = event?.completed ?? completedDocs.length;
           const failedCount = event?.failed ?? failedDocs.length;
+
+          const allDocsTerminal = currentDocs.every((d) => {
+            const s = (d.status || d.stageStatus || d.stage || "").toUpperCase();
+            return ["COMPLETED", "SUCCESS", "DONE", "FAILED", "ERROR", "REJECTED", "CANCELLED", "CANCELED"].includes(s);
+          });
+
+          // A batch stream can close after a batch-level event while individual
+          // documents are still queued. Do not show the completion summary yet.
+          if (!allDocsTerminal) {
+            return;
+          }
 
           if (completedCount === 0 && failedCount > 0) {
             setProcessingError({
@@ -1346,13 +1356,19 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
               });
 
               const batchEventCounts = getBatchCounts(event, finalizedDocs);
+              const allDocsTerminal = finalizedDocs.every((doc) => {
+                const s = (doc.status || doc.stageStatus || doc.stage || "").toUpperCase();
+                return ["COMPLETED", "SUCCESS", "DONE", "FAILED", "ERROR", "REJECTED", "CANCELLED", "CANCELED"].includes(s);
+              });
               const snapshotDocs = [...finalizedDocs];
-              setTimeout(() => {
-                handleBatchFinished(snapshotDocs, {
-                  ...event,
-                  ...batchEventCounts,
-                });
-              }, 0);
+              if (allDocsTerminal) {
+                setTimeout(() => {
+                  handleBatchFinished(snapshotDocs, {
+                    ...event,
+                    ...batchEventCounts,
+                  });
+                }, 0);
+              }
 
               return finalizedDocs;
             });

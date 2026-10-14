@@ -43,7 +43,7 @@ export const MedicineExtractionSummaryCard = React.memo(
         </View>
         <View style={{ marginVertical: 8 }}>
           {documents.map((doc, idx) => (
-            <View key={doc.id || idx} style={styles.summaryDocRow}>
+            <View key={`${doc.id || "document"}-${idx}`} style={styles.summaryDocRow}>
               <View
                 style={{
                   flexDirection: "row",

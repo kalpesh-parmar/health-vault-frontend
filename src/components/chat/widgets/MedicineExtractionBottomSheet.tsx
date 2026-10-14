@@ -313,7 +313,7 @@ export const MedicineExtractionBottomSheet = forwardRef<
 
             return (
               <View
-                key={doc.id}
+                key={`${doc.id || "document"}-${index}`}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",

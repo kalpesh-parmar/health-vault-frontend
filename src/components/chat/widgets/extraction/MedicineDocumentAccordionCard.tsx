@@ -125,13 +125,13 @@ export const MedicineDocumentAccordionCard = React.memo(
           },
         ]}
       >
-        {documents.map((doc) => {
+        {documents.map((doc, index) => {
           const isDocExpanded = expandedDocId === doc.id;
           const docMeds = medicines.filter((m) => m.documentId === doc.id);
 
           return (
             <View
-              key={doc.id}
+              key={`${doc.id || "document"}-${index}`}
               style={[
                 styles.accordionSection,
                 {

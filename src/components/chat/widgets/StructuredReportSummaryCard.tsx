@@ -525,7 +525,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
 
             return (
               <TouchableOpacity
-                key={report.id || `${reportName}-${index}`}
+                key={`${report.id || reportName || "report"}-${index}`}
                 accessibilityRole="button"
                 accessibilityLabel={`${reportName}, ${reportType}`}
                 style={[

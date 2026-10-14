@@ -112,13 +112,13 @@ export const TopProgressBar: React.FC<TopProgressBarProps> = ({
 
         {isExpanded && (
           <View style={styles.expandedSection}>
-            {documents.map((doc) => {
+            {documents.map((doc, index) => {
               const state = progressState[doc.id] || { status: "pending", progress: 0 };
               const isDone = state.status === "done";
               const isFailed = state.status === "failed";
               
               return (
-                <View key={doc.id} style={styles.docRow}>
+                <View key={`${doc.id || "document"}-${index}`} style={styles.docRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.docName, { color: textColor }]} numberOfLines={1}>
                       {doc.fileName}
