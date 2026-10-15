@@ -752,17 +752,26 @@ export const useChatWizardManager = ({
       }
     }
 
-    const userMsg: ChatMessage = {
-      id: `user-opt-${Date.now()}`,
-      role: "user",
-      text: optionLabel,
-      rawValue:
-        typeof option?.value === "string"
-          ? option.value
-          : JSON.stringify(option?.value || option),
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
+    const isNavigationOnly =
+      normalizedKey === "DASHBOARD" ||
+      normalizedKey === "GO_TO_DASHBOARD" ||
+      option?.actionType === "DASHBOARD" ||
+      option?.value === "DASHBOARD" ||
+      option?.value === "GO_TO_DASHBOARD";
+
+    if (!isNavigationOnly) {
+      const userMsg: ChatMessage = {
+        id: `user-opt-${Date.now()}`,
+        role: "user",
+        text: optionLabel,
+        rawValue:
+          typeof option?.value === "string"
+            ? option.value
+            : JSON.stringify(option?.value || option),
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+    }
 
     // If saving a medicine from AddMedicineCard
     if (option?.value?.medicine || (option?.actionType === "ADD_MEDICINE" && option?.value?.medicine)) {
@@ -1009,37 +1018,40 @@ export const useChatWizardManager = ({
           resData.document,
         );
 
-        const aiMsg: ChatMessage = {
-          id: `ai-opt-res-${Date.now()}`,
-          role: "ai",
-          text: replyText,
-          action: resData.actionType || resData.action || "NORMAL_CHAT",
-          actions: resData.actions || [],
-          reportSummary: reportSummaryData || null,
-          options: resData.options || [],
-          medicines: resData.medicines || [],
-          medicine: resData.medicine || null,
-          document: resolvedDoc || resData.document || null,
-          documentSummary: resData.documentSummary || null,
-          documents: Array.isArray(resData.document)
-            ? resData.document
-            : resData.documents || [],
-          onboardingState: resData.onboardingState || resData.state || null,
-          state: resData.onboardingState || resData.state || null,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => {
-          const lastMsg = prev[prev.length - 1];
-          if (
-            lastMsg &&
-            lastMsg.role === "ai" &&
-            lastMsg.action === aiMsg.action &&
-            lastMsg.text?.trim() === aiMsg.text?.trim()
-          ) {
-            return prev;
-          }
-          return [...prev, aiMsg];
-        });
+        if (!isNavigationOnly) {
+          const aiMsg: ChatMessage = {
+            id: `ai-opt-res-${Date.now()}`,
+            role: "ai",
+            text: replyText,
+            action: resData.actionType || resData.action || "NORMAL_CHAT",
+            actions: resData.actions || [],
+            reportSummary: reportSummaryData || null,
+            options: resData.options || [],
+            medicines: resData.medicines || [],
+            medicine: resData.medicine || null,
+            document: resolvedDoc || resData.document || null,
+            documentSummary: resData.documentSummary || null,
+            documents: Array.isArray(resData.document)
+              ? resData.document
+              : resData.documents || [],
+            onboardingState: resData.onboardingState || resData.state || null,
+            state: resData.onboardingState || resData.state || null,
+            suggestedQuestions: resData.suggestedQuestions || [],
+            createdAt: new Date().toISOString(),
+          };
+          setMessages((prev) => {
+            const lastMsg = prev[prev.length - 1];
+            if (
+              lastMsg &&
+              lastMsg.role === "ai" &&
+              lastMsg.action === aiMsg.action &&
+              lastMsg.text?.trim() === aiMsg.text?.trim()
+            ) {
+              return prev;
+            }
+            return [...prev, aiMsg];
+          });
+        }
 
         if (lastKnownStateRef && (resData?.onboardingState || resData?.state)) {
           lastKnownStateRef.current = resData.onboardingState || resData.state;
@@ -1064,14 +1076,14 @@ export const useChatWizardManager = ({
         setIsOnboardingCompleted(isNowCompleted);
         setPendingStep(isTerminalStep ? null : nextPendingStep);
 
-        if (normalizedKey === "DASHBOARD" || isTerminalStep || isNowCompleted) {
+        if (normalizedKey === "DASHBOARD" || isNavigationOnly || isTerminalStep || isNowCompleted) {
           queryClient.invalidateQueries({ queryKey: ["profile"] });
           queryClient.invalidateQueries({ queryKey: ["userProfile"] });
           queryClient.invalidateQueries({ queryKey: ["medications"] });
           queryClient.invalidateQueries({ queryKey: ["allMedications"] });
           queryClient.invalidateQueries({ queryKey: ["reminders"] });
           queryClient.invalidateQueries({ queryKey: ["todayOccurrences"] });
-          if (normalizedKey === "DASHBOARD") {
+          if (normalizedKey === "DASHBOARD" || isNavigationOnly) {
             try {
               if (navigation && typeof navigation.navigate === "function") {
                 navigation.navigate("Home");

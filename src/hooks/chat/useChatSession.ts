@@ -399,10 +399,13 @@ export const useChatSession = ({
       const isTerminalStep =
         !resolvedPendingStep ||
         resolvedPendingStep === "POST_ONBOARDING" ||
-        resolvedPendingStep === "COMPLETE";
+        resolvedPendingStep === "COMPLETE" ||
+        resumableState?.hasSkipped === true ||
+        resumableState?.isOnboardingCompleted === true;
 
       const completedFromState = Boolean(
         resumableState?.isOnboardingCompleted ||
+        resumableState?.hasSkipped ||
         resumableState?.currentStep === "POST_ONBOARDING" ||
         resumableState?.currentStep === "COMPLETE" ||
         resolvedPendingStep === "POST_ONBOARDING" ||
@@ -457,6 +460,7 @@ export const useChatSession = ({
             (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : "NORMAL_CHAT");
           const mappedRole = dbMsg.role === "assistant" ? "ai" : "user";
           const isDuplicateOfPrev =
+            Boolean(structRes.text || dbMsg.content) &&
             mapped.length > 0 &&
             mapped[mapped.length - 1].role === mappedRole &&
             mapped[mapped.length - 1].text?.trim() ===
@@ -468,12 +472,29 @@ export const useChatSession = ({
           if (isDuplicateOfPrev) {
             continue;
           }
+          const isAskReport =
+            msgAction === "ASK_REPORT" ||
+            meta?.action === "ASK_REPORT" ||
+            meta?.actionType === "ASK_REPORT";
+
+          const hasStructuredDoc = Boolean(
+            meta?.document && (
+              meta.document.patientDetails ||
+              meta.document.isLabReport ||
+              (Array.isArray(meta.document.abnormalResults) && meta.document.abnormalResults.length > 0) ||
+              (Array.isArray(meta.document.normalResults) && meta.document.normalResults.length > 0) ||
+              meta.document.summary
+            )
+          );
+
           mapped.push({
             ...meta,
             id: dbMsg.id,
             role: mappedRole,
             text:
-              structRes.isReportList || structRes.isMedicationList
+              isAskReport && hasStructuredDoc
+                ? ""
+                : structRes.isReportList || structRes.isMedicationList
                 ? structRes.text || ""
                 : dbMsg.content,
             sessionId: chatSessionId,
@@ -492,9 +513,19 @@ export const useChatSession = ({
               structRes.items.length > 0 ? structRes.items : meta.items || [],
             pagination: structRes.pagination || meta.pagination,
             document: meta.document || null,
-            documentSummary: meta.documentSummary || null,
+            documentSummary:
+              (typeof meta.documentSummary === "string" ? meta.documentSummary : null) ||
+              (typeof meta.document?.summary === "string" ? meta.document.summary : null) ||
+              null,
+            reportSummary:
+              (meta.reportSummary && typeof meta.reportSummary === "object")
+                ? meta.reportSummary
+                : (meta.document && typeof meta.document === "object")
+                ? meta.document
+                : null,
             documents: structRes.documents || meta.documents,
             suggestedQuestions: meta.suggestedQuestions || [],
+            preferredLanguage: meta.preferredLanguage || meta.document?.preferredLanguage || undefined,
             keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
             documentIds: normalizeDocumentIds(
               meta.document?.id,
@@ -618,12 +649,36 @@ export const useChatSession = ({
                   }
                 }
 
+                const msgAction =
+                  meta.action ||
+                  meta.actionType ||
+                  (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined);
+
+                const isAskReport =
+                  msgAction === "ASK_REPORT" ||
+                  meta.action === "ASK_REPORT" ||
+                  meta.actionType === "ASK_REPORT";
+
+                const hasStructuredDoc = Boolean(
+                  meta?.document && (
+                    meta.document.patientDetails ||
+                    meta.document.isLabReport ||
+                    (Array.isArray(meta.document.abnormalResults) && meta.document.abnormalResults.length > 0) ||
+                    (Array.isArray(meta.document.normalResults) && meta.document.normalResults.length > 0) ||
+                    meta.document.summary
+                  )
+                );
+
+                if (isAskReport && hasStructuredDoc && dbMsg.role === "assistant") {
+                  text = "";
+                }
+
                 return {
                   ...meta,
                   id: dbMsg.id,
                   role: dbMsg.role === "assistant" ? "ai" : "user",
                   text,
-                  action: meta.action || meta.actionType || (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined),
+                  action: msgAction,
                   medicines: meta.medicines || [],
                   rawValue:
                     meta.rawValue ||
@@ -640,6 +695,26 @@ export const useChatSession = ({
                     structRes.items.length > 0 ? structRes.items : meta.items || [],
                   pagination: structRes.pagination || meta.pagination,
                   documents: structRes.documents || meta.documents,
+                  document: meta.document || null,
+                  documentSummary:
+                    (typeof meta.documentSummary === "string" ? meta.documentSummary : null) ||
+                    (typeof meta.document?.summary === "string" ? meta.document.summary : null) ||
+                    null,
+                  reportSummary:
+                    (meta.reportSummary && typeof meta.reportSummary === "object")
+                      ? meta.reportSummary
+                      : (meta.document && typeof meta.document === "object")
+                      ? meta.document
+                      : null,
+                  suggestedQuestions: meta.suggestedQuestions || [],
+                  preferredLanguage: meta.preferredLanguage || meta.document?.preferredLanguage || undefined,
+                  keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
+                  documentIds: normalizeDocumentIds(
+                    meta.document?.id,
+                    meta.documentId,
+                    meta.documentIds,
+                    meta.documents,
+                  ),
                   createdAt: dbMsg.createdAt,
                 };
               });
@@ -729,18 +804,73 @@ export const useChatSession = ({
           }
         }
 
+        const structRes = resolveStructuredContent(dbMsg.content, meta);
+        const msgAction =
+          meta.action ||
+          meta.actionType ||
+          (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined);
+
+        const isAskReport =
+          msgAction === "ASK_REPORT" ||
+          meta.action === "ASK_REPORT" ||
+          meta.actionType === "ASK_REPORT";
+
+        const hasStructuredDoc = Boolean(
+          meta?.document && (
+            meta.document.patientDetails ||
+            meta.document.isLabReport ||
+            (Array.isArray(meta.document.abnormalResults) && meta.document.abnormalResults.length > 0) ||
+            (Array.isArray(meta.document.normalResults) && meta.document.normalResults.length > 0) ||
+            meta.document.summary
+          )
+        );
+
+        if (isAskReport && hasStructuredDoc && dbMsg.role === "assistant") {
+          text = "";
+        }
+
         return {
           ...meta,
           id: dbMsg.id,
           role: dbMsg.role === "assistant" ? "ai" : "user",
           text,
-          action: meta.action || meta.actionType || (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined),
+          action: msgAction,
           medicines: meta.medicines || [],
           rawValue:
             meta.rawValue ||
             (dbMsg.role === "user" && typeof dbMsg.content === "string" && dbMsg.content.trim().startsWith("{")
               ? dbMsg.content
               : undefined),
+          mode: meta.mode as ChatMode,
+          task: meta.task || structRes.task,
+          reports:
+            structRes.reports.length > 0
+              ? structRes.reports
+              : meta.reports || [],
+          items:
+            structRes.items.length > 0 ? structRes.items : meta.items || [],
+          pagination: structRes.pagination || meta.pagination,
+          documents: structRes.documents || meta.documents,
+          document: meta.document || null,
+          documentSummary:
+            (typeof meta.documentSummary === "string" ? meta.documentSummary : null) ||
+            (typeof meta.document?.summary === "string" ? meta.document.summary : null) ||
+            null,
+          reportSummary:
+            (meta.reportSummary && typeof meta.reportSummary === "object")
+              ? meta.reportSummary
+              : (meta.document && typeof meta.document === "object")
+              ? meta.document
+              : null,
+          suggestedQuestions: meta.suggestedQuestions || [],
+          preferredLanguage: meta.preferredLanguage || meta.document?.preferredLanguage || undefined,
+          keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
+          documentIds: normalizeDocumentIds(
+            meta.document?.id,
+            meta.documentId,
+            meta.documentIds,
+            meta.documents,
+          ),
           createdAt: dbMsg.createdAt,
         };
       });
@@ -1025,6 +1155,7 @@ export const useChatSession = ({
         seenNotice.add("ONBOARDING_COMPLETED_NOTICE");
       }
       const isDuplicateOfPrev =
+        Boolean(msg.text?.trim()) &&
         deduplicated.length > 0 &&
         deduplicated[deduplicated.length - 1].role === msg.role &&
         deduplicated[deduplicated.length - 1].text?.trim() ===

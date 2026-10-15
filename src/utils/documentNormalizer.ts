@@ -465,8 +465,13 @@ export const normalizeReportSummaryToDocument = (
   fallbackDoc?: any,
 ): any => {
   if (!reportSummary && !fallbackDoc) return null;
-  const src = reportSummary || fallbackDoc;
-  if (!src || typeof src !== "object") return null;
+  const src =
+    reportSummary && typeof reportSummary === "object"
+      ? reportSummary
+      : fallbackDoc && typeof fallbackDoc === "object"
+        ? fallbackDoc
+        : null;
+  if (!src) return null;
 
   const id =
     src.id ||
@@ -750,14 +755,14 @@ export const normalizeReportDocumentsToSummaries = (
     .filter((action) => action?.actionType === "REPORT_SUMMARY" || action?.reportSummary)
     .map((action) => action.reportSummary || action);
   const reportSummaries = [
-    ...(reportSummary ? [reportSummary] : []),
+    ...(reportSummary && typeof reportSummary === "object" ? [reportSummary] : []),
     ...actionSummaries,
   ].filter(
     (summary) =>
       !isReportSummaryForFailedDocuments(summary, sourceDocuments),
   );
   const processedSourceDocuments = sourceDocuments.filter(
-    (document) => !isFailedOrRejectedDocument(document),
+    (document: any) => !isFailedOrRejectedDocument(document),
   );
   const documentsToNormalize =
     sourceDocuments.length > 0
@@ -766,7 +771,7 @@ export const normalizeReportDocumentsToSummaries = (
         ? [reportSummaries[0]]
         : [];
 
-  return documentsToNormalize.map((rawDocument, index) => {
+  return documentsToNormalize.map((rawDocument: any, index: number) => {
     const extracted = rawDocument?.extractedStructuredData || {};
     const rawId =
       rawDocument?.id || rawDocument?.report_id || rawDocument?.reportId;
