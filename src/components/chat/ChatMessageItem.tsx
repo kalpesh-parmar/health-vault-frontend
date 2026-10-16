@@ -292,45 +292,55 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       (item as any).actionType === "REPORT_SUMMARY";
 
     if (isReportOrConfirmAction) {
-      const reportSummarySource = item.reportSummary ||
+      const reportSummarySource =
+        (item.reportSummary && typeof item.reportSummary === "object" ? item.reportSummary : null) ||
         (Array.isArray((item as any).actions)
           ? (item as any).actions.find(
-              (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+              (a: any) =>
+                (a.actionType === "REPORT_SUMMARY" || a.reportSummary) &&
+                typeof (a.reportSummary || a) === "object",
             )?.reportSummary
           : null);
+      const reportSourceDocuments = item.documents?.length
+        ? item.documents
+        : item.document;
       const reportSourceFailed =
         isFailedOrRejectedDocument(reportSummarySource) ||
         isFailedOrRejectedDocument(item.document) ||
         isReportSummaryForFailedDocuments(
           reportSummarySource,
-          item.documents?.length ? item.documents : item.document,
+          reportSourceDocuments,
         );
       const doc = reportSourceFailed
         ? null
         : normalizeReportSummaryToDocument(
             reportSummarySource || item.document,
             item.document,
-          );
+          ) ||
+          (item.document && typeof item.document === "object"
+            ? item.document
+            : null);
       const reportDocuments = normalizeReportDocumentsToSummaries(
-        item.documents?.length ? item.documents : item.document,
-        item.reportSummary,
+        reportSourceDocuments,
+        reportSummarySource,
         (item as any).actions || [],
       );
 
       const hasDoc = Boolean(
-        doc &&
-        !Array.isArray(doc) &&
-        (doc.id ||
-          doc.report_id ||
-          doc.summary ||
-          (doc.keyFindings && doc.keyFindings.length > 0) ||
-          doc.key_findings ||
-          (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
-          (Array.isArray(doc.abnormal_values) && doc.abnormal_values.length > 0) ||
-          doc.extractedStructuredData ||
-          doc.fileName ||
-          doc.report_name ||
-          doc.s3Key),
+        reportDocuments.length > 0 ||
+        (doc &&
+          !Array.isArray(doc) &&
+          (doc.id ||
+            doc.report_id ||
+            doc.summary ||
+            (doc.keyFindings && doc.keyFindings.length > 0) ||
+            doc.key_findings ||
+            (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
+            (Array.isArray(doc.abnormal_values) && doc.abnormal_values.length > 0) ||
+            doc.extractedStructuredData ||
+            doc.fileName ||
+            doc.report_name ||
+            doc.s3Key)),
       );
 
       if (hasDoc) {
@@ -340,13 +350,14 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             : SUGGESTED_QUESTIONS_I18N.english.document;
 
         const isStructured = Boolean(
-          doc.patientDetails ||
-          (Array.isArray(doc.abnormalResults) && doc.abnormalResults.length > 0) ||
-          (Array.isArray(doc.normalResults) && doc.normalResults.length > 0) ||
-          (Array.isArray(doc.abnormal_values) && doc.abnormal_values.length > 0) ||
-          (Array.isArray(doc.normal_values) && doc.normal_values.length > 0) ||
-          doc.whatThisMayMean ||
-          doc.isLabReport
+          reportDocuments.length > 0 ||
+          doc?.patientDetails ||
+          (Array.isArray(doc?.abnormalResults) && doc.abnormalResults.length > 0) ||
+          (Array.isArray(doc?.normalResults) && doc.normalResults.length > 0) ||
+          (Array.isArray(doc?.abnormal_values) && doc.abnormal_values.length > 0) ||
+          (Array.isArray(doc?.normal_values) && doc.normal_values.length > 0) ||
+          doc?.whatThisMayMean ||
+          doc?.isLabReport
         );
 
         if (isStructured) {

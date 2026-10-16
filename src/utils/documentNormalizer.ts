@@ -488,8 +488,13 @@ export const normalizeReportSummaryToDocument = (
   fallbackDoc?: any,
 ): any => {
   if (!reportSummary && !fallbackDoc) return null;
-  const src = reportSummary || fallbackDoc;
-  if (!src || typeof src !== "object") return null;
+  const src =
+    reportSummary && typeof reportSummary === "object"
+      ? reportSummary
+      : fallbackDoc && typeof fallbackDoc === "object"
+        ? fallbackDoc
+        : null;
+  if (!src) return null;
 
   const id =
     src.id ||
@@ -791,7 +796,7 @@ export const normalizeReportDocumentsToSummaries = (
     .filter((action) => action?.actionType === "REPORT_SUMMARY" || action?.reportSummary)
     .map((action) => action.reportSummary || action);
   const reportSummaries = [
-    ...(reportSummary ? [reportSummary] : []),
+    ...(reportSummary && typeof reportSummary === "object" ? [reportSummary] : []),
     ...actionSummaries,
   ].filter(
     (summary) =>
