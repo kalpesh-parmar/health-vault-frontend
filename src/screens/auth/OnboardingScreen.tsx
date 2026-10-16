@@ -104,6 +104,8 @@ type Message = {
   role: "assistant" | "user";
   content: string;
   rawValue?: string;
+  clientMessageId?: string;
+  selectedOption?: string;
   action?: string;
   actions?: any[];
   reportSummary?: any;
@@ -274,6 +276,7 @@ export default function OnboardingScreen() {
   const { cancelUpload, removeTrackedDocuments } = useDocumentUpload();
   const isUploadingRef = useRef(false);
   const isUploadCancelledRef = useRef(false);
+  const dashboardClientMsgIdRef = useRef<string | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -385,6 +388,8 @@ export default function OnboardingScreen() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [state, setState] = useState({
+    chatSessionId: null as string | null,
+    selectedOption: null as string | null,
     currentStep: null as string | null,
     isOnboardingCompleted: false,
     uploadedMedicalDocument: false,
@@ -681,6 +686,8 @@ export default function OnboardingScreen() {
       };
 
       const newState = {
+        chatSessionId: null as string | null,
+        selectedOption: null as string | null,
         currentStep: null as string | null,
         isOnboardingCompleted: !!isCompleted,
         uploadedMedicalDocument: false,
@@ -792,11 +799,24 @@ export default function OnboardingScreen() {
             canSkip: historyCanSkip,
           } = response.data?.data || {};
 
-          let mergedState = { ...baseState };
+          let mergedState = {
+            ...baseState,
+            chatSessionId: chatSessionId || null,
+            selectedOption: resumableState?.selectedOption || null,
+          };
           if (resumableState) {
             mergedState = {
               ...mergedState,
               ...resumableState,
+              chatSessionId:
+                chatSessionId ||
+                resumableState.chatSessionId ||
+                baseState.chatSessionId ||
+                null,
+              selectedOption:
+                resumableState.selectedOption ||
+                baseState.selectedOption ||
+                null,
               hasSocialData: isSocialFlag
                 ? (resumableState.hasSocialData ?? baseState.hasSocialData)
                 : undefined,
@@ -1411,6 +1431,7 @@ export default function OnboardingScreen() {
     updatedState = state,
     displayLabel?: string,
     actionType?: string,
+    customClientMessageId?: string,
   ) => {
     if (isSendingRef.current || loading) return;
     if (typeof userText === "string" && !userText.trim()) return;
@@ -1431,6 +1452,12 @@ export default function OnboardingScreen() {
       // ignore non-json
     }
 
+    const userMsgId = customClientMessageId || `user-${Date.now()}`;
+    const isDashboardAction =
+      actionType === "DASHBOARD" ||
+      userText === "DASHBOARD" ||
+      userText === "GO_TO_DASHBOARD";
+
     if (!isEditSave) {
       const userContent =
         displayLabel ||
@@ -1438,10 +1465,12 @@ export default function OnboardingScreen() {
           ? userText
           : userText?.name || userText?.action || "Medicine Selection");
       const userMsg: Message = {
-        id: `user-${Date.now()}`,
+        id: userMsgId,
         role: "user",
         content: userContent,
         rawValue: typeof userText === "string" ? userText : JSON.stringify(userText), // Store raw value for live matching!
+        clientMessageId: userMsgId,
+        selectedOption: isDashboardAction ? "DASHBOARD" : undefined,
         createdAt: new Date().toISOString(),
       };
 
@@ -1450,7 +1479,7 @@ export default function OnboardingScreen() {
         if (
           lastMsg &&
           lastMsg.role === "user" &&
-          lastMsg.content === userContent
+          (lastMsg.content === userContent || (isDashboardAction && lastMsg.selectedOption === "DASHBOARD"))
         ) {
           return prev;
         }
@@ -1716,7 +1745,14 @@ export default function OnboardingScreen() {
         };
       }
 
+      const effectiveSessionId =
+        updatedState?.chatSessionId ||
+        state?.chatSessionId ||
+        undefined;
+
       const payload: any = {
+        sessionId: effectiveSessionId,
+        clientMessageId: userMsgId,
         message: messageString || displayLabel || "Continue",
         history,
         state: updatedState,
@@ -1776,6 +1812,7 @@ export default function OnboardingScreen() {
             action !== "ASK_REPORT" &&
             action !== "NORMAL_CHAT")
         ) {
+          dashboardClientMsgIdRef.current = null;
           setIsOnboardingCompleted(true);
           queryClient.setQueryData(["profile"], (old: any) => ({
             ...(old || {}),
@@ -2996,9 +3033,19 @@ export default function OnboardingScreen() {
           medicinesConfirmed: true,
           currentStep: "COMPLETE",
           isOnboardingCompleted: true,
+          selectedOption: "DASHBOARD",
         };
         setState(nextState);
-        sendMessage(value, nextState, optionLabel);
+        if (!dashboardClientMsgIdRef.current) {
+          dashboardClientMsgIdRef.current = `dashboard-nav-${state?.chatSessionId || Date.now()}`;
+        }
+        sendMessage(
+          "DASHBOARD",
+          nextState,
+          optionLabel,
+          "DASHBOARD",
+          dashboardClientMsgIdRef.current,
+        );
       } else if (value === "ADD_MORE_MEDICINES" || value === "ADD") {
         const existingMeds = mergeMedicineReviewState(
           deduplicateDrafts(localMedicines || state?.medicinesToAdd || []),

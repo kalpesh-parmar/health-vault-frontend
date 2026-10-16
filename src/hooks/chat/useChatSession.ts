@@ -28,6 +28,8 @@ interface UseChatSessionProps {
   filesInfo?: any[];
   lastKnownStateRef?: React.MutableRefObject<any>;
   setPreferredLang?: (lang: string) => void;
+  selectedOption?: string | null;
+  setSelectedOption?: (val: string | null) => void;
 }
 
 const resolveStructuredContent = (content: any, meta: any) => {
@@ -91,6 +93,8 @@ export const useChatSession = ({
   filesInfo = [],
   lastKnownStateRef,
   setPreferredLang,
+  selectedOption,
+  setSelectedOption,
 }: UseChatSessionProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onboardingMessages, setOnboardingMessages] = useState<ChatMessage[]>(
@@ -422,8 +426,19 @@ export const useChatSession = ({
       setIsOnboardingCompleted(isComplete);
       setPendingStep(isTerminalStep ? null : resolvedPendingStep);
 
+      const restoredSelectedOption =
+        resumableState?.selectedOption ||
+        (resumableState?.data && resumableState.data.selectedOption) ||
+        null;
+      if (setSelectedOption) {
+        setSelectedOption(restoredSelectedOption);
+      }
+
       if (lastKnownStateRef && resumableState) {
-        lastKnownStateRef.current = resumableState;
+        lastKnownStateRef.current = {
+          ...resumableState,
+          selectedOption: restoredSelectedOption,
+        };
       }
       if (resumableState?.preferredLanguage && setPreferredLang) {
         setPreferredLang(resumableState.preferredLanguage);
@@ -614,7 +629,7 @@ export const useChatSession = ({
     } catch (err) {
       console.warn("[AI_CHAT] Failed to load onboarding history:", err);
     }
-  }, [lastKnownStateRef, setIsOnboardingCompleted, setPendingStep]);
+  }, [lastKnownStateRef, setIsOnboardingCompleted, setPendingStep, setSelectedOption]);
 
   const initChatHistory = useCallback(async () => {
     hasInitializedHistory.current = true;
@@ -1440,6 +1455,7 @@ export const useChatSession = ({
     abortActiveStream,
     speakingMessageId,
     speakMessage,
+    selectedOption: selectedOption || lastKnownStateRef?.current?.selectedOption || null,
     t,
   };
 };

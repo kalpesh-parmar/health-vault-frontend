@@ -37,6 +37,7 @@ interface UseChatWizardManagerProps {
   lastKnownStateRef: React.MutableRefObject<any>;
   setIsOnboardingCompleted: (val: boolean) => void;
   setPendingStep: (step: string | null) => void;
+  setSelectedOption?: (val: string | null) => void;
 }
 
 export const useChatWizardManager = ({
@@ -57,6 +58,7 @@ export const useChatWizardManager = ({
   lastKnownStateRef,
   setIsOnboardingCompleted,
   setPendingStep,
+  setSelectedOption,
 }: UseChatWizardManagerProps) => {
   const queryClient = useQueryClient();
   const [isLoadingResults, setIsLoadingResults] = useState(false);
@@ -798,19 +800,33 @@ export const useChatWizardManager = ({
       option?.value === "DASHBOARD" ||
       option?.value === "GO_TO_DASHBOARD";
 
-    if (!isNavigationOnly) {
-      const userMsg: ChatMessage = {
-        id: `user-opt-${Date.now()}`,
-        role: "user",
-        text: optionLabel,
-        rawValue:
-          typeof option?.value === "string"
-            ? option.value
-            : JSON.stringify(option?.value || option),
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMsg]);
-    }
+    const userMsgId = `user-opt-${Date.now()}`;
+    const userMsg: ChatMessage = {
+      id: userMsgId,
+      role: "user",
+      text: optionLabel,
+      action: isNavigationOnly ? "DASHBOARD" : undefined,
+      selectedOption: isNavigationOnly ? "DASHBOARD" : undefined,
+      clientMessageId: userMsgId,
+      rawValue:
+        typeof option?.value === "string"
+          ? option.value
+          : JSON.stringify(option?.value || option),
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => {
+      if (isNavigationOnly) {
+        const last = prev[prev.length - 1];
+        if (
+          last &&
+          last.role === "user" &&
+          (last.action === "DASHBOARD" || last.text === optionLabel)
+        ) {
+          return prev;
+        }
+      }
+      return [...prev, userMsg];
+    });
 
     // If saving a medicine from AddMedicineCard
     if (option?.value?.medicine || (option?.actionType === "ADD_MEDICINE" && option?.value?.medicine)) {
@@ -943,6 +959,7 @@ export const useChatWizardManager = ({
         preferredLanguage: preferredLang,
         fromScreen: "Dashboard",
         displayLabel: optionLabel,
+        clientMessageId: userMsgId,
         history: messages.map((m) => ({
           role: m.role === "ai" ? "assistant" : "user",
           content: m.text,
@@ -1116,6 +1133,17 @@ export const useChatWizardManager = ({
         setPendingStep(isTerminalStep ? null : nextPendingStep);
 
         if (normalizedKey === "DASHBOARD" || isNavigationOnly || isTerminalStep || isNowCompleted) {
+          if (normalizedKey === "DASHBOARD" || normalizedKey === "GO_TO_DASHBOARD" || option?.actionType === "DASHBOARD") {
+            if (setSelectedOption) {
+              setSelectedOption("DASHBOARD");
+            }
+            if (lastKnownStateRef) {
+              lastKnownStateRef.current = {
+                ...(lastKnownStateRef.current || {}),
+                selectedOption: "DASHBOARD",
+              };
+            }
+          }
           queryClient.invalidateQueries({ queryKey: ["profile"] });
           queryClient.invalidateQueries({ queryKey: ["userProfile"] });
           queryClient.invalidateQueries({ queryKey: ["medications"] });
