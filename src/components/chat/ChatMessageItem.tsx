@@ -30,6 +30,7 @@ import {
   ReportSummaryChatCard,
   DocumentSummaryStats,
 } from "./widgets/ReportSummaryChatCard";
+import { OnboardingReportSummaryCard } from "../onboarding/OnboardingReportSummaryCard";
 import { StructuredReportSummaryCard } from "./widgets/StructuredReportSummaryCard";
 import { StructuredMedicationListCard } from "./widgets/StructuredMedicationListCard";
 import { StructuredReportListCard } from "./widgets/StructuredReportListCard";
@@ -448,6 +449,23 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           doc?.isLabReport
         );
 
+        if (reportDocuments.length <= 1) {
+          return renderAssistantPrompt(
+            <OnboardingReportSummaryCard
+              document={doc}
+              suggestedQuestions={questions}
+              isDark={isDark}
+              theme={theme}
+              preferredLang={preferredLang}
+              onQuestionPress={(q, report) => submitReportQuestion(q, report || doc)}
+              onViewFullReport={
+                onViewFullReport ? () => onViewFullReport(doc) : undefined
+              }
+              readOnly={chosenVal !== null}
+            />,
+          );
+        }
+
         if (isStructured) {
           return renderAssistantPrompt(
             <StructuredReportSummaryCard
@@ -834,7 +852,22 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             summaryDocument.normalResults.length > 0),
       );
       const documentSummaryCard = hasDocumentSummary ? (
-        summaryIsStructured ? (
+        reportDocuments.length <= 1 ? (
+          <OnboardingReportSummaryCard
+            document={summaryDocument}
+            suggestedQuestions={SUGGESTED_QUESTIONS_I18N.english.document}
+            isDark={isDark}
+            theme={theme}
+            preferredLang={preferredLang}
+            onQuestionPress={(q, report) =>
+              submitReportQuestion(q, report || summaryDocument)
+            }
+            onViewFullReport={
+              onViewFullReport ? () => onViewFullReport(summaryDocument) : undefined
+            }
+            readOnly={isReadOnly}
+          />
+        ) : summaryIsStructured ? (
           <StructuredReportSummaryCard
             document={summaryDocument}
             reportDocuments={reportDocuments}

@@ -487,12 +487,19 @@ export const normalizeReportSummaryToDocument = (
   reportSummary: any,
   fallbackDoc?: any,
 ): any => {
-  if (!reportSummary && !fallbackDoc) return null;
+  const normalizedReportSummary = Array.isArray(reportSummary)
+    ? reportSummary.find(Boolean)
+    : reportSummary;
+  const normalizedFallbackDoc = Array.isArray(fallbackDoc)
+    ? fallbackDoc.find(Boolean)
+    : fallbackDoc;
+
+  if (!normalizedReportSummary && !normalizedFallbackDoc) return null;
   const src =
-    reportSummary && typeof reportSummary === "object"
-      ? reportSummary
-      : fallbackDoc && typeof fallbackDoc === "object"
-        ? fallbackDoc
+    normalizedReportSummary && typeof normalizedReportSummary === "object"
+      ? normalizedReportSummary
+      : normalizedFallbackDoc && typeof normalizedFallbackDoc === "object"
+        ? normalizedFallbackDoc
         : null;
   if (!src) return null;
 
@@ -502,8 +509,8 @@ export const normalizeReportSummaryToDocument = (
     src.reportId ||
     src.fileKey ||
     src.s3Key ||
-    fallbackDoc?.id ||
-    fallbackDoc?.report_id ||
+    normalizedFallbackDoc?.id ||
+    normalizedFallbackDoc?.report_id ||
     `doc-${Date.now()}`;
 
   const fileName =
@@ -511,11 +518,12 @@ export const normalizeReportSummaryToDocument = (
     src.report_name ||
     src.reportName ||
     src.name ||
-    fallbackDoc?.fileName ||
-    fallbackDoc?.report_name ||
+    normalizedFallbackDoc?.fileName ||
+    normalizedFallbackDoc?.report_name ||
     "Medical Report";
 
-  const extracted = src.extractedStructuredData || fallbackDoc?.extractedStructuredData || {};
+  const extracted =
+    src.extractedStructuredData || normalizedFallbackDoc?.extractedStructuredData || {};
 
   const documentType =
     src.documentType ||
@@ -523,7 +531,7 @@ export const normalizeReportSummaryToDocument = (
     src.reportType ||
     src.report_type ||
     extracted.documentInfo?.documentType ||
-    fallbackDoc?.documentType ||
+    normalizedFallbackDoc?.documentType ||
     "LAB_REPORT";
 
   const reportDate =
@@ -531,8 +539,8 @@ export const normalizeReportSummaryToDocument = (
     src.report_date ||
     src.date ||
     extracted.documentInfo?.documentDate ||
-    fallbackDoc?.reportDate ||
-    fallbackDoc?.report_date ||
+    normalizedFallbackDoc?.reportDate ||
+    normalizedFallbackDoc?.report_date ||
     null;
 
   const hospitalName =
@@ -541,7 +549,7 @@ export const normalizeReportSummaryToDocument = (
     src.clinicName ||
     src.clinic_name ||
     extracted.facilityInfo?.name ||
-    fallbackDoc?.hospitalName ||
+    normalizedFallbackDoc?.hospitalName ||
     null;
 
   const doctorName =
@@ -549,7 +557,7 @@ export const normalizeReportSummaryToDocument = (
     src.doctor_name ||
     extracted.providerInfo?.primary?.name ||
     (Array.isArray(extracted.providerInfo?.providers) ? extracted.providerInfo.providers[0]?.name : null) ||
-    fallbackDoc?.doctorName ||
+    normalizedFallbackDoc?.doctorName ||
     null;
 
   const patientName =
@@ -558,7 +566,7 @@ export const normalizeReportSummaryToDocument = (
     src.patientDetails?.name ||
     extracted.patientInfo?.fullName ||
     extracted.patientInfo?.name ||
-    fallbackDoc?.patientName ||
+    normalizedFallbackDoc?.patientName ||
     null;
 
   const summary =
@@ -568,16 +576,16 @@ export const normalizeReportSummaryToDocument = (
     extracted.summaryEnglish ||
     extracted.summary ||
     (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints[0] : "") ||
-    fallbackDoc?.summary ||
-    fallbackDoc?.summaryEnglish ||
+    normalizedFallbackDoc?.summary ||
+    normalizedFallbackDoc?.summaryEnglish ||
     "";
 
   const keyFindings =
     src.keyFindings ||
     src.key_findings ||
     (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints : null) ||
-    fallbackDoc?.keyFindings ||
-    fallbackDoc?.key_findings ||
+    normalizedFallbackDoc?.keyFindings ||
+    normalizedFallbackDoc?.key_findings ||
     summary;
 
   const rawAbnormal =
@@ -587,8 +595,8 @@ export const normalizeReportSummaryToDocument = (
     src.abnormal_results ||
     extracted.abnormalResults ||
     extracted.abnormal_values ||
-    fallbackDoc?.abnormalResults ||
-    fallbackDoc?.abnormal_values ||
+    normalizedFallbackDoc?.abnormalResults ||
+    normalizedFallbackDoc?.abnormal_values ||
     [];
 
   const abnormalResults = Array.isArray(rawAbnormal)
@@ -615,8 +623,8 @@ export const normalizeReportSummaryToDocument = (
     src.normal_results ||
     extracted.normalResults ||
     extracted.normal_values ||
-    fallbackDoc?.normalResults ||
-    fallbackDoc?.normal_values ||
+    normalizedFallbackDoc?.normalResults ||
+    normalizedFallbackDoc?.normal_values ||
     [];
 
   const normalResults = Array.isArray(rawNormal)
@@ -641,8 +649,8 @@ export const normalizeReportSummaryToDocument = (
     src.extracted_medicines ||
     src.medications ||
     src.medicines ||
-    fallbackDoc?.extractedMedicines ||
-    fallbackDoc?.extracted_medicines ||
+    normalizedFallbackDoc?.extractedMedicines ||
+    normalizedFallbackDoc?.extracted_medicines ||
     [];
 
   const medicationFindings = Array.isArray(rawMeds)
@@ -666,7 +674,7 @@ export const normalizeReportSummaryToDocument = (
   ];
 
   return {
-    ...fallbackDoc,
+    ...normalizedFallbackDoc,
     ...src,
     id,
     report_id: id,
