@@ -385,7 +385,9 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       }
 
       if (item.action === "ASK_REPORT") {
-        const msgDocs = normalizeDocumentsList(item.documents || item.document || item);
+        const msgDocs = normalizeDocumentsList(
+          item.documents?.length ? item.documents : item.document ? [item.document] : item,
+        );
         if (msgDocs.length > 0) {
           return renderAssistantPrompt(
             <DocumentProgressSummaryContainer
@@ -690,7 +692,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       item.action === "ADD_DOCUMENT"
     ) {
       const msgDocs = normalizeDocumentsList(
-        item.documents || item.document || item,
+        item.documents?.length ? item.documents : item.document ? [item.document] : item,
         [],
         chatWizardState.filesInfo,
       );

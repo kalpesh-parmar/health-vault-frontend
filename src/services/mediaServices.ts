@@ -47,7 +47,8 @@ export const pickDocumentAsset = async () => {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "image/*",
     ],
-    copyToCacheDirectory: true,
+    // Avoid duplicating large document files in the app cache.
+    copyToCacheDirectory: false,
   });
 
   if (result.canceled || !result.assets?.length) {

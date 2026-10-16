@@ -390,6 +390,7 @@ export default function OnboardingScreen() {
     uploadedMedicalDocument: false,
     documentUploaded: false,
     documentConfirmed: false,
+    documentOwnershipConfirmed: null as boolean | null | undefined,
     documentId: null as string | string[] | null,
     documentText: "",
     preferredLanguage: null as string | null,
@@ -685,6 +686,7 @@ export default function OnboardingScreen() {
         uploadedMedicalDocument: false,
         documentUploaded: false,
         documentConfirmed: false,
+         documentOwnershipConfirmed: null as boolean | null,
         documentId: null,
         documentText: "",
         preferredLanguage: null,
@@ -853,6 +855,7 @@ export default function OnboardingScreen() {
               const msgAction =
                 (medListResult.isMedicationList ? "MEDICATION_LIST" : undefined) ||
                 meta?.action ||
+                meta?.actionType ||
                 (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : undefined);
               const contentText = (dbMsg.content || "").toLowerCase();
               if (
@@ -864,13 +867,67 @@ export default function OnboardingScreen() {
               ) {
                 continue;
               }
+              const prevMsg = mappedMessages.length > 0 ? mappedMessages[mappedMessages.length - 1] : null;
+              const isSameRole = prevMsg && prevMsg.role === dbMsg.role;
+              const isSameText =
+                prevMsg &&
+                prevMsg.content?.trim() ===
+                (medListResult.isMedicationList ? (medListResult.rawText || "") : dbMsg.content)?.trim();
+              const isSameAction = prevMsg && prevMsg.action === msgAction;
+              const isBothAddDoc =
+                Boolean(isSameRole &&
+                (msgAction === "ADD_DOCUMENT" || meta?.actionType === "ADD_DOCUMENT") &&
+                (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+
+              const prevDocId = (prevMsg as any)?.documentId || (prevMsg as any)?.document?.id;
+              const curDocId = meta?.documentId || meta?.document?.id;
+              const prevDocNames: string[] = Array.isArray((prevMsg as any)?.documentsName)
+                ? (prevMsg as any).documentsName
+                : (prevMsg as any)?.document?.fileName
+                  ? [(prevMsg as any).document.fileName]
+                  : [];
+              const curDocNames: string[] = Array.isArray(meta?.documentsName)
+                ? meta.documentsName
+                : meta?.document?.fileName
+                  ? [meta.document.fileName]
+                  : [];
+
+              const shareDocIdOrName = Boolean(
+                isBothAddDoc &&
+                ((curDocId && prevDocId && curDocId === prevDocId) ||
+                 (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+              );
+
+              const hasConflictingDocIdentity = Boolean(
+                isBothAddDoc &&
+                ((curDocId && prevDocId && curDocId !== prevDocId) ||
+                 (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+              );
+
               const isDuplicateOfPrev =
-                mappedMessages.length > 0 &&
-                mappedMessages[mappedMessages.length - 1].role === dbMsg.role &&
-                mappedMessages[mappedMessages.length - 1].content?.trim() ===
-                (medListResult.isMedicationList ? (medListResult.rawText || "") : dbMsg.content)?.trim() &&
-                mappedMessages[mappedMessages.length - 1].action === msgAction;
-              if (isDuplicateOfPrev) {
+                Boolean(isSameRole && !hasConflictingDocIdentity && (
+                  (isBothAddDoc && (shareDocIdOrName || isSameText)) ||
+                  (isSameText && isSameAction)
+                ));
+
+              if (isDuplicateOfPrev && prevMsg) {
+                const hasRicher = Boolean(
+                  meta?.document ||
+                  (Array.isArray(meta?.documents) && meta.documents.length > 0) ||
+                  meta?.summary
+                );
+                if (hasRicher) {
+                  mappedMessages[mappedMessages.length - 1] = {
+                    ...prevMsg,
+                    ...(meta || {}),
+                    id: dbMsg.id || prevMsg.id,
+                    action: msgAction || prevMsg.action || "ADD_DOCUMENT",
+                    document: meta?.document || prevMsg.document,
+                    documents: meta?.documents || prevMsg.documents,
+                    documentSummary: meta?.documentSummary || prevMsg.documentSummary,
+                    summary: meta?.summary || prevMsg.summary,
+                  };
+                }
                 continue;
               }
               mappedMessages.push({
@@ -2997,6 +3054,24 @@ export default function OnboardingScreen() {
         return;
       } else {
         let newState = { ...state };
+        if (activeMsg.action === "CONFIRM_DOCUMENT_OWNERSHIP") {
+          // Keep the ownership decision explicit.  When this was sent as a
+          // plain value ("YES"/"NO"), the API could treat it as a generic
+          // onboarding answer and skip the follow-up profile/conflict step.
+          const ownershipConfirmed = String(value).trim().toUpperCase() === "YES";
+          newState = {
+            ...newState,
+            documentOwnershipConfirmed: ownershipConfirmed,
+          };
+          setState(newState);
+          sendMessage(
+            value,
+            newState,
+            label,
+            "CONFIRM_DOCUMENT_OWNERSHIP",
+          );
+          return;
+        }
         if (activeMsg.action === "ASK_BLOOD_GROUP") {
           newState.currentStep = "ASK_BLOOD_GROUP";
           if (value === "SKIP") {
@@ -3674,7 +3749,7 @@ export default function OnboardingScreen() {
       if (!isHistorical && medicineCardMode === "wizard") {
         return (
           <View style={{ width: "100%" }}>
-            {reviewMedicinesList}
+            {!activeMedicineToEdit && reviewMedicinesList}
             <AddMedicineCard
             key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
             med={activeMedicineToEdit || null}
@@ -4188,6 +4263,7 @@ export default function OnboardingScreen() {
   const isChatInputHidden =
     activeAction === "ASK_LANGUAGE" ||
     activeAction === "ASK_UPLOAD_OR_SKIP" ||
+    activeAction === "CONFIRM_DOCUMENT_OWNERSHIP" ||
     activeAction === "RESOLVE_PROFILE_SOURCE" ||
     activeAction === "ASK_GENDER" ||
     activeAction === "ASK_DOB" ||

@@ -80,7 +80,8 @@ export const useDocumentMedia = () => {
         const result = await DocumentPicker.getDocumentAsync({
           type: ALLOWED_MIMES,
           multiple: true,
-          copyToCacheDirectory: true,
+          // Avoid eagerly duplicating potentially large documents in cache.
+          copyToCacheDirectory: false,
         });
 
         if (result.canceled || !result.assets || result.assets.length === 0) {

@@ -39,6 +39,8 @@ export interface ChatMessage {
   sourceComparison?: string;
   documents?: { id: string; fileName: string; medicinesCount?: number }[];
   documentIds?: string[];
+  documentsName?: string[];
+  isLive?: boolean;
   conflicts?: any[];
   createdAt?: string | Date;
   document?: any;

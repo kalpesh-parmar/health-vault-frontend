@@ -278,6 +278,29 @@ export const normalizeDocumentsList = (
     return [];
   }
 
+  // If an empty array was passed as metaOrPayload, fallback to fallbackUploads or fallbackFilesInfo
+  if (Array.isArray(metaOrPayload) && metaOrPayload.length === 0) {
+    if (fallbackUploads && fallbackUploads.length > 0) {
+      return fallbackUploads.map((d, i) => normalizeSingleDocument(d, i));
+    }
+    if (fallbackFilesInfo && fallbackFilesInfo.length > 0) {
+      return fallbackFilesInfo.map((f, i) =>
+        normalizeSingleDocument(
+          {
+            id: f.jobId || f.fileKey || `file-${i}`,
+            fileName: f.fileName,
+            name: f.fileName,
+            fileKey: f.fileKey,
+            jobId: f.jobId,
+            status: "COMPLETED",
+          },
+          i,
+        ),
+      );
+    }
+    return [];
+  }
+
   // 1. Direct array passed as metaOrPayload
   if (Array.isArray(metaOrPayload)) {
     const flat = metaOrPayload.flat(Infinity).filter(Boolean);
@@ -487,11 +510,14 @@ export const normalizeReportSummaryToDocument = (
     fallbackDoc?.report_name ||
     "Medical Report";
 
+  const extracted = src.extractedStructuredData || fallbackDoc?.extractedStructuredData || {};
+
   const documentType =
     src.documentType ||
     src.document_type ||
     src.reportType ||
     src.report_type ||
+    extracted.documentInfo?.documentType ||
     fallbackDoc?.documentType ||
     "LAB_REPORT";
 
@@ -499,6 +525,7 @@ export const normalizeReportSummaryToDocument = (
     src.reportDate ||
     src.report_date ||
     src.date ||
+    extracted.documentInfo?.documentDate ||
     fallbackDoc?.reportDate ||
     fallbackDoc?.report_date ||
     null;
@@ -508,12 +535,15 @@ export const normalizeReportSummaryToDocument = (
     src.hospital_name ||
     src.clinicName ||
     src.clinic_name ||
+    extracted.facilityInfo?.name ||
     fallbackDoc?.hospitalName ||
     null;
 
   const doctorName =
     src.doctorName ||
     src.doctor_name ||
+    extracted.providerInfo?.primary?.name ||
+    (Array.isArray(extracted.providerInfo?.providers) ? extracted.providerInfo.providers[0]?.name : null) ||
     fallbackDoc?.doctorName ||
     null;
 
@@ -521,12 +551,18 @@ export const normalizeReportSummaryToDocument = (
     src.patientName ||
     src.patient_name ||
     src.patientDetails?.name ||
+    extracted.patientInfo?.fullName ||
+    extracted.patientInfo?.name ||
     fallbackDoc?.patientName ||
     null;
 
   const summary =
     src.summary ||
     src.summaryEnglish ||
+    extracted.summaryInPreferredLanguage ||
+    extracted.summaryEnglish ||
+    extracted.summary ||
+    (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints[0] : "") ||
     fallbackDoc?.summary ||
     fallbackDoc?.summaryEnglish ||
     "";
@@ -534,6 +570,7 @@ export const normalizeReportSummaryToDocument = (
   const keyFindings =
     src.keyFindings ||
     src.key_findings ||
+    (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints : null) ||
     fallbackDoc?.keyFindings ||
     fallbackDoc?.key_findings ||
     summary;
@@ -543,6 +580,8 @@ export const normalizeReportSummaryToDocument = (
     src.abnormal_values ||
     src.abnormalValues ||
     src.abnormal_results ||
+    extracted.abnormalResults ||
+    extracted.abnormal_values ||
     fallbackDoc?.abnormalResults ||
     fallbackDoc?.abnormal_values ||
     [];
@@ -569,6 +608,8 @@ export const normalizeReportSummaryToDocument = (
     src.normal_values ||
     src.normalValues ||
     src.normal_results ||
+    extracted.normalResults ||
+    extracted.normal_values ||
     fallbackDoc?.normalResults ||
     fallbackDoc?.normal_values ||
     [];
@@ -757,7 +798,7 @@ export const normalizeReportDocumentsToSummaries = (
       !isReportSummaryForFailedDocuments(summary, sourceDocuments),
   );
   const processedSourceDocuments = sourceDocuments.filter(
-    (document) => !isFailedOrRejectedDocument(document),
+    (document: any) => !isFailedOrRejectedDocument(document),
   );
   const documentsToNormalize =
     sourceDocuments.length > 0
@@ -766,7 +807,7 @@ export const normalizeReportDocumentsToSummaries = (
         ? [reportSummaries[0]]
         : [];
 
-  return documentsToNormalize.map((rawDocument, index) => {
+  return documentsToNormalize.map((rawDocument: any, index: number) => {
     const extracted = rawDocument?.extractedStructuredData || {};
     const rawId =
       rawDocument?.id || rawDocument?.report_id || rawDocument?.reportId;

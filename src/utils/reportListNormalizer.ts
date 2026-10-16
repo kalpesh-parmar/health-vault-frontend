@@ -145,6 +145,18 @@ export const parseReportListMessage = (
     };
   }
 
+  const isAddDocumentTask =
+    metaTask === "ADD_DOCUMENT" ||
+    metadata?.actionType === "ADD_DOCUMENT" ||
+    metadata?.action === "ADD_DOCUMENT";
+
+  if (isAddDocumentTask) {
+    return {
+      isReportList: false,
+      items: [],
+    };
+  }
+
   let parsedBody: any = null;
 
   if (typeof content === "string") {

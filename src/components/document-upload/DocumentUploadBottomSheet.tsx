@@ -529,7 +529,9 @@ export const DocumentUploadBottomSheet = React.forwardRef(
         const result = await DocumentPicker.getDocumentAsync({
           type: ["*/*"],
           multiple: !isSingleDoc,
-          copyToCacheDirectory: true,
+          // Keep large documents at their provider URI instead of eagerly
+          // creating another local cache copy before upload.
+          copyToCacheDirectory: false,
         });
         if (result.canceled || !result.assets || result.assets.length === 0) return;
 

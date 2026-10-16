@@ -456,16 +456,84 @@ export const useChatSession = ({
             meta.actionType ||
             (isNotice ? "ONBOARDING_COMPLETED_NOTICE" : "NORMAL_CHAT");
           const mappedRole = dbMsg.role === "assistant" ? "ai" : "user";
-          const isDuplicateOfPrev =
-            mapped.length > 0 &&
-            mapped[mapped.length - 1].role === mappedRole &&
-            mapped[mapped.length - 1].text?.trim() ===
+          const prevMsg = mapped.length > 0 ? mapped[mapped.length - 1] : null;
+          const isSameRole = prevMsg && prevMsg.role === mappedRole;
+          const isSameText =
+            prevMsg &&
+            prevMsg.text?.trim() ===
               (structRes.isReportList || structRes.isMedicationList
                 ? structRes.text || ""
                 : dbMsg.content
-              )?.trim() &&
-            mapped[mapped.length - 1].action === msgAction;
-          if (isDuplicateOfPrev) {
+              )?.trim();
+          const isSameAction = prevMsg && prevMsg.action === msgAction;
+
+          const isBothAddDoc =
+            Boolean(isSameRole &&
+            (msgAction === "ADD_DOCUMENT" || meta.actionType === "ADD_DOCUMENT") &&
+            (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+
+          const prevDocIds = prevMsg?.documentIds || [];
+          const curDocId = meta.documentId || meta.document?.id;
+          const prevDocNames: string[] = Array.isArray((prevMsg as any)?.documentsName)
+            ? (prevMsg as any).documentsName
+            : prevMsg?.document?.fileName
+              ? [prevMsg.document.fileName]
+              : [];
+          const curDocNames: string[] = Array.isArray(meta.documentsName)
+            ? meta.documentsName
+            : meta.document?.fileName
+              ? [meta.document.fileName]
+              : [];
+
+          const shareDocIdOrName = Boolean(
+            isBothAddDoc &&
+            ((curDocId && prevDocIds.includes(curDocId)) ||
+             (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+          );
+
+          const hasConflictingDocIdentity = Boolean(
+            isBothAddDoc &&
+            ((curDocId && prevDocIds.length > 0 && !prevDocIds.includes(curDocId)) ||
+             (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+          );
+
+          const isDuplicateOfPrev =
+            Boolean(isSameRole && !hasConflictingDocIdentity && (
+              (isBothAddDoc && (shareDocIdOrName || isSameText)) ||
+              (isSameText && isSameAction)
+            ));
+
+          if (isDuplicateOfPrev && prevMsg) {
+            const hasRicher = Boolean(
+              meta.document ||
+              (Array.isArray(meta.documents) && meta.documents.length > 0) ||
+              meta.summary ||
+              meta.mode === "ACTION" ||
+              meta.extractedStructuredData
+            );
+            if (hasRicher) {
+              mapped[mapped.length - 1] = {
+                ...prevMsg,
+                ...meta,
+                id: dbMsg.id || prevMsg.id,
+                action: msgAction || prevMsg.action || "ADD_DOCUMENT",
+                actionType: meta.actionType || (prevMsg as any).actionType || "ADD_DOCUMENT",
+                document: meta.document || prevMsg.document,
+                documents: (Array.isArray(meta.documents) && meta.documents.length > 0)
+                  ? meta.documents
+                  : (meta.document ? [meta.document] : prevMsg.documents),
+                documentSummary: meta.documentSummary || prevMsg.documentSummary,
+                summary: meta.summary || prevMsg.summary,
+                keyFindings: meta.document?.keyFindings || meta.keyFindings || prevMsg.keyFindings,
+                documentIds: normalizeDocumentIds(
+                  meta.document?.id,
+                  meta.documentId,
+                  meta.documentIds,
+                  meta.documents,
+                  prevMsg.documentIds,
+                ),
+              };
+            }
             continue;
           }
           mapped.push({
@@ -560,7 +628,8 @@ export const useChatSession = ({
                 null;
               setNextCursor(newCursor);
 
-              const mapped: ChatMessage[] = msgItems.map((dbMsg: any) => {
+              const mapped: ChatMessage[] = [];
+              for (const dbMsg of msgItems) {
                 let meta = dbMsg.metadata;
                 if (typeof meta === "string") {
                   try {
@@ -618,12 +687,89 @@ export const useChatSession = ({
                   }
                 }
 
-                return {
+                const msgAction =
+                  structRes.action ||
+                  meta.action ||
+                  meta.actionType ||
+                  (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined);
+                const mappedRole = dbMsg.role === "assistant" ? "ai" : "user";
+
+                const prevMsg = mapped.length > 0 ? mapped[mapped.length - 1] : null;
+                const isSameRole = prevMsg && prevMsg.role === mappedRole;
+                const isSameText = prevMsg && prevMsg.text?.trim() === text?.trim();
+                const isSameAction = prevMsg && prevMsg.action === msgAction;
+                const isBothAddDoc =
+                  Boolean(isSameRole &&
+                  (msgAction === "ADD_DOCUMENT" || meta.actionType === "ADD_DOCUMENT") &&
+                  (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+
+                const prevDocIds = prevMsg?.documentIds || [];
+                const curDocId = meta.documentId || meta.document?.id;
+                const prevDocNames: string[] = Array.isArray((prevMsg as any)?.documentsName)
+                  ? (prevMsg as any).documentsName
+                  : [];
+                const curDocNames: string[] = Array.isArray(meta.documentsName)
+                  ? meta.documentsName
+                  : [];
+
+                const shareDocIdOrName = Boolean(
+                  isBothAddDoc &&
+                  ((curDocId && prevDocIds.includes(curDocId)) ||
+                   (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+                );
+
+                const hasConflictingDocIdentity = Boolean(
+                  isBothAddDoc &&
+                  ((curDocId && prevDocIds.length > 0 && !prevDocIds.includes(curDocId)) ||
+                   (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+                );
+
+                const isDuplicateOfPrev =
+                  Boolean(isSameRole && !hasConflictingDocIdentity && (
+                    (isBothAddDoc && (shareDocIdOrName || isSameText)) ||
+                    (isSameText && isSameAction)
+                  ));
+
+                if (isDuplicateOfPrev && prevMsg) {
+                  const hasRicher = Boolean(
+                    meta.document ||
+                    (Array.isArray(meta.documents) && meta.documents.length > 0) ||
+                    meta.summary ||
+                    meta.mode === "ACTION" ||
+                    meta.extractedStructuredData
+                  );
+                  if (hasRicher) {
+                    mapped[mapped.length - 1] = {
+                      ...prevMsg,
+                      ...meta,
+                      id: dbMsg.id || prevMsg.id,
+                      action: msgAction || prevMsg.action || "ADD_DOCUMENT",
+                      actionType: meta.actionType || (prevMsg as any).actionType || "ADD_DOCUMENT",
+                      document: meta.document || prevMsg.document,
+                      documents: (Array.isArray(meta.documents) && meta.documents.length > 0)
+                        ? meta.documents
+                        : (meta.document ? [meta.document] : prevMsg.documents),
+                      documentSummary: meta.documentSummary || prevMsg.documentSummary,
+                      summary: meta.summary || prevMsg.summary,
+                      keyFindings: meta.document?.keyFindings || meta.keyFindings || prevMsg.keyFindings,
+                      documentIds: normalizeDocumentIds(
+                        meta.document?.id,
+                        meta.documentId,
+                        meta.documentIds,
+                        meta.documents,
+                        prevMsg.documentIds,
+                      ),
+                    };
+                  }
+                  continue;
+                }
+
+                mapped.push({
                   ...meta,
                   id: dbMsg.id,
-                  role: dbMsg.role === "assistant" ? "ai" : "user",
+                  role: mappedRole,
                   text,
-                  action: meta.action || meta.actionType || (dbMsg.role === "assistant" ? "NORMAL_CHAT" : undefined),
+                  action: msgAction,
                   medicines: meta.medicines || [],
                   rawValue:
                     meta.rawValue ||
@@ -639,10 +785,18 @@ export const useChatSession = ({
                   items:
                     structRes.items.length > 0 ? structRes.items : meta.items || [],
                   pagination: structRes.pagination || meta.pagination,
+                  document: meta.document || null,
+                  documentSummary: meta.documentSummary || null,
                   documents: structRes.documents || meta.documents,
                   createdAt: dbMsg.createdAt,
-                };
-              });
+                  documentIds: normalizeDocumentIds(
+                    meta.document?.id,
+                    meta.documentId,
+                    meta.documentIds,
+                    meta.documents,
+                  ),
+                });
+              }
               setMessages(mapped);
             }
           } catch (e) {
@@ -1000,7 +1154,30 @@ export const useChatSession = ({
   }, [preferredLang, selectedDocument]);
 
   const mergedMessages = useMemo(() => {
-    const liveNewestFirst = [...messages].reverse();
+    // The onboarding history endpoint and the chat-session endpoint can both
+    // return the same onboarding records. Prefer the onboarding copy because
+    // it contains the action/document metadata required to render its widget.
+    // The IDs differ between the two responses, so ID-only deduplication is
+    // not sufficient here.
+    const messageContentKey = (msg: ChatMessage) =>
+      `${msg.role}|${String(msg.text || "").trim().replace(/\s+/g, " ")}`;
+    const onboardingContentKeys = new Set(
+      onboardingMessages.map(messageContentKey),
+    );
+    const isLiveMessage = (msg: ChatMessage) =>
+      Boolean(
+        msg.id?.startsWith("user-") ||
+        msg.id?.startsWith("ai-") ||
+        msg.id?.startsWith("live-") ||
+        (msg as any).isLive
+      );
+
+    const liveNewestFirst = [...messages]
+      .reverse()
+      .filter((msg) => {
+        if (isLiveMessage(msg)) return true;
+        return !onboardingContentKeys.has(messageContentKey(msg));
+      });
     const onboardingNewestFirst = [...onboardingMessages].reverse();
     const combined = [...liveNewestFirst, ...onboardingNewestFirst];
 
@@ -1024,13 +1201,65 @@ export const useChatSession = ({
         }
         seenNotice.add("ONBOARDING_COMPLETED_NOTICE");
       }
+      const prevMsg = deduplicated.length > 0 ? deduplicated[deduplicated.length - 1] : null;
+
+      const isCurLive = isLiveMessage(msg);
+      const isPrevLive = prevMsg ? isLiveMessage(prevMsg) : false;
+
+      // Never drop or merge a live message as duplicate of a historical message
+      if (isCurLive !== isPrevLive) {
+        deduplicated.push(msg);
+        continue;
+      }
+
+      const isSameRole = prevMsg && prevMsg.role === msg.role;
+      const isSameText = prevMsg && prevMsg.text?.trim() === msg.text?.trim();
+      const isSameAction = prevMsg && prevMsg.action === msg.action;
+
+      const isBothAddDoc =
+        Boolean(isSameRole &&
+        (msg.action === "ADD_DOCUMENT" || (msg as any).actionType === "ADD_DOCUMENT") &&
+        (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+
+      const prevDocIds = prevMsg?.documentIds || [];
+      const curDocIds = msg.documentIds || [];
+      const prevDocNames: string[] = Array.isArray((prevMsg as any)?.documentsName)
+        ? (prevMsg as any).documentsName
+        : prevMsg?.document?.fileName
+          ? [prevMsg.document.fileName]
+          : [];
+      const curDocNames: string[] = Array.isArray((msg as any).documentsName)
+        ? (msg as any).documentsName
+        : msg?.document?.fileName
+          ? [msg.document.fileName]
+          : [];
+
+      const shareDocIdOrName = Boolean(
+        isBothAddDoc &&
+        ((curDocIds.length > 0 && prevDocIds.length > 0 && curDocIds.some((id) => prevDocIds.includes(id))) ||
+         (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+      );
+
+      const hasConflictingDocIdentity = Boolean(
+        isBothAddDoc &&
+        ((curDocIds.length > 0 && prevDocIds.length > 0 && !curDocIds.some((id) => prevDocIds.includes(id))) ||
+         (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+      );
+
       const isDuplicateOfPrev =
-        deduplicated.length > 0 &&
-        deduplicated[deduplicated.length - 1].role === msg.role &&
-        deduplicated[deduplicated.length - 1].text?.trim() ===
-          msg.text?.trim() &&
-        deduplicated[deduplicated.length - 1].action === msg.action;
-      if (isDuplicateOfPrev) {
+        Boolean(isSameRole && !hasConflictingDocIdentity && (
+          (isBothAddDoc && shareDocIdOrName) ||
+          (!isBothAddDoc && isSameText && isSameAction)
+        ));
+
+      if (isDuplicateOfPrev && prevMsg) {
+        if (msg.document && !prevMsg.document) prevMsg.document = msg.document;
+        if (msg.documents?.length && !prevMsg.documents?.length) prevMsg.documents = msg.documents;
+        if (msg.documentSummary && !prevMsg.documentSummary) prevMsg.documentSummary = msg.documentSummary;
+        if (msg.summary && !prevMsg.summary) prevMsg.summary = msg.summary;
+        if (msg.documentIds && prevMsg.documentIds) {
+          prevMsg.documentIds = Array.from(new Set([...prevMsg.documentIds, ...msg.documentIds]));
+        }
         continue;
       }
       deduplicated.push(msg);

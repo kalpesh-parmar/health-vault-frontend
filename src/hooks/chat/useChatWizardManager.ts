@@ -139,7 +139,18 @@ export const useChatWizardManager = ({
           try {
             const response = await apiClient.post("/v1/onboarding/chat", payload);
             const resData = response.data?.data || response.data;
-            if (resData?.reply) {
+            if (
+              resData?.reply ||
+              resData?.message ||
+              resData?.content ||
+              resData?.actionType === "ADD_DOCUMENT" ||
+              resData?.document
+            ) {
+              const replyText =
+                resData.reply ||
+                resData.message ||
+                resData.content ||
+                "Your document has been processed successfully. Please review it below.";
               const incomingMeds =
                 resData.medicines && resData.medicines.length > 0
                   ? resData.medicines
@@ -152,24 +163,52 @@ export const useChatWizardManager = ({
                         a.actionType === "REPORT_SUMMARY" || a.reportSummary,
                     )?.reportSummary
                   : null);
+              const normalizedDoc = normalizeReportSummaryToDocument(
+                reportSummaryData || resData.document,
+                resData.document,
+              );
+              const resolvedDocs = Array.isArray(resData.document)
+                ? resData.document
+                : resData.documents && resData.documents.length > 0
+                  ? resData.documents
+                  : normalizedDoc
+                    ? [normalizedDoc]
+                    : resData.document
+                      ? [resData.document]
+                      : [];
+              const resolvedDocIds = normalizeDocumentIds(
+                normalizedDoc?.id,
+                resData.document?.id,
+                resData.documentId,
+                resData.documents,
+                chatWizardState.filesInfo,
+              );
+              const resolvedDocNames = (
+                chatWizardState.filesInfo?.map((f: any) => f.fileName || f.name) || []
+              ).filter(Boolean);
+              if (normalizedDoc?.fileName && !resolvedDocNames.includes(normalizedDoc.fileName)) {
+                resolvedDocNames.push(normalizedDoc.fileName);
+              }
+
               const aiMsg: ChatMessage = {
                 id: `ai-doc-res-${Date.now()}`,
                 role: "ai",
-                text: resData.reply,
-                action: resData.actionType || resData.action || "REVIEW_MEDICINES_LIST",
-                actionType: resData.actionType || resData.action,
+                text: replyText,
+                action:
+                  resData.actionType ||
+                  resData.action ||
+                  (incomingMeds.length > 0 ? "REVIEW_MEDICINES_LIST" : "ADD_DOCUMENT"),
+                actionType: resData.actionType || resData.action || "ADD_DOCUMENT",
                 actions: resData.actions || [],
                 reportSummary: reportSummaryData || null,
                 options: resData.options || [],
                 medicines: incomingMeds,
-                document: normalizeReportSummaryToDocument(
-                  reportSummaryData || resData.document,
-                  resData.document,
-                ),
+                document: normalizedDoc || resData.document || null,
                 documentSummary: resData.documentSummary || null,
-                documents: Array.isArray(resData.document)
-                  ? resData.document
-                  : resData.documents || [],
+                documents: resolvedDocs,
+                documentIds: resolvedDocIds,
+                documentsName: resolvedDocNames,
+                isLive: true,
                 createdAt: new Date().toISOString(),
               };
               setMessages((prev) => [...prev, aiMsg]);
