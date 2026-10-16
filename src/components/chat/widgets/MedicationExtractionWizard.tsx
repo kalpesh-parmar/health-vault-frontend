@@ -15,6 +15,17 @@ import { useDocumentUpload } from "../../../context/DocumentUploadContext";
 import { MedicationReviewService } from "../../../services/medicationReviewService";
 import { listMedications, updateMedication } from "../../../services/medicationservice";
 import { ExtractedMedicine } from "../../../types/medicationReview";
+
+const appendExtractedMedicines = (existing: ExtractedMedicine[] = [], incoming: ExtractedMedicine[] = []) => [
+  ...existing,
+  ...incoming.map((medicine, index) => {
+    const key = medicine.client_med_id || medicine.id;
+    const existingKeys = new Set(existing.map((item) => item.client_med_id || item.id).filter(Boolean));
+    if (!key || !existingKeys.has(key)) return medicine;
+    const uniqueKey = `${key}__upload_${Date.now()}_${index}`;
+    return { ...medicine, id: uniqueKey, client_med_id: uniqueKey, sourceMedicineId: key };
+  }),
+];
 import { AddOrEditMedication } from "../../../types";
 import { queryClient } from "../../../config/queryClient";
 import { useMedicationFormState, MedicationFormFields } from "../../shared/MedicationFormFields";
@@ -227,14 +238,14 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
           setChatWizardState((prev) => ({
             ...prev,
             step: "results",
-            extractedMedicines: flatMeds,
+            extractedMedicines: appendExtractedMedicines(prev.extractedMedicines, flatMeds),
           }));
         } catch (err) {
           console.error("Failed to load extracted medicines inside chat:", err);
           setChatWizardState((prev) => ({
             ...prev,
             step: "results",
-            extractedMedicines: [],
+            extractedMedicines: prev.extractedMedicines,
           }));
         } finally {
           setIsLoadingResults(false);
@@ -253,14 +264,30 @@ export const MedicationExtractionWizard: React.FC<MedicationExtractionWizardProp
       const conflictsList: any[] = [];
       const newMedsList: ExtractedMedicine[] = [];
 
-      chatWizardState.extractedMedicines.forEach((extracted) => {
-        const duplicate = existingMeds.find((existing) => 
-          existing.medicationName.trim().toLowerCase() === extracted.name.trim().toLowerCase()
+      chatWizardState.extractedMedicines.forEach((extracted, index) => {
+        const extractedName = extracted.name.trim().toLowerCase();
+        // Keep the first extracted record unchanged. Treat a same-name record
+        // from a later upload as an incoming duplicate so both records remain
+        // available to the conflict resolver.
+        const previousExtracted: any = chatWizardState.extractedMedicines
+          .slice(0, index)
+          .find((previous: any) => String(previous.name || previous.medicationName || "").trim().toLowerCase() === extractedName);
+        const duplicate = previousExtracted || existingMeds.find((existing: any) =>
+          String(existing.medicationName || existing.name || "").trim().toLowerCase() === extractedName
         );
         if (duplicate) {
           conflictsList.push({
             extractedMedicine: extracted,
-            existingMedication: duplicate,
+            existingMedication: previousExtracted
+              ? {
+                  id: previousExtracted.id,
+                  medicationName: previousExtracted.name || previousExtracted.medicationName,
+                  dosePerIntake: previousExtracted.dosage,
+                  medicationType: previousExtracted.medicineType,
+                  frequency: previousExtracted.frequency,
+                  totalQuantity: previousExtracted.totalQuantity,
+                }
+              : duplicate,
           });
         } else {
           newMedsList.push(extracted);

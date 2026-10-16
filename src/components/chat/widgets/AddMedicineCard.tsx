@@ -846,6 +846,11 @@ export function AddMedicineCard({
     return str;
   };
 
+  // Once a medicine is explicitly opened for local editing it must remain
+  // interactive, even if the parent review message was previously marked
+  // read-only after a chat/upload state transition.
+  const isFormReadOnly = readOnly && !isEditingLocal;
+
   // Helper to extract unconfirmed drafts only
   const getUnconfirmed = (list: any[]) =>
     Array.isArray(list) ? list.filter((m: any) => !m?.isSaved && !m?.dbId) : [];
@@ -1172,13 +1177,13 @@ export function AddMedicineCard({
 
   return (
     <View
-      pointerEvents={readOnly ? "none" : "auto"}
+      pointerEvents={isFormReadOnly ? "none" : "auto"}
       style={[
         styles.medEditCard,
         {
           backgroundColor: isDark ? "#1e293b" : "#ffffff",
           borderColor: isDark ? "#334155" : "#e2e8f0",
-          opacity: readOnly ? 0.6 : 1,
+          opacity: isFormReadOnly ? 0.6 : 1,
         },
       ]}
     >
@@ -1198,7 +1203,7 @@ export function AddMedicineCard({
         preferredLang={preferredLang}
         isDark={isDark}
         theme={theme}
-        readOnly={readOnly}
+        readOnly={isFormReadOnly}
         isInBottomSheet={isInBottomSheet}
         chosenVal={chosenVal}
         chosenLabel={chosenLabel}

@@ -19,6 +19,20 @@ import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n
 import { sanitizeMedicineForPayload } from "../../components/chat/widgets/MedicineHelpers";
 import { queryClient } from "../../config/queryClient";
 
+// Keep each upload's extraction as its own record. Duplicate medicines must
+// remain visible so the conflict flow can present both the existing and the
+// incoming medicine for resolution.
+const appendExtractedMedicines = (existing: ExtractedMedicine[] = [], incoming: ExtractedMedicine[] = []) => [
+  ...existing,
+  ...incoming.map((medicine, index) => {
+    const key = medicine.client_med_id || medicine.id;
+    const existingKeys = new Set(existing.map((item) => item.client_med_id || item.id).filter(Boolean));
+    if (!key || !existingKeys.has(key)) return medicine;
+    const uniqueKey = `${key}__upload_${Date.now()}_${index}`;
+    return { ...medicine, id: uniqueKey, client_med_id: uniqueKey, sourceMedicineId: key };
+  }),
+];
+
 interface UseChatWizardManagerProps {
   chatWizardState: ChatWizardState;
   setChatWizardState: React.Dispatch<React.SetStateAction<ChatWizardState>>;
@@ -116,7 +130,7 @@ export const useChatWizardManager = ({
           setChatWizardState((prev) => ({
             ...prev,
             step: "results",
-            extractedMedicines: flatMeds,
+            extractedMedicines: appendExtractedMedicines(prev.extractedMedicines, flatMeds),
             summaries: summariesList,
           }));
 
@@ -190,6 +204,7 @@ export const useChatWizardManager = ({
                 resolvedDocNames.push(normalizedDoc.fileName);
               }
 
+              const appendedMeds = appendExtractedMedicines(chatWizardState.extractedMedicines, incomingMeds);
               const aiMsg: ChatMessage = {
                 id: `ai-doc-res-${Date.now()}`,
                 role: "ai",
@@ -202,7 +217,7 @@ export const useChatWizardManager = ({
                 actions: resData.actions || [],
                 reportSummary: reportSummaryData || null,
                 options: resData.options || [],
-                medicines: incomingMeds,
+                medicines: appendedMeds,
                 document: normalizedDoc || resData.document || null,
                 documentSummary: resData.documentSummary || null,
                 documents: resolvedDocs,
@@ -214,7 +229,7 @@ export const useChatWizardManager = ({
               setMessages((prev) => [...prev, aiMsg]);
               setChatWizardState((prev) => ({
                 ...prev,
-                extractedMedicines: incomingMeds,
+                extractedMedicines: appendExtractedMedicines(prev.extractedMedicines, incomingMeds),
               }));
             }
           } catch (apiErr) {
@@ -397,24 +412,38 @@ export const useChatWizardManager = ({
                   a.actionType === "REPORT_SUMMARY" || a.reportSummary,
               )?.reportSummary
             : null);
+        const resolvedDoc = normalizeReportSummaryToDocument(
+          reportSummaryData || resData.document,
+          resData.document,
+        );
+        const prevDocMsg = [...messages].reverse().find(
+          (m) =>
+            m.document ||
+            m.reportSummary ||
+            (Array.isArray(m.documents) && m.documents.length > 0),
+        );
+        const fallbackDoc = prevDocMsg?.document || null;
+        const fallbackReportSummary = prevDocMsg?.reportSummary || null;
+        const fallbackDocuments =
+          prevDocMsg?.documents || (fallbackDoc ? [fallbackDoc] : []);
+
         const aiMsg: ChatMessage = {
           id: `ai-confirm-res-${Date.now()}`,
           role: "ai",
           text: resData.reply,
-          action: resData.actionType || resData.action || "NORMAL_CHAT",
-          actionType: resData.actionType || resData.action,
+          action: resData.actionType || resData.action || "CONFIRM_MEDICINES",
+          actionType: resData.actionType || resData.action || "CONFIRM_MEDICINES",
           actions: resData.actions || [],
-          reportSummary: reportSummaryData || null,
+          reportSummary: reportSummaryData || fallbackReportSummary,
           options: resData.options || [],
           medicines: resData.medicines || [],
-          document: normalizeReportSummaryToDocument(
-            reportSummaryData || resData.document,
-            resData.document,
-          ),
-          documentSummary: resData.documentSummary || null,
+          document: resolvedDoc || resData.document || fallbackDoc,
+          documentSummary: resData.documentSummary || prevDocMsg?.documentSummary || null,
           documents: Array.isArray(resData.document)
             ? resData.document
-            : resData.documents || [],
+            : resData.documents && resData.documents.length > 0
+            ? resData.documents
+            : fallbackDocuments,
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, aiMsg]);
@@ -1057,22 +1086,48 @@ export const useChatWizardManager = ({
           resData.document,
         );
 
+        const isMedFlowAction =
+          option?.actionType === "CONFIRM_MEDICINES" ||
+          option?.actionType === "SKIP_MEDICINES" ||
+          normalizedKey === "CONFIRM_MEDICINES" ||
+          normalizedKey === "SKIP_MEDICINES";
+        const prevDocMsg = isMedFlowAction
+          ? [...messages].reverse().find(
+              (m) =>
+                m.document ||
+                m.reportSummary ||
+                (Array.isArray(m.documents) && m.documents.length > 0),
+            )
+          : null;
+        const fallbackDoc = prevDocMsg?.document || null;
+        const fallbackReportSummary = prevDocMsg?.reportSummary || null;
+        const fallbackDocuments =
+          prevDocMsg?.documents || (fallbackDoc ? [fallbackDoc] : []);
+
+        const resolvedAction =
+          resData.actionType ||
+          resData.action ||
+          (isMedFlowAction ? option.actionType : "NORMAL_CHAT");
+
         if (!isNavigationOnly) {
           const aiMsg: ChatMessage = {
             id: `ai-opt-res-${Date.now()}`,
             role: "ai",
             text: replyText,
-            action: resData.actionType || resData.action || "NORMAL_CHAT",
+            action: resolvedAction,
+            actionType: resolvedAction,
             actions: resData.actions || [],
-            reportSummary: reportSummaryData || null,
+            reportSummary: reportSummaryData || fallbackReportSummary,
             options: resData.options || [],
             medicines: resData.medicines || [],
             medicine: resData.medicine || null,
-            document: resolvedDoc || resData.document || null,
-            documentSummary: resData.documentSummary || null,
+            document: resolvedDoc || resData.document || fallbackDoc,
+            documentSummary: resData.documentSummary || prevDocMsg?.documentSummary || null,
             documents: Array.isArray(resData.document)
               ? resData.document
-              : resData.documents || [],
+              : resData.documents && resData.documents.length > 0
+              ? resData.documents
+              : fallbackDocuments,
             onboardingState: resData.onboardingState || resData.state || null,
             state: resData.onboardingState || resData.state || null,
             suggestedQuestions: resData.suggestedQuestions || [],

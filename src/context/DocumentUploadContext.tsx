@@ -724,11 +724,19 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
         const targetDoc = uploadingDocs.find((d) => d.fileKey === fileKey || d.id === fileKey || d.jobId === fileKey);
         const jobIdToRetry = targetDoc?.jobId || targetDoc?.id || targetDoc?.fileKey || fileKey;
-        const response = await retryDocumentProcessing({ jobId: jobIdToRetry, fileKey, batchId });
+        // `jobId` is the UUID returned by the batch API, while `fileKey` is
+        // the `doc_...` key required by the retry endpoint. If the caller
+        // passed the job UUID, use the matched document's canonical file key.
+        const fileKeyToRetry = targetDoc?.fileKey || fileKey;
+        const response = await retryDocumentProcessing({
+          jobId: jobIdToRetry,
+          fileKey: fileKeyToRetry,
+          batchId,
+        });
         const data = (response as any)?.data?.data || (response as any)?.data || response;
         const streamEndpoint =
           data?.streamUrl ||
-          (data?.fileKey ? `/sse/files/${data.fileKey}/stream` : `/sse/files/${fileKey}/stream`);
+          (data?.fileKey ? `/sse/files/${data.fileKey}/stream` : `/sse/files/${fileKeyToRetry}/stream`);
 
         const initProgress = typeof data?.progress === "number" ? data.progress : 10;
         const initStage = data?.resumeStage || data?.stage || "RUNNING";
@@ -810,12 +818,12 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
 
             let retriedMedCount: number | undefined;
             try {
-              const res = await getOcrStatus(fileKey);
+              const res = await getOcrStatus(fileKeyToRetry);
               const data = res?.data || res;
               const meds = extractMedicinesFromOcrData(data);
               retriedMedCount = meds.length;
             } catch (e) {
-              console.log("Failed to fetch retry status for", fileKey, e);
+              console.log("Failed to fetch retry status for", fileKeyToRetry, e);
             }
 
             setUploadingDocs((prev) => {
@@ -878,7 +886,7 @@ export const DocumentUploadProvider: React.FC<{ children: React.ReactNode }> = (
         });
       }
     },
-    [updateCompletedBatchFromDocs],
+    [uploadingDocs, updateCompletedBatchFromDocs],
   );
 
   const startUpload = useCallback(

@@ -6,6 +6,7 @@ interface NetworkContextType {
   isConnected: boolean | null;
   isInternetReachable: boolean | null;
   isOffline: boolean;
+  isReady: boolean;
   isChecking: boolean;
   checkConnection: () => Promise<boolean>;
 }
@@ -14,6 +15,7 @@ const NetworkContext = createContext<NetworkContextType>({
   isConnected: true,
   isInternetReachable: true,
   isOffline: false,
+  isReady: false,
   isChecking: false,
   checkConnection: async () => true,
 });
@@ -29,7 +31,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     isInternetReachable: true,
   });
 
-  const [isChecking, setIsChecking] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
 
   const updateNetworkState = useCallback((state: NetInfoState) => {
@@ -43,9 +45,19 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     // Initial fetch
-    NetInfo.fetch().then((state) => {
-      updateNetworkState(state);
-    });
+    NetInfo.fetch()
+      .then((state) => {
+        updateNetworkState(state);
+      })
+      .catch(() => {
+        // If reachability cannot be determined, fail closed and let the
+        // offline blocker handle the app instead of leaving startup spinning.
+        setNetState({ isConnected: false, isInternetReachable: false });
+        setHasInitialized(true);
+      })
+      .finally(() => {
+        setIsChecking(false);
+      });
 
     // Event listener for real-time network connectivity changes
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -66,7 +78,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
         new Promise((res) => setTimeout(res, 600)),
       ]);
       updateNetworkState(state);
-      const online = Boolean(state.isConnected && state.isInternetReachable !== false);
+      const online = Boolean(state.isConnected === true && state.isInternetReachable === true);
       return online;
     } catch (error) {
       console.warn("Network check error:", error);
@@ -80,7 +92,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Only trigger once initialized so app doesn't flash offline during the first millisecond
   const isOffline =
     hasInitialized &&
-    (netState.isConnected === false || netState.isInternetReachable === false);
+    (netState.isConnected !== true || netState.isInternetReachable !== true);
 
   return (
     <NetworkContext.Provider
@@ -88,6 +100,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isConnected: netState.isConnected,
         isInternetReachable: netState.isInternetReachable,
         isOffline,
+        isReady: hasInitialized,
         isChecking,
         checkConnection,
       }}

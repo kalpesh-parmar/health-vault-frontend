@@ -97,6 +97,28 @@ export interface BatchUploadItem {
   fileUrl?: string;
 }
 
+// The batch API returns a UUID as `jobId` and the retry endpoint expects the
+// corresponding `doc_...` value from `fileKey`. Keep this relationship in the
+// service so all retry entry points can resolve it consistently.
+const retryFileKeyByJobId = new Map<string, string>();
+
+const rememberRetryFileKeys = (response: any) => {
+  const payload = response?.data?.data || response?.data || response;
+  const documents = Array.isArray(payload?.documents)
+    ? payload.documents
+    : payload?.jobId || payload?.fileKey
+      ? [payload]
+      : [];
+
+  documents.forEach((document: any) => {
+    const jobId = document?.jobId;
+    const fileKey = document?.fileKey;
+    if (typeof jobId === "string" && typeof fileKey === "string" && fileKey.startsWith("doc_")) {
+      retryFileKeyByJobId.set(jobId, fileKey);
+    }
+  });
+};
+
 export const documentUpload = async (
   formData: FormData,
 ): Promise<ApiResponse<UploadResponse>> => {
@@ -166,6 +188,7 @@ export const uploadDocumentsBatch = async (
     timeout: options?.timeout || UPLOAD_TIMEOUT,
     onUploadProgress,
   });
+  rememberRetryFileKeys(response.data);
   return response.data;
 };
 
@@ -188,7 +211,19 @@ export interface RetryDocumentResponse {
 export const retryDocumentProcessing = async (
   payload: RetryDocumentPayload,
 ): Promise<ApiResponse<RetryDocumentResponse>> => {
-  const fileKey = payload.fileKey || payload.jobId || "";
+  // The retry endpoint expects the processing job key (`doc_...`). Upload
+  // responses also contain a storage/file UUID, so prefer the job-shaped
+  // identifier when both values are available.
+  const cleanPayloadKeys = [payload.jobId, payload.fileKey]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.replace(/[\'\"]+/g, ""));
+  const retryKey = cleanPayloadKeys.find(
+    (value) => /^doc_/.test(value),
+  );
+  const rememberedRetryKey = cleanPayloadKeys
+    .map((value) => retryFileKeyByJobId.get(value))
+    .find(Boolean);
+  const fileKey = retryKey || rememberedRetryKey || payload.fileKey || payload.jobId || "";
   const cleanFileKey = String(fileKey).replace(/['"]+/g, "");
   let endpoint = `${DOCUMENT_ENDPOINTS.RETRY_DOCUMENT}?fileKey=${encodeURIComponent(cleanFileKey)}`;
   if (payload.batchId) {
@@ -204,10 +239,19 @@ export const retryDocumentProcessing = async (
     } as any);
 
     const response = await apiClient.post(endpoint, formData);
+    rememberRetryFileKeys({
+      jobId: payload.jobId,
+      fileKey: cleanFileKey,
+    });
     return response.data;
   }
 
   const response = await apiClient.post(endpoint);
+  rememberRetryFileKeys({
+    jobId: payload.jobId,
+    fileKey: cleanFileKey,
+  });
+  rememberRetryFileKeys(response.data);
   return response.data;
 };
 

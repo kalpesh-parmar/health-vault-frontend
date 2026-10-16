@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import NetInfo from "@react-native-community/netinfo";
 import { signOutFirebase } from "../firebase/config";
 import { queryClient } from "../config/queryClient";
 import { registerForceLogoutHandler, resetForceLogout, getValidAccessToken } from "../services/apiClient";
@@ -86,6 +87,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         const storedRefreshToken = await SecureStore.getItemAsync("authToken");
         if (storedRefreshToken) {
+          // Do not validate/refresh a session while offline. A failed network
+          // check is not an authentication failure and must not log the user out.
+          const networkState = await NetInfo.fetch();
+          const isOffline =
+            networkState.isConnected !== true ||
+            networkState.isInternetReachable !== true;
+          if (isOffline) {
+            const storedAccessToken = await SecureStore.getItemAsync("accessToken");
+            setAccessToken(storedAccessToken);
+            setRefreshToken(storedRefreshToken);
+            setIsAuthenticated(true);
+            return;
+          }
+
           try {
             // Proactively validate / refresh token via getValidAccessToken
             const validToken = await getValidAccessToken();
@@ -95,6 +110,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               setRefreshToken(latestRefreshToken);
               setIsAuthenticated(true);
             } else {
+              // A blocked refresh means the device may be offline, not that
+              // the session is invalid. Keep the local session until online.
+              const networkState = await NetInfo.fetch();
+              const isOffline =
+                networkState.isConnected !== true ||
+                networkState.isInternetReachable !== true;
+              if (isOffline) {
+                const storedAccessToken = await SecureStore.getItemAsync("accessToken");
+                setAccessToken(storedAccessToken);
+                setRefreshToken(storedRefreshToken);
+                setIsAuthenticated(true);
+                return;
+              }
+
               // Refresh failed / invalid credentials
               await clearStoredAuth();
               clearLocalAuthState();

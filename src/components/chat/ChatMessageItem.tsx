@@ -186,7 +186,21 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
     Boolean((item as any).isConfirmed);
   const isReadOnly = isHistorical || isConfirmAction;
 
+  const isFollowUpToMedicineFlow =
+    item.role === "ai" &&
+    Boolean(
+      prevItem &&
+        prevItem.role === "user" &&
+        (prevItem.text === "Confirm Selection" ||
+          prevItem.text === "Skip All" ||
+          prevItem.text === "Cancel" ||
+          (typeof prevItem.rawValue === "string" &&
+            (prevItem.rawValue.includes("CONFIRM_MEDICINES") ||
+              prevItem.rawValue.includes("SKIP_MEDICINES")))),
+    );
+
   const isComplexStep =
+    isFollowUpToMedicineFlow ||
     item.action === "RESOLVE_PROFILE_SOURCE" ||
     item.action === "ASK_UPLOAD_OR_SKIP" ||
     item.action === "ASK_ALLERGIES" ||
@@ -283,6 +297,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
   if (isComplexStep) {
     const isReportOrConfirmAction =
+      isFollowUpToMedicineFlow ||
       item.action === "ASK_REPORT" ||
       item.action === "SKIP_MEDICINES" ||
       item.action === "CONFIRM_MEDICINES" ||
@@ -292,7 +307,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       (item as any).actionType === "REPORT_SUMMARY";
 
     if (isReportOrConfirmAction) {
-      const reportSummarySource =
+      let reportSummarySource =
         (item.reportSummary && typeof item.reportSummary === "object" ? item.reportSummary : null) ||
         (Array.isArray((item as any).actions)
           ? (item as any).actions.find(
@@ -301,12 +316,36 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                 typeof (a.reportSummary || a) === "object",
             )?.reportSummary
           : null);
-      const reportSourceDocuments = item.documents?.length
+      let reportSourceDocuments = item.documents?.length
         ? item.documents
         : item.document;
+      let effectiveDocument = item.document;
+
+      if (!reportSummarySource && !effectiveDocument && (!reportSourceDocuments || reportSourceDocuments.length === 0)) {
+        for (let i = index - 1; i >= 0; i--) {
+          const m = mergedMessages[i];
+          const mSummary =
+            (m.reportSummary && typeof m.reportSummary === "object" ? m.reportSummary : null) ||
+            (Array.isArray((m as any).actions)
+              ? (m as any).actions.find(
+                  (a: any) =>
+                    (a.actionType === "REPORT_SUMMARY" || a.reportSummary) &&
+                    typeof (a.reportSummary || a) === "object",
+                )?.reportSummary
+              : null);
+          const mDocs = m.documents?.length ? m.documents : m.document;
+          if (mSummary || m.document || (Array.isArray(mDocs) && mDocs.length > 0)) {
+            reportSummarySource = mSummary;
+            effectiveDocument = m.document;
+            reportSourceDocuments = mDocs;
+            break;
+          }
+        }
+      }
+
       const reportSourceFailed =
         isFailedOrRejectedDocument(reportSummarySource) ||
-        isFailedOrRejectedDocument(item.document) ||
+        isFailedOrRejectedDocument(effectiveDocument) ||
         isReportSummaryForFailedDocuments(
           reportSummarySource,
           reportSourceDocuments,
@@ -314,11 +353,11 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       const doc = reportSourceFailed
         ? null
         : normalizeReportSummaryToDocument(
-            reportSummarySource || item.document,
-            item.document,
+            reportSummarySource || effectiveDocument,
+            effectiveDocument,
           ) ||
-          (item.document && typeof item.document === "object"
-            ? item.document
+          (effectiveDocument && typeof effectiveDocument === "object"
+            ? effectiveDocument
             : null);
       const reportDocuments = normalizeReportDocumentsToSummaries(
         reportSourceDocuments,
@@ -883,6 +922,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
       const handleSkipAll = () => {
         if (isReadOnly) return;
+        (item as any).isSkipped = true;
         const displayLabel = tOnboarding("skipAll") || "Skip All";
         handleGenericOptionPress(
           {
@@ -901,6 +941,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
       const handleCancelReview = () => {
         if (isReadOnly) return;
+        (item as any).isCancelled = true;
         const displayLabel = tOnboarding("cancel") || "Cancel";
         setChatWizardState((prev: any) => ({
           ...prev,
@@ -1010,7 +1051,6 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       if (displayMeds.length > 0) {
         return renderAssistantPrompt(
           <View style={{ width: "100%" }}>
-            {documentSummaryCard}
             <ReviewMedicinesListCard
               localMedicines={displayMeds}
               setLocalMedicines={setLocalMedicinesWrapper}
@@ -1038,6 +1078,14 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         return (
           <View style={{ width: "100%" }}>
             {dateHeader}
+            {item.text && item.text.trim().length > 0 && (
+              <MessageBubble
+                message={item as any}
+                isDark={isDark}
+                onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
+                isSpeaking={speakingMessageId === item.id}
+              />
+            )}
             <View style={styles.optionsWrapper}>
               <DocumentProgressSummaryContainer
                 documents={msgDocs}
@@ -1049,14 +1097,6 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                 readOnly={isReadOnly}
               />
             </View>
-            {item.text && item.text.trim().length > 0 && (
-              <MessageBubble
-                message={item as any}
-                isDark={isDark}
-                onSpeak={() => speakMessage(item.id, item.text, preferredLang)}
-                isSpeaking={speakingMessageId === item.id}
-              />
-            )}
             {documentSummaryCard && (
               <View style={styles.optionsWrapper}>{documentSummaryCard}</View>
             )}

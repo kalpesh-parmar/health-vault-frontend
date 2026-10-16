@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -124,6 +124,7 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
   const [expandedRejectionIds, setExpandedRejectionIds] = useState<Set<string>>(new Set());
   const [retryingDocKeys, setRetryingDocKeys] = useState<Set<string>>(new Set());
   const [docStateOverrides, setDocStateOverrides] = useState<Record<string, Partial<DocumentSummaryItem>>>({});
+  const canonicalFileKeysRef = useRef<Record<string, string>>({});
 
   const lang = preferredLang?.toLowerCase() || "english";
   const dict = I18N_SUMMARY[lang] || I18N_SUMMARY.english;
@@ -187,6 +188,37 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
     const key = doc.fileKey || doc.id || doc.jobId;
     if (!key) return;
 
+    const retryIdentityKeys = [
+      key,
+      doc.id,
+      doc.jobId,
+      (doc as any).documentId,
+    ].filter(Boolean) as string[];
+    const rememberedFileKey = retryIdentityKeys
+      .map((identity) => canonicalFileKeysRef.current[identity])
+      .find(Boolean);
+
+    // Some document summary payloads only contain the UUID job id. Resolve
+    // the canonical `doc_...` file key from the upload state before retrying.
+    const matchingUpload = docUpload.uploadingDocs.find(
+      (upload) =>
+        upload.fileKey === key ||
+        upload.id === key ||
+        upload.jobId === key ||
+        upload.documentId === key,
+    );
+    const matchingFileInfo = docUpload.chatWizardState?.filesInfo?.find(
+      (file) => file.fileKey === key || file.jobId === key,
+    );
+    const retryFileKey =
+      rememberedFileKey || matchingUpload?.fileKey || matchingFileInfo?.fileKey || doc.fileKey || key;
+
+    if (retryFileKey.startsWith("doc_")) {
+      retryIdentityKeys.forEach((identity) => {
+        canonicalFileKeysRef.current[identity] = retryFileKey;
+      });
+    }
+
     setRetryingDocKeys((prev) => new Set(prev).add(key));
     setDocStateOverrides((prev) => ({
       ...prev,
@@ -203,18 +235,31 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
 
     try {
       if (onRetry) {
-        await onRetry(key, doc.batchId);
+        await onRetry(retryFileKey, doc.batchId);
+        // The parent handler owns the API request and SSE lifecycle. Do not
+        // send a second retry request from this summary widget.
+        setDocStateOverrides((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        setRetryingDocKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        return;
       }
 
       const response = await retryDocumentProcessing({
         jobId: doc.jobId || doc.id || doc.fileKey || key,
-        fileKey: key,
+        fileKey: retryFileKey,
         batchId: doc.batchId,
       });
       const data = (response as any)?.data?.data || (response as any)?.data || response;
       const streamEndpoint =
         data?.streamUrl ||
-        (data?.fileKey ? `/sse/files/${data.fileKey}/stream` : `/sse/files/${key}/stream`);
+        (data?.fileKey ? `/sse/files/${data.fileKey}/stream` : `/sse/files/${retryFileKey}/stream`);
 
       const initProgress = typeof data?.progress === "number" ? data.progress : 10;
       const initStage = data?.resumeStage || data?.stage || "RUNNING";
@@ -329,7 +374,7 @@ export const DocumentProgressSummaryContainer: React.FC<DocumentProgressSummaryC
 
           let medCount: number | undefined;
           try {
-            const res = await getOcrStatus(key);
+            const res = await getOcrStatus(retryFileKey);
             const data = res?.data || res;
             const meds =
               data?.extractedStructuredData?.medications ||

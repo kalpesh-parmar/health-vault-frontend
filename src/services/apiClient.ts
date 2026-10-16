@@ -2,6 +2,7 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
+import NetInfo from "@react-native-community/netinfo";
 import { signOutFirebase } from "../firebase/config";
 import { BASE_URL, API_TIMEOUT, ENABLE_API_LOGS } from "../config/api";
 
@@ -14,6 +15,19 @@ const apiClient = axios.create({
     "Bypass-Tunnel-Reminder": "true"
   },
 });
+
+// The UI network blocker is mounted below AuthProvider. Keep a service-level
+// guard as well, so bootstrap requests cannot reach Axios while offline.
+const assertOnline = async () => {
+  const state = await NetInfo.fetch();
+  // Treat unknown reachability as offline during startup; otherwise Android
+  // can report a connected interface before internet reachability is known.
+  if (state.isConnected !== true || state.isInternetReachable !== true) {
+    const error = new Error("You are offline. Please reconnect to continue.");
+    (error as any).code = "ERR_NETWORK_OFFLINE";
+    throw error;
+  }
+};
 
 // Sensitive keys to mask
 const SENSITIVE_KEYS = new Set([
@@ -30,8 +44,8 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 function shouldMask(): boolean {
-  const isDev = (typeof __DEV__ !== "undefined" && __DEV__) || process.env.NODE_ENV === "development";
-  return !isDev;
+  // Never print bearer tokens to Metro or device logs.
+  return true;
 }
 
 function maskSensitiveData(data: any): any {
@@ -366,6 +380,8 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
   isRefreshing = true;
 
   try {
+    // Token refresh uses axios directly, so apply the same offline guard.
+    await assertOnline();
     const refreshToken = await SecureStore.getItemAsync("authToken"); // refreshToken is stored as authToken
 
     // If NEITHER token nor refreshToken exists, and this is NOT an explicit forceRefresh retry,
@@ -468,6 +484,8 @@ export function isAuthEndpoint(url?: string): boolean {
 
 apiClient.interceptors.request.use(
   async (config) => {
+    await assertOnline();
+
     if (config.url && normalizePath(config.url) === "/ocr/extract") {
       config.timeout = 240000;
     }
