@@ -50,6 +50,7 @@ import { normalizeReportItem } from "../../utils/reportListNormalizer";
 import {
   isMedicineReviewMessage,
   computeMedicineReviewReadOnly,
+  getLatestMedicineReviewMessage,
 } from "../../utils/medicineReviewLifecycle";
 export type { ChatMessage };
 
@@ -275,12 +276,25 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
     );
 
   const isMedicineReviewStep = isMedicineReviewMessage(item);
+  // History hydration tags messages from the onboarding-history endpoint as
+  // onboarding messages. That flag is useful for locking old cards after the
+  // flow is complete, but it must not lock the latest unanswered review: it
+  // is still the user's active decision point after a reload.
+  const latestMedicineReview = getLatestMedicineReviewMessage(mergedMessages);
+  const isLatestMedicineReview = latestMedicineReview?.id === item.id;
   const { isReadOnly: isReviewReadOnly, isCurrentActiveReview } = isMedicineReviewStep
-    ? computeMedicineReviewReadOnly(mergedMessages, item, isOnboardingCompleted)
+    ? computeMedicineReviewReadOnly(
+        mergedMessages,
+        item,
+        isOnboardingCompleted && !isLatestMedicineReview,
+      )
     : { isReadOnly: false, isCurrentActiveReview: false };
 
   const isHistoricalOnboarding = Boolean(
-    isOnboardingCompleted && isPreOnboardingWizardStep && !isCurrentActiveReview
+    isOnboardingCompleted &&
+    isPreOnboardingWizardStep &&
+    !isCurrentActiveReview &&
+    !isLatest
   );
   const isReadOnly = isMedicineReviewStep
     ? isReviewReadOnly
