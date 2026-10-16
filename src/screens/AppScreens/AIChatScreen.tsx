@@ -68,6 +68,7 @@ const AIChatScreen = ({ route }: any) => {
   }, [storedPreferredLanguage]);
 
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(false);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [pendingStep, setPendingStep] = useState<string | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<any>(null);
@@ -182,6 +183,8 @@ const AIChatScreen = ({ route }: any) => {
     filesInfo: chatWizardState.filesInfo,
     lastKnownStateRef,
     setPreferredLang,
+    selectedOption,
+    setSelectedOption,
   });
 
   // Wizard & Conflict Manager Hook
@@ -216,6 +219,7 @@ const AIChatScreen = ({ route }: any) => {
     lastKnownStateRef,
     setIsOnboardingCompleted,
     setPendingStep,
+    setSelectedOption,
   });
 
   // Load history on focus / mount
@@ -422,11 +426,13 @@ const AIChatScreen = ({ route }: any) => {
         }
         onAllergyCardExpand={handleAllergyCardExpand}
         isOnboardingCompleted={isOnboardingCompleted}
+        selectedOption={selectedOption}
       />
     ),
     [
       displayMessages,
       isOnboardingCompleted,
+      selectedOption,
       isDark,
       theme,
       preferredLang,

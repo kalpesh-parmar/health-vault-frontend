@@ -53,6 +53,8 @@ export interface ChatMessage {
   reports?: any[];
   onboardingState?: any;
   state?: any;
+  selectedOption?: string | null;
+  clientMessageId?: string | null;
 }
 
 export type { ChatWizardState, DuplicateConflict };

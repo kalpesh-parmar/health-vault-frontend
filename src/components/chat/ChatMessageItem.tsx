@@ -46,6 +46,10 @@ import {
 } from "../../utils/documentNormalizer";
 import { normalizeMedicationItem } from "../../utils/medicationListNormalizer";
 import { normalizeReportItem } from "../../utils/reportListNormalizer";
+import {
+  isMedicineReviewMessage,
+  computeMedicineReviewReadOnly,
+} from "../../utils/medicineReviewLifecycle";
 export type { ChatMessage };
 
 interface ChatMessageItemProps {
@@ -94,6 +98,7 @@ interface ChatMessageItemProps {
   onRetryDocument?: (fileKey: string, batchId?: string) => Promise<void> | void;
   onReportQuestion?: (question: string, document?: any) => Promise<void> | void;
   isOnboardingCompleted?: boolean;
+  selectedOption?: string | null;
   onAllergyCardExpand?: () => void;
 }
 
@@ -126,6 +131,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   onRetryDocument,
   onReportQuestion,
   isOnboardingCompleted,
+  selectedOption,
   onAllergyCardExpand,
 }) => {
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
@@ -184,7 +190,6 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
     item.action === "CONFIRM_MEDICINES" ||
     (item as any).actionType === "CONFIRM_MEDICINES" ||
     Boolean((item as any).isConfirmed);
-  const isReadOnly = isHistorical || isConfirmAction;
 
   const isFollowUpToMedicineFlow =
     item.role === "ai" &&
@@ -248,6 +253,50 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       item.action === "ASK_GENDER" ||
       item.action === "ASK_BLOOD_GROUP" ||
       (item.options && item.options.length > 0));
+
+  const isPreOnboardingWizardStep =
+    item.action === "MEDICINE_OPTIONS" ||
+    item.action === "RESOLVE_PROFILE_SOURCE" ||
+    item.action === "ASK_UPLOAD_OR_SKIP" ||
+    item.action === "ASK_ALLERGIES" ||
+    item.action === "CONFIRM_MEDICINE" ||
+    item.action === "EXTRACTED_MEDICINES_CONFIRM" ||
+    item.action === "ASK_LANGUAGE" ||
+    item.action === "ASK_GENDER" ||
+    item.action === "ASK_BLOOD_GROUP" ||
+    Boolean(item.isOnboardingMessage) ||
+    Boolean(
+      isChipStep &&
+        (item.isOnboardingMessage ||
+          item.action === "ASK_LANGUAGE" ||
+          item.action === "ASK_GENDER" ||
+          item.action === "ASK_BLOOD_GROUP")
+    );
+
+  const isMedicineReviewStep = isMedicineReviewMessage(item);
+  const { isReadOnly: isReviewReadOnly, isCurrentActiveReview } = isMedicineReviewStep
+    ? computeMedicineReviewReadOnly(mergedMessages, item, isOnboardingCompleted)
+    : { isReadOnly: false, isCurrentActiveReview: false };
+
+  const isHistoricalOnboarding = Boolean(
+    isOnboardingCompleted && isPreOnboardingWizardStep && !isCurrentActiveReview
+  );
+  const isReadOnly = isMedicineReviewStep
+    ? isReviewReadOnly
+    : isHistorical || isConfirmAction || isHistoricalOnboarding;
+
+  const effectiveReviewChosenVal = isCurrentActiveReview ? null : chosenVal;
+  const effectiveReviewChosenLabel = isCurrentActiveReview ? null : chosenLabel;
+
+  const hasDashboardSelected = selectedOption === "DASHBOARD";
+  const effectiveChosenVal =
+    chosenVal !== null
+      ? chosenVal
+      : (hasDashboardSelected ? "DASHBOARD" : null);
+  const effectiveChosenLabel =
+    chosenLabel !== null
+      ? chosenLabel
+      : (hasDashboardSelected ? (tOnboarding("goToDashboard") || "Go to Dashboard") : null);
 
   const renderAssistantPrompt = (card: React.ReactNode) => {
     const hasText = item.text && item.text.trim().length > 0;
@@ -715,15 +764,15 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           theme={theme}
           currentClientMedId={clientMedId}
           setCurrentClientMedId={setClientMedId}
-          onSaveMedicines={!isHistorical ? handleSaveMedicines : undefined}
-          onSave={!isHistorical ? (updatedMed) => handleSaveMedicines([updatedMed]) : () => { }}
-          onAddAndContinue={!isHistorical ? handleAddAndContinue : undefined}
-          onDraftSync={!isHistorical ? handleDraftSync : undefined}
-          onExitToOptions={!isHistorical ? handleExitToOptions : undefined}
-          onCancel={!isHistorical ? handleExitToOptions : undefined}
-          readOnly={isHistorical}
-          chosenVal={chosenVal}
-          chosenLabel={chosenLabel}
+          onSaveMedicines={!isReadOnly ? handleSaveMedicines : undefined}
+          onSave={!isReadOnly ? (updatedMed) => handleSaveMedicines([updatedMed]) : () => { }}
+          onAddAndContinue={!isReadOnly ? handleAddAndContinue : undefined}
+          onDraftSync={!isReadOnly ? handleDraftSync : undefined}
+          onExitToOptions={!isReadOnly ? handleExitToOptions : undefined}
+          onCancel={!isReadOnly ? handleExitToOptions : undefined}
+          readOnly={isReadOnly}
+          chosenVal={effectiveReviewChosenVal}
+          chosenLabel={effectiveReviewChosenLabel}
         />,
       );
     }
@@ -922,7 +971,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
       const handleSkipAll = () => {
         if (isReadOnly) return;
-        (item as any).isSkipped = true;
+        (item as any).isCancelled = true;
         const displayLabel = tOnboarding("skipAll") || "Skip All";
         handleGenericOptionPress(
           {
@@ -1063,8 +1112,8 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
               onEdit={handleEdit}
               onCancel={handleCancelReview}
               readOnly={isReadOnly}
-              chosenVal={chosenVal}
-              chosenLabel={chosenLabel}
+              chosenVal={effectiveReviewChosenVal}
+              chosenLabel={effectiveReviewChosenLabel}
               documents={msgDocs}
               showDocumentSummary={true}
               onRetryDocument={onRetryDocument}
@@ -1109,8 +1158,8 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                   onOptionPress={(opt) => handleGenericOptionPress(opt)}
                   readOnly={isReadOnly}
                   disableDashboardOption={isLatest && !isReadOnly}
-                  chosenVal={chosenVal}
-                  chosenLabel={chosenLabel}
+                  chosenVal={effectiveChosenVal}
+                  chosenLabel={effectiveChosenLabel}
                   preferredLang={preferredLang}
                 />
               </View>
@@ -1134,7 +1183,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           theme={theme}
           onConfirm={() => { }}
           onEdit={() => { }}
-          readOnly={isHistorical}
+          readOnly={isHistorical || isHistoricalOnboarding}
           chosenVal={chosenVal}
           chosenLabel={chosenLabel}
         />,
@@ -1151,8 +1200,8 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           readOnly={isHistoricalMsg}
           disableDashboardOption={isLatest && !isHistoricalMsg}
           loading={isLoadingResults || isConfirmingMeds}
-          chosenVal={chosenVal}
-          chosenLabel={chosenLabel}
+          chosenVal={effectiveChosenVal}
+          chosenLabel={effectiveChosenLabel}
           preferredLang={preferredLang}
         />,
       );
@@ -1454,7 +1503,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
     }
   }
 
-  if (isHistorical && isChipStep) {
+  if ((isHistorical || isHistoricalOnboarding) && isChipStep) {
     return (
       <View style={{ width: "100%" }}>
         {dateHeader}
@@ -1490,7 +1539,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       {showChips && (
         <View
           style={styles.optionsWrapper}
-          pointerEvents={isHistorical || isLoadingResults || isConfirmingMeds ? "none" : "auto"}
+          pointerEvents={isHistorical || isHistoricalOnboarding || isLoadingResults || isConfirmingMeds ? "none" : "auto"}
         >
           <View style={widgetStyles.chipRow}>
             {item.options?.map((opt: any, idx: number) => {
@@ -1501,7 +1550,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
                 String(key).toUpperCase() === "DASHBOARD" ||
                 String(value).toUpperCase() === "DASHBOARD" ||
                 String(label).toLowerCase().includes("dashboard");
-              const isOptDisabled = isHistorical || isLoadingResults || isConfirmingMeds || (isLatest && isDashboard);
+              const isOptDisabled = isHistorical || isHistoricalOnboarding || isLoadingResults || isConfirmingMeds || (isLatest && isDashboard);
 
                 const rawChipLabel = typeof opt === "string" ? opt : (opt.label || opt.value || "");
                 const displayChipLabel =
@@ -1554,6 +1603,8 @@ export const ChatMessageItem = React.memo(ChatMessageItemComponent, (prevProps, 
   if (prevProps.isLoadingResults !== nextProps.isLoadingResults) return false;
   if (prevProps.isConfirmingMeds !== nextProps.isConfirmingMeds) return false;
   if (prevProps.chatWizardState !== nextProps.chatWizardState) return false;
+  if (prevProps.isOnboardingCompleted !== nextProps.isOnboardingCompleted) return false;
+  if (prevProps.selectedOption !== nextProps.selectedOption) return false;
 
   const prevSpeaking = prevProps.speakingMessageId === prevProps.item.id;
   const nextSpeaking = nextProps.speakingMessageId === nextProps.item.id;
