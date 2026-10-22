@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { FlatList, LayoutAnimation, ActivityIndicator } from "react-native";
 import styled from "styled-components/native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useQuery, useMutation, useInfiniteQuery } from "@tanstack/react-query";
@@ -48,13 +48,39 @@ const ReminderScreen = () => {
   const [endDateFilter, setEndDateFilter] = useState<Date | undefined>(undefined);
   const [datePicker, setDatePicker] = useState<{ visible: boolean; type: "start" | "end" }>({ visible: false, type: "start" });
 
-  const { data: allRemindersData, isLoading: isLoadingCounts } = useQuery({
+  const { data: allRemindersData, isLoading: isLoadingCounts, refetch: refetchCounts } = useQuery({
     queryKey: ["allRemindersCounts"],
     queryFn: listSubReminders,
   });
 
+  useFocusEffect(
+    useCallback(() => {
+      refetchCounts();
+    }, [refetchCounts])
+  );
+
   const allRemindersForCounts = allRemindersData?.data || [];
 
+  /**
+   * Reminder Counts Scope Definitions (Requirement 3 Consistency):
+   * 
+   * 1. Pending:
+   *    Outstanding pending occurrences across the active medication horizon
+   *    where status === 'PENDING' and actualMedicationTime is not yet overdue.
+   * 
+   * 2. Overdue:
+   *    Overdue occurrences requiring immediate patient action
+   *    where status === 'PENDING' and actualMedicationTime <= now (isOverdue === true).
+   * 
+   * 3. Completed:
+   *    Completed occurrences across the screen's defined active dataset.
+   * 
+   * 4. Dashboard Badge (Quick Actions):
+   *    Total outstanding actionable occurrences = Pending + Overdue across all active medication schedules.
+   * 
+   * 5. Today's Reminders (Dashboard Section):
+   *    All medication occurrences scheduled for today's local date (Pending, Completed, Completed Late, Skipped, Overdue, Missed).
+   */
   const pendingCount = allRemindersForCounts.filter(
     (r: any) => r.status?.toLowerCase() === "pending" && !r.isOverdue,
   ).length;
@@ -115,24 +141,18 @@ const ReminderScreen = () => {
     initialPageParam: 1,
   });
 
-  // const filteredReminders = useMemo(() => {
-  //   return infiniteData?.pages.flatMap((page: any) => {
-  //     if (Array.isArray(page?.data)) return page.data;
-  //     if (Array.isArray(page?.data?.data)) return page.data.data;
-  //     if (Array.isArray(page?.data?.occurrences)) return page.data.occurrences;
-  //     return [];
-  //   }) || [];
-  // }, [infiniteData]);
-
   const updateStatusMutation = useMutation({
     mutationFn: updateReminderOccurrenceStatus,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["paginatedReminders"] });
       queryClient.invalidateQueries({ queryKey: ["allRemindersCounts"] });
       queryClient.invalidateQueries({ queryKey: ["todayReminders"] });
+      queryClient.invalidateQueries({ queryKey: ["outstandingRemindersCount"] });
+      queryClient.invalidateQueries({ queryKey: ["todayOccurrencesCount"] });
       queryClient.invalidateQueries({ queryKey: ["allReminders"] });
       queryClient.invalidateQueries({ queryKey: ["notificationCount"] });
       queryClient.invalidateQueries({ queryKey: ["paginatedNotifications"] });
+      refetchCounts();
     },
   });
 
@@ -141,7 +161,7 @@ const ReminderScreen = () => {
       id: "pending",
       title: "Pending",
       count: pendingCount,
-      subtitle: "Upcoming reminders",
+      subtitle: "All upcoming doses",
       icon: "time-outline",
       color: "#f97316",
       bgLight: "#fff8f1",
@@ -151,7 +171,7 @@ const ReminderScreen = () => {
       id: "completed",
       title: "Completed",
       count: completedCount,
-      subtitle: "Tasks completed",
+      subtitle: "Total completed",
       icon: "checkmark-circle-outline",
       color: "#10b981",
       bgLight: "#f0fdf4",

@@ -55,6 +55,14 @@ export interface ChatMessage {
   state?: any;
   selectedOption?: string | null;
   clientMessageId?: string | null;
+  mentions?: DocumentMention[];
+}
+
+export interface DocumentMention {
+  id: string;
+  name?: string;
+  title?: string;
+  [key: string]: any;
 }
 
 export type { ChatWizardState, DuplicateConflict };

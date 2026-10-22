@@ -50,7 +50,13 @@ export const updateReminderOccurrenceStatus = async ({
   return response.data;
 };
 
-export const listTodayOccurrencesCount = async (payload: { startDate: string; endDate: string }) => {
-  const response = await apiClient.post(MEDICATION_REMINDER_ENDPOINTS.LIST_TODAY_OCCURENCES_COUNT, payload);
+export const listTodayOccurrencesCount = async (payload?: { startDate?: string; endDate?: string }) => {
+  const response = await apiClient.post(MEDICATION_REMINDER_ENDPOINTS.LIST_TODAY_OCCURENCES_COUNT, payload || {});
   return response.data;
 };
+
+export const getOutstandingRemindersCount = async () => {
+  const response = await apiClient.post(MEDICATION_REMINDER_ENDPOINTS.LIST_TODAY_OCCURENCES_COUNT, {});
+  return response.data;
+};
+

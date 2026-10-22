@@ -146,6 +146,7 @@ export interface User {
   isMobileVerified: boolean;
   isEmailVerified: boolean;
   sessionId?: string;
+  timezone?: string;
 }
 
 // ─── Update User Request ────────────────────────────────────────────────
@@ -246,21 +247,25 @@ export interface Reminder {
   status?: string;
   beforeReminderTime?: string;
   afterReminderMinutes?: number;
-  refillAlertBeforeDays: number;
-  dosePerIntake: number;
-  frequency: string;
-  medicationTime: {
+  refillAlertBeforeDays?: number;
+  dosePerIntake?: number;
+  unit?: string;
+  frequency?: string;
+  medicationTime?: {
     time: string;
     period: string;
   }[];
   actualMedicationTime: string;
   completedAt?: string;
+  delayMinutes?: number | null;
+  completionClassification?: string | null;
+  skipReason?: string | null;
   isOverdue?: boolean;
-  timezone: string;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-  softDelete: boolean;
+  timezone?: string;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  softDelete?: boolean;
 }
 
 export interface CreateMedicationReminderRequest {
