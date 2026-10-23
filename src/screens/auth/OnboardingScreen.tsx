@@ -1686,6 +1686,17 @@ export default function OnboardingScreen() {
         messageString = JSON.stringify(actionData);
       }
 
+
+      if (messageString.length > 4000 && actionData !== undefined) {
+        messageString =
+          displayLabel ||
+          (resolvedActionType === "SAVE_AND_REVIEW"
+            ? "Save and Review"
+            : resolvedActionType === "CONFIRM_MEDICINES"
+              ? "Confirm Medicines"
+              : "Continue");
+      }
+
       // A resumed onboarding session can retain ASK_DOB as its persisted
       // currentStep even though the visible card is now the profile
       // confirmation step. Keep the explicit profile-confirm action and state
@@ -3796,7 +3807,6 @@ export default function OnboardingScreen() {
       if (!isHistorical && medicineCardMode === "wizard") {
         return (
           <View style={{ width: "100%" }}>
-            {!activeMedicineToEdit && reviewMedicinesList}
             <AddMedicineCard
             key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
             med={activeMedicineToEdit || null}

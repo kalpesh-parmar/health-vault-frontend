@@ -230,6 +230,13 @@ const DocumentList = () => {
     enabled: (isFilterApplied || searchQuery.trim().length > 0) && !!userId,
   });
 
+  // Fetch the complete document list for the category counts shown in FilterTabs.
+  const { data: allDocumentsForCounts } = useQuery({
+    queryKey: ["allDocumentCounts", userId],
+    queryFn: listDocument,
+    enabled: !!userId,
+  });
+
   // Fetch paginated documents when "All" is active.
   const {
     data: allDocsData,
@@ -294,6 +301,56 @@ const DocumentList = () => {
       : activeTab === "All"
         ? isLoadingAll
         : isLoadingInfinite;
+
+  const categoryCounts = useMemo(() => {
+    const response = allDocumentsForCounts as any;
+    const allDocuments: MedicalDocument[] =
+      safeArray(response).length > 0
+        ? safeArray(response)
+        : Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response?.data?.data)
+            ? response.data.data
+            : Array.isArray(response?.data?.items)
+              ? response.data.items
+              : Array.isArray(response?.items)
+                ? response.items
+                : [];
+
+    const normalize = (value: unknown) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const categoryAliases: Record<string, string[]> = {
+      Prescription: ["prescription"],
+      "Lab Report": ["lab report", "laboratory report"],
+      "Imaging Report": ["imaging report", "imaging"],
+      "Discharge Summary": ["discharge summary"],
+      "Consultation Report": ["consultation report"],
+      "Surgery Report": ["surgery report", "surgery procedure report"],
+      "Vaccination Report": ["vaccination report", "vaccination record"],
+      "Medical Certificate": ["medical certificate"],
+      "Other Medical Document": ["other medical document"],
+    };
+
+    const counts: Record<string, number> = {
+      All: allDocuments.length,
+    };
+
+    CATEGORIES.forEach(({ value }) => {
+      if (value === "All") return;
+      const aliases = categoryAliases[value] || [normalize(value)];
+      counts[value] = allDocuments.filter((document) => {
+        const type = normalize(document.documentType || document.category);
+        return aliases.some((alias) => type === alias || type.startsWith(`${alias} `));
+      }).length;
+    });
+
+    return counts;
+  }, [allDocumentsForCounts]);
 
   const documents = useMemo(() => {
     const getSafeArray = (response: any) => {
@@ -495,6 +552,7 @@ const DocumentList = () => {
         <FilterTabs
           data={CATEGORIES.map((category) => category.value)}
           activeTab={activeTab}
+          counts={categoryCounts}
           onSelectTab={(tab) => {
             setActiveTab(tab);
             setIsFilterApplied(false); // Reset sort/filter on tab change

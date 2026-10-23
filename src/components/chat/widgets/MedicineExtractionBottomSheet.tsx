@@ -256,23 +256,55 @@ export const MedicineExtractionBottomSheet = forwardRef<
           style={{ maxHeight: 280, marginBottom: 20 }}
         >
           {uploadingDocs.map((doc, index) => {
-            const isFailed =
-              doc.status === "FAILED" ||
-              doc.status === "CANCELLED" ||
-              doc.status === "failed";
-            const isDone =
-              doc.status === "COMPLETED" ||
-              doc.status === "completed" ||
-              doc.status === "done" ||
-              doc.status === "success";
-            const progress = doc.progress || 0;
+            const statusValues = [doc.status, doc.stageStatus, doc.stage]
+              .filter(Boolean)
+              .map((value) => String(value).toUpperCase());
+            const hasStatus = (terms: string[]) =>
+              statusValues.some((status) =>
+                terms.some((term) => status.includes(term)),
+              );
+            const isFailed = hasStatus([
+              "FAILED",
+              "ERROR",
+              "REJECTED",
+              "CANCELLED",
+              "CANCELED",
+            ]);
+            const isDone = hasStatus(["COMPLETED", "DONE", "SUCCESS"]);
+            const isUploading = !isFailed && !isDone && hasStatus(["UPLOAD"]);
+            const isQueued = hasStatus(["QUEUE", "PENDING"]);
+            const rawProgress = isDone
+              ? 100
+              : typeof doc.percentage === "number"
+                ? doc.percentage
+                : doc.progress;
+            const progress =
+              typeof rawProgress === "number" && Number.isFinite(rawProgress)
+                ? Math.min(100, Math.max(0, rawProgress))
+                : 0;
+            const isActive =
+              !isFailed &&
+              !isDone &&
+              !isQueued &&
+              (isUploading ||
+                hasStatus([
+                  "RUN",
+                  "PROCESS",
+                  "PARS",
+                  "EXTRACT",
+                  "ANALYZ",
+                  "SUMMAR",
+                  "VALIDAT",
+                  "OCR",
+                ]) ||
+                (progress > 0 && progress < 100));
 
             let stepLabel = "Queued";
             let statusIcon = <Ionicons name="time" size={18} color="#64748b" />;
             let barColor = isDark ? "#475569" : "#cbd5e1";
             let statusTextColor = "#64748b";
 
-            if (doc.status === "UPLOADING" || doc.status === "uploading") {
+            if (isUploading) {
               stepLabel = "Uploading";
               statusIcon = (
                 <ActivityIndicator
@@ -283,7 +315,7 @@ export const MedicineExtractionBottomSheet = forwardRef<
               );
               barColor = "#3b82f6";
               statusTextColor = "#3b82f6";
-            } else if (doc.status === "RUNNING" || doc.status === "running") {
+            } else if (isActive) {
               stepLabel =
                 progress <= 50 ? "OCR Extraction" : "Medicine Extraction";
               statusIcon = (
@@ -369,7 +401,7 @@ export const MedicineExtractionBottomSheet = forwardRef<
                   <View
                     style={{
                       height: "100%",
-                      width: `${progress}%`,
+                      width: `${Math.max(progress, isActive && progress === 0 ? 3 : 0)}%`,
                       backgroundColor: barColor,
                     }}
                   />
