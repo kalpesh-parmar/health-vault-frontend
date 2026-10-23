@@ -4029,14 +4029,39 @@ export default function OnboardingScreen() {
       );
     }
 
+    const medicineItems = Array.isArray(activeMsg.medicines)
+      ? activeMsg.medicines
+      : activeMsg.medicine
+        ? [activeMsg.medicine]
+        : Array.isArray((activeMsg as any).state?.medicinesToAdd)
+          ? (activeMsg as any).state.medicinesToAdd
+          : Array.isArray((activeMsg as any).onboardingState?.medicinesToAdd)
+            ? (activeMsg as any).onboardingState.medicinesToAdd
+        : [];
+    const medicineAction = String(activeMsg.action || (activeMsg as any).actionType || "").toUpperCase();
+    const hasCurrentDocument = Boolean(
+      activeMsg.document || (Array.isArray(activeMsg.documents) && activeMsg.documents.length > 0),
+    );
+    const isManualMedicineOnly =
+      medicineItems.length > 0 &&
+      !hasCurrentDocument &&
+      (medicineItems.every(
+        (medicine: any) => String(medicine?.source || "").toUpperCase() === "MANUAL",
+      ) ||
+        ["ADD_MEDICINE", "SAVE_AND_REVIEW", "REVIEW_MEDICINES_LIST", "CONFIRM_MEDICINES", "CONFIRM_MEDICINE"].includes(medicineAction)) &&
+      activeMsg.action !== "ASK_REPORT" &&
+      activeMsg.action !== "REPORT_SUMMARY" &&
+      (activeMsg as any).actionType !== "REPORT_SUMMARY";
+
     const isReportOrConfirmActive =
-      activeMsg.action === "ASK_REPORT" ||
+      !isManualMedicineOnly &&
+      (activeMsg.action === "ASK_REPORT" ||
       activeMsg.action === "SKIP_MEDICINES" ||
       activeMsg.action === "CONFIRM_MEDICINES" ||
       activeMsg.action === "CONFIRM_MEDICINE" ||
       (activeMsg as any).actionType === "CONFIRM_MEDICINES" ||
       activeMsg.action === "REPORT_SUMMARY" ||
-      (activeMsg as any).actionType === "REPORT_SUMMARY";
+      (activeMsg as any).actionType === "REPORT_SUMMARY");
 
     if (isReportOrConfirmActive) {
       const reportSummarySource = activeMsg.reportSummary ||

@@ -227,19 +227,71 @@ export const parseMedicationListMessage = (
   };
 };
 
+/**
+ * Normalize a medication name for draft-level comparisons.
+ * Dosage forms and strengths are not part of the medication identity here.
+ */
+export const normalizeMedicationName = (name: string): string => {
+  if (!name || typeof name !== "string") return "";
+
+  let clean = name.toLowerCase().trim();
+  clean = clean.replace(
+    /\b(?:tab\.|tablet|tablets|tab|cap\.|capsule|capsules|caps|cap|syp\.|syrup|syp|inj\.|injection|inj|drops?|drop|spray|inhaler|inh\.|inh)\b/gi,
+    "",
+  );
+  clean = clean.replace(/\b\d+(\.\d+)?\s*(mg|g|mcg|ml|iu|puffs?|%)?\b/gi, "");
+  clean = clean.replace(/[^a-z0-9\s]/gi, "").replace(/\s+/g, " ").trim();
+  return clean;
+};
+
 export const deduplicateDrafts = (medList: any[]): any[] => {
   if (!Array.isArray(medList)) return [];
+
   const seenIds = new Set<string>();
+  const seenNames = new Map<string, number>();
   const result: any[] = [];
+
   for (const m of medList) {
-    if (!m) continue;
-    const key = m.client_med_id || m.id;
-    if (key && seenIds.has(key)) {
-      continue;
+    if (!m || typeof m !== "object") continue;
+
+    const rawName = String(
+      m.medicationName || m.name || m.medicineName || "",
+    ).trim();
+    const normName = normalizeMedicationName(rawName) || rawName.toLowerCase();
+    const key = m.client_med_id || m.clientMedId || m.id;
+    const isUnsavedDraft = !m.isSaved && !m.dbId;
+
+    if (!normName && !key) continue;
+    if (key && seenIds.has(key)) continue;
+
+    if (normName && isUnsavedDraft && seenNames.has(normName)) {
+      const existingIdx = seenNames.get(normName)!;
+      const existing = result[existingIdx];
+
+      if (!existing.isSaved && !existing.dbId) {
+        result[existingIdx] = {
+          ...existing,
+          ...m,
+          // Keep the first item's stable identity (usually the document ID).
+          id: existing.id || m.id || key,
+          client_med_id: existing.client_med_id || m.client_med_id || key,
+          name: existing.name || m.name || rawName,
+          documentId: existing.documentId || m.documentId,
+          documentName: existing.documentName || m.documentName,
+          dosage: existing.dosage || m.dosage,
+          selected: existing.selected !== undefined ? existing.selected : m.selected,
+        };
+
+        if (key) seenIds.add(key);
+        continue;
+      }
     }
+
     if (key) seenIds.add(key);
+    if (normName) seenNames.set(normName, result.length);
     result.push(m);
   }
+
   return result;
 };
 

@@ -97,28 +97,56 @@ export const getTodayDateString = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+/**
+ * Return reminder times in the chat/form representation (HH:mm).
+ * Schedules can arrive from the API as either an array or a keyed object,
+ * and API values may include seconds.
+ */
+export const normalizeMedicationScheduleTimes = (schedule: any): string[] => {
+  const values: any[] = [];
+
+  const collect = (value: any) => {
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+    } else if (typeof value === "string" && value.includes(":")) {
+      values.push(value);
+    }
+  };
+
+  collect(schedule);
+  if (schedule && typeof schedule === "object" && !Array.isArray(schedule)) {
+    Object.values(schedule).forEach(collect);
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim().split(":").slice(0, 2).join(":"))
+        .filter((value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)),
+    ),
+  ).sort();
+};
+
+export const buildMedicationSchedulePayload = (schedule: any): Record<string, any> => {
+  const scheduleObj: Record<string, any> = {};
+  normalizeMedicationScheduleTimes(schedule).forEach((time) => {
+    const key = time === "08:00" ? "MORNING" : time === "14:00" ? "NOON" : time === "20:00" ? "NIGHT" : "CUSTOM";
+    const value = `${time}:00`;
+    if (scheduleObj[key]) {
+      scheduleObj[key] = Array.isArray(scheduleObj[key])
+        ? [...scheduleObj[key] as string[], value]
+        : [scheduleObj[key] as string, value];
+    } else {
+      scheduleObj[key] = key === "CUSTOM" ? [value] : value;
+    }
+  });
+  return scheduleObj;
+};
+
 export const buildMedicationPayload = (
   med: ExtractedMedicine
 ): AddOrEditMedication => {
-  const scheduleObj: Record<string, any> = {};
-  const times = med.medicationSchedule || [];
-  times.forEach((timeStr) => {
-    let key = "CUSTOM";
-    if (timeStr === "08:00") key = "MORNING";
-    else if (timeStr === "14:00") key = "NOON";
-    else if (timeStr === "20:00") key = "NIGHT";
-
-    const timeWithSec = `${timeStr}:00`;
-    if (scheduleObj[key]) {
-      if (Array.isArray(scheduleObj[key])) {
-        scheduleObj[key].push(timeWithSec);
-      } else {
-        scheduleObj[key] = [scheduleObj[key], timeWithSec];
-      }
-    } else {
-      scheduleObj[key] = key === "CUSTOM" ? [timeWithSec] : timeWithSec;
-    }
-  });
+  const scheduleObj = buildMedicationSchedulePayload(med.medicationSchedule);
 
   let freqLabel = "Once Daily";
   if (med.frequency === "TWICE" || med.frequency === "Twice Daily")

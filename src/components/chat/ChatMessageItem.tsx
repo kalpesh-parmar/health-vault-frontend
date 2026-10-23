@@ -260,6 +260,33 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
               prevItem.rawValue.includes("SKIP_MEDICINES")))),
     );
 
+  // Manual medicines must not inherit a report card from an earlier upload
+  // in the same chat session. Explicit report actions are still allowed to
+  // render report cards below.
+  const medicineItems = Array.isArray(item.medicines)
+    ? item.medicines
+    : item.medicine
+      ? [item.medicine]
+      : Array.isArray((item as any).state?.medicinesToAdd)
+        ? (item as any).state.medicinesToAdd
+        : Array.isArray((item as any).onboardingState?.medicinesToAdd)
+          ? (item as any).onboardingState.medicinesToAdd
+      : [];
+  const medicineAction = String(item.action || (item as any).actionType || "").toUpperCase();
+  const hasCurrentDocument = Boolean(
+    item.document || (Array.isArray(item.documents) && item.documents.length > 0),
+  );
+  const isManualMedicineOnly =
+    medicineItems.length > 0 &&
+    !hasCurrentDocument &&
+    (medicineItems.every(
+      (medicine: any) => String(medicine?.source || "").toUpperCase() === "MANUAL",
+    ) ||
+      ["ADD_MEDICINE", "SAVE_AND_REVIEW", "REVIEW_MEDICINES_LIST", "CONFIRM_MEDICINES", "CONFIRM_MEDICINE"].includes(medicineAction)) &&
+    item.action !== "ASK_REPORT" &&
+    item.action !== "REPORT_SUMMARY" &&
+    (item as any).actionType !== "REPORT_SUMMARY";
+
   const isComplexStep =
     isFollowUpToMedicineFlow ||
     item.action === "RESOLVE_PROFILE_SOURCE" ||
@@ -415,14 +442,15 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
   if (isComplexStep) {
     const isReportOrConfirmAction =
-      isFollowUpToMedicineFlow ||
+      !isManualMedicineOnly &&
+      (isFollowUpToMedicineFlow ||
       item.action === "ASK_REPORT" ||
       item.action === "SKIP_MEDICINES" ||
       item.action === "CONFIRM_MEDICINES" ||
       item.action === "CONFIRM_MEDICINE" ||
       (item as any).actionType === "CONFIRM_MEDICINES" ||
       item.action === "REPORT_SUMMARY" ||
-      (item as any).actionType === "REPORT_SUMMARY";
+      (item as any).actionType === "REPORT_SUMMARY");
 
     if (isReportOrConfirmAction) {
       let reportSummarySource =
@@ -929,7 +957,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           (Array.isArray(summaryDocument?.normalResults) &&
             summaryDocument.normalResults.length > 0),
       );
-      const documentSummaryCard = hasDocumentSummary ? (
+      const documentSummaryCard = hasDocumentSummary && !isManualMedicineOnly ? (
         reportDocuments.length <= 1 ? (
           <OnboardingReportSummaryCard
             document={summaryDocument}
@@ -987,7 +1015,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             ? chatWizardState.extractedMedicines
             : extractMedicationsFromDocuments(msgDocs)));
 
-      const displayMeds = rawMeds.map((m: any, idx: number) => ({
+      const displayMeds = deduplicateDrafts(rawMeds).map((m: any, idx: number) => ({
         ...m,
         id: m.id || m.client_med_id || `med-${item.id}-${idx}`,
         selected: m.selected !== undefined ? m.selected : true,
