@@ -132,6 +132,7 @@ type Message = {
   suggestedQuestions?: string[];
   keyFindings?: any[];
   documentIds?: string[];
+  citations?: any[];
   createdAt?: string | Date;
 };
 
@@ -966,6 +967,9 @@ export default function OnboardingScreen() {
 
             setMessages(mappedMessages);
             setLoading(false);
+            if (mappedMessages.length === 0) {
+              await startOnboardingChat(mergedState);
+            }
             return;
           }
 
@@ -1138,6 +1142,7 @@ export default function OnboardingScreen() {
         aiRes.documentIds,
         aiRes.documents,
       ),
+      citations: aiRes.citations || (aiRes.data && aiRes.data.citations) || [],
       createdAt: aiRes.createdAt || new Date().toISOString(),
     };
 
@@ -1821,7 +1826,8 @@ export default function OnboardingScreen() {
           messageString === "DASHBOARD" ||
           (responseOnboardingCompleted &&
             action !== "ASK_REPORT" &&
-            action !== "NORMAL_CHAT")
+            action !== "NORMAL_CHAT" &&
+            action !== "ONBOARDING_DOCUMENT_QA")
         ) {
           dashboardClientMsgIdRef.current = null;
           setIsOnboardingCompleted(true);
@@ -1929,83 +1935,86 @@ export default function OnboardingScreen() {
         latestAssistantMsg?.action ||
         messages[messages.length - 1]?.action ||
         state.currentStep;
+      const isLikelyMedicalQuestion = /(?:રિપોર્ટ|દસ્તાવેજ|અર્થ|સમજાવો|હિમોગ્લોબિન|દવા|બીમારી|સારવાર|લક્ષણો|ટેસ્ટ|પરિણામ|report|document|summary|explain|treatment|medicine|hemoglobin|normal|abnormal|meaning|\?)/i.test(textToSubmit);
       let updatedState = { ...state };
-      if (activeAction === "ASK_FIRST_NAME" || activeAction === "ASK_NAME") {
-        updatedState = {
-          ...updatedState,
-          existingUserData: {
-            ...updatedState.existingUserData,
-            firstName: textToSubmit,
-          },
-        };
-        setState(updatedState);
-      } else if (activeAction === "ASK_LAST_NAME") {
-        updatedState = {
-          ...updatedState,
-          existingUserData: {
-            ...updatedState.existingUserData,
-            lastName: textToSubmit,
-          },
-        };
-        setState(updatedState);
-      } else if (activeAction === "ASK_BLOOD_GROUP") {
-        updatedState.currentStep = "ASK_BLOOD_GROUP";
-        if (textToSubmit.toLowerCase() === "skip") {
+      if (!isLikelyMedicalQuestion) {
+        if (activeAction === "ASK_FIRST_NAME" || activeAction === "ASK_NAME") {
           updatedState = {
             ...updatedState,
-            bloodGroupSkipped: true,
-          };
-        } else {
-          updatedState = {
-            ...updatedState,
-            bloodGroupSkipped: false,
             existingUserData: {
               ...updatedState.existingUserData,
-              bloodGroup: textToSubmit,
+              firstName: textToSubmit,
             },
           };
-        }
-        setState(updatedState);
-      } else if (activeAction === "ASK_ALLERGIES") {
-        const lower = textToSubmit.trim().toLowerCase();
-        if (lower === "skip" || lower === "no" || lower === "not_sure" || lower === "not sure") {
+          setState(updatedState);
+        } else if (activeAction === "ASK_LAST_NAME") {
           updatedState = {
             ...updatedState,
-            allergiesSkipped: true,
             existingUserData: {
               ...updatedState.existingUserData,
-              allergies: [],
+              lastName: textToSubmit,
             },
           };
-        } else {
-          try {
-            const parsed = JSON.parse(textToSubmit);
-            if (parsed && Array.isArray(parsed.allergies)) {
-              updatedState = {
-                ...updatedState,
-                allergiesSkipped: true,
-                existingUserData: {
-                  ...updatedState.existingUserData,
-                  allergies: parsed.allergies,
-                },
-              };
-            }
-          } catch {
-            const splitAllergies = textToSubmit
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean);
+          setState(updatedState);
+        } else if (activeAction === "ASK_BLOOD_GROUP") {
+          updatedState.currentStep = "ASK_BLOOD_GROUP";
+          if (textToSubmit.toLowerCase() === "skip") {
+            updatedState = {
+              ...updatedState,
+              bloodGroupSkipped: true,
+            };
+          } else {
+            updatedState = {
+              ...updatedState,
+              bloodGroupSkipped: false,
+              existingUserData: {
+                ...updatedState.existingUserData,
+                bloodGroup: textToSubmit,
+              },
+            };
+          }
+          setState(updatedState);
+        } else if (activeAction === "ASK_ALLERGIES") {
+          const lower = textToSubmit.trim().toLowerCase();
+          if (lower === "skip" || lower === "no" || lower === "not_sure" || lower === "not sure") {
             updatedState = {
               ...updatedState,
               allergiesSkipped: true,
               existingUserData: {
                 ...updatedState.existingUserData,
-                allergies: splitAllergies,
+                allergies: [],
               },
             };
+          } else {
+            try {
+              const parsed = JSON.parse(textToSubmit);
+              if (parsed && Array.isArray(parsed.allergies)) {
+                updatedState = {
+                  ...updatedState,
+                  allergiesSkipped: true,
+                  existingUserData: {
+                    ...updatedState.existingUserData,
+                    allergies: parsed.allergies,
+                  },
+                };
+              }
+            } catch {
+              const splitAllergies = textToSubmit
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
+              updatedState = {
+                ...updatedState,
+                allergiesSkipped: true,
+                existingUserData: {
+                  ...updatedState.existingUserData,
+                  allergies: splitAllergies,
+                },
+              };
+            }
           }
+          setState(updatedState);
         }
-        setState(updatedState);
       }
       sendMessage(textToSubmit, updatedState);
     }
@@ -4331,7 +4340,6 @@ export default function OnboardingScreen() {
     activeAction === "EDIT_MEDICINE" ||
     activeAction === "CONFIRM_MEDICINE" ||
     activeAction === "MEDICINE_OPTIONS" ||
-    activeAction === "ASK_REPORT" ||
     activeAction === "POST_ONBOARDING" ||
     activeAction === "COMPLETE";
 

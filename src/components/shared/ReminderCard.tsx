@@ -46,9 +46,19 @@ const parseSafeDate = (dateVal: any): Date => {
 
 const getReminderState = (item: Reminder, isDark: boolean) => {
   const baseStatus = (item.status || "pending").toUpperCase();
-  let normalizedStatus = (baseStatus === "PENDING" && item.isOverdue) ? "OVERDUE" : baseStatus;
-  if (baseStatus === "COMPLETED" && (item as any).isOverdue) {
-    normalizedStatus = "COMPLETED_LATE";
+  let normalizedStatus = baseStatus;
+
+  if (baseStatus === "PENDING" && item.isOverdue) {
+    normalizedStatus = "OVERDUE";
+  } else if (baseStatus === "COMPLETED") {
+    const classification = item.completionClassification?.toUpperCase();
+    if (classification === "LATE" || (item as any).isOverdue || (typeof item.delayMinutes === "number" && item.delayMinutes > 30)) {
+      normalizedStatus = "COMPLETED_LATE";
+    } else if (classification === "EARLY" || (typeof item.delayMinutes === "number" && item.delayMinutes < -5)) {
+      normalizedStatus = "COMPLETED_EARLY";
+    } else {
+      normalizedStatus = "COMPLETED";
+    }
   }
 
   // Icon Mapping
@@ -182,7 +192,7 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       bgDark: "#0f291e",
       borderLight: "#dcfce7",
       borderDark: "#1a402d",
-      reminderDate: dateLabel,
+      reminderDate: "On-Time",
       topRightTextLine2: actualMedicationTimeStr,
       topRightIcon: "checkmark-done-outline" as any,
       bottomLeftText: `Completed at ${completedAt}`,
@@ -197,14 +207,44 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       bgDark: "#0f291e",
       borderLight: "#dcfce7",
       borderDark: "#1a402d",
-      reminderDate: calculatedDueTime ? "Late By" : dateLabel,
-      topRightTextLine2: calculatedDueTime ? calculatedDueTime : actualMedicationTimeStr,
+      reminderDate: typeof item.delayMinutes === "number" && item.delayMinutes > 0 ? `Late: ${item.delayMinutes}m` : (calculatedDueTime ? `Late: ${calculatedDueTime}` : "Completed Late"),
+      topRightTextLine2: actualMedicationTimeStr,
       topRightIcon: "checkmark-done-outline" as any,
       bottomLeftText: `Completed at ${completedAt}`,
       bottomLeftIcon: "time-outline" as any,
       btnText: "",
       btnIcon: "" as any,
       badgeText: "COMPLETED LATE",
+    },
+    COMPLETED_EARLY: {
+      themeColor: "#10b981", // green
+      bgLight: "#f0fdf4",
+      bgDark: "#0f291e",
+      borderLight: "#dcfce7",
+      borderDark: "#1a402d",
+      reminderDate: typeof item.delayMinutes === "number" && item.delayMinutes < 0 ? `${Math.abs(item.delayMinutes)}m Early` : "Early",
+      topRightTextLine2: actualMedicationTimeStr,
+      topRightIcon: "checkmark-done-outline" as any,
+      bottomLeftText: `Completed at ${completedAt}`,
+      bottomLeftIcon: "time-outline" as any,
+      btnText: "",
+      btnIcon: "" as any,
+      badgeText: "COMPLETED EARLY",
+    },
+    SKIPPED: {
+      themeColor: "#64748b", // slate gray
+      bgLight: "#f8fafc",
+      bgDark: "#1e293b",
+      borderLight: "#e2e8f0",
+      borderDark: "#334155",
+      reminderDate: "Skipped",
+      topRightTextLine2: actualMedicationTimeStr,
+      topRightIcon: "close-circle-outline" as any,
+      bottomLeftText: item.skipReason || "Dose skipped by patient",
+      bottomLeftIcon: "close-circle-outline" as any,
+      btnText: "",
+      btnIcon: "" as any,
+      badgeText: "SKIPPED",
     },
     OVERDUE: {
       themeColor: "#ef4444", // red
@@ -220,6 +260,21 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
       btnText: "Complete Now",
       btnIcon: "checkmark-circle" as any,
       badgeText: "OVERDUE",
+    },
+    MISSED: {
+      themeColor: "#f59e0b", // amber
+      bgLight: "#fffbeb",
+      bgDark: "#2c2210",
+      borderLight: "#fef3c7",
+      borderDark: "#45341a",
+      reminderDate: "Missed",
+      topRightTextLine2: actualMedicationTimeStr,
+      topRightIcon: "alert-circle-outline" as any,
+      bottomLeftText: `Scheduled at ${actualMedicationTimeStr}`,
+      bottomLeftIcon: "calendar-outline" as any,
+      btnText: "Complete Now",
+      btnIcon: "checkmark-circle" as any,
+      badgeText: "MISSED",
     },
   };
 
@@ -239,6 +294,30 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
   }
 
   const isCompletedLate = normalizedStatus === "COMPLETED_LATE";
+  const isCompletedEarly = normalizedStatus === "COMPLETED_EARLY";
+  const isSkipped = normalizedStatus === "SKIPPED";
+
+  let badgeThemeColor = config.themeColor;
+  let badgeBg = isDark ? config.borderDark : config.borderLight;
+  let badgeBorder = config.themeColor;
+  let topRightBorder = isDark ? config.borderDark : config.borderLight;
+
+  if (isCompletedLate) {
+    badgeThemeColor = "#ef4444";
+    badgeBg = isDark ? "#2d1618" : "#fef2f2";
+    badgeBorder = "#ef4444";
+    topRightBorder = "#ef4444";
+  } else if (isCompletedEarly) {
+    badgeThemeColor = "#059669";
+    badgeBg = isDark ? "#064e3b" : "#ecfdf5";
+    badgeBorder = "#10b981";
+    topRightBorder = isDark ? config.borderDark : config.borderLight;
+  } else if (isSkipped) {
+    badgeThemeColor = "#64748b";
+    badgeBg = isDark ? "#334155" : "#f1f5f9";
+    badgeBorder = isDark ? "#475569" : "#cbd5e1";
+    topRightBorder = isDark ? config.borderDark : config.borderLight;
+  }
 
   return {
     medIcon,
@@ -248,10 +327,10 @@ const getReminderState = (item: Reminder, isDark: boolean) => {
     bg: isDark ? config.bgDark : config.bgLight,
     borderColor: isDark ? config.borderDark : config.borderLight,
     iconBg: isDark ? config.borderDark : config.borderLight,
-    badgeThemeColor: isCompletedLate ? "#ef4444" : config.themeColor,
-    badgeBg: isCompletedLate ? (isDark ? "#2d1618" : "#fef2f2") : (isDark ? config.borderDark : config.borderLight),
-    badgeBorder: isCompletedLate ? "#ef4444" : config.themeColor,
-    topRightBorder: isCompletedLate ? "#ef4444" : (isDark ? config.borderDark : config.borderLight),
+    badgeThemeColor,
+    badgeBg,
+    badgeBorder,
+    topRightBorder,
     isActionAllowed,
     availableAtTimeStr,
   };
@@ -273,13 +352,18 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
         await onActionPress();
       } catch (error) {
         setIsCompleting(false);
+      } finally {
+        setIsCompleting(false);
       }
     }
   };
 
+  const doseLabel = item.unit
+    ? `${item.dosePerIntake || 1} ${item.unit}`
+    : `${item.dosePerIntake || 1} ${item.medicationType ? item.medicationType.toLowerCase() : "dose"}`;
   const description =
     (item as any).notes ||
-    `Take ${item.dosePerIntake || 1} ${item.medicationType ? item.medicationType.toLowerCase() : "dose"}${item.frequency ? ` • ${item.frequency.replace(/_/g, " ")}` : ""}`;
+    `Take ${doseLabel}${item.frequency ? ` • ${item.frequency.replace(/_/g, " ")}` : ""}`;
 
   return (
     <Animated.View
