@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test:phase1": "npx ts-node -O \"{\\\"module\\\":\\\"commonjs\\\"}\" src/__tests__/imageOnlyPhase1.test.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

@@ -11,6 +11,8 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LIGHT_THEME, DARK_THEME } from "../../../constants/theme";
 import { formatDateOnly } from "../../../utils/dateFormatter";
 import DocumentViewerModal from "../../shared/DocumentViewerModal";
+import { isImageOnlyDocument } from "../../../utils/documentNormalizer";
+import { ImagingOverviewCard } from "./ImagingOverviewCard";
 
 export interface PatientDetails {
   name?: string | null;
@@ -92,6 +94,7 @@ export interface StructuredReportDocument {
   treatmentPlan?: TreatmentPlanData | null;
   treatments?: any[];
   structuredExtractedData?: any;
+  imageAnalysis?: any;
 }
 
 export interface StructuredReportSummaryCardProps {
@@ -138,6 +141,7 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     optionalBadge: "Optional",
     treatmentPlan: "Treatment Plan",
     lineItems: "Quoted Items",
+    preliminaryAiObservation: "Preliminary AI image observation. Formal interpretation requires a radiologist's review.",
   },
   gujarati: {
     patientDetails: "દર્દીની વિગતો",
@@ -170,6 +174,7 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     optionalBadge: "વૈકલ્પિક",
     treatmentPlan: "સારવાર યોજના",
     lineItems: "વિગતો",
+    preliminaryAiObservation: "પ્રારંભિક AI ઇમેજ અવલોકન. ઔપચારિક અર્થઘટન માટે રેડિયોલોજિસ્ટની સમીક્ષા જરૂરી છે.",
   },
   hindi: {
     patientDetails: "मरीज़ का विवरण",
@@ -202,6 +207,7 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     optionalBadge: "वैकल्पिक",
     treatmentPlan: "उपचार योजना",
     lineItems: "आइटम सूची",
+    preliminaryAiObservation: "प्रारंभिक एआई छवि अवलोकन। औपचारिक व्याख्या के लिए रेडियोलॉजिस्ट की समीक्षा आवश्यक है।",
   },
   marathi: {
     patientDetails: "रुग्णाचा तपशील",
@@ -234,6 +240,7 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     optionalBadge: "पर्यायी",
     treatmentPlan: "उपचार योजना",
     lineItems: "तपशील",
+    preliminaryAiObservation: "प्राथमिक AI प्रतिमा निरीक्षण. औपचारिक विश्लेषणासाठी रेडिओलॉजिस्टचे पुनरावलोकन आवश्यक आहे.",
   },
   tamil: {
     patientDetails: "நோயாளி விவரங்கள்",
@@ -266,6 +273,7 @@ export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
     optionalBadge: "விருப்பமானது",
     treatmentPlan: "சிகிச்சை திட்டம்",
     lineItems: "பொருட்கள் பட்டியல்",
+    preliminaryAiObservation: "ஆரம்ப AI படக் கவனிப்பு. முறையான விளக்கத்திற்கு கதிரியக்க நிபுணரின் மதிப்பாய்வு தேவை.",
   },
 };
 
@@ -274,7 +282,7 @@ const getFileNameOnly = (value: unknown): string => {
   return value.trim().split(/[\\/]/).pop() || "Medical Report";
 };
 
-export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardProps> = ({
+const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardProps> = ({
   document: docProp = {},
   reportDocuments,
   suggestedQuestions = [],
@@ -286,6 +294,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
   readOnly = false,
 }) => {
   const document: StructuredReportDocument = docProp || {};
+
   const [normalExpanded, setNormalExpanded] = useState(false);
   const [localViewerOpen, setLocalViewerOpen] = useState(false);
   const [selectedReport, setSelectedReport] =
@@ -299,12 +308,12 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     normalizedLang === "gu" || normalizedLang === "gujarati"
       ? "gujarati"
       : normalizedLang === "hi" || normalizedLang === "hindi"
-      ? "hindi"
-      : normalizedLang === "mr" || normalizedLang === "marathi"
-      ? "marathi"
-      : normalizedLang === "ta" || normalizedLang === "tamil"
-      ? "tamil"
-      : "english";
+        ? "hindi"
+        : normalizedLang === "mr" || normalizedLang === "marathi"
+          ? "marathi"
+          : normalizedLang === "ta" || normalizedLang === "tamil"
+            ? "tamil"
+            : "english";
 
   const t = I18N_STRUCTURED_CARD[langKey] || I18N_STRUCTURED_CARD.english;
 
@@ -383,7 +392,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
       dt.includes("ESTIMATE") ||
       Boolean(
         document.financialSummary?.lineItems &&
-          document.financialSummary.lineItems.length > 0,
+        document.financialSummary.lineItems.length > 0,
       )
     );
   }, [document.documentType, document.isQuotation, document.financialSummary]);
@@ -393,12 +402,53 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
     return `${curr} ${Number(val).toLocaleString("en-IN")}`;
   };
 
-  const keyFindingsText = useMemo(() => {
-    if (typeof document.keyFindings === "string" && document.keyFindings.trim()) {
-      return document.keyFindings.trim();
+  const isPreliminaryImageAnalysis = useMemo(() => {
+    const docAny = document as any;
+    const imgAnalysis =
+      docAny.imageAnalysis ||
+      docAny.image_analysis ||
+      docAny.structuredExtractedData?.imageAnalysis ||
+      docAny.extractedStructuredData?.imageAnalysis;
+    const dt = String(document.documentType || docAny.document_type || "").toUpperCase();
+    const isImageDocType =
+      dt.includes("X-RAY") ||
+      dt.includes("XRAY") ||
+      dt.includes("IMAGING") ||
+      dt.includes("SCAN") ||
+      dt.includes("MRI") ||
+      dt.includes("CT") ||
+      dt.includes("ULTRASOUND");
+
+    if (
+      imgAnalysis &&
+      (imgAnalysis.status === "COMPLETED" ||
+        imgAnalysis.status === "UNVERIFIED_PRELIMINARY" ||
+        imgAnalysis.visualDescription ||
+        imgAnalysis.visual_description ||
+        imgAnalysis.educationalDescription ||
+        imgAnalysis.aiGeneratedDescription)
+    ) {
+      return true;
     }
-    if (typeof (document as any).key_findings === "string" && (document as any).key_findings.trim()) {
-      return (document as any).key_findings.trim();
+    return isImageDocType && (!document.labFindings || document.labFindings.length === 0);
+  }, [document]);
+
+  const keyFindingsText = useMemo(() => {
+    const rawFindings = document.keyFindings ?? (document as any).key_findings;
+    if (typeof rawFindings === "string" && rawFindings.trim()) {
+      return rawFindings.trim();
+    }
+    if (Array.isArray(rawFindings) && rawFindings.length > 0) {
+      const items = rawFindings
+        .map((f: any) => {
+          if (typeof f === "string") return f.trim();
+          if (f && typeof f === "object") return f.finding || f.name || f.description || "";
+          return "";
+        })
+        .filter(Boolean);
+      if (items.length > 0) {
+        return items.join("\n");
+      }
     }
     if (document.summary && document.summary.trim()) {
       return document.summary.trim();
@@ -432,9 +482,9 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
 
   const displayFileName = getFileNameOnly(
     document.fileName ||
-      (document as any).report_name ||
-      (document as any).reportName ||
-      (document as any).name,
+    (document as any).report_name ||
+    (document as any).reportName ||
+    (document as any).name,
   );
 
   const displayDocType =
@@ -450,11 +500,11 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
 
   const hasPatientDetails = Boolean(
     patient.name ||
-      patientAge ||
-      patientGender ||
-      patient.uhid ||
-      patient.doctorName ||
-      patient.hospitalName,
+    patientAge ||
+    patientGender ||
+    patient.uhid ||
+    patient.doctorName ||
+    patient.hospitalName,
   );
 
   const handleViewFullReport = () => {
@@ -514,8 +564,8 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
               "Medical Report";
             const reportName = getFileNameOnly(
               report.fileName ||
-                (report as any).report_name ||
-                (report as any).reportName,
+              (report as any).report_name ||
+              (report as any).reportName,
             );
             const reportDate =
               report.reportDate || (report as any).report_date || null;
@@ -628,9 +678,9 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
                     onViewFullReport={
                       onViewFullReport
                         ? (report) => {
-                            setSelectedReport(null);
-                            onViewFullReport(report || selectedReport);
-                          }
+                          setSelectedReport(null);
+                          onViewFullReport(report || selectedReport);
+                        }
                         : undefined
                     }
                     readOnly={readOnly}
@@ -730,7 +780,7 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
             </Text>
           </View>
 
-            <View style={styles.patientGrid}>
+          <View style={styles.patientGrid}>
             {patient.name && <View style={styles.patientGridItemFull}>
               <Text style={[styles.gridLabel, { color: colors.textSecondary }]}>{t.name}</Text>
               <Text
@@ -821,6 +871,24 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
           >
             {keyFindingsText}
           </Text>
+          {isPreliminaryImageAnalysis && (
+            <View style={styles.preliminaryDisclosureContainer}>
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={isDark ? "#94a3b8" : "#64748b"}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  styles.preliminaryDisclosureText,
+                  { color: isDark ? "#94a3b8" : "#64748b" },
+                ]}
+              >
+                {t.preliminaryAiObservation}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Section 4: Abnormal Results Section (High Visibility) */}
@@ -977,15 +1045,15 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
                 <Text style={[styles.financialTotalValue, { color: colors.primary }]}>
                   {formatCurrency(
                     document.financialSummary.mandatoryTotal ??
-                      document.financialSummary.estimatedTotal ??
-                      document.financialSummary.totalCost,
+                    document.financialSummary.estimatedTotal ??
+                    document.financialSummary.totalCost,
                     document.financialSummary.currency || "₹",
                   ) || "—"}
                 </Text>
               </View>
 
               {document.financialSummary.optionalTotal != null &&
-              document.financialSummary.optionalTotal > 0 ? (
+                document.financialSummary.optionalTotal > 0 ? (
                 <View
                   style={[
                     styles.financialTotalCard,
@@ -1457,6 +1525,20 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "500",
   },
+  preliminaryDisclosureContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148, 163, 184, 0.2)",
+  },
+  preliminaryDisclosureText: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontStyle: "italic",
+    flex: 1,
+  },
   resultsBlock: {
     marginBottom: 14,
   },
@@ -1628,3 +1710,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+
+export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardProps> = (props) => {
+  const document = props.document || {};
+  if (isImageOnlyDocument(document)) {
+    return (
+      <ImagingOverviewCard
+        document={document}
+        isDark={props.isDark}
+        theme={props.theme}
+        preferredLang={props.preferredLang}
+        onViewFullReport={props.onViewFullReport}
+        suggestedQuestions={props.suggestedQuestions}
+        onQuestionPress={props.onQuestionPress}
+        readOnly={props.readOnly}
+      />
+    );
+  }
+  return <StandardStructuredReportSummaryCard {...props} />;
+};
+

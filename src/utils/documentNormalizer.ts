@@ -38,6 +38,20 @@ export interface DocumentSummaryItem {
   labResults?: any[];
   medications?: any[];
   additionalInformation?: any;
+  summary?: string;
+  summaryEnglish?: string;
+  summaryInPreferredLanguage?: string;
+  summaryLanguage?: string;
+  preferredLanguage?: string;
+  summariesByLanguage?: Record<string, string>;
+  summaryPipelineVersion?: string;
+  translationStatus?: string;
+  translationProvider?: string;
+  keyPoints?: string[];
+  keyFindings?: any;
+  imageAnalysis?: any;
+  imagingOverview?: any;
+  isNoText?: boolean;
 }
 
 export interface DocumentSummaryStats {
@@ -47,6 +61,39 @@ export interface DocumentSummaryStats {
   totalUploads?: number;
   [key: string]: any;
 }
+
+/**
+ * Detects whether a document represents an image-only diagnostic document (no OCR report text).
+ * Checks top-level, additionalInformation, and subType across both legacy and new structures.
+ */
+export const isImageOnlyDocument = (doc: any): boolean => {
+  if (!doc || typeof doc !== "object") return false;
+  const struct = doc.extractedStructuredData || doc.structuredExtractedData || {};
+  return Boolean(
+    doc.isNoText === true ||
+    doc.additionalInformation?.isNoText === true ||
+    struct.isNoText === true ||
+    struct.additionalInformation?.isNoText === true ||
+    String(doc.subType || doc.documentSubtype || struct.documentInfo?.documentSubtype || "").toLowerCase().startsWith("image_only") ||
+    doc.imagingOverview ||
+    struct.imagingOverview
+  );
+};
+
+/**
+ * Checks whether a given string is a generic image-only disclosure
+ */
+export const isFallbackDisclosureText = (text?: string | null): boolean => {
+  if (!text || typeof text !== "string") return false;
+  const lower = text.toLowerCase();
+  return (
+    (lower.includes("uploaded successfully") && lower.includes("no written report")) ||
+    (text.includes("સફળતાપૂર્વક અપલોડ") && text.includes("કોઈ લેખિત રિપોર્ટ")) ||
+    (text.includes("सफलतापूर्वक अपलोड") && text.includes("कोई लिखित रिपोर्ट")) ||
+    (text.includes("यशस्वीरित्या अपलोड") && text.includes("कोणताही लिखित अहवाल")) ||
+    (text.includes("வெற்றிகரமாக பதிவேற்றப்பட்டது") && text.includes("எழுதப்பட்ட அறிக்கை"))
+  );
+};
 
 /**
  * Cleanly formats a document title or filename.
@@ -204,6 +251,54 @@ export const normalizeSingleDocument = (doc: any, index = 0): DocumentSummaryIte
   const medications = Array.isArray(meds) ? meds : (structured.medications || []);
   const additionalInformation = doc.additionalInformation || structured.additionalInformation || null;
 
+  const summary =
+    doc.summary ||
+    structured.summary ||
+    structured.summaryInPreferredLanguage ||
+    structured.summaryEnglish ||
+    "";
+  const summaryEnglish =
+    doc.summaryEnglish ||
+    structured.summaryEnglish ||
+    (typeof summary === "string" ? summary : "");
+  const summaryInPreferredLanguage =
+    doc.summaryInPreferredLanguage || structured.summaryInPreferredLanguage || null;
+  const summaryLanguage = doc.summaryLanguage || structured.summaryLanguage || "english";
+  const preferredLanguage = doc.preferredLanguage || structured.preferredLanguage || "english";
+  const summariesByLanguage =
+    doc.summariesByLanguage ||
+    structured.summariesByLanguage ||
+    (summaryEnglish ? { english: summaryEnglish } : {});
+  const summaryPipelineVersion =
+    doc.summaryPipelineVersion || structured.summaryPipelineVersion || "1.1.0";
+  const translationStatus = doc.translationStatus || structured.translationStatus || "original";
+  const translationProvider = doc.translationProvider || structured.translationProvider || "original";
+  const isNoText = isImageOnlyDocument(doc);
+  const keyPoints = isNoText
+    ? []
+    : Array.isArray(doc.keyPoints)
+      ? doc.keyPoints
+      : Array.isArray(structured.keyPoints)
+        ? structured.keyPoints
+        : [];
+  const keyFindings = isNoText
+    ? []
+    : doc.keyFindings || structured.keyFindings || [];
+
+  const rawImageAnalysis = doc.imageAnalysis || structured.imageAnalysis || null;
+  const imageAnalysis = rawImageAnalysis
+    ? {
+        ...rawImageAnalysis,
+        visualDescription:
+          rawImageAnalysis.visualDescription ||
+          rawImageAnalysis.visual_description ||
+          rawImageAnalysis.educationalDescription ||
+          rawImageAnalysis.aiGeneratedDescription ||
+          "",
+      }
+    : null;
+  const imagingOverview = doc.imagingOverview || structured.imagingOverview || null;
+
   return {
     ...doc,
     id,
@@ -244,6 +339,20 @@ export const normalizeSingleDocument = (doc: any, index = 0): DocumentSummaryIte
     labResults,
     medications,
     additionalInformation,
+    summary,
+    summaryEnglish,
+    summaryInPreferredLanguage,
+    summaryLanguage,
+    preferredLanguage,
+    summariesByLanguage,
+    summaryPipelineVersion,
+    translationStatus,
+    translationProvider,
+    keyPoints,
+    keyFindings,
+    imageAnalysis,
+    imagingOverview,
+    isNoText,
   };
 };
 
@@ -381,17 +490,17 @@ export const normalizeDocumentsList = (
 
       const docObj = matched
         ? {
-            ...matched,
-            status: docStatus,
-          }
+          ...matched,
+          status: docStatus,
+        }
         : {
-            id: nameOrKey,
-            fileKey: nameOrKey,
-            fileName: nameOrKey,
-            name: nameOrKey,
-            status: docStatus,
-            retryable: docStatus === "FAILED" || docStatus === "REJECTED",
-          };
+          id: nameOrKey,
+          fileKey: nameOrKey,
+          fileName: nameOrKey,
+          name: nameOrKey,
+          status: docStatus,
+          retryable: docStatus === "FAILED" || docStatus === "REJECTED",
+        };
 
       return normalizeSingleDocument(docObj, idx);
     });
@@ -569,24 +678,50 @@ export const normalizeReportSummaryToDocument = (
     normalizedFallbackDoc?.patientName ||
     null;
 
-  const summary =
-    src.summary ||
-    src.summaryEnglish ||
-    extracted.summaryInPreferredLanguage ||
-    extracted.summaryEnglish ||
-    extracted.summary ||
-    (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints[0] : "") ||
-    normalizedFallbackDoc?.summary ||
-    normalizedFallbackDoc?.summaryEnglish ||
-    "";
+  const isNoText =
+    isImageOnlyDocument(src) ||
+    isImageOnlyDocument(extracted) ||
+    isImageOnlyDocument(normalizedFallbackDoc);
 
-  const keyFindings =
-    src.keyFindings ||
-    src.key_findings ||
-    (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints : null) ||
-    normalizedFallbackDoc?.keyFindings ||
-    normalizedFallbackDoc?.key_findings ||
-    summary;
+  const userLang = String(
+    src.preferredLanguage ||
+    src.summaryLanguage ||
+    extracted.preferredLanguage ||
+    extracted.summaryLanguage ||
+    "english"
+  ).toLowerCase();
+  const isNonEnglish = userLang !== "english" && userLang !== "en";
+
+  const summary = isNonEnglish
+    ? (extracted.summaryInPreferredLanguage ||
+       src.summaryInPreferredLanguage ||
+       src.summary ||
+       src.summaryEnglish ||
+       extracted.summaryEnglish ||
+       extracted.summary ||
+       normalizedFallbackDoc?.summaryInPreferredLanguage ||
+       normalizedFallbackDoc?.summary ||
+       "")
+    : (src.summary ||
+       src.summaryEnglish ||
+       extracted.summaryInPreferredLanguage ||
+       extracted.summaryEnglish ||
+       extracted.summary ||
+       (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints[0] : "") ||
+       normalizedFallbackDoc?.summary ||
+       normalizedFallbackDoc?.summaryEnglish ||
+       "");
+
+  // For image-only documents, keyFindings MUST stay []
+  // Ignore src.keyFindings, extracted.keyPoints, and summary fallbacks!
+  const keyFindings = isNoText
+    ? []
+    : (src.keyFindings ||
+       src.key_findings ||
+       (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints : null) ||
+       normalizedFallbackDoc?.keyFindings ||
+       normalizedFallbackDoc?.key_findings ||
+       summary);
 
   const rawAbnormal =
     src.abnormalResults ||
@@ -601,19 +736,19 @@ export const normalizeReportSummaryToDocument = (
 
   const abnormalResults = Array.isArray(rawAbnormal)
     ? rawAbnormal.map((item: any) => ({
-        name: item.name || item.testName || item.parameter || "Parameter",
-        value:
-          item.value !== undefined &&
+      name: item.name || item.testName || item.parameter || "Parameter",
+      value:
+        item.value !== undefined &&
           item.value !== null &&
           String(item.value).toLowerCase() !== "null"
-            ? String(item.value)
-            : "",
-        unit: item.unit || "",
-        status: item.status || "Abnormal",
-        referenceRange:
-          item.referenceRange || item.reference_range || item.normalRange || "",
-        isAbnormal: item.isAbnormal !== undefined ? item.isAbnormal : true,
-      }))
+          ? String(item.value)
+          : "",
+      unit: item.unit || "",
+      status: item.status || "Abnormal",
+      referenceRange:
+        item.referenceRange || item.reference_range || item.normalRange || "",
+      isAbnormal: item.isAbnormal !== undefined ? item.isAbnormal : true,
+    }))
     : [];
 
   const rawNormal =
@@ -629,19 +764,19 @@ export const normalizeReportSummaryToDocument = (
 
   const normalResults = Array.isArray(rawNormal)
     ? rawNormal.map((item: any) => ({
-        name: item.name || item.testName || item.parameter || "Parameter",
-        value:
-          item.value !== undefined &&
+      name: item.name || item.testName || item.parameter || "Parameter",
+      value:
+        item.value !== undefined &&
           item.value !== null &&
           String(item.value).toLowerCase() !== "null"
-            ? String(item.value)
-            : "",
-        unit: item.unit || "",
-        status: item.status || "Normal",
-        referenceRange:
-          item.referenceRange || item.reference_range || item.normalRange || "",
-        isAbnormal: false,
-      }))
+          ? String(item.value)
+          : "",
+      unit: item.unit || "",
+      status: item.status || "Normal",
+      referenceRange:
+        item.referenceRange || item.reference_range || item.normalRange || "",
+      isAbnormal: false,
+    }))
     : [];
 
   const rawMeds =
@@ -655,16 +790,16 @@ export const normalizeReportSummaryToDocument = (
 
   const medicationFindings = Array.isArray(rawMeds)
     ? rawMeds.map((med: any) => ({
-        name: med.name || med.medicationName || med.medicineName || "",
-        dosage:
-          med.dosage ||
-          med.dose ||
-          (med.dosePerIntake ? `${med.dosePerIntake}` : ""),
-        frequency: med.frequency || "",
-        instructions:
-          med.instructions || med.foodInstructions || med.foodContext || "",
-        type: med.type || med.medicationType || "TABLET",
-      }))
+      name: med.name || med.medicationName || med.medicineName || "",
+      dosage:
+        med.dosage ||
+        med.dose ||
+        (med.dosePerIntake ? `${med.dosePerIntake}` : ""),
+      frequency: med.frequency || "",
+      instructions:
+        med.instructions || med.foodInstructions || med.foodContext || "",
+      type: med.type || med.medicationType || "TABLET",
+    }))
     : [];
 
   const labFindings = [
@@ -699,6 +834,28 @@ export const normalizeReportSummaryToDocument = (
     summary,
     keyFindings,
     key_findings: keyFindings,
+    keyPoints: isNoText
+      ? []
+      : (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0
+          ? extracted.keyPoints
+          : Array.isArray(src.keyPoints) && src.keyPoints.length > 0
+            ? src.keyPoints
+            : []),
+    imageAnalysis: (() => {
+      const raw = extracted.imageAnalysis || src.imageAnalysis || normalizedFallbackDoc?.imageAnalysis || null;
+      if (!raw) return null;
+      return {
+        ...raw,
+        visualDescription:
+          raw.visualDescription ||
+          raw.visual_description ||
+          raw.educationalDescription ||
+          raw.aiGeneratedDescription ||
+          "",
+      };
+    })(),
+    imagingOverview: src.imagingOverview || extracted.imagingOverview || normalizedFallbackDoc?.imagingOverview || null,
+    isNoText: isNoText,
     abnormalResults,
     abnormal_values: abnormalResults,
     normalResults,
@@ -743,9 +900,9 @@ export const isFailedOrRejectedDocument = (document: any): boolean => {
 
   return Boolean(
     document.errorCode ||
-      document.error ||
-      document.errorMessage ||
-      /fail|error|reject/i.test(String(document.reason || "")),
+    document.error ||
+    document.errorMessage ||
+    /fail|error|reject/i.test(String(document.reason || "")),
   );
 };
 
@@ -773,15 +930,15 @@ export const isReportSummaryForFailedDocuments = (
   ].filter(Boolean).map(String);
   const matchingDocument = summaryIds.length > 0
     ? sourceDocuments.find((document: any) =>
-        [
-          document?.id,
-          document?.report_id,
-          document?.reportId,
-          document?.fileKey,
-          document?.s3Key,
-          document?.jobId,
-        ].some((id) => id && summaryIds.includes(String(id))),
-      )
+      [
+        document?.id,
+        document?.report_id,
+        document?.reportId,
+        document?.fileKey,
+        document?.s3Key,
+        document?.jobId,
+      ].some((id) => id && summaryIds.includes(String(id))),
+    )
     : null;
 
   if (matchingDocument) return isFailedOrRejectedDocument(matchingDocument);
