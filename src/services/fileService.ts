@@ -8,7 +8,7 @@ export const uploadFileToS3 = async (
   uploadType: "PATIENT_DOCUMENT" | "PATIENT_PROFILE"
 ): Promise<ApiResponse<any>> => {
   const formData = new FormData();
-  
+
   const file = uri.split("/").pop();
   const extension = file?.split(".").pop() || "jpg";
 
@@ -21,20 +21,49 @@ export const uploadFileToS3 = async (
   formData.append("uploadType", uploadType);
 
   const response = await apiClient.post(FILE_ENDPOINTS.UPLOAD, formData);
-  
+
   return response.data;
 };
 
 export const getFileSource = async (
   fileKey: string
-): Promise<{ uri: string; headers: { Authorization: string } } | null> => {
-  if (!fileKey) return null;
+): Promise<{ uri: string; headers?: Record<string, string> } | null> => {
+  if (!fileKey || typeof fileKey !== "string") return null;
+  const trimmed = fileKey.trim();
+  if (!trimmed || trimmed === "[object Object]") return null;
+
+  // Handle existing full URLs or local device URIs safely
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("file://") ||
+    trimmed.startsWith("content://") ||
+    trimmed.startsWith("ph://")
+  ) {
+    // Forward auth headers ONLY if calling our own backend BASE_URL
+    if (trimmed.startsWith(BASE_URL)) {
+      const token = await getValidAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (BASE_URL.includes("ngrok")) headers["ngrok-skip-browser-warning"] = "true";
+      return { uri: trimmed, headers };
+    }
+    // External pre-signed S3 or local URI: do NOT send bearer tokens
+    return { uri: trimmed };
+  }
+
   const token = await getValidAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  if (BASE_URL.includes("ngrok")) {
+    headers["ngrok-skip-browser-warning"] = "true";
+  }
+
   return {
-    uri: `${BASE_URL}${FILE_ENDPOINTS.GET_SIGNED_URL}?fileKey=${encodeURIComponent(fileKey)}`,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    uri: `${BASE_URL}${FILE_ENDPOINTS.GET_SIGNED_URL}?fileKey=${encodeURIComponent(trimmed)}`,
+    headers,
   };
 };
 

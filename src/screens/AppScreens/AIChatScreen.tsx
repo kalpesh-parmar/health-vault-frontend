@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useOcrJobPolling } from "../../hooks/useOcrJobPolling";
 import { listDocument } from "../../services/documentService";
+import { getUser } from "../../services/userService";
 
 // Chat Hooks & Utils
 import { useChatSession } from "../../hooks/chat/useChatSession";
@@ -45,6 +46,8 @@ import BottomSheet from "../../components/shared/BottomSheet";
 import { DocumentUploadBottomSheet } from "../../components/document-upload/DocumentUploadBottomSheet";
 import MedicineExtractionBottomSheet from "../../components/chat/widgets/MedicineExtractionBottomSheet";
 import DocumentViewerModal from "../../components/shared/DocumentViewerModal";
+import { DocumentMentionDropdown } from "../../components/chat/DocumentMentionDropdown";
+import { DocumentMention } from "../../types/chat";
 import { LoadingScreen, ErrorScreen } from "../../components/shared/DefensiveStates";
 import { ReportReferenceHeader } from "../../components/chat/widgets/ReportReferenceHeader";
 import { getRelativeDateLabel } from "../../utils/dateFormatter";
@@ -67,7 +70,27 @@ const AIChatScreen = ({ route }: any) => {
     }
   }, [storedPreferredLanguage]);
 
-  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(false);
+  const { data: userProfileResponse } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const response = await getUser();
+      return response?.data || response;
+    },
+  });
+
+  const profileOnboardingCompleted = Boolean(
+    (userProfileResponse as any)?.onboardingCompleted ??
+    (userProfileResponse as any)?.data?.onboardingCompleted ??
+    true
+  );
+
+  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(profileOnboardingCompleted);
+
+  useEffect(() => {
+    if (profileOnboardingCompleted) {
+      setIsOnboardingCompleted(true);
+    }
+  }, [profileOnboardingCompleted]);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [pendingStep, setPendingStep] = useState<string | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -138,10 +161,10 @@ const AIChatScreen = ({ route }: any) => {
   const documentsList: MedicalDocument[] = useMemo(() => {
     const payload: any = docsResponse?.data;
 
-    // The documents endpoint has returned both { data: [] } and
-    // { data: { data: [] } } shapes across API versions. Always keep this
-    // value as an array because the viewer lookup uses Array.find().
+    // The documents endpoint returns { items: [], total: ... }
+    // Always keep this value as an array because the viewer lookup uses Array.find().
     if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.items)) return payload.items;
     if (Array.isArray(payload?.data)) return payload.data;
     if (Array.isArray(payload?.documents)) return payload.documents;
     return [];
@@ -156,8 +179,12 @@ const AIChatScreen = ({ route }: any) => {
     onboardingSessionId,
     selectedDocument,
     setSelectedDocument,
+    selectedDocuments,
+    setSelectedDocuments,
     input,
     setInput,
+    activeMentions,
+    setActiveMentions,
     isSending,
     setIsSending,
     isLoadingHistory,
@@ -222,17 +249,185 @@ const AIChatScreen = ({ route }: any) => {
     setSelectedOption,
   });
 
+  // Mention Dropdown & Selection State
+  const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [selectionOverride, setSelectionOverride] = useState<
+    { start: number; end: number } | undefined
+  >(undefined);
+  const [mentionDropdownVisible, setMentionDropdownVisible] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionTriggerIndex, setMentionTriggerIndex] = useState(-1);
+  const chatInputRef = useRef<any>(null);
+
+  const currentTextRef = useRef(input);
+  currentTextRef.current = input;
+
+  const checkMentionTrigger = useCallback(
+    (text: string, cursorPosition: number) => {
+      const pos = Math.max(0, Math.min(text.length, cursorPosition));
+      const textBefore = text.slice(0, pos);
+      const lastAt = textBefore.lastIndexOf("@");
+      if (lastAt >= 0) {
+        const isStartOrWhitespace =
+          lastAt === 0 || /\s/.test(textBefore[lastAt - 1]);
+        if (isStartOrWhitespace) {
+          const afterAt = textBefore.slice(lastAt + 1);
+          if (!/[\s@]/.test(afterAt)) {
+            setMentionTriggerIndex(lastAt);
+            setMentionQuery(afterAt);
+            setMentionDropdownVisible(true);
+            return;
+          }
+        }
+      }
+      setMentionDropdownVisible(false);
+      setMentionQuery("");
+      setMentionTriggerIndex(-1);
+    },
+    [],
+  );
+
+  const handleInputChange = useCallback(
+    (newText: string) => {
+      currentTextRef.current = newText;
+      // Clear any temporary programmatic selection override
+      setSelectionOverride(undefined);
+
+      // Keep active mentions synchronized if tokens are deleted or edited
+      setActiveMentions((prev) =>
+        prev.filter((m) => newText.includes(`@${m.displayName}`)),
+      );
+
+      // Accurately compute new cursor position based on text delta
+      const prevStart = selectionRef.current.start;
+      const diff = newText.length - input.length;
+      const cursor =
+        diff > 0
+          ? Math.min(newText.length, Math.max(0, prevStart + diff))
+          : Math.min(newText.length, Math.max(0, prevStart));
+      selectionRef.current = { start: cursor, end: cursor };
+
+      // Check at computed cursor first, then fallback to end of text
+      const posToCheck = cursor > 0 ? cursor : newText.length;
+      checkMentionTrigger(newText, posToCheck);
+      setInput(newText);
+    },
+    [input.length, setActiveMentions, setInput, checkMentionTrigger],
+  );
+
+  const handleSelectionChange = useCallback(
+    (sel: { start: number; end: number }) => {
+      selectionRef.current = sel;
+      checkMentionTrigger(currentTextRef.current, sel.start);
+    },
+    [checkMentionTrigger],
+  );
+
+  const handleSelectMentionDocument = useCallback(
+    (doc: MedicalDocument) => {
+      const title = (
+        doc.fileName ||
+        doc.report_name ||
+        doc.name ||
+        "Medical Report"
+      ).trim();
+      const mentionToken = `@${title} `;
+
+      const triggerIdx =
+        mentionTriggerIndex >= 0 ? mentionTriggerIndex : input.lastIndexOf("@");
+      const textBefore = triggerIdx >= 0 ? input.slice(0, triggerIdx) : input;
+      const currentCursor =
+        selectionRef.current.start >= triggerIdx
+          ? selectionRef.current.start
+          : input.length;
+      const textAfter = input.slice(currentCursor);
+      const nextText = textBefore + mentionToken + textAfter;
+      const nextPos = (textBefore + mentionToken).length;
+
+      const newMention: DocumentMention = {
+        documentId: doc.id,
+        displayName: title,
+        fileName: doc.fileName || title,
+        type: "DOCUMENT",
+        documentType: doc.documentType || "LAB_REPORT",
+        reportDate:
+          doc.reportDate || (doc.createdAt ? String(doc.createdAt) : undefined),
+        patientId: doc.patientId,
+        triggerIndex: triggerIdx,
+        length: mentionToken.length,
+      };
+
+      setActiveMentions((prev) => [
+        ...prev.filter((m) => m.documentId !== doc.id),
+        newMention,
+      ]);
+      setInput(nextText);
+      selectionRef.current = { start: nextPos, end: nextPos };
+      setSelectionOverride({ start: nextPos, end: nextPos });
+      setTimeout(() => setSelectionOverride(undefined), 200);
+
+      setMentionDropdownVisible(false);
+      setMentionQuery("");
+      setMentionTriggerIndex(-1);
+    },
+    [
+      input,
+      mentionTriggerIndex,
+      setActiveMentions,
+      setInput,
+    ],
+  );
+
   // Load history on focus / mount
   useEffect(() => {
     initChatHistory();
   }, [initChatHistory]);
 
-  // Sync route document if provided
+  // Sync route document and handle initial question if provided
+  const initialParamsHandledRef = useRef<string | null>(null);
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
   useEffect(() => {
-    if (route?.params?.document) {
-      setSelectedDocument(route.params.document);
+    const docId = route?.params?.document?.id || route?.params?.documentId;
+    const initQ = route?.params?.initialQuestion;
+    const initMentions: DocumentMention[] | undefined =
+      route?.params?.initialMentions;
+    const key = `${docId || ""}_${initQ || ""}`;
+    if (key && initialParamsHandledRef.current !== key) {
+      initialParamsHandledRef.current = key;
+      if (route?.params?.document) {
+        setSelectedDocument(route.params.document);
+        setSelectedDocuments([route.params.document]);
+      }
+      if (
+        initMentions &&
+        Array.isArray(initMentions) &&
+        initMentions.length > 0
+      ) {
+        setActiveMentions(initMentions);
+      }
+      if (initQ) {
+        const timer = setTimeout(() => {
+          handleSendRef.current(
+            initQ,
+            route?.params?.document,
+            false,
+            initMentions,
+          );
+        }, 400);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [route?.params?.document, setSelectedDocument]);
+  }, [
+    route?.params?.document?.id,
+    route?.params?.documentId,
+    route?.params?.initialQuestion,
+    route?.params?.initialMentions,
+    setSelectedDocument,
+    setSelectedDocuments,
+    setActiveMentions,
+  ]);
 
   // Back handler
   useEffect(() => {
@@ -328,12 +523,18 @@ const AIChatScreen = ({ route }: any) => {
         ? {
             ...matched,
             ...doc,
-            s3Key: doc?.s3Key || (matched as any).s3Key,
-            fileKey: doc?.fileKey || (matched as any).fileKey,
+            id: matched.id || documentId,
+            s3Key: doc?.s3Key || (matched as any).s3Key || (matched as any).fileKey,
+            fileKey: doc?.fileKey || (matched as any).fileKey || (matched as any).s3Key,
             fileUrl: doc?.fileUrl || (matched as any).fileUrl,
             imageUri: doc?.imageUri || (matched as any).imageUri,
           }
-        : doc,
+        : {
+            ...doc,
+            id: documentId,
+            s3Key: documentKey,
+            fileKey: documentKey,
+          },
     );
     setIsViewerOpen(true);
   }, [documentsList]);
@@ -535,14 +736,32 @@ const AIChatScreen = ({ route }: any) => {
       )}
 
       {/* Report Reference Header */}
-      {selectedDocument ? (
+      {selectedDocument || (selectedDocuments && selectedDocuments.length > 0) ? (
         <ReportReferenceHeader
-          document={selectedDocument}
+          document={selectedDocument || selectedDocuments[0]}
+          documents={
+            selectedDocuments.length > 0
+              ? selectedDocuments
+              : selectedDocument
+                ? [selectedDocument]
+                : []
+          }
           isDark={isDark}
           theme={theme}
           preferredLang={preferredLang}
-          onPress={() => handleViewFullReport(selectedDocument)}
-          onDismiss={() => setSelectedDocument(null)}
+          onPress={() =>
+            handleViewFullReport(selectedDocument || selectedDocuments[0])
+          }
+          onDismiss={() => {
+            setSelectedDocument(null);
+            setSelectedDocuments([]);
+          }}
+          onRemoveDocument={(docId) => {
+            const updated = selectedDocuments.filter(
+              (d: any) => d && (d.id !== docId && d.documentId !== docId),
+            );
+            setSelectedDocuments(updated);
+          }}
         />
       ) : null}
 
@@ -616,6 +835,20 @@ const AIChatScreen = ({ route }: any) => {
           />
         </View>
 
+        {/* Floating Document Mention Dropdown */}
+        {mentionDropdownVisible && (
+          <DocumentMentionDropdown
+            visible={mentionDropdownVisible}
+            query={mentionQuery}
+            documents={documentsList}
+            isLoading={isLoadingDocs}
+            isDark={isDark}
+            theme={theme}
+            onSelectDocument={handleSelectMentionDocument}
+            onClose={() => setMentionDropdownVisible(false)}
+          />
+        )}
+
         {/* Input & Suggested Chips */}
         <View>
           <SuggestedQuestionChip
@@ -625,9 +858,14 @@ const AIChatScreen = ({ route }: any) => {
           />
 
           <ChatInput
+            inputRef={chatInputRef}
             value={input}
-            onChangeText={setInput}
-            onSend={() => handleSend()}
+            selection={selectionOverride}
+            onSelectionChange={handleSelectionChange}
+            onChangeText={handleInputChange}
+            onSend={() =>
+              handleSend(undefined, undefined, false, activeMentions)
+            }
             isSending={isSending}
             isDark={isDark}
             preferredLanguage={preferredLang}

@@ -117,9 +117,18 @@ const processChunkBuffer = (
         const chunkText = extractTextChunk(parsed);
         if (chunkText) onChunk(chunkText);
         if (parsed && typeof parsed === "object") {
+          if (parsed.type === "chart" && parsed.data) {
+            finalData.chart = parsed.data;
+          }
+          if (parsed.chart) {
+            finalData.chart = parsed.chart;
+          }
           const payloadToMerge =
             parsed.data && typeof parsed.data === "object" ? parsed.data : parsed;
           Object.assign(finalData, payloadToMerge);
+          if (payloadToMerge.chart) {
+            finalData.chart = payloadToMerge.chart;
+          }
         }
       } catch {
         if (dataStr) onChunk(dataStr);

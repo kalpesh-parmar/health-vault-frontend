@@ -34,6 +34,7 @@ import ErrorBoundary from "../../components/shared/ErrorBoundary";
 import { EditDocumentBottomSheet, formatDocumentType } from "../../components/shared/EditDocumentBottomSheet";
 import { ShareDocumentSheet } from "../../components/shared/ShareDocumentSheet";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { DocumentMention } from "../../types/chat";
 import { getDocument, getSharedLinks, revokeShareLink, ShareLinkResponse } from "../../services/documentService";
 import {
   Gesture,
@@ -319,9 +320,34 @@ const SummaryScreen = ({ route, navigation }: any) => {
 
   const handleAskQuestion = (question: string) => {
     if (!question.trim()) return;
-    navigation.navigate("AIChatScreen", {
+    const docTitle = (
+      localDoc?.fileName ||
+      localDoc?.report_name ||
+      localDoc?.name ||
+      "Medical Report"
+    ).trim();
+
+    const mentionToken = `@${docTitle}`;
+    const formattedQuestion = question.trim().includes(mentionToken)
+      ? question.trim()
+      : `${mentionToken} ${question.trim()}`;
+
+    const mention: DocumentMention = {
+      documentId: localDoc?.id || localDoc?.documentId,
+      displayName: docTitle,
+      fileName: localDoc?.fileName || docTitle,
+      type: "DOCUMENT",
+      documentType: localDoc?.documentType || "LAB_REPORT",
+      reportDate:
+        localDoc?.reportDate ||
+        (localDoc?.createdAt ? String(localDoc.createdAt) : undefined),
+      patientId: localDoc?.patientId,
+    };
+
+    (navigation as any).navigate("AIChat", {
       document: localDoc,
-      initialQuestion: question.trim(),
+      initialQuestion: formattedQuestion,
+      initialMentions: [mention],
     });
   };
 

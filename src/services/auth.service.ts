@@ -214,13 +214,13 @@ export const loginWithFacebook = async (): Promise<{
     const result =
       Platform.OS === "ios"
         ? await LoginManager.logInWithPermissions(
-            ["public_profile", "email"],
-            "limited",
-          )
+          ["public_profile", "email"],
+          "limited",
+        )
         : await LoginManager.logInWithPermissions([
-            "public_profile",
-            "email",
-          ]);
+          "public_profile",
+          "email",
+        ]);
 
     if (result.isCancelled) {
       throw new Error("Facebook Sign-In cancelled.");

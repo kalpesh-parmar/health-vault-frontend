@@ -288,14 +288,14 @@ export const normalizeSingleDocument = (doc: any, index = 0): DocumentSummaryIte
   const rawImageAnalysis = doc.imageAnalysis || structured.imageAnalysis || null;
   const imageAnalysis = rawImageAnalysis
     ? {
-        ...rawImageAnalysis,
-        visualDescription:
-          rawImageAnalysis.visualDescription ||
-          rawImageAnalysis.visual_description ||
-          rawImageAnalysis.educationalDescription ||
-          rawImageAnalysis.aiGeneratedDescription ||
-          "",
-      }
+      ...rawImageAnalysis,
+      visualDescription:
+        rawImageAnalysis.visualDescription ||
+        rawImageAnalysis.visual_description ||
+        rawImageAnalysis.educationalDescription ||
+        rawImageAnalysis.aiGeneratedDescription ||
+        "",
+    }
     : null;
   const imagingOverview = doc.imagingOverview || structured.imagingOverview || null;
 
@@ -694,34 +694,34 @@ export const normalizeReportSummaryToDocument = (
 
   const summary = isNonEnglish
     ? (extracted.summaryInPreferredLanguage ||
-       src.summaryInPreferredLanguage ||
-       src.summary ||
-       src.summaryEnglish ||
-       extracted.summaryEnglish ||
-       extracted.summary ||
-       normalizedFallbackDoc?.summaryInPreferredLanguage ||
-       normalizedFallbackDoc?.summary ||
-       "")
+      src.summaryInPreferredLanguage ||
+      src.summary ||
+      src.summaryEnglish ||
+      extracted.summaryEnglish ||
+      extracted.summary ||
+      normalizedFallbackDoc?.summaryInPreferredLanguage ||
+      normalizedFallbackDoc?.summary ||
+      "")
     : (src.summary ||
-       src.summaryEnglish ||
-       extracted.summaryInPreferredLanguage ||
-       extracted.summaryEnglish ||
-       extracted.summary ||
-       (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints[0] : "") ||
-       normalizedFallbackDoc?.summary ||
-       normalizedFallbackDoc?.summaryEnglish ||
-       "");
+      src.summaryEnglish ||
+      extracted.summaryInPreferredLanguage ||
+      extracted.summaryEnglish ||
+      extracted.summary ||
+      (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints[0] : "") ||
+      normalizedFallbackDoc?.summary ||
+      normalizedFallbackDoc?.summaryEnglish ||
+      "");
 
   // For image-only documents, keyFindings MUST stay []
   // Ignore src.keyFindings, extracted.keyPoints, and summary fallbacks!
   const keyFindings = isNoText
     ? []
     : (src.keyFindings ||
-       src.key_findings ||
-       (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints : null) ||
-       normalizedFallbackDoc?.keyFindings ||
-       normalizedFallbackDoc?.key_findings ||
-       summary);
+      src.key_findings ||
+      (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0 ? extracted.keyPoints : null) ||
+      normalizedFallbackDoc?.keyFindings ||
+      normalizedFallbackDoc?.key_findings ||
+      summary);
 
   const rawAbnormal =
     src.abnormalResults ||
@@ -837,10 +837,10 @@ export const normalizeReportSummaryToDocument = (
     keyPoints: isNoText
       ? []
       : (Array.isArray(extracted.keyPoints) && extracted.keyPoints.length > 0
-          ? extracted.keyPoints
-          : Array.isArray(src.keyPoints) && src.keyPoints.length > 0
-            ? src.keyPoints
-            : []),
+        ? extracted.keyPoints
+        : Array.isArray(src.keyPoints) && src.keyPoints.length > 0
+          ? src.keyPoints
+          : []),
     imageAnalysis: (() => {
       const raw = extracted.imageAnalysis || src.imageAnalysis || normalizedFallbackDoc?.imageAnalysis || null;
       if (!raw) return null;

@@ -1,36 +1,47 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LIGHT_THEME, DARK_THEME } from "../../../constants/theme";
 import { StructuredReportDocument } from "./StructuredReportSummaryCard";
 
 export interface ReportReferenceHeaderProps {
-  document: StructuredReportDocument;
+  document?: StructuredReportDocument;
+  documents?: StructuredReportDocument[];
   isDark: boolean;
   theme?: any;
   preferredLang?: string;
   onPress?: () => void;
   onDismiss?: () => void;
+  onRemoveDocument?: (docId: string) => void;
+  onAddReport?: () => void;
 }
 
 export const ReportReferenceHeader: React.FC<ReportReferenceHeaderProps> = ({
   document,
+  documents,
   isDark,
   theme,
   preferredLang: _preferredLang = "english",
   onPress,
   onDismiss,
+  onRemoveDocument,
+  onAddReport,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   const activeTheme = theme || (isDark ? DARK_THEME : LIGHT_THEME);
   const colors = activeTheme.colors;
 
-  const fileName = document.fileName || "Medical Report";
-  const reportDate = document.reportDate || document.patientDetails?.reportDate || "";
+  const docList = documents && documents.length > 0 ? documents : document ? [document] : [];
+  if (docList.length === 0) return null;
+
+  const isMulti = docList.length > 1;
+  const primaryDoc = docList[0];
+  const fileName = primaryDoc.fileName || "Medical Report";
+  const reportDate = primaryDoc.reportDate || primaryDoc.patientDetails?.reportDate || "";
   const abnormalCount =
-    document.abnormalResults?.length ??
-    document.labFindings?.filter((l) => l.isAbnormal).length ??
+    primaryDoc.abnormalResults?.length ??
+    primaryDoc.labFindings?.filter((l) => l.isAbnormal).length ??
     0;
 
   if (collapsed) {
@@ -57,13 +68,8 @@ export const ReportReferenceHeader: React.FC<ReportReferenceHeaderProps> = ({
             style={[styles.miniBannerText, { color: colors.textPrimary }]}
             numberOfLines={1}
           >
-            {fileName}
+            {isMulti ? `${docList.length} Reports Selected` : fileName}
           </Text>
-          {abnormalCount > 0 && (
-            <View style={styles.badgeMini}>
-              <Text style={styles.badgeMiniText}>{abnormalCount}</Text>
-            </View>
-          )}
           <Ionicons
             name="chevron-down"
             size={14}
@@ -75,6 +81,87 @@ export const ReportReferenceHeader: React.FC<ReportReferenceHeaderProps> = ({
     );
   }
 
+  // Multi-document chip banner
+  if (isMulti) {
+    return (
+      <View style={styles.container} testID="report-reference-header-multi">
+        <View
+          style={[
+            styles.multiCard,
+            {
+              backgroundColor: isDark ? "#1e293b" : "#f8fafc",
+              borderColor: isDark ? "rgba(91, 75, 255, 0.3)" : "#c7d2fe",
+            },
+          ]}
+        >
+          <View style={styles.multiHeader}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <MaterialCommunityIcons
+                name="file-multiple-outline"
+                size={16}
+                color={colors.primary}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={[styles.multiTitle, { color: colors.textPrimary }]}>
+                {docList.length} Reports Active (Comparison Mode)
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {onAddReport && (
+                <TouchableOpacity
+                  onPress={onAddReport}
+                  style={[styles.addBtn, { borderColor: colors.primary }]}
+                >
+                  <Ionicons name="add" size={14} color={colors.primary} />
+                  <Text style={[styles.addBtnText, { color: colors.primary }]}>Add</Text>
+                </TouchableOpacity>
+              )}
+              {onDismiss && (
+                <TouchableOpacity onPress={onDismiss} style={{ marginLeft: 8 }}>
+                  <Ionicons name="close" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsScroll}
+          >
+            {docList.map((d) => (
+              <View
+                key={d.id}
+                style={[
+                  styles.docChip,
+                  {
+                    backgroundColor: isDark ? "#334155" : "#e0e7ff",
+                    borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "#c7d2fe",
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.chipText, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  {d.fileName || "Report"}
+                </Text>
+                {onRemoveDocument && (
+                  <TouchableOpacity
+                    onPress={() => d.id && onRemoveDocument(d.id)}
+                    style={{ marginLeft: 6 }}
+                  >
+                    <Ionicons name="close-circle" size={14} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
+
+  // Single document banner
   return (
     <View style={styles.container} testID="report-reference-header">
       <TouchableOpacity
@@ -132,6 +219,15 @@ export const ReportReferenceHeader: React.FC<ReportReferenceHeaderProps> = ({
         </View>
 
         <View style={styles.actionGroup}>
+          {onAddReport && (
+            <TouchableOpacity
+              style={[styles.addBtn, { borderColor: colors.primary, marginRight: 8 }]}
+              onPress={onAddReport}
+            >
+              <Ionicons name="add" size={14} color={colors.primary} />
+              <Text style={[styles.addBtnText, { color: colors.primary }]}>Compare</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.toggleBtn}
             onPress={() => setCollapsed(true)}
@@ -174,6 +270,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+  },
+  multiCard: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  multiHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  multiTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  chipsScroll: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  docChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    maxWidth: 160,
+  },
+  chipText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  addBtnText: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginLeft: 2,
   },
   leftGroup: {
     flexDirection: "row",
@@ -251,17 +393,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     maxWidth: 160,
-  },
-  badgeMini: {
-    backgroundColor: "#ef4444",
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginLeft: 6,
-  },
-  badgeMiniText: {
-    color: "#ffffff",
-    fontSize: 9,
-    fontWeight: "800",
   },
 });

@@ -107,4 +107,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  docButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(100, 116, 139, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
 });

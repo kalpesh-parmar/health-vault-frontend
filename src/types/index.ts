@@ -25,6 +25,12 @@ export interface MedicalDocument {
   notes?: string;
   title?: string;
   fileSize?: number;
+  reportDate?: string;
+  patientId?: string;
+  hospitalName?: string;
+  doctorName?: string;
+  report_name?: string;
+  name?: string;
 }
 
 export interface UploadDocumentResponse {

@@ -278,6 +278,7 @@ export default function OnboardingScreen() {
   const isUploadingRef = useRef(false);
   const isUploadCancelledRef = useRef(false);
   const dashboardClientMsgIdRef = useRef<string | null>(null);
+  const currentDocIdRef = useRef<string | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -488,22 +489,22 @@ export default function OnboardingScreen() {
 
       const draft = hasLocalDuplicate
         ? {
-            ...medicine,
-            isBackendDuplicate: true,
+          ...medicine,
+          isBackendDuplicate: true,
+          hasDuplicate: true,
+          duplicateInfo: {
+            ...(medicine?.duplicateInfo || {}),
             hasDuplicate: true,
-            duplicateInfo: {
-              ...(medicine?.duplicateInfo || {}),
-              hasDuplicate: true,
-              conflictType: medicine?.duplicateInfo?.conflictType ||
-                (sameExtractedMedicine ? "CROSS_DOC_DIFF" : "EXACT_DUPLICATE"),
-              matchedMedication:
-                medicine?.duplicateInfo?.matchedMedication ||
-                existingMedicine ||
-                sameExtractedMedicine,
-            },
+            conflictType: medicine?.duplicateInfo?.conflictType ||
+              (sameExtractedMedicine ? "CROSS_DOC_DIFF" : "EXACT_DUPLICATE"),
             matchedMedication:
-              medicine?.matchedMedication || existingMedicine || sameExtractedMedicine,
-          }
+              medicine?.duplicateInfo?.matchedMedication ||
+              existingMedicine ||
+              sameExtractedMedicine,
+          },
+          matchedMedication:
+            medicine?.matchedMedication || existingMedicine || sameExtractedMedicine,
+        }
         : { ...medicine };
 
       // The extraction mapper may populate a default resolution for a
@@ -520,9 +521,9 @@ export default function OnboardingScreen() {
         ...draft,
         ...(previousMedicine.resolutionSource === "user" || previousMedicine.userResolved === true
           ? {
-              resolution: previousMedicine.resolution,
-              resolutionSource: "user",
-            }
+            resolution: previousMedicine.resolution,
+            resolutionSource: "user",
+          }
           : {}),
         ...(previousMedicine.selected !== undefined
           ? { selected: previousMedicine.selected }
@@ -694,7 +695,7 @@ export default function OnboardingScreen() {
         uploadedMedicalDocument: false,
         documentUploaded: false,
         documentConfirmed: false,
-         documentOwnershipConfirmed: null as boolean | null,
+        documentOwnershipConfirmed: null as boolean | null,
         documentId: null,
         documentText: "",
         preferredLanguage: null,
@@ -733,13 +734,13 @@ export default function OnboardingScreen() {
                 (await AsyncStorage.getItem("loginProvider")) ||
                 (await SecureStore.getItemAsync("loginProvider")) ||
                 "";
-            } catch {}
+            } catch { }
           }
 
           let isSocialStored = false;
           try {
             isSocialStored = (await AsyncStorage.getItem("isSocialLogin")) === "true";
-          } catch {}
+          } catch { }
 
           const isSocialFlag =
             !["mobile", "phone", "otp", "sms", "number"].includes(
@@ -764,22 +765,22 @@ export default function OnboardingScreen() {
 
           const socialProfileData = hasSocial
             ? {
-                firstName: initialUserData.firstName,
-                lastName: initialUserData.lastName,
-                email: initialUserData.email,
-                dateOfBirth: initialUserData.dateOfBirth,
-                gender: initialUserData.gender,
-              }
+              firstName: initialUserData.firstName,
+              lastName: initialUserData.lastName,
+              email: initialUserData.email,
+              dateOfBirth: initialUserData.dateOfBirth,
+              gender: initialUserData.gender,
+            }
             : undefined;
 
           const loginProfileData = hasSocial
             ? {
-                firstName: { value: initialUserData.firstName, verified: true },
-                lastName: { value: initialUserData.lastName, verified: true },
-                email: { value: initialUserData.email, verified: true },
-                dateOfBirth: { value: initialUserData.dateOfBirth, verified: false },
-                gender: { value: initialUserData.gender, verified: false },
-              }
+              firstName: { value: initialUserData.firstName, verified: true },
+              lastName: { value: initialUserData.lastName, verified: true },
+              email: { value: initialUserData.email, verified: true },
+              dateOfBirth: { value: initialUserData.dateOfBirth, verified: false },
+              gender: { value: initialUserData.gender, verified: false },
+            }
             : undefined;
 
           baseState = {
@@ -897,8 +898,8 @@ export default function OnboardingScreen() {
               const isSameAction = prevMsg && prevMsg.action === msgAction;
               const isBothAddDoc =
                 Boolean(isSameRole &&
-                (msgAction === "ADD_DOCUMENT" || meta?.actionType === "ADD_DOCUMENT") &&
-                (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+                  (msgAction === "ADD_DOCUMENT" || meta?.actionType === "ADD_DOCUMENT") &&
+                  (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
 
               const prevDocId = (prevMsg as any)?.documentId || (prevMsg as any)?.document?.id;
               const curDocId = meta?.documentId || meta?.document?.id;
@@ -916,13 +917,13 @@ export default function OnboardingScreen() {
               const shareDocIdOrName = Boolean(
                 isBothAddDoc &&
                 ((curDocId && prevDocId && curDocId === prevDocId) ||
-                 (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+                  (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
               );
 
               const hasConflictingDocIdentity = Boolean(
                 isBothAddDoc &&
                 ((curDocId && prevDocId && curDocId !== prevDocId) ||
-                 (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+                  (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
               );
 
               const isDuplicateOfPrev =
@@ -1081,8 +1082,8 @@ export default function OnboardingScreen() {
     // confirmed history does not lose items from the list.
     const responseMedicines =
       Array.isArray(confirmedMedicines) &&
-      confirmedMedicines.length > 0 &&
-      (aiRes.onboardingState?.medicinesConfirmed || aiRes.state?.medicinesConfirmed)
+        confirmedMedicines.length > 0 &&
+        (aiRes.onboardingState?.medicinesConfirmed || aiRes.state?.medicinesConfirmed)
         ? confirmedMedicines
         : aiRes.medicines;
 
@@ -1090,8 +1091,8 @@ export default function OnboardingScreen() {
       aiRes.reportSummary ||
       (Array.isArray(aiRes.actions)
         ? aiRes.actions.find(
-            (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
-          )?.reportSummary
+          (a: any) => a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+        )?.reportSummary
         : null);
 
     const resolvedDoc = normalizeReportSummaryToDocument(
@@ -1147,7 +1148,7 @@ export default function OnboardingScreen() {
     };
 
     const normalizeText = (t?: string) =>
-      (t || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+      (t || "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "").trim();
 
     const normReply = normalizeText(messageContent);
     const normComp = normalizeText(aiRes.completionMessage);
@@ -1267,6 +1268,7 @@ export default function OnboardingScreen() {
           !isInteractiveOptionMsg &&
           lastAssistantMsg &&
           lastAssistantMsg.action === newMsg.action &&
+          Boolean(normReply) &&
           normalizeText(lastAssistantMsg.content) === normReply &&
           lastAssistantMsg.action !== "ONBOARDING_COMPLETED_NOTICE";
 
@@ -1739,7 +1741,7 @@ export default function OnboardingScreen() {
                         cleanedAllergies.push(...arr.map(String));
                         continue;
                       }
-                    } catch {}
+                    } catch { }
                   }
                 }
               }
@@ -1778,9 +1780,7 @@ export default function OnboardingScreen() {
         provider: updatedState?.loginProvider || state?.loginProvider,
         hasSocialData: updatedState?.hasSocialData ?? state?.hasSocialData,
         documentId: normalizeDocumentIds(
-          updatedState?.documentId,
-          latestAssistantMessage?.documentIds,
-          latestAssistantMessage?.document?.id,
+          updatedState?.documentId || currentDocIdRef.current || undefined,
         ),
         stream: false,
       };
@@ -2340,12 +2340,12 @@ export default function OnboardingScreen() {
     currentDocIdRef.current = primaryDocId;
     selectedFileRef.current = primaryFile
       ? {
-          uri: primaryFile.uri,
-          name: primaryFileName,
-          type: primaryFile.mimeType || "application/pdf",
-          size: primaryFile.size,
-          fileType: "document",
-        }
+        uri: primaryFile.uri,
+        name: primaryFileName,
+        type: primaryFile.mimeType || "application/pdf",
+        size: primaryFile.size,
+        fileType: "document",
+      }
       : null;
 
     await AsyncStorage.setItem("onboarding_pending_job_id", primaryJobId);
@@ -2359,7 +2359,6 @@ export default function OnboardingScreen() {
   const uploadAbortControllerRef = useRef<AbortController | null>(null);
   const sseUnsubRef = useRef<(() => void) | null>(null);
   const currentFileKeyRef = useRef<string | null>(null);
-  const currentDocIdRef = useRef<string | null>(null);
   const sseReconnectAttemptsRef = useRef<number>(0);
   const sseReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -2783,6 +2782,7 @@ export default function OnboardingScreen() {
   const handleCompletedJob = async (documentId: string, fileName: string) => {
     uploadRetryCountRef.current = 0;
     setUploadRetryCount(0);
+    currentDocIdRef.current = documentId;
     const newState = {
       ...state,
       flowMode: "UPLOAD",
@@ -2801,6 +2801,7 @@ export default function OnboardingScreen() {
       "DOCUMENT_UPLOADED",
       newState,
       "Document Uploaded: " + fileName,
+      "DOCUMENT_UPLOADED",
     );
 
     setTimeout(() => {
@@ -3169,11 +3170,11 @@ export default function OnboardingScreen() {
               ...newState.existingUserData,
               allergies: Array.isArray(newState.existingUserData?.allergies)
                 ? newState.existingUserData.allergies.filter(
-                    (a: any) =>
-                      !["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].includes(
-                        String(a).toUpperCase().replace(/\s+/g, ""),
-                      ),
-                  )
+                  (a: any) =>
+                    !["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].includes(
+                      String(a).toUpperCase().replace(/\s+/g, ""),
+                    ),
+                )
                 : [],
             };
           } else {
@@ -3644,9 +3645,9 @@ export default function OnboardingScreen() {
             !isHistorical
               ? isEditingLocal
                 ? () => {
-                    setActiveMedicineToEdit(null);
-                    setMedicineCardMode("review");
-                  }
+                  setActiveMedicineToEdit(null);
+                  setMedicineCardMode("review");
+                }
                 : handleExitToOptions
               : undefined
           }
@@ -3654,9 +3655,9 @@ export default function OnboardingScreen() {
             !isHistorical
               ? isEditingLocal
                 ? () => {
-                    setActiveMedicineToEdit(null);
-                    setMedicineCardMode("review");
-                  }
+                  setActiveMedicineToEdit(null);
+                  setMedicineCardMode("review");
+                }
                 : handleExitToOptions
               : undefined
           }
@@ -3817,87 +3818,87 @@ export default function OnboardingScreen() {
         return (
           <View style={{ width: "100%" }}>
             <AddMedicineCard
-            key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
-            med={activeMedicineToEdit || null}
-            initialMedicines={memoizedInitialMedicines}
-            includeExistingMedicines={!activeMedicineToEdit}
-            isEditingLocal={Boolean(activeMedicineToEdit)}
-            preferredLang={preferredLang}
-            isDark={isDark}
-            theme={theme}
-            currentClientMedId={currentClientMedId}
-            setCurrentClientMedId={setCurrentClientMedId}
-            onSave={(updatedMed) => {
-              if (activeMedicineToEdit) {
-                const targetKey = activeMedicineToEdit.client_med_id || activeMedicineToEdit.id;
-                const currentMeds = (localMedicines && localMedicines.length > 0)
-                  ? localMedicines
-                  : (activeMsg.medicines && activeMsg.medicines.length > 0 ? activeMsg.medicines : state?.medicinesToAdd || []);
+              key={activeMedicineToEdit?.client_med_id || activeMedicineToEdit?.id || "wizard-review-mode"}
+              med={activeMedicineToEdit || null}
+              initialMedicines={memoizedInitialMedicines}
+              includeExistingMedicines={!activeMedicineToEdit}
+              isEditingLocal={Boolean(activeMedicineToEdit)}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+              currentClientMedId={currentClientMedId}
+              setCurrentClientMedId={setCurrentClientMedId}
+              onSave={(updatedMed) => {
+                if (activeMedicineToEdit) {
+                  const targetKey = activeMedicineToEdit.client_med_id || activeMedicineToEdit.id;
+                  const currentMeds = (localMedicines && localMedicines.length > 0)
+                    ? localMedicines
+                    : (activeMsg.medicines && activeMsg.medicines.length > 0 ? activeMsg.medicines : state?.medicinesToAdd || []);
 
-                const updatedMeds = currentMeds.map((m: any) => {
-                  const isMatch = (
-                    (activeMedicineToEdit.client_med_id && m.client_med_id === activeMedicineToEdit.client_med_id) ||
-                    (activeMedicineToEdit.id && m.id === activeMedicineToEdit.id) ||
-                    (m.client_med_id === targetKey || m.id === targetKey)
-                  );
-                  if (!isMatch) return m;
+                  const updatedMeds = currentMeds.map((m: any) => {
+                    const isMatch = (
+                      (activeMedicineToEdit.client_med_id && m.client_med_id === activeMedicineToEdit.client_med_id) ||
+                      (activeMedicineToEdit.id && m.id === activeMedicineToEdit.id) ||
+                      (m.client_med_id === targetKey || m.id === targetKey)
+                    );
+                    if (!isMatch) return m;
 
-                  return {
-                    ...m,
-                    ...updatedMed,
-                    selected: m.selected !== undefined ? m.selected : true,
-                    subtitle:
-                      updatedMed.type === "TABLET" || updatedMed.type === "CAPSULE"
-                        ? `${updatedMed.dose?.count || 1} ${(updatedMed.type || "tablet").toLowerCase()}(s) · ${(updatedMed.frequency || "once").toLowerCase()}`
-                        : `${updatedMed.dose?.value || 1} ${updatedMed.dose?.unit || ""} · ${(updatedMed.frequency || "once").toLowerCase()}`,
-                  };
-                });
-                setLocalMedicines(updatedMeds);
-                setState((prev) => ({ ...prev, medicinesToAdd: updatedMeds }));
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === activeMsg.id
-                      ? {
+                    return {
+                      ...m,
+                      ...updatedMed,
+                      selected: m.selected !== undefined ? m.selected : true,
+                      subtitle:
+                        updatedMed.type === "TABLET" || updatedMed.type === "CAPSULE"
+                          ? `${updatedMed.dose?.count || 1} ${(updatedMed.type || "tablet").toLowerCase()}(s) · ${(updatedMed.frequency || "once").toLowerCase()}`
+                          : `${updatedMed.dose?.value || 1} ${updatedMed.dose?.unit || ""} · ${(updatedMed.frequency || "once").toLowerCase()}`,
+                    };
+                  });
+                  setLocalMedicines(updatedMeds);
+                  setState((prev) => ({ ...prev, medicinesToAdd: updatedMeds }));
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === activeMsg.id
+                        ? {
                           ...msg,
                           medicines: updatedMeds,
                         }
-                      : msg
-                  )
-                );
-                handleDraftSync(updatedMeds);
-              }
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            onAddAndContinue={(newMed: any, allDrafts?: any[]) => {
-              const uniqueDrafts = deduplicateDrafts(allDrafts || [...localMedicines, newMed]);
-              setLocalMedicines(uniqueDrafts);
-              setState((prev) => ({
-                ...prev,
-                medicinesToAdd: uniqueDrafts,
-                currentMedicineIndex: uniqueDrafts.length,
-              }));
-            }}
-            // Review-mode additions are frontend-only until the user confirms the list.
-            onDraftSync={undefined}
-            onSaveMedicines={(allDrafts) => {
-              const uniqueDrafts = deduplicateDrafts(allDrafts);
-              setLocalMedicines(uniqueDrafts);
-              setState((prev) => ({ ...prev, medicinesToAdd: uniqueDrafts }));
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            onExitToOptions={() => {
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            onCancel={() => {
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            readOnly={false}
-            chosenVal={null}
-            chosenLabel={null}
+                        : msg
+                    )
+                  );
+                  handleDraftSync(updatedMeds);
+                }
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              onAddAndContinue={(newMed: any, allDrafts?: any[]) => {
+                const uniqueDrafts = deduplicateDrafts(allDrafts || [...localMedicines, newMed]);
+                setLocalMedicines(uniqueDrafts);
+                setState((prev) => ({
+                  ...prev,
+                  medicinesToAdd: uniqueDrafts,
+                  currentMedicineIndex: uniqueDrafts.length,
+                }));
+              }}
+              // Review-mode additions are frontend-only until the user confirms the list.
+              onDraftSync={undefined}
+              onSaveMedicines={(allDrafts) => {
+                const uniqueDrafts = deduplicateDrafts(allDrafts);
+                setLocalMedicines(uniqueDrafts);
+                setState((prev) => ({ ...prev, medicinesToAdd: uniqueDrafts }));
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              onExitToOptions={() => {
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              onCancel={() => {
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              readOnly={false}
+              chosenVal={null}
+              chosenLabel={null}
             />
           </View>
         );
@@ -4065,12 +4066,12 @@ export default function OnboardingScreen() {
 
     if (isReportOrConfirmActive) {
       const reportSummarySource = activeMsg.reportSummary ||
-          (Array.isArray((activeMsg as any).actions)
-            ? (activeMsg as any).actions.find(
-                (a: any) =>
-                  a.actionType === "REPORT_SUMMARY" || a.reportSummary,
-              )?.reportSummary
-            : null);
+        (Array.isArray((activeMsg as any).actions)
+          ? (activeMsg as any).actions.find(
+            (a: any) =>
+              a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+          )?.reportSummary
+          : null);
       const reportSourceDocuments = activeMsg.documents?.length
         ? activeMsg.documents
         : activeMsg.document;
@@ -4084,11 +4085,11 @@ export default function OnboardingScreen() {
       const doc = reportSourceFailed
         ? {}
         : normalizeReportSummaryToDocument(
-            reportSummarySource || activeMsg.document,
-            activeMsg.document,
-          ) ||
-          activeMsg.document ||
-          {};
+          reportSummarySource || activeMsg.document,
+          activeMsg.document,
+        ) ||
+        activeMsg.document ||
+        {};
       const reportDocuments = normalizeReportDocumentsToSummaries(
         reportSourceDocuments,
         activeMsg.reportSummary,
@@ -4146,7 +4147,13 @@ export default function OnboardingScreen() {
                 sendMessage(q, newState, q);
               }}
               onViewFullReport={() => {
-                setViewerDoc(doc);
+                const msgAny = activeMsg as any;
+                setViewerDoc({
+                  ...doc,
+                  id: doc?.id || msgAny?.documentId || (Array.isArray(state.documentId) ? state.documentId[0] : state.documentId),
+                  s3Key: doc?.s3Key || doc?.fileKey || msgAny?.fileKey,
+                  fileKey: doc?.fileKey || doc?.s3Key || msgAny?.fileKey,
+                });
                 setIsViewerOpen(true);
               }}
               readOnly={isHistorical}
@@ -4170,7 +4177,13 @@ export default function OnboardingScreen() {
               sendMessage(q, newState, q);
             }}
             onViewFullReport={() => {
-              setViewerDoc(doc);
+              const msgAny = activeMsg as any;
+              setViewerDoc({
+                ...doc,
+                id: doc?.id || msgAny?.documentId || (Array.isArray(state.documentId) ? state.documentId[0] : state.documentId),
+                s3Key: doc?.s3Key || doc?.fileKey || msgAny?.fileKey,
+                fileKey: doc?.fileKey || doc?.s3Key || msgAny?.fileKey,
+              });
               setIsViewerOpen(true);
             }}
             readOnly={isHistorical}

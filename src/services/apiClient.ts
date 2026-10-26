@@ -20,9 +20,9 @@ const apiClient = axios.create({
 // guard as well, so bootstrap requests cannot reach Axios while offline.
 const assertOnline = async () => {
   const state = await NetInfo.fetch();
-  // Treat unknown reachability as offline during startup; otherwise Android
+  // Treat unknown reachability as offline during startup in production; otherwise Android
   // can report a connected interface before internet reachability is known.
-  if (state.isConnected !== true || state.isInternetReachable !== true) {
+  if (state.isConnected === false || (state.isInternetReachable === false && !__DEV__)) {
     const error = new Error("You are offline. Please reconnect to continue.");
     (error as any).code = "ERR_NETWORK_OFFLINE";
     throw error;

@@ -13,6 +13,15 @@ interface Message {
   role: "ai" | "user";
   text: string;
   documents?: { id: string; fileName: string; }[];
+  citations?: {
+    documentId: string;
+    fileName: string;
+    pageNumber: number;
+    reportDate?: string;
+    documentType?: string;
+    relevanceScore?: number;
+    excerpt?: string;
+  }[];
   createdAt?: string | Date;
   title?: string;
   subtitle?: string;
@@ -23,9 +32,16 @@ interface MessageBubbleProps {
   isDark: boolean;
   onSpeak?: () => void;
   isSpeaking?: boolean;
+  onPressCitation?: (citation: any) => void;
 }
 
-const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, isDark, onSpeak, isSpeaking }) => {
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
+  message,
+  isDark,
+  onSpeak,
+  isSpeaking,
+  onPressCitation,
+}) => {
   const isUser = message.role === "user";
   const timeString = message.createdAt ? formatUTCDateTime(message.createdAt, "hh:mm a", true) : "";
 
@@ -313,6 +329,45 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, isDark,
             </Text>
           ) : null}
           {renderedAiMarkdown}
+          {message.citations && message.citations.length > 0 && (
+            <View style={styles.citationsContainer}>
+              <Text style={[styles.citationsLabel, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                Verified Sources:
+              </Text>
+              <View style={styles.citationsRow}>
+                {message.citations.map((cit, idx) => (
+                  <TouchableOpacity
+                    key={`cit-${idx}`}
+                    style={[
+                      styles.citationBadge,
+                      {
+                        backgroundColor: isDark ? "rgba(56, 189, 248, 0.15)" : "#eff6ff",
+                        borderColor: isDark ? "rgba(56, 189, 248, 0.3)" : "#bfdbfe",
+                      },
+                    ]}
+                    onPress={() => onPressCitation && onPressCitation(cit)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="document-text-outline"
+                      size={12}
+                      color={isDark ? "#38bdf8" : "#2563eb"}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.citationBadgeText,
+                        { color: isDark ? "#38bdf8" : "#2563eb" },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {cit.fileName || "Report"} {cit.pageNumber ? `(p. ${cit.pageNumber})` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6, minHeight: 24 }}>
             {timeString ? (
               <Text style={[styles.aiTime, { color: isDark ? "rgba(255,255,255,0.5)" : "#94a3b8", marginTop: 0 }]}>
@@ -520,5 +575,35 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: "500",
     lineHeight: 21,
+  },
+  citationsContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148, 163, 184, 0.2)",
+  },
+  citationsLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  citationsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  citationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    maxWidth: SCREEN_WIDTH * 0.65,
+  },
+  citationBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
   },
 });

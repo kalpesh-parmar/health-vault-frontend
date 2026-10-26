@@ -55,14 +55,22 @@ export interface ChatMessage {
   state?: any;
   selectedOption?: string | null;
   clientMessageId?: string | null;
+  chart?: any;
+  chartType?: string;
+  table?: any;
   mentions?: DocumentMention[];
 }
 
 export interface DocumentMention {
-  id: string;
-  name?: string;
-  title?: string;
-  [key: string]: any;
+  documentId: string;
+  displayName: string;
+  fileName?: string;
+  type?: "DOCUMENT";
+  documentType?: string;
+  reportDate?: string;
+  patientId?: string;
+  triggerIndex?: number;
+  length?: number;
 }
 
 export type { ChatWizardState, DuplicateConflict };

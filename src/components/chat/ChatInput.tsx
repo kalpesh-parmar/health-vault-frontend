@@ -31,6 +31,9 @@ interface ChatInputProps {
   preferredLanguage?: string;
   mode?: "default" | "onboarding";
   onAttachPress?: () => void;
+  selection?: { start: number; end: number };
+  onSelectionChange?: (selection: { start: number; end: number }) => void;
+  inputRef?: React.RefObject<TextInput>;
 }
 
 export let activeFormDictationCallback: ((transcript: string) => void) | null =
@@ -103,6 +106,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   preferredLanguage,
   mode = "default",
   onAttachPress,
+  selection,
+  onSelectionChange,
+  inputRef,
 }) => {
   const [isListening, setIsListening] = useState(false);
   const pulseScale = useSharedValue(1);
@@ -235,6 +241,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* TextInput */}
       <TextInput
+        ref={inputRef}
         style={[styles.textInput, { color: inputTextColor }]}
         placeholder={isListening ? "Listening..." : "Message Dr. Health..."}
         placeholderTextColor={
@@ -242,6 +249,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
         value={value}
         onChangeText={onChangeText}
+        selection={selection}
+        onSelectionChange={(e) => {
+          if (onSelectionChange && e?.nativeEvent?.selection) {
+            onSelectionChange(e.nativeEvent.selection);
+          }
+        }}
         onFocus={() => {
           if (mode === "onboarding") {
             setActiveFormDictationCallback(null);
