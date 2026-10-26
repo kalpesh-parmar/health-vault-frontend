@@ -32,17 +32,17 @@ type AddMedicationScreenRouteProp = RouteProp<
 const formatMedicationForBatchApi = (med: AddOrEditMedication) => {
   const normType = String(med.medicationType || "TABLET").toUpperCase().trim();
 
-  // Frequency mapping
-  let normFreq = "ONCE_DAILY";
+  // The batch API expects the display frequency labels, not enum-style values.
+  let normFreq = "Once Daily";
   const freqStr = String(med.frequency || "").toUpperCase().trim();
   if (freqStr.includes("TWICE") || freqStr.includes("2")) {
-    normFreq = "TWICE_DAILY";
+    normFreq = "Twice Daily";
   } else if (freqStr.includes("THRICE") || freqStr.includes("3") || freqStr.includes("THREE")) {
-    normFreq = "THRICE_DAILY";
+    normFreq = "Thrice Daily";
   } else if (freqStr.includes("ONCE") || freqStr.includes("1")) {
-    normFreq = "ONCE_DAILY";
+    normFreq = "Once Daily";
   } else if (freqStr) {
-    normFreq = freqStr.replace(/\s+/g, "_");
+    normFreq = String(med.frequency).trim();
   }
 
   // Food frequency mapping
@@ -58,37 +58,65 @@ const formatMedicationForBatchApi = (med: AddOrEditMedication) => {
     normFood = foodStr;
   }
 
-  // Schedule mapping: ensure object with HH:mm:ss format
-  const scheduleObj: Record<string, string> = {};
+  // Schedule mapping: ensure object with HH:mm:ss format. Custom schedules
+  // may contain multiple times, so keep the complete array under CUSTOM.
+  const scheduleObj: Record<string, string | string[]> = {};
+  const normalizeTime = (value: unknown) => {
+    const time = String(value);
+    return time.length === 5 ? `${time}:00` : time;
+  };
+
+  const addScheduleTime = (key: string, value: unknown) => {
+    const time = normalizeTime(value);
+    const existing = scheduleObj[key];
+    if (!existing) {
+      scheduleObj[key] = key === "CUSTOM" ? [time] : time;
+    } else if (Array.isArray(existing)) {
+      existing.push(time);
+    } else {
+      scheduleObj[key] = [existing, time];
+    }
+  };
+
   if (med.medicationSchedule && typeof med.medicationSchedule === "object" && !Array.isArray(med.medicationSchedule)) {
     Object.entries(med.medicationSchedule).forEach(([k, rawVal]) => {
       const v = rawVal as any;
       if (typeof v === "string") {
-        const timeVal = v.length === 5 ? `${v}:00` : v;
-        scheduleObj[k.toUpperCase()] = timeVal;
+        addScheduleTime(k.toUpperCase(), v);
       } else if (Array.isArray(v) && v.length > 0) {
-        const firstTime = String(v[0]);
-        scheduleObj[k.toUpperCase()] = firstTime.length === 5 ? `${firstTime}:00` : firstTime;
+        v.forEach((time: unknown) => addScheduleTime(k.toUpperCase(), time));
       }
     });
   } else if (Array.isArray(med.medicationSchedule)) {
     const times = [...med.medicationSchedule].sort();
-    times.forEach((t, i) => {
+    times.forEach((t) => {
       const timeStr = String(t);
-      const timeWithSec = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
-      let slotKey = i === 0 ? "MORNING" : i === 1 ? (times.length === 2 ? "NIGHT" : "NOON") : "NIGHT";
-      if (timeStr.startsWith("08:") || timeStr.startsWith("09:")) slotKey = "MORNING";
-      else if (timeStr.startsWith("13:") || timeStr.startsWith("14:") || timeStr.startsWith("15:")) slotKey = "NOON";
-      else if (timeStr.startsWith("19:") || timeStr.startsWith("20:") || timeStr.startsWith("21:")) slotKey = "NIGHT";
-      scheduleObj[slotKey] = timeWithSec;
+      const slotKey =
+        timeStr === "08:00" ? "MORNING" :
+        timeStr === "14:00" ? "NOON" :
+        timeStr === "20:00" ? "NIGHT" :
+        "CUSTOM";
+      addScheduleTime(slotKey, timeStr);
+    });
+  }
+
+  // Once custom mode is selected, all selected times belong to CUSTOM.
+  // This also protects against a mixed payload such as CUSTOM + NIGHT.
+  if (Object.prototype.hasOwnProperty.call(scheduleObj, "CUSTOM")) {
+    const customTimes = Object.values(scheduleObj).flatMap((value) =>
+      Array.isArray(value) ? value : [value],
+    );
+    scheduleObj.CUSTOM = Array.from(new Set(customTimes));
+    Object.keys(scheduleObj).forEach((key) => {
+      if (key !== "CUSTOM") delete scheduleObj[key];
     });
   }
 
   if (Object.keys(scheduleObj).length === 0) {
-    if (normFreq === "TWICE_DAILY") {
+    if (normFreq === "Twice Daily") {
       scheduleObj["MORNING"] = "08:00:00";
       scheduleObj["NIGHT"] = "20:00:00";
-    } else if (normFreq === "THRICE_DAILY") {
+    } else if (normFreq === "Thrice Daily") {
       scheduleObj["MORNING"] = "08:00:00";
       scheduleObj["NOON"] = "14:00:00";
       scheduleObj["NIGHT"] = "20:00:00";

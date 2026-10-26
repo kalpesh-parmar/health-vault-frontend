@@ -3,7 +3,7 @@ import Toast from "react-native-toast-message";
 import apiClient from "../../services/apiClient";
 import { streamChatResponse } from "../../services/streamService";
 import { useTextToSpeech } from "../useTextToSpeech";
-import { ChatMessage, ChatMode } from "../../types/chat";
+import { ChatMessage, ChatMode, DocumentMention } from "../../types/chat";
 import {
   buildChatHistory,
   normalizeDocumentIds,
@@ -96,6 +96,8 @@ export const useChatSession = ({
   selectedOption,
   setSelectedOption,
 }: UseChatSessionProps) => {
+
+  console.log("isOnbordingCompleted: ", isOnboardingCompleted);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onboardingMessages, setOnboardingMessages] = useState<ChatMessage[]>(
     [],
@@ -107,8 +109,28 @@ export const useChatSession = ({
     null,
   );
   const [sessions, setSessions] = useState<any[]>([]);
-  const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
+  const [selectedDocument, _setSelectedDocument] = useState<any | null>(null);
+  const [selectedDocuments, _setSelectedDocuments] = useState<any[]>([]);
+
+  const setSelectedDocument = useCallback((doc: any) => {
+    _setSelectedDocument(doc);
+    if (!doc) {
+      _setSelectedDocuments([]);
+    } else if (Array.isArray(doc)) {
+      _setSelectedDocuments(doc);
+      _setSelectedDocument(doc[0] || null);
+    } else {
+      _setSelectedDocuments([doc]);
+    }
+  }, []);
+
+  const setSelectedDocuments = useCallback((docs: any[]) => {
+    const list = Array.isArray(docs) ? docs : docs ? [docs] : [];
+    _setSelectedDocuments(list);
+    _setSelectedDocument(list.length > 0 ? list[0] : null);
+  }, []);
   const [input, setInput] = useState("");
+  const [activeMentions, setActiveMentions] = useState<DocumentMention[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -212,28 +234,34 @@ export const useChatSession = ({
         finalData,
       );
 
+      const resolvedChart =
+        finalData?.chart ||
+        ((Array.isArray(finalData?.dataPoints) || Array.isArray(finalData?.points))
+          ? finalData
+          : null);
+
       const actionType = isReportQuestion
         ? "NORMAL_CHAT"
         : structRes.action ||
-          finalData?.actionType ||
-          finalData?.action ||
-          "NORMAL_CHAT";
+        finalData?.actionType ||
+        finalData?.action ||
+        (resolvedChart ? "MEDICAL_TREND_CHART" : "NORMAL_CHAT");
 
       const reportSummaryData = isReportQuestion
         ? null
         : finalData?.reportSummary ||
-          (Array.isArray(finalData?.actions)
-            ? finalData.actions.find(
-                (a: any) =>
-                  a.actionType === "REPORT_SUMMARY" || a.reportSummary,
-              )?.reportSummary
-            : null);
+        (Array.isArray(finalData?.actions)
+          ? finalData.actions.find(
+            (a: any) =>
+              a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+          )?.reportSummary
+          : null);
       const resolvedDoc = isReportQuestion
         ? null
         : normalizeReportSummaryToDocument(
-            reportSummaryData || finalData?.document,
-            finalData?.document,
-          );
+          reportSummaryData || finalData?.document,
+          finalData?.document,
+        );
 
       upsertAssistantMessage(messageId, (current) => {
         const baseMessage = current || {
@@ -243,16 +271,18 @@ export const useChatSession = ({
           createdAt: new Date().toISOString(),
         };
 
+        const finalChart = resolvedChart ?? (baseMessage as any).chart ?? null;
+
         return {
           ...baseMessage,
           text:
             !isReportQuestion &&
-            (structRes.isReportList || structRes.isMedicationList)
+              (structRes.isReportList || structRes.isMedicationList)
               ? structRes.text || displayedText || replyText || baseMessage.text
               : displayedText || replyText || baseMessage.text,
           sessionId: finalData?.sessionId ?? baseMessage.sessionId,
-          mode: isReportQuestion ? "NORMAL_CHAT" : finalData?.mode ?? baseMessage.mode,
-          action: actionType || baseMessage.action || "NORMAL_CHAT",
+          mode: isReportQuestion ? "NORMAL_CHAT" : finalData?.mode ?? (finalChart ? "CHART" : baseMessage.mode),
+          action: (finalChart ? "MEDICAL_TREND_CHART" : actionType) || baseMessage.action || "NORMAL_CHAT",
           actions: isReportQuestion
             ? []
             : finalData?.actions ?? (baseMessage as any).actions ?? [],
@@ -277,8 +307,8 @@ export const useChatSession = ({
           pagination: isReportQuestion
             ? undefined
             : structRes.pagination ||
-              finalData?.pagination ||
-              (baseMessage as any).pagination,
+            finalData?.pagination ||
+            (baseMessage as any).pagination,
           documents: isReportQuestion
             ? []
             : Array.isArray(finalData?.document)
@@ -296,10 +326,10 @@ export const useChatSession = ({
           keyFindings: isReportQuestion
             ? []
             : resolvedDoc?.keyFindings ??
-              finalData?.document?.keyFindings ??
-              finalData?.keyFindings ??
-              baseMessage.keyFindings ??
-              [],
+            finalData?.document?.keyFindings ??
+            finalData?.keyFindings ??
+            baseMessage.keyFindings ??
+            [],
           documentIds:
             normalizeDocumentIds(
               resolvedDoc?.id,
@@ -307,6 +337,10 @@ export const useChatSession = ({
               finalData?.documentIds,
               finalData?.documents,
             ) ?? baseMessage.documentIds,
+          chart: finalChart,
+          chartType: finalChart ? "MEDICAL_TREND_CHART" : (finalData?.chartType ?? (baseMessage as any).chartType ?? null),
+          table: finalData?.table ?? (baseMessage as any).table ?? null,
+          mentions: finalData?.mentions ?? baseMessage.mentions,
         };
       });
 
@@ -479,16 +513,16 @@ export const useChatSession = ({
           const isSameText =
             prevMsg &&
             prevMsg.text?.trim() ===
-              (structRes.isReportList || structRes.isMedicationList
-                ? structRes.text || ""
-                : dbMsg.content
-              )?.trim();
+            (structRes.isReportList || structRes.isMedicationList
+              ? structRes.text || ""
+              : dbMsg.content
+            )?.trim();
           const isSameAction = prevMsg && prevMsg.action === msgAction;
 
           const isBothAddDoc =
             Boolean(isSameRole &&
-            (msgAction === "ADD_DOCUMENT" || meta.actionType === "ADD_DOCUMENT") &&
-            (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+              (msgAction === "ADD_DOCUMENT" || meta.actionType === "ADD_DOCUMENT") &&
+              (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
 
           const prevDocIds = prevMsg?.documentIds || [];
           const curDocId = meta.documentId || meta.document?.id;
@@ -506,13 +540,13 @@ export const useChatSession = ({
           const shareDocIdOrName = Boolean(
             isBothAddDoc &&
             ((curDocId && prevDocIds.includes(curDocId)) ||
-             (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+              (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
           );
 
           const hasConflictingDocIdentity = Boolean(
             isBothAddDoc &&
             ((curDocId && prevDocIds.length > 0 && !prevDocIds.includes(curDocId)) ||
-             (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+              (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
           );
 
           const isDuplicateOfPrev =
@@ -577,8 +611,8 @@ export const useChatSession = ({
               isAskReport && hasStructuredDoc
                 ? ""
                 : structRes.isReportList || structRes.isMedicationList
-                ? structRes.text || ""
-                : dbMsg.content,
+                  ? structRes.text || ""
+                  : dbMsg.content,
             sessionId: chatSessionId,
             createdAt: dbMsg.createdAt,
             action: msgAction,
@@ -603,8 +637,8 @@ export const useChatSession = ({
               (meta.reportSummary && typeof meta.reportSummary === "object")
                 ? meta.reportSummary
                 : (meta.document && typeof meta.document === "object")
-                ? meta.document
-                : null,
+                  ? meta.document
+                  : null,
             documents: structRes.documents || meta.documents,
             suggestedQuestions: meta.suggestedQuestions || [],
             preferredLanguage: meta.preferredLanguage || meta.document?.preferredLanguage || undefined,
@@ -649,7 +683,9 @@ export const useChatSession = ({
             if (fetchedSessions.length > 0) {
               const mostRecent = initialSessionId
                 ? fetchedSessions.find((s: any) => s.id === initialSessionId) || fetchedSessions[0]
-                : fetchedSessions[0];
+                : (fetchedSessions.find((s: any) => s.metadata?.isCanonical === true || s.metadata?.type === "CANONICAL") ||
+                   fetchedSessions.find((s: any) => s.metadata?.type !== "ONBOARDING") ||
+                   fetchedSessions[0]);
               setActiveSessionId(mostRecent.id);
 
               if (mostRecent.documentId) {
@@ -764,8 +800,8 @@ export const useChatSession = ({
                 const isSameAction = prevMsg && prevMsg.action === msgAction;
                 const isBothAddDoc =
                   Boolean(isSameRole &&
-                  (msgAction === "ADD_DOCUMENT" || meta.actionType === "ADD_DOCUMENT") &&
-                  (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+                    (msgAction === "ADD_DOCUMENT" || meta.actionType === "ADD_DOCUMENT") &&
+                    (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
 
                 const prevDocIds = prevMsg?.documentIds || [];
                 const curDocId = meta.documentId || meta.document?.id;
@@ -783,13 +819,13 @@ export const useChatSession = ({
                 const shareDocIdOrName = Boolean(
                   isBothAddDoc &&
                   ((curDocId && prevDocIds.includes(curDocId)) ||
-                   (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+                    (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
                 );
 
                 const hasConflictingDocIdentity = Boolean(
                   isBothAddDoc &&
                   ((curDocId && prevDocIds.length > 0 && !prevDocIds.includes(curDocId)) ||
-                   (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+                    (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
                 );
 
                 const isDuplicateOfPrev =
@@ -863,8 +899,8 @@ export const useChatSession = ({
                     (meta.reportSummary && typeof meta.reportSummary === "object")
                       ? meta.reportSummary
                       : (meta.document && typeof meta.document === "object")
-                      ? meta.document
-                      : null,
+                        ? meta.document
+                        : null,
                   suggestedQuestions: meta.suggestedQuestions || [],
                   preferredLanguage: meta.preferredLanguage || meta.document?.preferredLanguage || undefined,
                   keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
@@ -1019,8 +1055,8 @@ export const useChatSession = ({
             (meta.reportSummary && typeof meta.reportSummary === "object")
               ? meta.reportSummary
               : (meta.document && typeof meta.document === "object")
-              ? meta.document
-              : null,
+                ? meta.document
+                : null,
           suggestedQuestions: meta.suggestedQuestions || [],
           preferredLanguage: meta.preferredLanguage || meta.document?.preferredLanguage || undefined,
           keyFindings: meta.document?.keyFindings || meta.keyFindings || [],
@@ -1045,6 +1081,7 @@ export const useChatSession = ({
     customText?: string,
     targetDocument?: any,
     isReportQuestion = false,
+    targetMentions?: DocumentMention[],
   ) => {
     const textToSubmit = (customText || input).trim();
     if (!textToSubmit) return;
@@ -1094,9 +1131,9 @@ export const useChatSession = ({
             resData.reportSummary ||
             (Array.isArray(resData.actions)
               ? resData.actions.find(
-                  (a: any) =>
-                    a.actionType === "REPORT_SUMMARY" || a.reportSummary,
-                )?.reportSummary
+                (a: any) =>
+                  a.actionType === "REPORT_SUMMARY" || a.reportSummary,
+              )?.reportSummary
               : null);
           const resolvedDoc = normalizeReportSummaryToDocument(
             reportSummaryData || resData.document,
@@ -1225,36 +1262,87 @@ export const useChatSession = ({
       return;
     }
 
-    const messageDocument = targetDocument || selectedDocument;
-    const targetDocumentIds = targetDocument
-      ? normalizeDocumentIds(
-          targetDocument,
-          targetDocument?.report_id,
-          targetDocument?.file_key,
-        )
-      : undefined;
-    const messageDocumentIds = normalizeDocumentIds(
-      messageDocument,
-      messageDocument?.report_id,
-      messageDocument?.file_key,
-    );
+    const finalMentions =
+      targetMentions !== undefined
+        ? targetMentions
+        : activeMentions.length > 0
+          ? activeMentions
+          : undefined;
+
+    const mentionDocIds =
+      finalMentions && finalMentions.length > 0
+        ? Array.from(
+            new Set(
+              finalMentions
+                .map((m) => m.documentId)
+                .filter(Boolean),
+            ),
+          )
+        : [];
+
+    const messageDocument =
+      targetDocument ||
+      (selectedDocuments && selectedDocuments.length > 0
+        ? selectedDocuments
+        : selectedDocument);
+
+    const targetDocumentIds =
+      mentionDocIds.length > 0
+        ? mentionDocIds
+        : messageDocument
+          ? normalizeDocumentIds(
+              messageDocument,
+              messageDocument?.report_id,
+              messageDocument?.file_key,
+            )
+          : undefined;
+
+    const messageDocumentIds =
+      mentionDocIds.length > 0
+        ? mentionDocIds
+        : normalizeDocumentIds(
+            messageDocument,
+            messageDocument?.report_id,
+            messageDocument?.file_key,
+          );
+
+    const docList = Array.isArray(messageDocument)
+      ? messageDocument
+      : messageDocument
+        ? [messageDocument]
+        : [];
+
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
       text: textToSubmit,
-      documents: messageDocumentIds?.map((id) => ({
-        id,
-        fileName:
-          messageDocument?.fileName ||
-          messageDocument?.report_name ||
-          messageDocument?.name ||
-          "Medical Report",
-      })),
+      mentions: finalMentions && finalMentions.length > 0 ? finalMentions : undefined,
+      documents:
+        finalMentions && finalMentions.length > 0
+          ? finalMentions.map((m) => ({
+              id: m.documentId,
+              fileName:
+                m.fileName || m.displayName || "Medical Report",
+            }))
+          : messageDocumentIds?.map((id) => {
+              const found = docList.find(
+                (d: any) => d && (d.id === id || d.documentId === id),
+              );
+              return {
+                id,
+                fileName:
+                  found?.fileName ||
+                  found?.report_name ||
+                  found?.name ||
+                  "Medical Report",
+              };
+            }),
       createdAt: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setActiveMentions([]);
     setIsSending(true);
 
     try {
@@ -1264,6 +1352,10 @@ export const useChatSession = ({
         sessionId: activeSessionId || onboardingSessionId || undefined,
         preferredLanguage: preferredLang,
         documentId: targetDocumentIds,
+        mentions:
+          finalMentions && finalMentions.length > 0
+            ? finalMentions
+            : undefined,
         history: buildChatHistory(messages),
         stream: true,
       };
@@ -1353,8 +1445,8 @@ export const useChatSession = ({
 
       const isBothAddDoc =
         Boolean(isSameRole &&
-        (msg.action === "ADD_DOCUMENT" || (msg as any).actionType === "ADD_DOCUMENT") &&
-        (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
+          (msg.action === "ADD_DOCUMENT" || (msg as any).actionType === "ADD_DOCUMENT") &&
+          (prevMsg?.action === "ADD_DOCUMENT" || (prevMsg as any)?.actionType === "ADD_DOCUMENT"));
 
       const prevDocIds = prevMsg?.documentIds || [];
       const curDocIds = msg.documentIds || [];
@@ -1372,13 +1464,13 @@ export const useChatSession = ({
       const shareDocIdOrName = Boolean(
         isBothAddDoc &&
         ((curDocIds.length > 0 && prevDocIds.length > 0 && curDocIds.some((id) => prevDocIds.includes(id))) ||
-         (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
+          (curDocNames.length > 0 && prevDocNames.length > 0 && curDocNames.some((n: string) => prevDocNames.includes(n))))
       );
 
       const hasConflictingDocIdentity = Boolean(
         isBothAddDoc &&
         ((curDocIds.length > 0 && prevDocIds.length > 0 && !curDocIds.some((id) => prevDocIds.includes(id))) ||
-         (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
+          (curDocNames.length > 0 && prevDocNames.length > 0 && !curDocNames.some((n: string) => prevDocNames.includes(n))))
       );
 
       const isDuplicateOfPrev =
@@ -1437,8 +1529,12 @@ export const useChatSession = ({
     setSessions,
     selectedDocument,
     setSelectedDocument,
+    selectedDocuments,
+    setSelectedDocuments,
     input,
     setInput,
+    activeMentions,
+    setActiveMentions,
     isSending,
     setIsSending,
     isLoadingHistory,

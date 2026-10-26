@@ -53,6 +53,10 @@ export const MEDICATION_REMINDER_ENDPOINTS = {
   LIST_TODAY_OCCURENCES_COUNT: "/medication-reminders/occurrences/summary",
   UPDATE_REMINDER_OCCURRENCE_STATUS: "/medication-reminders/occurrences/{id}",
   FILTER_AND_SORT_OCCURRENCES: "/medication-reminders/occurrences/list",
+  DASHBOARD_WEEKLY: "/medication-reminders/dashboard/weekly",
+  DASHBOARD_MONTHLY: "/medication-reminders/dashboard/monthly",
+  DASHBOARD_DAILY_DETAILS: "/medication-reminders/dashboard/daily-details",
+  DASHBOARD_REFILLS: "/medication-reminders/dashboard/refills",
 } as const;
 
 export const NOTIFICATION_ENDPOINTS = {

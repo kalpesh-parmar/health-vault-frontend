@@ -54,6 +54,60 @@ import {
 } from "../../utils/medicineReviewLifecycle";
 export type { ChatMessage };
 
+const isDocumentMedicineDraft = (medicine: any) =>
+  Boolean(
+    medicine?.documentId ||
+      medicine?.documentName ||
+      String(medicine?.source || "").toUpperCase() === "OCR" ||
+      String(medicine?.medicationSchedule?.provenance || "").toLowerCase() ===
+        "primary_ocr",
+  );
+
+// OCR results can arrive once from the document response and once from the
+// wizard state. Their IDs differ, but they represent the same medicine.
+// Collapse only those equivalent document records; keep a separately entered
+// medicine with the same name available for normal duplicate handling.
+const deduplicateMedicineDrafts = (medicines: any[]) => {
+  const deduped = deduplicateDrafts(medicines || []);
+  const result: any[] = [];
+
+  for (const medicine of deduped) {
+    const name = String(medicine?.name || medicine?.medicationName || "")
+      .trim()
+      .toLowerCase();
+    const type = String(medicine?.type || medicine?.medicationType || "")
+      .trim()
+      .toLowerCase();
+    const existingIndex = result.findIndex((candidate) => {
+      const candidateName = String(
+        candidate?.name || candidate?.medicationName || "",
+      )
+        .trim()
+        .toLowerCase();
+      const candidateType = String(
+        candidate?.type || candidate?.medicationType || "",
+      )
+        .trim()
+        .toLowerCase();
+      return (
+        name &&
+        name === candidateName &&
+        type === candidateType &&
+        isDocumentMedicineDraft(medicine) &&
+        isDocumentMedicineDraft(candidate)
+      );
+    });
+
+    if (existingIndex >= 0) {
+      result[existingIndex] = { ...result[existingIndex], ...medicine };
+    } else {
+      result.push(medicine);
+    }
+  }
+
+  return result;
+};
+
 interface ChatMessageItemProps {
   item: ChatMessage;
   index: number;
@@ -139,7 +193,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
   const [localDrafts, setLocalDrafts] = React.useState<any[]>([]);
   const [activeMedicineToEdit, setActiveMedicineToEdit] = React.useState<any | null>(null);
-  const [medicineCardMode, setMedicineCardMode] = React.useState<"review" | "edit">("review");
+  const [medicineCardMode, setMedicineCardMode] = React.useState<"review" | "edit" | "add">("review");
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
@@ -205,6 +259,33 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             (prevItem.rawValue.includes("CONFIRM_MEDICINES") ||
               prevItem.rawValue.includes("SKIP_MEDICINES")))),
     );
+
+  // Manual medicines must not inherit a report card from an earlier upload
+  // in the same chat session. Explicit report actions are still allowed to
+  // render report cards below.
+  const medicineItems = Array.isArray(item.medicines)
+    ? item.medicines
+    : item.medicine
+      ? [item.medicine]
+      : Array.isArray((item as any).state?.medicinesToAdd)
+        ? (item as any).state.medicinesToAdd
+        : Array.isArray((item as any).onboardingState?.medicinesToAdd)
+          ? (item as any).onboardingState.medicinesToAdd
+      : [];
+  const medicineAction = String(item.action || (item as any).actionType || "").toUpperCase();
+  const hasCurrentDocument = Boolean(
+    item.document || (Array.isArray(item.documents) && item.documents.length > 0),
+  );
+  const isManualMedicineOnly =
+    medicineItems.length > 0 &&
+    !hasCurrentDocument &&
+    (medicineItems.every(
+      (medicine: any) => String(medicine?.source || "").toUpperCase() === "MANUAL",
+    ) ||
+      ["ADD_MEDICINE", "SAVE_AND_REVIEW", "REVIEW_MEDICINES_LIST", "CONFIRM_MEDICINES", "CONFIRM_MEDICINE"].includes(medicineAction)) &&
+    item.action !== "ASK_REPORT" &&
+    item.action !== "REPORT_SUMMARY" &&
+    (item as any).actionType !== "REPORT_SUMMARY";
 
   const isComplexStep =
     isFollowUpToMedicineFlow ||
@@ -361,14 +442,15 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
   if (isComplexStep) {
     const isReportOrConfirmAction =
-      isFollowUpToMedicineFlow ||
+      !isManualMedicineOnly &&
+      (isFollowUpToMedicineFlow ||
       item.action === "ASK_REPORT" ||
       item.action === "SKIP_MEDICINES" ||
       item.action === "CONFIRM_MEDICINES" ||
       item.action === "CONFIRM_MEDICINE" ||
       (item as any).actionType === "CONFIRM_MEDICINES" ||
       item.action === "REPORT_SUMMARY" ||
-      (item as any).actionType === "REPORT_SUMMARY";
+      (item as any).actionType === "REPORT_SUMMARY");
 
     if (isReportOrConfirmAction) {
       let reportSummarySource =
@@ -822,10 +904,20 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
       item.action === "REVIEW_MEDICINES_LIST" ||
       item.action === "ADD_DOCUMENT"
     ) {
+      // Upload metadata is kept in wizard state after OCR completes. It must
+      // only be used by the upload-success review, not by later manual
+      // medicine save/review responses.
+      const isUploadSuccessMessage =
+        Boolean(
+          (item as any).isLive ||
+            item.action === "ADD_DOCUMENT" ||
+            item.document ||
+            (Array.isArray(item.documents) && item.documents.length > 0),
+        );
       const msgDocs = normalizeDocumentsList(
         item.documents?.length ? item.documents : item.document ? [item.document] : item,
         [],
-        chatWizardState.filesInfo,
+        isUploadSuccessMessage ? chatWizardState.filesInfo : [],
       );
       const reportSummaryData =
         item.reportSummary ||
@@ -865,7 +957,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           (Array.isArray(summaryDocument?.normalResults) &&
             summaryDocument.normalResults.length > 0),
       );
-      const documentSummaryCard = hasDocumentSummary ? (
+      const documentSummaryCard = hasDocumentSummary && !isManualMedicineOnly ? (
         reportDocuments.length <= 1 ? (
           <OnboardingReportSummaryCard
             document={summaryDocument}
@@ -923,7 +1015,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
             ? chatWizardState.extractedMedicines
             : extractMedicationsFromDocuments(msgDocs)));
 
-      const displayMeds = rawMeds.map((m: any, idx: number) => ({
+      const displayMeds = deduplicateDrafts(rawMeds).map((m: any, idx: number) => ({
         ...m,
         id: m.id || m.client_med_id || `med-${item.id}-${idx}`,
         selected: m.selected !== undefined ? m.selected : true,
@@ -988,32 +1080,21 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
       const handleAddNew = () => {
         if (isReadOnly) return;
-        const displayLabel = tOnboarding("addAnotherMedicine") || "Add New";
         // Keep the accumulated chat drafts when the review card is replaced
         // by a new Add Medicine card. The current message can contain only
         // the latest medicine after a server round-trip.
-        const preservedDrafts = deduplicateDrafts([
+        const preservedDrafts = deduplicateMedicineDrafts([
           ...(chatWizardState.extractedMedicines || []),
           ...displayMeds,
         ]);
+        setLocalDrafts(preservedDrafts);
         setChatWizardState((prev: any) => ({
           ...prev,
           extractedMedicines: preservedDrafts,
         }));
-        handleGenericOptionPress(
-          {
-            key: "ADD",
-            value: "ADD",
-            actionType: "ADD_MEDICINE",
-            label: displayLabel,
-            state: {
-              currentStep: "ADD_MEDICINE",
-              cancellationNotice: false,
-              medicinesToAdd: preservedDrafts,
-            },
-          },
-          displayLabel,
-        );
+        // Keep this transition local so Add New does not create a static chat message.
+        setActiveMedicineToEdit(null);
+        setMedicineCardMode("add");
       };
 
       const handleSkipAll = () => {
@@ -1102,6 +1183,74 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         }
       };
 
+      if (medicineCardMode === "add") {
+        const addDrafts = deduplicateMedicineDrafts([
+          ...(chatWizardState.extractedMedicines || []),
+          ...displayMeds,
+          ...localDrafts,
+        ]);
+
+        const handleSaveNewMedicines = (allDrafts: any[]) => {
+          const uniqueDrafts = deduplicateMedicineDrafts(allDrafts).filter(
+            (m: any) => !m?.isSaved && !m?.dbId,
+          );
+          const displayLabel = tOnboarding("saveMedicines") || "Save Medicines";
+          handleGenericOptionPress(
+            {
+              key: "SAVE_AND_REVIEW",
+              value: { action: "SAVE_AND_REVIEW", saveAndReview: true, medicines: uniqueDrafts },
+              actionType: "SAVE_AND_REVIEW",
+              label: displayLabel,
+              state: {
+                medicinesToAdd: uniqueDrafts,
+                currentStep: "REVIEW_MEDICINES_LIST",
+              },
+            },
+            displayLabel,
+          );
+        };
+
+        const handleAddAndContinue = (newMed: any, allDrafts?: any[]) => {
+          const updated = deduplicateMedicineDrafts(allDrafts || [...addDrafts, newMed]);
+          setLocalDrafts(updated);
+          setChatWizardState((prev: any) => ({
+            ...prev,
+            extractedMedicines: updated,
+          }));
+        };
+
+        return renderAssistantPrompt(
+          <AddMedicineCard
+            key={`add-${item.id}`}
+            med={{}}
+            initialMedicines={addDrafts}
+            includeExistingMedicines
+            totalBuffered={addDrafts.length}
+            isEditingLocal={false}
+            preferredLang={preferredLang}
+            isDark={isDark}
+            theme={theme}
+            currentClientMedId={clientMedId}
+            setCurrentClientMedId={setClientMedId}
+            onSaveMedicines={handleSaveNewMedicines}
+            onSave={(updatedMed) => handleSaveNewMedicines([...addDrafts, updatedMed])}
+            onAddAndContinue={handleAddAndContinue}
+            onDraftSync={(updated) => {
+              setLocalDrafts(updated);
+              setChatWizardState((prev: any) => ({
+                ...prev,
+                extractedMedicines: deduplicateMedicineDrafts(updated),
+              }));
+            }}
+            onExitToOptions={() => setMedicineCardMode("review")}
+            onCancel={() => setMedicineCardMode("review")}
+            readOnly={false}
+            chosenVal={null}
+            chosenLabel={null}
+          />,
+        );
+      }
+
       if (medicineCardMode === "edit" && activeMedicineToEdit) {
         return renderAssistantPrompt(
           <AddMedicineCard
@@ -1162,7 +1311,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
               chosenVal={effectiveReviewChosenVal}
               chosenLabel={effectiveReviewChosenLabel}
               documents={msgDocs}
-              showDocumentSummary={true}
+              showDocumentSummary={isUploadSuccessMessage && msgDocs.length > 0}
               onRetryDocument={onRetryDocument}
               canRetry={isLatest && !isReadOnly}
             />

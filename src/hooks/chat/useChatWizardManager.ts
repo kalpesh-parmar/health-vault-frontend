@@ -13,7 +13,11 @@ import { createMedicationReminder } from "../../services/reminderService";
 import { ExtractedMedicine } from "../../types/medicationReview";
 import { AddOrEditMedication } from "../../types";
 import { ChatMessage, ChatWizardState, ConflictResolution } from "../../types/chat";
-import { buildMedicationPayload, normalizeDocumentIds } from "../../utils/chatUtils";
+import {
+  buildMedicationPayload,
+  buildMedicationSchedulePayload,
+  normalizeDocumentIds,
+} from "../../utils/chatUtils";
 import { normalizeReportSummaryToDocument } from "../../utils/documentNormalizer";
 import { I18N_ONBOARDING_UI } from "../../components/chat/widgets/OnboardingI18n";
 import { sanitizeMedicineForPayload } from "../../components/chat/widgets/MedicineHelpers";
@@ -870,16 +874,9 @@ export const useChatWizardManager = ({
           foodFrequency: medData.foodFrequency || medData.foodContext || "AFTER_FOOD",
           startDate: medData.startDate || new Date().toISOString().split("T")[0],
           ongoing: medData.ongoing !== undefined ? medData.ongoing : true,
-          medicationSchedule: Array.isArray(medData.medicationSchedule)
-            ? medData.medicationSchedule.reduce((acc: any, t: string) => {
-                let key = "CUSTOM";
-                if (t === "08:00") key = "MORNING";
-                else if (t === "14:00") key = "NOON";
-                else if (t === "20:00") key = "NIGHT";
-                acc[key] = `${t}:00`;
-                return acc;
-              }, {})
-            : (medData.medicationSchedule || { MORNING: "08:00:00" }),
+          medicationSchedule: buildMedicationSchedulePayload(
+            medData.medicationSchedule || ["08:00"],
+          ),
           totalQuantity: medData.totalQuantity || medData.total_quantity || 1,
           notes: medData.notes || "",
         };
