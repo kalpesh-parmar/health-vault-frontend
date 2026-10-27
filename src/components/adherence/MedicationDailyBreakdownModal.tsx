@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Modal,
   View,
@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  TouchableWithoutFeedback,
+  Pressable,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DailyDetailsResponse, DailyDoseDetail } from "../../types/adherence";
@@ -36,7 +37,18 @@ export const MedicationDailyBreakdownModal: React.FC<MedicationDailyBreakdownMod
   onClose,
 }) => {
   const { isDark, theme } = useAppTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [listContentHeight, setListContentHeight] = useState(0);
   const palette = isDark ? ADHERENCE_DARK_COLORS : ADHERENCE_COLORS;
+
+  const maxSheetHeight = windowHeight * 0.85;
+  const minSheetHeight = windowHeight * 0.45;
+  const measuredSheetHeight = headerHeight + listContentHeight + 12;
+  const sheetHeight =
+    measuredSheetHeight > 12
+      ? Math.min(Math.max(measuredSheetHeight, minSheetHeight), maxSheetHeight)
+      : minSheetHeight;
 
   const formattedDate = formatFullDateHeader(dateStr);
 
@@ -216,18 +228,25 @@ export const MedicationDailyBreakdownModal: React.FC<MedicationDailyBreakdownMod
       animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.backdrop}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.sheetContainer,
-                {
-                  backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-                  borderColor: isDark ? "#334155" : "#E2E8F0",
-                },
-              ]}
-            >
+      <View style={styles.backdrop}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityLabel="Close daily breakdown modal"
+        />
+        <View
+          style={[
+            styles.sheetContainer,
+            { height: sheetHeight },
+            {
+              backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
+              borderColor: isDark ? "#334155" : "#E2E8F0",
+            },
+          ]}
+        >
+          <View
+            onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
+          >
               {/* Sheet Drag Indicator */}
               <View style={styles.dragIndicator} />
 
@@ -264,6 +283,7 @@ export const MedicationDailyBreakdownModal: React.FC<MedicationDailyBreakdownMod
                   />
                 </TouchableOpacity>
               </View>
+          </View>
 
               {/* Content body */}
               {isLoading ? (
@@ -331,6 +351,8 @@ export const MedicationDailyBreakdownModal: React.FC<MedicationDailyBreakdownMod
                   style={styles.doseList}
                   contentContainerStyle={{ paddingBottom: 24 }}
                   showsVerticalScrollIndicator={false}
+                  nestedScrollEnabled
+                  onContentSizeChange={(_, height) => setListContentHeight(height)}
                 >
                   {data.doses.map((dose) => {
                     return (
@@ -449,10 +471,8 @@ export const MedicationDailyBreakdownModal: React.FC<MedicationDailyBreakdownMod
                   })}
                 </ScrollView>
               )}
-            </View>
-          </TouchableWithoutFeedback>
         </View>
-      </TouchableWithoutFeedback>
+      </View>
     </Modal>
   );
 };
@@ -464,8 +484,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheetContainer: {
-    maxHeight: "85%",
-    minHeight: "45%",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
@@ -523,6 +541,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   doseList: {
+    flex: 1,
+    minHeight: 0,
     width: "100%",
   },
   doseCard: {

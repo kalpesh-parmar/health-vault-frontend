@@ -4308,6 +4308,16 @@ export default function OnboardingScreen() {
 
   const displayMessages = useMemo(() => {
     const displayArr: any[] = [];
+    const usedRenderKeys = new Set<string>();
+    const getUniqueRenderKey = (baseKey: string) => {
+      let key = baseKey;
+      let duplicateIndex = 1;
+      while (usedRenderKeys.has(key)) {
+        key = `${baseKey}-${duplicateIndex++}`;
+      }
+      usedRenderKeys.add(key);
+      return key;
+    };
 
     for (let i = 0; i < messages.length; i++) {
       const item = messages[i];
@@ -4339,11 +4349,15 @@ export default function OnboardingScreen() {
         displayArr.push({
           isDateHeader: true,
           id: `date-header-${item.id || i}`,
+          renderKey: getUniqueRenderKey(`date-${item.id || i}`),
           dateLabel: label,
         });
       }
 
-      displayArr.push(item);
+      displayArr.push({
+        ...item,
+        renderKey: getUniqueRenderKey(`message-${item.id || i}`),
+      });
     }
 
     return displayArr;
@@ -4488,7 +4502,7 @@ export default function OnboardingScreen() {
             <FlatList
               ref={flatListRef}
               data={displayMessages}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item, index) => item.renderKey || `message-${index}`}
               onViewableItemsChanged={onViewableItemsChanged.current}
               viewabilityConfig={viewabilityConfig.current}
               automaticallyAdjustKeyboardInsets={false}

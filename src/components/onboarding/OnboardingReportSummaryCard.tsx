@@ -1,13 +1,13 @@
 import React from "react";
 import {
   StructuredReportDocument,
-  StructuredReportSummaryCard,
-  StructuredReportSummaryCardProps,
+  SingleStructuredReportSummaryCard,
+  SingleStructuredReportSummaryCardProps,
 } from "../chat/widgets/StructuredReportSummaryCard";
 
 type OnboardingReportSummaryCardProps = Omit<
-  StructuredReportSummaryCardProps,
-  "document" | "reportDocuments"
+  SingleStructuredReportSummaryCardProps,
+  "document"
 > & {
   document: StructuredReportDocument;
 };
@@ -15,8 +15,8 @@ type OnboardingReportSummaryCardProps = Omit<
 export const OnboardingReportSummaryCard: React.FC<
   OnboardingReportSummaryCardProps
 > = ({ document, ...props }) => {
-  // Do not pass reportDocuments here. The shared card renders the
-  // single-document summary directly when that prop is omitted.
-  return <StructuredReportSummaryCard document={document} {...props} />;
+  // Onboarding always displays one report, using the same detail design as
+  // the report selected in the chat card's modal.
+  return <SingleStructuredReportSummaryCard document={document} {...props} />;
 };
 

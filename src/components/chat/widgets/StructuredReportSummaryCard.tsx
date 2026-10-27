@@ -109,6 +109,11 @@ export interface StructuredReportSummaryCardProps {
   readOnly?: boolean;
 }
 
+export type SingleStructuredReportSummaryCardProps = Omit<
+  StructuredReportSummaryCardProps,
+  "reportDocuments"
+>;
+
 export const I18N_STRUCTURED_CARD: Record<string, Record<string, string>> = {
   english: {
     patientDetails: "Patient Details",
@@ -522,13 +527,23 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
           style={[
             styles.card,
             {
-              backgroundColor: isDark ? "#1a2234" : "#ffffff",
-              borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0",
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             },
           ]}
         >
-          <View style={styles.reportListHeader}>
-            <View style={styles.reportListHeaderIcon}>
+          <View
+            style={[
+              styles.reportListHeader,
+              { backgroundColor: colors.surfaceLight },
+            ]}
+          >
+            <View
+              style={[
+                styles.reportListHeaderIcon,
+                { backgroundColor: colors.iconBox },
+              ]}
+            >
               <MaterialCommunityIcons
                 name="file-document-multiple-outline"
                 size={21}
@@ -569,10 +584,6 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
             );
             const reportDate =
               report.reportDate || (report as any).report_date || null;
-            const accent = ["#5b4bff", "#10b981", "#f97316", "#64748b"][
-              index % 4
-            ];
-
             return (
               <TouchableOpacity
                 key={`${report.id || reportName || "report"}-${index}`}
@@ -582,11 +593,9 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
                   styles.reportListItem,
                   {
                     backgroundColor: isDark
-                      ? "rgba(255, 255, 255, 0.04)"
-                      : "#f8fafc",
-                    borderColor: isDark
-                      ? "rgba(255, 255, 255, 0.12)"
-                      : `${accent}45`,
+                      ? colors.surfaceLight
+                      : colors.surface,
+                    borderColor: colors.border,
                   },
                 ]}
                 onPress={() => setSelectedReport(report)}
@@ -595,13 +604,13 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
                 <View
                   style={[
                     styles.reportListItemIcon,
-                    { backgroundColor: `${accent}1a` },
+                    { backgroundColor: colors.iconBox },
                   ]}
                 >
                   <MaterialCommunityIcons
                     name="file-document-outline"
                     size={21}
-                    color={accent}
+                    color={colors.primary}
                   />
                 </View>
                 <View style={styles.reportListItemContent}>
@@ -612,7 +621,10 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
                     {reportType.replace(/_/g, " ")}
                   </Text>
                   <Text
-                    style={[styles.reportListItemType, { color: accent }]}
+                    style={[
+                      styles.reportListItemType,
+                      { color: colors.textSecondary },
+                    ]}
                     numberOfLines={1}
                   >
                     {reportName}
@@ -629,7 +641,11 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
                     </View>
                   ) : null}
                 </View>
-                <Ionicons name="chevron-forward" size={19} color={accent} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={19}
+                  color={colors.textSecondary}
+                />
               </TouchableOpacity>
             );
           })}
@@ -646,7 +662,7 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
             <View
               style={[
                 styles.reportModalSheet,
-                { backgroundColor: isDark ? "#111827" : "#ffffff" },
+                { backgroundColor: colors.card },
               ]}
             >
               <View style={styles.reportModalTopRow}>
@@ -672,9 +688,10 @@ const StandardStructuredReportSummaryCard: React.FC<StructuredReportSummaryCardP
                     isDark={isDark}
                     theme={theme}
                     preferredLang={preferredLang}
-                    onQuestionPress={(question, report) =>
-                      onQuestionPress?.(question, report || selectedReport || undefined)
-                    }
+                    onQuestionPress={(question, report) => {
+                      setSelectedReport(null);
+                      onQuestionPress?.(question, report || selectedReport || undefined);
+                    }}
                     onViewFullReport={
                       onViewFullReport
                         ? (report) => {
@@ -1727,6 +1744,32 @@ export const StructuredReportSummaryCard: React.FC<StructuredReportSummaryCardPr
       />
     );
   }
+  return <StandardStructuredReportSummaryCard {...props} />;
+};
+
+/**
+ * Renders the same detail view used inside the report picker modal, while
+ * explicitly preventing the multi-report list from being rendered.
+ */
+export const SingleStructuredReportSummaryCard: React.FC<
+  SingleStructuredReportSummaryCardProps
+> = (props) => {
+  const document = props.document || {};
+  if (isImageOnlyDocument(document)) {
+    return (
+      <ImagingOverviewCard
+        document={document}
+        isDark={props.isDark}
+        theme={props.theme}
+        preferredLang={props.preferredLang}
+        onViewFullReport={props.onViewFullReport}
+        suggestedQuestions={props.suggestedQuestions}
+        onQuestionPress={props.onQuestionPress}
+        readOnly={props.readOnly}
+      />
+    );
+  }
+
   return <StandardStructuredReportSummaryCard {...props} />;
 };
 

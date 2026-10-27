@@ -97,7 +97,6 @@ export const useChatSession = ({
   setSelectedOption,
 }: UseChatSessionProps) => {
 
-  console.log("isOnbordingCompleted: ", isOnboardingCompleted);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onboardingMessages, setOnboardingMessages] = useState<ChatMessage[]>(
     [],

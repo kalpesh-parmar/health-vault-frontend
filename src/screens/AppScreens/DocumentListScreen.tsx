@@ -35,6 +35,7 @@ import {
   documentListPaginated,
   filterDocuments,
   listDocument,
+  getDocumentsSummary,
   deleteDocument,
 } from "../../services/documentService";
 import { getUser } from "../../services/userService";
@@ -237,6 +238,12 @@ const DocumentList = () => {
     enabled: !!userId,
   });
 
+  const { data: documentsSummary } = useQuery({
+    queryKey: ["documentsSummary"],
+    queryFn: getDocumentsSummary,
+    enabled: !!userId,
+  });
+
   // Fetch paginated documents when "All" is active.
   const {
     data: allDocsData,
@@ -337,7 +344,7 @@ const DocumentList = () => {
     };
 
     const counts: Record<string, number> = {
-      All: allDocuments.length,
+      All: Number(documentsSummary?.data?.total ?? allDocuments.length),
     };
 
     CATEGORIES.forEach(({ value }) => {
@@ -350,7 +357,7 @@ const DocumentList = () => {
     });
 
     return counts;
-  }, [allDocumentsForCounts]);
+  }, [allDocumentsForCounts, documentsSummary]);
 
   const documents = useMemo(() => {
     const getSafeArray = (response: any) => {
