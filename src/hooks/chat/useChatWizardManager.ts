@@ -715,14 +715,6 @@ export const useChatWizardManager = ({
         text2: "All medications have been added to your schedule.",
       });
 
-      const successMsg: ChatMessage = {
-        id: `ai-success-${Date.now()}`,
-        role: "ai",
-        text: "Medications confirmed and saved successfully!",
-        action: "SUCCESS_CARD",
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, successMsg]);
     } catch (err) {
       console.error("[AI_CHAT] Error saving medications:", err);
       Toast.show({
@@ -912,14 +904,6 @@ export const useChatWizardManager = ({
           text2: `${payload.medicationName} added successfully`,
         });
 
-        const confirmationMsg: ChatMessage = {
-          id: `ai-med-saved-${Date.now()}`,
-          role: "ai",
-          text: `Added ${payload.medicationName} to your medications successfully.`,
-          action: "NORMAL_CHAT",
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, confirmationMsg]);
       } catch (err: any) {
         console.error("[AI_CHAT] Error saving medicine:", err);
         Toast.show({
@@ -936,14 +920,6 @@ export const useChatWizardManager = ({
 
     // If cancelling the Add Medicine form
     if (option?.actionType === "CANCEL" || normalizedKey === "CANCEL" || option?.value === "cancel") {
-      const cancelMsg: ChatMessage = {
-        id: `ai-cancel-${Date.now()}`,
-        role: "ai",
-        text: "Medicine addition cancelled.",
-        action: "NORMAL_CHAT",
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, cancelMsg]);
       isSendingRef.current = false;
       setIsSending(false);
       return;
@@ -961,7 +937,8 @@ export const useChatWizardManager = ({
       const addMedPromptMsg: ChatMessage = {
         id: `ai-add-med-${Date.now()}`,
         role: "ai",
-        text: "Please fill out the medicine details below:",
+        // The form itself is the UI; do not add a static assistant message.
+        text: "",
         action: "ADD_MEDICINE",
         medicine: {},
         createdAt: new Date().toISOString(),

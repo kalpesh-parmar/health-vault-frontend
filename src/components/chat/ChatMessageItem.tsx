@@ -140,7 +140,7 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
   const [clientMedId, setClientMedId] = React.useState<string | null>(null);
   const [localDrafts, setLocalDrafts] = React.useState<any[]>([]);
   const [activeMedicineToEdit, setActiveMedicineToEdit] = React.useState<any | null>(null);
-  const [medicineCardMode, setMedicineCardMode] = React.useState<"review" | "edit">("review");
+  const [medicineCardMode, setMedicineCardMode] = React.useState<"review" | "edit" | "add">("review");
   const tOnboarding = (key: string, replacements?: Record<string, string | number>) => {
     const lang = preferredLang || "english";
     const dict = I18N_ONBOARDING_UI[lang] || I18N_ONBOARDING_UI.english;
@@ -989,10 +989,11 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
 
       const handleAddNew = () => {
         if (isReadOnly) return;
-        const displayLabel = tOnboarding("addAnotherMedicine") || "Add New";
         // Keep the accumulated chat drafts when the review card is replaced
         // by a new Add Medicine card. The current message can contain only
-        // the latest medicine after a server round-trip.
+        // the latest medicine after a server round-trip. The onboarding
+        // screen replaces the review card in place, so do the same here
+        // instead of creating a second assistant message.
         const preservedDrafts = deduplicateDrafts([
           ...(chatWizardState.extractedMedicines || []),
           ...displayMeds,
@@ -1001,20 +1002,8 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
           ...prev,
           extractedMedicines: preservedDrafts,
         }));
-        handleGenericOptionPress(
-          {
-            key: "ADD",
-            value: "ADD",
-            actionType: "ADD_MEDICINE",
-            label: displayLabel,
-            state: {
-              currentStep: "ADD_MEDICINE",
-              cancellationNotice: false,
-              medicinesToAdd: preservedDrafts,
-            },
-          },
-          displayLabel,
-        );
+        setActiveMedicineToEdit(null);
+        setMedicineCardMode("add");
       };
 
       const handleSkipAll = () => {
@@ -1103,45 +1092,119 @@ const ChatMessageItemComponent: React.FC<ChatMessageItemProps> = ({
         }
       };
 
+      if (medicineCardMode === "add") {
+        return renderAssistantPrompt(
+          <View style={{ width: "100%" }}>
+            {msgDocs.length > 0 && (
+              <DocumentProgressSummaryContainer
+                documents={msgDocs}
+                preferredLang={preferredLang}
+                isDark={isDark}
+                theme={theme}
+                onRetry={onRetryDocument}
+                canRetry={isLatest && !isReadOnly}
+                readOnly={isReadOnly}
+              />
+            )}
+            <AddMedicineCard
+              key={`add-${item.id}`}
+              med={null}
+              // Add New must always start with a blank form. The extracted
+              // medicines stay in the parent state and are merged on save.
+              initialMedicines={[]}
+              includeExistingMedicines={false}
+              totalBuffered={displayMeds.length}
+              // Add New must use the normal add flow. Edit mode changes the
+              // title and save semantics to "Edit Medicine".
+              isEditingLocal={false}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+              currentClientMedId={null}
+              setCurrentClientMedId={() => { }}
+              onSaveMedicines={(allDrafts) => {
+                const uniqueDrafts = deduplicateDrafts([
+                  ...displayMeds,
+                  ...(Array.isArray(allDrafts) ? allDrafts : [allDrafts]),
+                ]);
+                setLocalMedicinesWrapper(uniqueDrafts);
+                setMedicineCardMode("review");
+              }}
+              onSave={(updatedMed) => {
+                const uniqueDrafts = deduplicateDrafts([...displayMeds, updatedMed]);
+                setLocalMedicinesWrapper(uniqueDrafts);
+                setMedicineCardMode("review");
+              }}
+              onAddAndContinue={(newMed, allDrafts) => {
+                setLocalMedicinesWrapper(
+                  deduplicateDrafts([
+                    ...displayMeds,
+                    ...(allDrafts || [newMed]),
+                  ]),
+                );
+              }}
+              onExitToOptions={() => setMedicineCardMode("review")}
+              onCancel={() => setMedicineCardMode("review")}
+              readOnly={false}
+              chosenVal={null}
+              chosenLabel={null}
+            />
+          </View>,
+        );
+      }
+
       if (medicineCardMode === "edit" && activeMedicineToEdit) {
         return renderAssistantPrompt(
-          <AddMedicineCard
-            key={`edit-${activeMedicineToEdit.client_med_id || activeMedicineToEdit.id || item.id}`}
-            med={activeMedicineToEdit}
-            initialMedicines={displayMeds}
-            totalBuffered={displayMeds.length}
-            isEditingLocal={true}
-            preferredLang={preferredLang}
-            isDark={isDark}
-            theme={theme}
-            currentClientMedId={activeMedicineToEdit.client_med_id || activeMedicineToEdit.id}
-            setCurrentClientMedId={() => { }}
-            onSaveMedicines={(allDrafts) => {
-              const uniqueDrafts = deduplicateDrafts(allDrafts);
-              setLocalMedicinesWrapper(uniqueDrafts);
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            onSave={(updatedMed) => {
-              const updatedList = displayMeds.map((m: any) =>
-                (m.client_med_id === updatedMed.client_med_id || m.id === updatedMed.id) ? updatedMed : m
-              );
-              setLocalMedicinesWrapper(deduplicateDrafts(updatedList));
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            onExitToOptions={() => {
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            onCancel={() => {
-              setActiveMedicineToEdit(null);
-              setMedicineCardMode("review");
-            }}
-            readOnly={false}
-            chosenVal={null}
-            chosenLabel={null}
-          />,
+          <View style={{ width: "100%" }}>
+            {msgDocs.length > 0 && (
+              <DocumentProgressSummaryContainer
+                documents={msgDocs}
+                preferredLang={preferredLang}
+                isDark={isDark}
+                theme={theme}
+                onRetry={onRetryDocument}
+                canRetry={isLatest && !isReadOnly}
+                readOnly={isReadOnly}
+              />
+            )}
+            <AddMedicineCard
+              key={`edit-${activeMedicineToEdit.client_med_id || activeMedicineToEdit.id || item.id}`}
+              med={activeMedicineToEdit}
+              initialMedicines={displayMeds}
+              totalBuffered={displayMeds.length}
+              isEditingLocal={true}
+              preferredLang={preferredLang}
+              isDark={isDark}
+              theme={theme}
+              currentClientMedId={activeMedicineToEdit.client_med_id || activeMedicineToEdit.id}
+              setCurrentClientMedId={() => { }}
+              onSaveMedicines={(allDrafts) => {
+                const uniqueDrafts = deduplicateDrafts(allDrafts);
+                setLocalMedicinesWrapper(uniqueDrafts);
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              onSave={(updatedMed) => {
+                const updatedList = displayMeds.map((m: any) =>
+                  (m.client_med_id === updatedMed.client_med_id || m.id === updatedMed.id) ? updatedMed : m
+                );
+                setLocalMedicinesWrapper(deduplicateDrafts(updatedList));
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              onExitToOptions={() => {
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              onCancel={() => {
+                setActiveMedicineToEdit(null);
+                setMedicineCardMode("review");
+              }}
+              readOnly={false}
+              chosenVal={null}
+              chosenLabel={null}
+            />
+          </View>,
         );
       }
 

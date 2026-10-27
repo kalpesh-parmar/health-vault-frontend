@@ -191,6 +191,7 @@ const AIChatScreen = ({ route }: any) => {
     setIsSending,
     isLoadingHistory,
     isLoadingMore,
+    hasMoreMessages,
     isActivelyStreaming,
     hasEmergency,
     suggestedQuestions,
@@ -544,7 +545,8 @@ const AIChatScreen = ({ route }: any) => {
   const keyExtractor = useCallback((item: any, index: number) => item.id || `msg-${index}`, []);
 
   const shouldAutoScrollRef = useRef(true);
-  const isInitialLoadRef = useRef(true);
+  const isInitialScrollPendingRef = useRef(true);
+  const initialScrollSettlingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const programmaticScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProgrammaticScrollingRef = useRef(false);
@@ -552,14 +554,16 @@ const AIChatScreen = ({ route }: any) => {
   const lastContentHeightRef = useRef(0);
   const prevMessagesCountRef = useRef(0);
   const prevIsSendingRef = useRef(false);
+  const prevIsFocusedRef = useRef(false);
+  const prevIsLoadingHistoryRef = useRef(isLoadingHistory);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const firstMessageIdRef = useRef<string | null>(null);
 
   const displayMessages = useMemo(() => {
     return [...mergedMessages].reverse();
   }, [mergedMessages]);
 
   const scrollToBottom = useCallback((animated = true) => {
-    if (!shouldAutoScrollRef.current) return;
-
     if (scrollTimerRef.current) {
       clearTimeout(scrollTimerRef.current);
       scrollTimerRef.current = null;
@@ -569,6 +573,8 @@ const AIChatScreen = ({ route }: any) => {
       flatListRef.current?.scrollToEnd({ animated: false });
       return;
     }
+
+    if (!shouldAutoScrollRef.current) return;
 
     isProgrammaticScrollingRef.current = true;
     if (programmaticScrollTimerRef.current) {
@@ -598,58 +604,136 @@ const AIChatScreen = ({ route }: any) => {
         clearTimeout(programmaticScrollTimerRef.current);
         programmaticScrollTimerRef.current = null;
       }
+      if (initialScrollSettlingTimerRef.current) {
+        clearTimeout(initialScrollSettlingTimerRef.current);
+        initialScrollSettlingTimerRef.current = null;
+      }
     };
   }, []);
 
-  // Initial load and focus anchor: scroll without animation and clear initial load flag
+  // When screen opens or regains focus, reset initial scroll flag to anchor to the latest message
   useEffect(() => {
-    if (!isFocused || isLoadingHistory || displayMessages.length === 0) {
-      return;
-    }
-
-    if (isInitialLoadRef.current) {
+    if (isFocused && !prevIsFocusedRef.current) {
+      isInitialScrollPendingRef.current = true;
       shouldAutoScrollRef.current = true;
-      scrollToBottom(false);
-      isInitialLoadRef.current = false;
-      prevMessagesCountRef.current = displayMessages.length;
-    }
-  }, [isFocused, isLoadingHistory, displayMessages.length, scrollToBottom]);
-
-  // Handle incoming messages, sending state, and streaming responses
-  useEffect(() => {
-    if (isInitialLoadRef.current) {
       if (displayMessages.length > 0 && !isLoadingHistory) {
-        scrollToBottom(false);
-        isInitialLoadRef.current = false;
-        prevMessagesCountRef.current = displayMessages.length;
+        flatListRef.current?.scrollToEnd({ animated: false });
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        });
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        }, 100);
       }
-      return;
     }
+    prevIsFocusedRef.current = isFocused;
+  }, [isFocused, isLoadingHistory, displayMessages.length]);
 
-    // Only force auto-scroll on the leading-edge transition of isSending (when user sends message)
-    // Prevents repeated scroll hijack during long-running background OCR or state re-renders
+  // When previous chat messages finish loading, trigger auto-scroll to the latest message
+  useEffect(() => {
+    const justFinishedLoadingHistory = prevIsLoadingHistoryRef.current && !isLoadingHistory;
+    prevIsLoadingHistoryRef.current = isLoadingHistory;
+
+    if (justFinishedLoadingHistory && displayMessages.length > 0) {
+      isInitialScrollPendingRef.current = true;
+      shouldAutoScrollRef.current = true;
+      flatListRef.current?.scrollToEnd({ animated: false });
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      });
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 300);
+    }
+  }, [isLoadingHistory, displayMessages.length]);
+
+  // Handle incoming messages, initial message population, sending state, and older message loading
+  useEffect(() => {
+    const currentFirstId = displayMessages[0]?.id ?? null;
+    const currentLastId = displayMessages[displayMessages.length - 1]?.id ?? null;
+    const currentCount = displayMessages.length;
+
+    const previousCount = prevMessagesCountRef.current;
+    const prevFirstId = firstMessageIdRef.current;
+    const prevLastId = lastMessageIdRef.current;
+
     const justStartedSending = !prevIsSendingRef.current && isSending;
     prevIsSendingRef.current = isSending;
 
-    const isNewMessage = displayMessages.length > prevMessagesCountRef.current;
-    prevMessagesCountRef.current = displayMessages.length;
-
     if (justStartedSending) {
       shouldAutoScrollRef.current = true;
+      isInitialScrollPendingRef.current = false;
       scrollToBottom(true);
       return;
     }
 
-    // Only scroll if user is following the bottom (not scrolled upward to read history)
-    if (shouldAutoScrollRef.current) {
-      if (isActivelyStreaming) {
-        // Fast token streaming: un-animated scroll keeps viewport anchored to new words
+    if (currentCount === 0 || isLoadingHistory) {
+      return;
+    }
+
+    // Initial load of previous chat messages: anchor immediately to the latest message
+    if (prevLastId === null) {
+      lastMessageIdRef.current = currentLastId;
+      firstMessageIdRef.current = currentFirstId;
+      prevMessagesCountRef.current = currentCount;
+      isInitialScrollPendingRef.current = true;
+      shouldAutoScrollRef.current = true;
+
+      flatListRef.current?.scrollToEnd({ animated: false });
+      const frameId = requestAnimationFrame(() => {
         flatListRef.current?.scrollToEnd({ animated: false });
-      } else if (isNewMessage) {
+      });
+      const t1 = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 80);
+      const t2 = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 250);
+
+      return () => {
+        cancelAnimationFrame(frameId);
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+
+    // Check if new latest message arrived vs. previous messages prepended (pagination)
+    const isNewLatestMessage = currentLastId !== prevLastId;
+    const isOlderMessagesPrepended =
+      !isNewLatestMessage &&
+      currentCount > previousCount &&
+      currentFirstId !== prevFirstId;
+
+    lastMessageIdRef.current = currentLastId;
+    firstMessageIdRef.current = currentFirstId;
+    prevMessagesCountRef.current = currentCount;
+
+    if (isOlderMessagesPrepended) {
+      // Previous chat messages were loaded at the top (pagination)
+      // Do NOT scroll to bottom so the user's reading position is maintained
+      return;
+    }
+
+    if (isNewLatestMessage) {
+      if (shouldAutoScrollRef.current || isInitialScrollPendingRef.current) {
         scrollToBottom(true);
       }
+      return;
     }
-  }, [displayMessages.length, isSending, isActivelyStreaming, isLoadingHistory, scrollToBottom]);
+
+    if (shouldAutoScrollRef.current && isActivelyStreaming) {
+      flatListRef.current?.scrollToEnd({ animated: false });
+    }
+  }, [
+    displayMessages,
+    isSending,
+    isActivelyStreaming,
+    isLoadingHistory,
+    scrollToBottom,
+  ]);
 
   const renderChatItem = useCallback(
     ({ item, index }: { item: any; index: number }) => (
@@ -848,9 +932,9 @@ const AIChatScreen = ({ route }: any) => {
             onViewableItemsChanged={onViewableItemsChanged.current}
             viewabilityConfig={viewabilityConfig.current}
             renderItem={renderChatItem}
-            initialNumToRender={20}
-            maxToRenderPerBatch={10}
-            windowSize={11}
+            initialNumToRender={50}
+            maxToRenderPerBatch={25}
+            windowSize={21}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews={false}
             automaticallyAdjustKeyboardInsets={false}
@@ -863,27 +947,33 @@ const AIChatScreen = ({ route }: any) => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             onLayout={() => {
-              if (displayMessages.length > 0 && isInitialLoadRef.current) {
+              if (displayMessages.length > 0 && (isInitialScrollPendingRef.current || shouldAutoScrollRef.current)) {
                 flatListRef.current?.scrollToEnd({ animated: false });
-                if (!isLoadingHistory) {
-                  isInitialLoadRef.current = false;
-                }
               }
             }}
             onContentSizeChange={(_w, h) => {
               const delta = Math.abs(h - lastContentHeightRef.current);
               lastContentHeightRef.current = h;
 
-              if (isInitialLoadRef.current) {
-                if (displayMessages.length > 0 && !isLoadingHistory) {
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                  isInitialLoadRef.current = false;
+              if (displayMessages.length === 0 || h === 0) return;
+
+              // Follow content size changes on initial open or whenever following bottom
+              if (isInitialScrollPendingRef.current || shouldAutoScrollRef.current) {
+                flatListRef.current?.scrollToEnd({ animated: false });
+
+                if (initialScrollSettlingTimerRef.current) {
+                  clearTimeout(initialScrollSettlingTimerRef.current);
                 }
+                initialScrollSettlingTimerRef.current = setTimeout(() => {
+                  if (isInitialScrollPendingRef.current) {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                    isInitialScrollPendingRef.current = false;
+                  }
+                }, 400);
                 return;
               }
 
-              // Guard onContentSizeChange: follow height changes ONLY while actively streaming text.
-              // Background OCR progress and card re-renders MUST NOT hijack the viewport.
+              // Active streaming tokens: keep anchored to bottom without animation
               if (shouldAutoScrollRef.current && isActivelyStreaming && delta > 4) {
                 flatListRef.current?.scrollToEnd({ animated: false });
               }
@@ -893,6 +983,28 @@ const AIChatScreen = ({ route }: any) => {
               const isCloseToBottom =
                 layoutMeasurement.height + contentOffset.y >= contentSize.height - 80;
 
+              // Load more messages when scrolled near top
+              if (
+                contentOffset.y <= 40 &&
+                !isLoadingMore &&
+                !isLoadingHistory &&
+                hasMoreMessages &&
+                isUserInteractingRef.current
+              ) {
+                loadMoreMessages();
+              }
+
+              // During initial load settling, never let passive scroll measurements disable auto-scroll
+              if (isInitialScrollPendingRef.current) {
+                if (isUserInteractingRef.current) {
+                  isInitialScrollPendingRef.current = false;
+                  shouldAutoScrollRef.current = isCloseToBottom;
+                } else {
+                  shouldAutoScrollRef.current = true;
+                }
+                return;
+              }
+
               // If user is actively dragging or in momentum: update intent based on actual position
               if (isUserInteractingRef.current) {
                 shouldAutoScrollRef.current = isCloseToBottom;
@@ -901,16 +1013,27 @@ const AIChatScreen = ({ route }: any) => {
 
               // Do not let in-flight programmatic scrolls or active streaming layout transients disable auto-scroll
               if (isActivelyStreaming || isProgrammaticScrollingRef.current) {
+                if (isCloseToBottom) {
+                  shouldAutoScrollRef.current = true;
+                }
                 return;
               }
 
-              // Stationary viewport: track true bottom proximity
-              shouldAutoScrollRef.current = isCloseToBottom;
+              // Passive / programmatic scrolls only re-enable auto-scroll when reaching bottom;
+              // never disable auto-scroll unless the user explicitly drags away
+              if (isCloseToBottom) {
+                shouldAutoScrollRef.current = true;
+              }
             }}
             scrollEventThrottle={32}
             onScrollBeginDrag={() => {
               isUserInteractingRef.current = true;
               isProgrammaticScrollingRef.current = false;
+              isInitialScrollPendingRef.current = false;
+              if (initialScrollSettlingTimerRef.current) {
+                clearTimeout(initialScrollSettlingTimerRef.current);
+                initialScrollSettlingTimerRef.current = null;
+              }
             }}
             onScrollEndDrag={(event) => {
               const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
