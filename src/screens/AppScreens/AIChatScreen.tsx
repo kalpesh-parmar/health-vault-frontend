@@ -97,6 +97,7 @@ const AIChatScreen = ({ route }: any) => {
   const [viewerDoc, setViewerDoc] = useState<any>(null);
   const [showFloatingPanel] = useState(true);
   const [activeDateLabel, setActiveDateLabel] = useState<string>("");
+  const activeDateLabelRef = useRef<string>("");
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems && viewableItems.length > 0) {
@@ -109,7 +110,8 @@ const AIChatScreen = ({ route }: any) => {
       const message = topItem?.item;
       if (message && message.createdAt) {
         const label = getRelativeDateLabel(message.createdAt, true);
-        if (label) {
+        if (label && label !== activeDateLabelRef.current) {
+          activeDateLabelRef.current = label;
           setActiveDateLabel(label);
         }
       }
@@ -543,55 +545,111 @@ const AIChatScreen = ({ route }: any) => {
 
   const shouldAutoScrollRef = useRef(true);
   const isInitialLoadRef = useRef(true);
+  const scrollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const programmaticScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isProgrammaticScrollingRef = useRef(false);
+  const isUserInteractingRef = useRef(false);
+  const lastContentHeightRef = useRef(0);
+  const prevMessagesCountRef = useRef(0);
+  const prevIsSendingRef = useRef(false);
 
   const displayMessages = useMemo(() => {
     return [...mergedMessages].reverse();
   }, [mergedMessages]);
 
   const scrollToBottom = useCallback((animated = true) => {
-    // Message cards can change height after the first layout (for example,
-    // while streamed text or report widgets finish rendering). Retry across
-    // a few layout passes so scrollToEnd uses the final content height.
-    const scroll = () => {
-      if (shouldAutoScrollRef.current) {
-        flatListRef.current?.scrollToEnd({ animated });
-      }
-    };
+    if (!shouldAutoScrollRef.current) return;
 
-    scroll();
-    setTimeout(scroll, 50);
-    setTimeout(scroll, 150);
-    setTimeout(scroll, 350);
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = null;
+    }
+
+    if (!animated) {
+      flatListRef.current?.scrollToEnd({ animated: false });
+      return;
+    }
+
+    isProgrammaticScrollingRef.current = true;
+    if (programmaticScrollTimerRef.current) {
+      clearTimeout(programmaticScrollTimerRef.current);
+    }
+    programmaticScrollTimerRef.current = setTimeout(() => {
+      isProgrammaticScrollingRef.current = false;
+      programmaticScrollTimerRef.current = null;
+    }, 400);
+
+    // Single debounced scroll operation to avoid overlapping native scroll animations
+    scrollTimerRef.current = setTimeout(() => {
+      if (shouldAutoScrollRef.current) {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }
+      scrollTimerRef.current = null;
+    }, 60);
   }, []);
 
   useEffect(() => {
-    if (isFocused && displayMessages.length > 0) {
-      scrollToBottom(false);
-    }
-  }, [isFocused, displayMessages.length, scrollToBottom]);
+    return () => {
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = null;
+      }
+      if (programmaticScrollTimerRef.current) {
+        clearTimeout(programmaticScrollTimerRef.current);
+        programmaticScrollTimerRef.current = null;
+      }
+    };
+  }, []);
 
-  useEffect(() => {
-    if (!isLoadingHistory && displayMessages.length > 0) {
-      scrollToBottom(false);
-    }
-  }, [isLoadingHistory, displayMessages.length, scrollToBottom]);
-
-  useEffect(() => {
-    if (shouldAutoScrollRef.current || isInitialLoadRef.current) {
-      scrollToBottom(isInitialLoadRef.current ? false : true);
-    }
-  }, [displayMessages.length, isSending, isActivelyStreaming, scrollToBottom]);
-
-  // Re-anchor the chat when it is opened or brought back into focus so the
-  // latest message is visible after history has finished loading.
+  // Initial load and focus anchor: scroll without animation and clear initial load flag
   useEffect(() => {
     if (!isFocused || isLoadingHistory || displayMessages.length === 0) {
       return;
     }
 
-    shouldAutoScrollRef.current = true;
-    scrollToBottom(false);
+    if (isInitialLoadRef.current) {
+      shouldAutoScrollRef.current = true;
+      scrollToBottom(false);
+      isInitialLoadRef.current = false;
+      prevMessagesCountRef.current = displayMessages.length;
+    }
   }, [isFocused, isLoadingHistory, displayMessages.length, scrollToBottom]);
+
+  // Handle incoming messages, sending state, and streaming responses
+  useEffect(() => {
+    if (isInitialLoadRef.current) {
+      if (displayMessages.length > 0 && !isLoadingHistory) {
+        scrollToBottom(false);
+        isInitialLoadRef.current = false;
+        prevMessagesCountRef.current = displayMessages.length;
+      }
+      return;
+    }
+
+    // Only force auto-scroll on the leading-edge transition of isSending (when user sends message)
+    // Prevents repeated scroll hijack during long-running background OCR or state re-renders
+    const justStartedSending = !prevIsSendingRef.current && isSending;
+    prevIsSendingRef.current = isSending;
+
+    const isNewMessage = displayMessages.length > prevMessagesCountRef.current;
+    prevMessagesCountRef.current = displayMessages.length;
+
+    if (justStartedSending) {
+      shouldAutoScrollRef.current = true;
+      scrollToBottom(true);
+      return;
+    }
+
+    // Only scroll if user is following the bottom (not scrolled upward to read history)
+    if (shouldAutoScrollRef.current) {
+      if (isActivelyStreaming) {
+        // Fast token streaming: un-animated scroll keeps viewport anchored to new words
+        flatListRef.current?.scrollToEnd({ animated: false });
+      } else if (isNewMessage) {
+        scrollToBottom(true);
+      }
+    }
+  }, [displayMessages.length, isSending, isActivelyStreaming, isLoadingHistory, scrollToBottom]);
 
   const renderChatItem = useCallback(
     ({ item, index }: { item: any; index: number }) => (
@@ -690,13 +748,8 @@ const AIChatScreen = ({ route }: any) => {
   }, [isSending, isActivelyStreaming, isDark]);
 
   const handleAllergyCardExpand = useCallback(() => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 50);
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 200);
-  }, []);
+    scrollToBottom(true);
+  }, [scrollToBottom]);
 
   const isOnboardingSession = Boolean(onboardingSessionId && !isOnboardingCompleted);
 
@@ -810,25 +863,70 @@ const AIChatScreen = ({ route }: any) => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             onLayout={() => {
-              if (displayMessages.length > 0) {
+              if (displayMessages.length > 0 && isInitialLoadRef.current) {
+                flatListRef.current?.scrollToEnd({ animated: false });
+                if (!isLoadingHistory) {
+                  isInitialLoadRef.current = false;
+                }
+              }
+            }}
+            onContentSizeChange={(_w, h) => {
+              const delta = Math.abs(h - lastContentHeightRef.current);
+              lastContentHeightRef.current = h;
+
+              if (isInitialLoadRef.current) {
+                if (displayMessages.length > 0 && !isLoadingHistory) {
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                  isInitialLoadRef.current = false;
+                }
+                return;
+              }
+
+              // Guard onContentSizeChange: follow height changes ONLY while actively streaming text.
+              // Background OCR progress and card re-renders MUST NOT hijack the viewport.
+              if (shouldAutoScrollRef.current && isActivelyStreaming && delta > 4) {
                 flatListRef.current?.scrollToEnd({ animated: false });
               }
             }}
-            onContentSizeChange={() => {
-              if (shouldAutoScrollRef.current) {
-                scrollToBottom();
+            onScroll={(event) => {
+              const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+              const isCloseToBottom =
+                layoutMeasurement.height + contentOffset.y >= contentSize.height - 80;
+
+              // If user is actively dragging or in momentum: update intent based on actual position
+              if (isUserInteractingRef.current) {
+                shouldAutoScrollRef.current = isCloseToBottom;
+                return;
               }
+
+              // Do not let in-flight programmatic scrolls or active streaming layout transients disable auto-scroll
+              if (isActivelyStreaming || isProgrammaticScrollingRef.current) {
+                return;
+              }
+
+              // Stationary viewport: track true bottom proximity
+              shouldAutoScrollRef.current = isCloseToBottom;
             }}
+            scrollEventThrottle={32}
             onScrollBeginDrag={() => {
-              shouldAutoScrollRef.current = false;
+              isUserInteractingRef.current = true;
+              isProgrammaticScrollingRef.current = false;
+            }}
+            onScrollEndDrag={(event) => {
+              const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+              const isCloseToBottom =
+                layoutMeasurement.height + contentOffset.y >= contentSize.height - 80;
+              shouldAutoScrollRef.current = isCloseToBottom;
+              if (!event.nativeEvent.velocity?.y) {
+                isUserInteractingRef.current = false;
+              }
             }}
             onMomentumScrollEnd={(event) => {
               const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
               const isCloseToBottom =
                 layoutMeasurement.height + contentOffset.y >= contentSize.height - 80;
-              if (isCloseToBottom) {
-                shouldAutoScrollRef.current = true;
-              }
+              shouldAutoScrollRef.current = isCloseToBottom;
+              isUserInteractingRef.current = false;
             }}
             ListHeaderComponent={renderListHeader}
             ListFooterComponent={renderListFooter}
